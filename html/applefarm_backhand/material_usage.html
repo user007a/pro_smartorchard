@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 农资使用</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .usage-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: var(--space-xl);
+  }
+  .usage-stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    box-shadow: var(--shadow-card);
+    border: 1px solid rgba(34, 168, 74, 0.08);
+    transition: all var(--transition-normal);
+    position: relative;
+    overflow: hidden;
+  }
+  .usage-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--gradient-primary);
+    border-radius: 0 3px 3px 0;
+  }
+  .usage-stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-card-hover);
+  }
+  .stat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-md);
+  }
+  .stat-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-50);
+    color: var(--primary-500);
+    font-size: 16px;
+  }
+  .stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    font-weight: var(--font-weight-medium);
+  }
+  .stat-value {
+    font-size: 22px;
+    font-weight: var(--font-weight-bold);
+    line-height: 1.2;
+    background: linear-gradient(135deg, var(--primary-600), var(--primary-500));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: var(--space-xs);
+  }
+  .stat-unit {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-normal);
+    color: var(--text-tertiary);
+  }
+  .search-section {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 16px 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    margin-bottom: 16px;
+  }
+  .search-select {
+    padding: 10px 16px;
+    border: 1px solid #e8e8e8;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #333;
+    min-width: 140px;
+  }
+  .search-input {
+    flex: 1;
+    padding: 10px 16px;
+    border: 1px solid #e8e8e8;
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  .search-input:focus, .search-select:focus {
+    outline: none;
+    border-color: #22a84a;
+    box-shadow: 0 0 0 2px rgba(34, 168, 74, 0.1);
+  }
+  .action-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 16px;
+  }
+  .data-section {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+  }
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .data-table th, .data-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .data-table th {
+    background: #fafafa;
+    font-weight: 600;
+    color: #666;
+    font-size: 13px;
+  }
+  .data-table tr:hover {
+    background: #fafafa;
+  }
+  .checkbox-col {
+    width: 40px;
+  }
+  .text-right {
+    text-align: right;
+  }
+  .status-tag {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .status-tag.approved {
+    background: #e6f7ff;
+    color: #1890ff;
+  }
+  .status-tag.pending {
+    background: #fff7e6;
+    color: #fa8c16;
+  }
+  .action-btns {
+    display: flex;
+    gap: 8px;
+  }
+  .action-btn {
+    padding: 5px 12px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .action-btn.detail {
+    background: #e8f5e9;
+    color: #22a84a;
+  }
+  .action-btn.detail:hover {
+    background: #c8e6c9;
+  }
+  .action-btn.approve {
+    background: #e6f7ff;
+    color: #1890ff;
+  }
+  .action-btn.approve:hover {
+    background: #b3d8f0;
+  }
+  .action-btn.reject {
+    background: #fff1f0;
+    color: #ff4d4f;
+  }
+  .action-btn.reject:hover {
+    background: #ffccc7;
+  }
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    gap: 8px;
+    border-top: 1px solid #f0f0f0;
+  }
+  .page-btn {
+    width: 36px;
+    height: 36px;
+    border: 1px solid #e8e8e8;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+  .page-btn:hover:not(.disabled) {
+    background: #f5f5f5;
+    border-color: #22a84a;
+  }
+  .page-btn.active {
+    background: #22a84a;
+    color: white;
+    border-color: #22a84a;
+  }
+  .page-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .pagination-input {
+    width: 50px;
+    padding: 4px 8px;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 14px;
+  }
+  .pagination-input:focus {
+    outline: none;
+    border-color: #22a84a;
+  }
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.show {
+    display: flex;
+  }
+  .modal-container {
+    background: #fff;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #999;
+    padding: 4px;
+  }
+  .modal-close:hover {
+    color: #666;
+  }
+  .modal-body {
+    padding: 20px;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid #f0f0f0;
+    background: #fafafa;
+  }
+  .form-row {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 16px;
+  }
+  .form-item {
+    flex: 1;
+  }
+  .form-item label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+  }
+  .form-item input, .form-item select, .form-item textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e8e8e8;
+    border-radius: 6px;
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+  .form-item textarea {
+    min-height: 80px;
+    resize: vertical;
+  }
+  .form-item input:focus, .form-item select:focus, .form-item textarea:focus {
+    outline: none;
+    border-color: #22a84a;
+  }
+  .detail-content {
+    padding: 10px 0;
+  }
+  .detail-row {
+    display: flex;
+    padding: 12px 0;
+    border-bottom: 1px solid #f5f5f5;
+  }
+  .detail-label {
+    width: 120px;
+    font-weight: 500;
+    color: #666;
+    font-size: 14px;
+  }
+  .detail-value {
+    flex: 1;
+    color: #333;
+    font-size: 14px;
+  }
+  .export-options {
+    padding: 10px 0;
+  }
+  .export-option {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .export-option:hover {
+    border-color: #22a84a;
+    background: #f6ffed;
+  }
+  .export-option.selected {
+    border-color: #22a84a;
+    background: #f6ffed;
+  }
+  .export-option input[type="radio"] {
+    margin-right: 12px;
+    width: 18px;
+    height: 18px;
+  }
+  .export-option .option-text {
+    font-size: 14px;
+    color: #333;
+  }
+</style>
+</head>
+<body data-active-menu="material" data-active-submenu="material-usage">
+
+<div class="app-layout">
+  <nav class="sidebar" aria-label="主导航">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 3C8 1 5 3 5 6.5C5 10 8 14 11 17C14 14 17 10 17 6.5C17 3 14 1 11 3Z" fill="rgba(34,168,74,0.2)"/>
+          <path d="M11 5C9.5 4 7.5 5 7.5 7C7.5 9 9.5 12 11 14"/>
+          <path d="M11 5C12.5 4 14.5 5 14.5 7C14.5 9 12.5 12 11 14"/>
+          <path d="M11 3V1"/>
+        </svg>
+      </div>
+      <span class="sidebar-brand-text">智慧果园</span>
+    </div>
+    <div class="sidebar-body"></div>
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn sidebar-collapse-btn" title="折叠侧边栏">
+        <span class="collapse-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 3L6 9L11 15"/><path d="M14 3V15"/>
+          </svg>
+        </span>
+        <span class="btn-text">折叠</span>
+      </button>
+      <button class="sidebar-footer-btn" title="系统设置" id="btn-settings">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="9" r="2.5"/>
+          <path d="M9 2V4M9 14V16M2 9H4M14 9H16M4.2 4.2L5.6 5.6M12.4 12.4L13.8 13.8M13.8 4.2L12.4 5.6M5.6 12.4L4.2 13.8"/>
+        </svg>
+        <span class="btn-text">设置</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="sidebar-overlay"></div>
+
+  <div class="main-wrapper">
+    <header class="topbar">
+      <button class="topbar-hamburger" aria-label="打开导航菜单">
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M3 6H19M3 11H19M3 16H19"/>
+        </svg>
+      </button>
+      <div class="topbar-right">
+        <button class="topbar-notification" title="消息通知">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2C7 2 5 4.5 5 7.5V12L3 14H17L15 12V7.5C15 4.5 13 2 10 2Z"/>
+            <path d="M8.5 16C8.5 17 9.2 18 10 18C10.8 18 11.5 17 11.5 16"/>
+          </svg>
+          <span class="badge">3</span>
+        </button>
+        <div class="topbar-user">
+          <div class="topbar-user-avatar">张</div>
+          <span class="topbar-user-name">张三</span>
+          <span class="topbar-user-arrow">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
+              <path d="M3 5L6 8L9 5"/>
+            </svg>
+          </span>
+        </div>
+        <div class="topbar-user-dropdown">
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <circle cx="8" cy="5" r="3"/><path d="M2 15C2 11.5 5 10 8 10C11 10 14 11.5 14 15"/>
+            </svg>
+            个人中心
+          </div>
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M8 2V8L11 11"/><circle cx="8" cy="8" r="6"/>
+            </svg>
+            操作日志
+          </div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" style="color:var(--error);">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M6 2H3C2.45 2 2 2.45 2 3V13C2 13.55 2.45 14 3 14H6"/><path d="M10 11L14 8L10 5"/><path d="M14 8H6"/>
+            </svg>
+            退出登录
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 页面头部 -->
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">农资使用</h1>
+            <p class="page-subtitle">记录农资使用情况，分析使用趋势</p>
+          </div>
+        </div>
+        <div class="usage-stats">
+          <div class="usage-stat-card">
+            <div class="stat-header">
+              <div class="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;">
+                  <path d="M12 2v20M2 12h20M12 2a10 10 0 0 1 10 10M12 2a10 10 0 0 0-10 10"/>
+                </svg>
+              </div>
+            </div>
+            <div class="stat-value">128</div>
+            <div class="stat-label">本月使用次数</div>
+          </div>
+          <div class="usage-stat-card">
+            <div class="stat-header">
+              <div class="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                  <line x1="12" y1="22.08" x2="12" y2="12"/>
+                </svg>
+              </div>
+            </div>
+            <div class="stat-value">5.2<span class="stat-unit">吨</span></div>
+            <div class="stat-label">本月使用总量</div>
+          </div>
+          <div class="usage-stat-card">
+            <div class="stat-header">
+              <div class="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                  <line x1="7" y1="7" x2="7.01" y2="7"/>
+                </svg>
+              </div>
+            </div>
+            <div class="stat-value">32<span class="stat-unit">种</span></div>
+            <div class="stat-label">使用农资种类</div>
+          </div>
+        </div>
+
+        <div class="search-section">
+          <select class="search-select" id="materialSelect">
+            <option value="">全部农资</option>
+            <option value="fertilizer">肥料</option>
+            <option value="pesticide">农药</option>
+            <option value="tool">工具</option>
+          </select>
+          <input type="text" class="search-input" placeholder="搜索农资名称..." id="searchInput">
+          <button class="jg-btn" onclick="search()">搜索</button>
+        </div>
+
+        <div class="action-bar">
+          <button class="jg-btn jg-btn-primary" onclick="openExportModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;margin-right:6px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            导出使用记录
+          </button>
+        </div>
+
+        <div class="data-section">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="checkbox-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                <th>农资名称</th>
+                <th>规格型号</th>
+                <th>使用数量</th>
+                <th>使用时间</th>
+                <th>使用人员</th>
+                <th>关联任务</th>
+                <th>关联地块</th>
+                <th>审核状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+            </tbody>
+          </table>
+          <div class="pagination" id="pagination">
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 导出弹窗 -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">导出使用记录</h3>
+      <button class="modal-close" onclick="closeExportModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="export-options">
+        <div class="export-option" onclick="selectExportFormat('excel')">
+          <input type="radio" name="exportFormat" id="formatExcel" value="excel" checked>
+          <span class="option-text">Excel格式 (.xlsx)</span>
+        </div>
+        <div class="export-option" onclick="selectExportFormat('csv')">
+          <input type="radio" name="exportFormat" id="formatCsv" value="csv">
+          <span class="option-text">CSV格式 (.csv)</span>
+        </div>
+        <div class="export-option" onclick="selectExportFormat('pdf')">
+          <input type="radio" name="exportFormat" id="formatPdf" value="pdf">
+          <span class="option-text">PDF格式 (.pdf)</span>
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <label style="display:block;margin-bottom:8px;font-size:14px;font-weight:500;">导出范围</label>
+        <label style="display:block;margin-bottom:8px;font-size:13px;">
+          <input type="radio" name="exportRange" value="all" checked> 全部记录
+        </label>
+        <label style="display:block;font-size:13px;">
+          <input type="radio" name="exportRange" value="current"> 当前页记录
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn-outline" onclick="closeExportModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="confirmExport()">导出</button>
+    </div>
+  </div>
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">使用记录详情</h3>
+      <button class="modal-close" onclick="closeDetailModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-content">
+        <div class="detail-row">
+          <span class="detail-label">记录编号</span>
+          <span class="detail-value" id="detailId">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">农资名称</span>
+          <span class="detail-value" id="detailName">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">规格型号</span>
+          <span class="detail-value" id="detailSpec">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">使用数量</span>
+          <span class="detail-value" id="detailQuantity">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">使用时间</span>
+          <span class="detail-value" id="detailTime">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">使用人员</span>
+          <span class="detail-value" id="detailOperator">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">关联任务</span>
+          <span class="detail-value" id="detailTask">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">关联地块</span>
+          <span class="detail-value" id="detailPlot">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">审核状态</span>
+          <span class="detail-value" id="detailStatus">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">备注</span>
+          <span class="detail-value" id="detailRemark">-</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn jg-btn-primary" onclick="closeDetailModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/sidebar-layout.js"></script>
+<script src="js/iframe-hide.js"></script>
+
+<script>
+// 农资使用数据
+const usageData = [
+  {"id":"U-001","name":"NPK复合肥","type":"fertilizer","spec":"40kg/袋","quantity":"2袋","time":"2024-05-20 09:30","operator":"李技术员","task":"春季追肥计划","plot":"A区01地块","status":"approved","statusText":"已审核","remark":"按计划施肥"},
+  {"id":"U-002","name":"高效杀虫剂","type":"pesticide","spec":"500ml/瓶","quantity":"5瓶","time":"2024-05-19 14:20","operator":"张技术员","task":"病虫害防治任务","plot":"B区02地块","status":"approved","statusText":"已审核","remark":"防治蚜虫"},
+  {"id":"U-003","name":"有机肥料","type":"fertilizer","spec":"25kg/袋","quantity":"8袋","time":"2024-05-18 10:15","operator":"王技术员","task":"基肥补充计划","plot":"C区01地块","status":"pending","statusText":"待审核","remark":"补充有机质"},
+  {"id":"U-004","name":"疏花疏果器","type":"tool","spec":"SK-5材质","quantity":"10个","time":"2024-05-17 08:00","operator":"李技术员","task":"疏花疏果作业","plot":"A区05地块","status":"approved","statusText":"已审核","remark":"疏花工具"},
+  {"id":"U-005","name":"杀菌剂","type":"pesticide","spec":"1L/瓶","quantity":"8瓶","time":"2024-05-16 15:30","operator":"张技术员","task":"病害预防任务","plot":"B区01地块","status":"pending","statusText":"待审核","remark":"预防白粉病"},
+  {"id":"U-006","name":"叶面肥","type":"fertilizer","spec":"500ml/瓶","quantity":"6瓶","time":"2024-05-15 11:00","operator":"赵技术员","task":"叶面喷施作业","plot":"D区03地块","status":"approved","statusText":"已审核","remark":"补充微量元素"},
+  {"id":"U-007","name":"修枝剪","type":"tool","spec":"不锈钢","quantity":"5把","time":"2024-05-14 09:00","operator":"孙技术员","task":"夏季修剪任务","plot":"A区02地块","status":"approved","statusText":"已审核","remark":"修剪工具"},
+  {"id":"U-008","name":"钾肥","type":"fertilizer","spec":"50kg/袋","quantity":"4袋","time":"2024-05-13 14:00","operator":"周技术员","task":"钾肥追肥计划","plot":"B区03地块","status":"pending","statusText":"待审核","remark":"促进果实膨大"},
+  {"id":"U-009","name":"除草剂","type":"pesticide","spec":"2L/瓶","quantity":"3瓶","time":"2024-05-12 10:30","operator":"吴技术员","task":"杂草清除任务","plot":"C区02地块","status":"approved","statusText":"已审核","remark":"清除行间杂草"},
+  {"id":"U-010","name":"授粉器","type":"tool","spec":"电动","quantity":"2个","time":"2024-05-11 08:30","operator":"郑技术员","task":"人工授粉作业","plot":"A区03地块","status":"approved","statusText":"已审核","remark":"授粉工具"},
+  {"id":"U-011","name":"生物农药","type":"pesticide","spec":"1L/瓶","quantity":"10瓶","time":"2024-05-10 16:00","operator":"张技术员","task":"生物防治计划","plot":"D区01地块","status":"pending","statusText":"待审核","remark":"生物防治"},
+  {"id":"U-012","name":"钙肥","type":"fertilizer","spec":"20kg/袋","quantity":"6袋","time":"2024-05-09 09:15","operator":"李技术员","task":"补钙计划","plot":"B区04地块","status":"approved","statusText":"已审核","remark":"预防苦痘病"},
+  {"id":"U-013","name":"嫁接刀","type":"tool","spec":"特种钢","quantity":"3把","time":"2024-05-08 14:30","operator":"王技术员","task":"嫁接作业任务","plot":"A区06地块","status":"approved","statusText":"已审核","remark":"嫁接工具"},
+  {"id":"U-014","name":"保鲜剂","type":"pesticide","spec":"100ml/瓶","quantity":"15瓶","time":"2024-05-07 11:00","operator":"赵技术员","task":"果实保鲜计划","plot":"C区03地块","status":"approved","statusText":"已审核","remark":"采前保鲜处理"},
+  {"id":"U-015","name":"喷雾器","type":"tool","spec":"手动","quantity":"4个","time":"2024-05-06 10:00","operator":"孙技术员","task":"喷雾作业工具","plot":"D区02地块","status":"approved","statusText":"已审核","remark":"喷雾设备"},
+  {"id":"U-016","name":"微量元素肥","type":"fertilizer","spec":"5kg/袋","quantity":"8袋","time":"2024-05-05 15:00","operator":"周技术员","task":"微量元素补充","plot":"A区04地块","status":"pending","statusText":"待审核","remark":"补充微量元素"},
+  {"id":"U-017","name":"生长调节剂","type":"pesticide","spec":"250ml/瓶","quantity":"6瓶","time":"2024-05-04 09:30","operator":"吴技术员","task":"生长调节计划","plot":"B区05地块","status":"approved","statusText":"已审核","remark":"调节生长"},
+  {"id":"U-018","name":"绑枝机","type":"tool","spec":"半自动","quantity":"3个","time":"2024-05-03 14:00","operator":"郑技术员","task":"绑枝作业任务","plot":"C区04地块","status":"approved","statusText":"已审核","remark":"绑枝工具"},
+  {"id":"U-019","name":"杀虫灯","type":"tool","spec":"太阳能","quantity":"2盏","time":"2024-05-02 10:30","operator":"张技术员","task":"物理防虫计划","plot":"D区04地块","status":"approved","statusText":"已审核","remark":"物理防虫"},
+  {"id":"U-020","name":"尿素","type":"fertilizer","spec":"50kg/袋","quantity":"10袋","time":"2024-05-01 08:00","operator":"李技术员","task":"氮肥补充计划","plot":"A区07地块","status":"pending","statusText":"待审核","remark":"补充氮肥"},
+  {"id":"U-021","name":"杀螨剂","type":"pesticide","spec":"1L/瓶","quantity":"4瓶","time":"2024-04-30 15:30","operator":"王技术员","task":"红蜘蛛防治","plot":"B区06地块","status":"approved","statusText":"已审核","remark":"防治红蜘蛛"},
+  {"id":"U-022","name":"磷酸二铵","type":"fertilizer","spec":"40kg/袋","quantity":"5袋","time":"2024-04-29 09:00","operator":"赵技术员","task":"磷铵追肥计划","plot":"C区05地块","status":"approved","statusText":"已审核","remark":"磷铵追肥"},
+  {"id":"U-023","name":"土壤改良剂","type":"fertilizer","spec":"25kg/袋","quantity":"6袋","time":"2024-04-28 14:00","operator":"孙技术员","task":"土壤改良计划","plot":"D区05地块","status":"pending","statusText":"待审核","remark":"改良土壤结构"}
+];
+
+let currentPage = 1;
+const pageSize = 10;
+let totalItems = usageData.length;
+let totalPages = Math.ceil(totalItems / pageSize);
+let filteredData = [...usageData];
+
+const exportModal = document.getElementById('exportModal');
+const detailModal = document.getElementById('detailModal');
+const tableBody = document.getElementById('tableBody');
+const pagination = document.getElementById('pagination');
+const searchInput = document.getElementById('searchInput');
+const materialSelect = document.getElementById('materialSelect');
+
+function init() {
+  renderTable();
+  renderPagination();
+}
+
+function renderTable() {
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  const pageData = filteredData.slice(start, end);
+  
+  tableBody.innerHTML = pageData.map(item => `
+    <tr>
+      <td class="checkbox-col"><input type="checkbox" name="record" value="${item.id}"></td>
+      <td><strong>${item.name}</strong></td>
+      <td>${item.spec}</td>
+      <td class="text-right">${item.quantity}</td>
+      <td>${item.time}</td>
+      <td>${item.operator}</td>
+      <td>${item.task}</td>
+      <td>${item.plot}</td>
+      <td><span class="status-tag ${item.status}">${item.statusText}</span></td>
+      <td>
+        <div class="action-btns">
+          <button class="action-btn detail" onclick="viewDetail('${item.id}')">详情</button>
+          ${item.status === 'pending' ? `
+          <button class="action-btn approve" onclick="approveUsage('${item.id}')">审核通过</button>
+          <button class="action-btn reject" onclick="rejectUsage('${item.id}')">拒绝</button>
+          ` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderPagination() {
+  pagination.innerHTML = `
+    <button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="prevPage()">‹</button>
+    ${Array.from({length: Math.min(5, totalPages)}, (_, i) => {
+      let pageNum;
+      if (totalPages <= 5) {
+        pageNum = i + 1;
+      } else if (currentPage <= 3) {
+        pageNum = i + 1;
+      } else if (currentPage >= totalPages - 2) {
+        pageNum = totalPages - 4 + i;
+      } else {
+        pageNum = currentPage - 2 + i;
+      }
+      return `<button class="page-btn ${currentPage === pageNum ? 'active' : ''}" onclick="goToPage(${pageNum})">${pageNum}</button>`;
+    }).join('')}
+    <button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="nextPage()">›</button>
+    <span style="margin-left:16px;font-size:13px;color:#6b7b6b;">第 <input type="number" class="pagination-input" id="pageInput" value="${currentPage}" min="1" max="${totalPages}" onkeydown="if(event.keyCode===13)jumpToPage()"> 页 / 共 ${totalPages} 页，共 ${totalItems} 条记录</span>
+    <button class="jg-btn-outline" style="margin-left:12px;padding:2px 8px;font-size:12px;" onclick="jumpToPage()">跳转</button>
+  `;
+}
+
+function prevPage() {
+  if (currentPage > 1) {
+    currentPage--;
+    renderTable();
+    renderPagination();
+  }
+}
+
+function nextPage() {
+  if (currentPage < totalPages) {
+    currentPage++;
+    renderTable();
+    renderPagination();
+  }
+}
+
+function goToPage(page) {
+  if (page >= 1 && page <= totalPages) {
+    currentPage = page;
+    renderTable();
+    renderPagination();
+  }
+}
+
+function jumpToPage() {
+  const pageInput = document.getElementById('pageInput');
+  const page = parseInt(pageInput.value);
+  if (!isNaN(page) && page >= 1 && page <= totalPages) {
+    currentPage = page;
+    renderTable();
+    renderPagination();
+  } else {
+    pageInput.value = currentPage;
+  }
+}
+
+function search() {
+  const keyword = searchInput.value.toLowerCase().trim();
+  const type = materialSelect.value;
+  
+  filteredData = usageData.filter(item => {
+    let match = true;
+    
+    if (keyword) {
+      match = match && (item.name.toLowerCase().includes(keyword) || 
+                        item.task.toLowerCase().includes(keyword) ||
+                        item.operator.toLowerCase().includes(keyword));
+    }
+    if (type) {
+      match = match && item.type === type;
+    }
+    
+    return match;
+  });
+  
+  totalItems = filteredData.length;
+  totalPages = Math.ceil(totalItems / pageSize);
+  currentPage = 1;
+  
+  renderTable();
+  renderPagination();
+}
+
+function toggleSelectAll() {
+  const checkboxes = document.querySelectorAll('input[name="record"]');
+  const selectAll = document.getElementById('selectAll');
+  checkboxes.forEach(cb => cb.checked = selectAll.checked);
+}
+
+function openExportModal() {
+  exportModal.classList.add('show');
+}
+
+function closeExportModal() {
+  exportModal.classList.remove('show');
+}
+
+function selectExportFormat(format) {
+  document.querySelector(`input[value="${format}"]`).checked = true;
+}
+
+function confirmExport() {
+  const format = document.querySelector('input[name="exportFormat"]:checked').value;
+  const range = document.querySelector('input[name="exportRange"]:checked').value;
+  
+  let dataToExport = range === 'all' ? filteredData : filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  
+  alert(`正在导出${dataToExport.length}条记录，格式：${format.toUpperCase()}...\n\n导出成功！`);
+  closeExportModal();
+}
+
+function viewDetail(id) {
+  const item = usageData.find(u => u.id === id);
+  if (item) {
+    document.getElementById('detailId').textContent = item.id;
+    document.getElementById('detailName').textContent = item.name;
+    document.getElementById('detailSpec').textContent = item.spec;
+    document.getElementById('detailQuantity').textContent = item.quantity;
+    document.getElementById('detailTime').textContent = item.time;
+    document.getElementById('detailOperator').textContent = item.operator;
+    document.getElementById('detailTask').textContent = item.task;
+    document.getElementById('detailPlot').textContent = item.plot;
+    document.getElementById('detailStatus').innerHTML = `<span class="status-tag ${item.status}">${item.statusText}</span>`;
+    document.getElementById('detailRemark').textContent = item.remark || '-';
+    detailModal.classList.add('show');
+  }
+}
+
+function closeDetailModal() {
+  detailModal.classList.remove('show');
+}
+
+function approveUsage(id) {
+  const item = usageData.find(u => u.id === id);
+  if (item && item.status === 'pending') {
+    item.status = 'approved';
+    item.statusText = '已审核';
+    alert(`记录 ${item.id} 已审核通过`);
+    search();
+  }
+}
+
+function rejectUsage(id) {
+  if (confirm('确定要拒绝这条使用记录吗？')) {
+    const item = usageData.find(u => u.id === id);
+    if (item) {
+      item.status = 'rejected';
+      item.statusText = '已拒绝';
+      alert(`记录 ${item.id} 已被拒绝`);
+      search();
+    }
+  }
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 农资库存</title>
+<!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+  <link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 模块卡片 hover 效果 */
+  .module-card {
+    transition: all 0.2s ease;
+  }
+  .module-card:hover {
+    background: var(--bg-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* 弹窗遮罩层 */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.show {
+    display: flex;
+  }
+
+  /* 弹窗容器 */
+  .modal-container {
+    background: #fff;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 85vh;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+
+  @keyframes modalFadeIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  /* 弹窗头部 */
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e8e8e8;
+    background: #fafafa;
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f1f1f;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: #999;
+    transition: color 0.2s;
+  }
+
+  .modal-close:hover {
+    color: #666;
+  }
+
+  /* 弹窗内容 */
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(85vh - 100px);
+  }
+
+  /* 表单样式 */
+  .form-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .form-item {
+    flex: 1;
+  }
+
+  .form-item label {
+    display: block;
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 6px;
+  }
+
+  .form-item input,
+  .form-item select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+  }
+
+  .form-item input:focus,
+  .form-item select:focus {
+    outline: none;
+    border-color: #22a84a;
+  }
+
+  .form-item textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 80px;
+    box-sizing: border-box;
+  }
+
+  /* 弹窗底部 */
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid #e8e8e8;
+    background: #fafafa;
+  }
+
+  /* 详情弹窗样式 */
+  .detail-content {
+    font-size: 14px;
+  }
+
+  .detail-row {
+    display: flex;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .detail-label {
+    width: 120px;
+    color: #999;
+    flex-shrink: 0;
+  }
+
+  .detail-value {
+    color: #333;
+    font-weight: 500;
+  }
+
+  /* 分页输入框 */
+  .pagination-input {
+    width: 50px;
+    padding: 4px 8px;
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    text-align: center;
+    margin: 0 4px;
+  }
+</style>
+</head>
+<body data-active-menu="material" data-active-submenu="material-inventory">
+
+<!-- ===== 整体布局容器 ===== -->
+<div class="app-layout">
+
+  <!-- ===== 侧边栏 ===== -->
+  <nav class="sidebar" aria-label="主导航">
+    <!-- 品牌区 -->
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <!-- 苹果绿 Logo SVG -->
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 3C8 1 5 3 5 6.5C5 10 8 14 11 17C14 14 17 10 17 6.5C17 3 14 1 11 3Z" fill="rgba(34,168,74,0.2)"/>
+          <path d="M11 5C9.5 4 7.5 5 7.5 7C7.5 9 9.5 12 11 14"/>
+          <path d="M11 5C12.5 4 14.5 5 14.5 7C14.5 9 12.5 12 11 14"/>
+          <path d="M11 3V1"/>
+        </svg>
+      </div>
+      <span class="sidebar-brand-text">智慧果园</span>
+    </div>
+
+    <!-- 菜单主体（由 JS 动态渲染） -->
+    <div class="sidebar-body"></div>
+
+    <!-- 底部功能区 -->
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn sidebar-collapse-btn" title="折叠侧边栏">
+        <span class="collapse-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 3L6 9L11 15"/><path d="M14 3V15"/>
+          </svg>
+        </span>
+        <span class="btn-text">折叠</span>
+      </button>
+      <button class="sidebar-footer-btn" title="系统设置" id="btn-settings">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="9" r="2.5"/>
+          <path d="M9 2V4M9 14V16M2 9H4M14 9H16M4.2 4.2L5.6 5.6M12.4 12.4L13.8 13.8M13.8 4.2L12.4 5.6M5.6 12.4L4.2 13.8"/>
+        </svg>
+        <span class="btn-text">设置</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- 移动端遮罩层 -->
+  <div class="sidebar-overlay"></div>
+
+  <!-- ===== 主内容区 ===== -->
+  <div class="main-wrapper">
+
+    <!-- 顶栏 -->
+    <header class="topbar">
+      <!-- 移动端汉堡菜单 -->
+      <button class="topbar-hamburger" aria-label="打开导航菜单">
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M3 6H19M3 11H19M3 16H19"/>
+        </svg>
+      </button>
+      <!-- 右侧功能区 -->
+      <div class="topbar-right">
+        <!-- 通知铃铛 -->
+        <button class="topbar-notification" title="消息通知">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2C7 2 5 4.5 5 7.5V12L3 14H17L15 12V7.5C15 4.5 13 2 10 2Z"/>
+            <path d="M8.5 16C8.5 17 9.2 18 10 18C10.8 18 11.5 17 11.5 16"/>
+          </svg>
+          <span class="badge">3</span>
+        </button>
+
+        <!-- 用户信息 -->
+        <div class="topbar-user">
+          <div class="topbar-user-avatar">张</div>
+          <span class="topbar-user-name">张三</span>
+          <span class="topbar-user-arrow">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
+              <path d="M3 5L6 8L9 5"/>
+            </svg>
+          </span>
+        </div>
+
+        <!-- 用户下拉菜单 -->
+        <div class="topbar-user-dropdown">
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <circle cx="8" cy="5" r="3"/><path d="M2 15C2 11.5 5 10 8 10C11 10 14 11.5 14 15"/>
+            </svg>
+            个人中心
+          </div>
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M8 2V8L11 11"/><circle cx="8" cy="8" r="6"/>
+            </svg>
+            操作日志
+          </div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" style="color:var(--error);">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M6 2H3C2.45 2 2 2.45 2 3V13C2 13.55 2.45 14 3 14H6"/><path d="M10 11L14 8L10 5"/><path d="M14 8H6"/>
+            </svg>
+            退出登录
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tab 标签栏 -->
+    <div class="tab-bar">
+      <!-- Tab 标签由 JS 动态渲染 -->
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 页面头部 -->
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">农资库存</h1>
+            <p class="page-subtitle">实时监控农资库存状态，及时处理库存异常</p>
+          </div>
+        </div>
+        
+        <!-- ===== 搜索栏区 ===== -->
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="warehouseSelect">
+              <option value="">全部仓库</option>
+              <option value="warehouse1">一号仓库</option>
+              <option value="warehouse2">二号仓库</option>
+            </select>
+            <select class="search-select" style="min-width:120px;">
+              <option value="">全部状态</option>
+              <option value="normal">正常</option>
+              <option value="low">库存不足</option>
+              <option value="high">库存充足</option>
+            </select>
+            <input type="text" class="search-input" placeholder="搜索农资名称..." id="searchInput">
+            <button class="jg-btn" style="margin-left:auto;" onclick="search()">搜索</button>
+          </div>
+        </div>
+
+        <!-- ===== 操作按钮区（搜索栏下、数据列表上）===== -->
+        <div class="page-section action-bar">
+          <button class="jg-btn jg-btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <path d="M12 5v14"/>
+              <path d="M5 12h14"/>
+            </svg>
+            入库登记
+          </button>
+          <button class="jg-btn-outline">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" x2="12" y1="15" y2="3"/>
+            </svg>
+            导出库存
+          </button>
+          <button class="jg-btn-outline">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;margin-right:6px;">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 1v6m0 6v6m9-9h-6m-6 0H3"/>
+            </svg>
+            库存盘点
+          </button>
+        </div>
+
+        <!-- ===== 数据列表区 ===== -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:40px;">
+                    <input type="checkbox" style="width:16px;height:16px;">
+                  </th>
+                  <th style="width:100px;">仓库</th>
+                  <th style="width:100px;">农资编号</th>
+                  <th>农资名称</th>
+                  <th style="width:120px;">规格型号</th>
+                  <th style="width:60px;">单位</th>
+                  <th style="width:100px;text-align:right;">库存数量</th>
+                  <th style="width:100px;text-align:right;">最低库存</th>
+                  <th style="width:100px;">库存状态</th>
+                  <th style="width:140px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody">
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination" id="pagination">
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+</div>
+
+<!-- ===== 入库登记弹窗 ===== -->
+<div class="modal-overlay" id="inboundModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">入库登记</h3>
+      <button class="modal-close" onclick="closeInboundModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="inboundForm">
+        <div class="form-row">
+          <div class="form-item">
+            <label>入库单号</label>
+            <input type="text" id="inboundCode" placeholder="自动生成" readonly>
+          </div>
+          <div class="form-item">
+            <label>仓库</label>
+            <select id="inboundWarehouse">
+              <option value="warehouse1">一号仓库</option>
+              <option value="warehouse2">二号仓库</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>农资名称</label>
+            <select id="inboundMaterial">
+              <option value="">请选择农资</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>入库数量</label>
+            <input type="number" id="inboundQty" placeholder="请输入数量" min="1">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>入库日期</label>
+            <input type="date" id="inboundDate">
+          </div>
+          <div class="form-item">
+            <label>经办人</label>
+            <input type="text" id="inboundOperator" placeholder="请输入经办人">
+          </div>
+        </div>
+        <div class="form-item">
+          <label>备注</label>
+          <textarea id="inboundRemark" placeholder="请输入备注信息"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn-outline" onclick="closeInboundModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="saveInbound()">确认入库</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 库存盘点弹窗 ===== -->
+<div class="modal-overlay" id="countModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">库存盘点</h3>
+      <button class="modal-close" onclick="closeCountModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="countForm">
+        <div class="form-row">
+          <div class="form-item">
+            <label>盘点单号</label>
+            <input type="text" id="countCode" placeholder="自动生成" readonly>
+          </div>
+          <div class="form-item">
+            <label>仓库</label>
+            <select id="countWarehouse">
+              <option value="">全部仓库</option>
+              <option value="warehouse1">一号仓库</option>
+              <option value="warehouse2">二号仓库</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>盘点日期</label>
+            <input type="date" id="countDate">
+          </div>
+          <div class="form-item">
+            <label>盘点人</label>
+            <input type="text" id="countOperator" placeholder="请输入盘点人">
+          </div>
+        </div>
+        <div class="form-item">
+          <label>盘点说明</label>
+          <textarea id="countRemark" placeholder="请输入盘点说明"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn-outline" onclick="closeCountModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="saveCount()">开始盘点</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 查看库存详情弹窗 ===== -->
+<div class="modal-overlay" id="viewModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">库存详情</h3>
+      <button class="modal-close" onclick="closeViewModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-content">
+        <div class="detail-row">
+          <span class="detail-label">仓库</span>
+          <span class="detail-value" id="viewWarehouse">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">农资编号</span>
+          <span class="detail-value" id="viewCode">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">农资名称</span>
+          <span class="detail-value" id="viewName">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">规格型号</span>
+          <span class="detail-value" id="viewSpec">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">单位</span>
+          <span class="detail-value" id="viewUnit">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">库存数量</span>
+          <span class="detail-value" id="viewStock">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">最低库存</span>
+          <span class="detail-value" id="viewMin">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">库存状态</span>
+          <span class="detail-value" id="viewStatus">-</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn jg-btn-primary" onclick="closeViewModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 库存调整弹窗 ===== -->
+<div class="modal-overlay" id="adjustModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">库存调整</h3>
+      <button class="modal-close" onclick="closeAdjustModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="adjustForm">
+        <input type="hidden" id="adjustId">
+        <div class="form-row">
+          <div class="form-item">
+            <label>农资名称</label>
+            <input type="text" id="adjustName" readonly>
+          </div>
+          <div class="form-item">
+            <label>当前库存</label>
+            <input type="text" id="adjustCurrent" readonly>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>调整类型</label>
+            <select id="adjustType">
+              <option value="increase">增加库存</option>
+              <option value="decrease">减少库存</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>调整数量</label>
+            <input type="number" id="adjustQty" placeholder="请输入调整数量" min="1">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>调整日期</label>
+            <input type="date" id="adjustDate">
+          </div>
+          <div class="form-item">
+            <label>调整人</label>
+            <input type="text" id="adjustOperator" placeholder="请输入调整人">
+          </div>
+        </div>
+        <div class="form-item">
+          <label>调整原因</label>
+          <textarea id="adjustReason" placeholder="请输入调整原因"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn-outline" onclick="closeAdjustModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="saveAdjust()">确认调整</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 导出确认弹窗 ===== -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal-container" style="max-width: 400px;">
+    <div class="modal-header">
+      <h3 class="modal-title">导出库存</h3>
+      <button class="modal-close" onclick="closeExportModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="color:#666;margin-bottom:16px;">确定要导出当前库存数据吗？</p>
+      <div class="form-item">
+        <label>导出格式</label>
+        <select id="exportFormat">
+          <option value="excel">Excel (.xlsx)</option>
+          <option value="csv">CSV (.csv)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn-outline" onclick="closeExportModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="doExport()">确认导出</button>
+    </div>
+  </div>
+</div>
+
+<!-- 引入交互脚本 -->
+<script src="js/sidebar-layout.js"></script>
+
+<!-- 已通过质量审查（第2轮修正）- 严过审 2025-01-18 -->
+<script src="js/iframe-hide.js"></script>
+
+<script>
+// 库存数据
+const inventoryData = [
+  {"id":"1","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-001","name":"NPK复合肥","spec":"40kg/袋","unit":"袋","stock":"150","minStock":"100","status":"normal"},
+  {"id":"2","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-002","name":"高效杀虫剂","spec":"500ml/瓶","unit":"瓶","stock":"25","minStock":"50","status":"danger"},
+  {"id":"3","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-003","name":"有机肥料","spec":"25kg/袋","unit":"袋","stock":"80","minStock":"50","status":"normal"},
+  {"id":"4","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-004","name":"疏花疏果剪","spec":"SK-5材质","unit":"把","stock":"200","minStock":"30","status":"high"},
+  {"id":"5","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-005","name":"杀菌剂","spec":"1L/瓶","unit":"瓶","stock":"15","minStock":"30","status":"danger"},
+  {"id":"6","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-006","name":"磷酸二铵","spec":"50kg/袋","unit":"袋","stock":"200","minStock":"120","status":"high"},
+  {"id":"7","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-007","name":"除草剂","spec":"200ml/瓶","unit":"瓶","stock":"95","minStock":"80","status":"normal"},
+  {"id":"8","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-008","name":"修枝剪","spec":"铝合金手柄","unit":"把","stock":"150","minStock":"40","status":"high"},
+  {"id":"9","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-009","name":"叶面肥","spec":"500ml/瓶","unit":"瓶","stock":"180","minStock":"150","status":"normal"},
+  {"id":"10","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-010","name":"生物农药","spec":"1L/瓶","unit":"瓶","stock":"25","minStock":"40","status":"danger"},
+  {"id":"11","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-011","name":"授粉器","spec":"电动型","unit":"个","stock":"18","minStock":"20","status":"normal"},
+  {"id":"12","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-012","name":"钾肥","spec":"50kg/袋","unit":"袋","stock":"150","minStock":"90","status":"high"},
+  {"id":"13","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-013","name":"杀螨剂","spec":"300ml/瓶","unit":"瓶","stock":"30","minStock":"70","status":"danger"},
+  {"id":"14","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-014","name":"嫁接刀","spec":"不锈钢","unit":"把","stock":"200","minStock":"100","status":"high"},
+  {"id":"15","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-015","name":"尿素","spec":"50kg/袋","unit":"袋","stock":"250","minStock":"200","status":"normal"},
+  {"id":"16","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-016","name":"保鲜剂","spec":"500ml/瓶","unit":"瓶","stock":"45","minStock":"35","status":"normal"},
+  {"id":"17","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-017","name":"喷雾器","spec":"手动型 16L","unit":"个","stock":"20","minStock":"25","status":"normal"},
+  {"id":"18","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-018","name":"微量元素肥","spec":"1kg/袋","unit":"袋","stock":"80","minStock":"60","status":"normal"},
+  {"id":"19","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-019","name":"生长调节剂","spec":"100ml/瓶","unit":"瓶","stock":"55","minStock":"45","status":"normal"},
+  {"id":"20","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-020","name":"绑枝机","spec":"手动绑枝机","unit":"个","stock":"25","minStock":"30","status":"normal"},
+  {"id":"21","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-021","name":"钙肥","spec":"25kg/袋","unit":"袋","stock":"20","minStock":"50","status":"danger"},
+  {"id":"22","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-022","name":"杀虫灯","spec":"太阳能型","unit":"盏","stock":"12","minStock":"15","status":"normal"},
+  {"id":"23","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-023","name":"土壤改良剂","spec":"20kg/袋","unit":"袋","stock":"35","minStock":"40","status":"normal"}
+];
+
+// 当前页面、每页条数、总条数、总页数
+let currentPage = 1;
+const pageSize = 10;
+let totalItems = inventoryData.length;
+let totalPages = Math.ceil(totalItems / pageSize);
+let filteredData = [...inventoryData];
+
+// DOM元素
+const tableBody = document.querySelector('.data-table tbody');
+const pagination = document.querySelector('.pagination');
+const searchBtn = document.querySelector('.search-bar .jg-btn');
+const searchInput = document.getElementById('searchInput');
+const warehouseSelect = document.getElementById('warehouseSelect');
+const statusSelect = document.querySelector('.search-bar select:nth-child(2)');
+const inboundBtn = document.querySelector('.action-bar .jg-btn-primary');
+const exportBtn = document.querySelector('.action-bar .jg-btn-outline:nth-child(2)');
+const countBtn = document.querySelector('.action-bar .jg-btn-outline:nth-child(3)');
+
+// 弹窗元素
+const inboundModal = document.getElementById('inboundModal');
+const countModal = document.getElementById('countModal');
+const viewModal = document.getElementById('viewModal');
+const adjustModal = document.getElementById('adjustModal');
+const exportModal = document.getElementById('exportModal');
+
+// 初始化
+function init() {
+  renderTable();
+  renderPagination();
+  bindEvents();
+  populateMaterialSelect();
+}
+
+// 渲染表格
+function renderTable() {
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  const pageData = filteredData.slice(start, end);
+  
+  tableBody.innerHTML = pageData.map(item => {
+    const stockClass = item.status === 'danger' ? 'style="color: #ff4d4f; font-weight: 600;"' : '';
+    return `
+      <tr>
+        <td><input type="checkbox" style="width:16px;height:16px;"></td>
+        <td>${item.warehouse}</td>
+        <td><strong>${item.code}</strong></td>
+        <td>${item.name}</td>
+        <td>${item.spec}</td>
+        <td>${item.unit}</td>
+        <td class="text-right" ${stockClass}>${item.stock}</td>
+        <td class="text-right">${item.minStock}</td>
+        <td><span class="status-tag ${item.status}">${getStatusText(item.status)}</span></td>
+        <td>
+          <div class="action-btns">
+            <button class="action-btn detail" onclick="viewInventory('${item.id}')">详情</button>
+            <button class="action-btn edit" onclick="adjustInventory('${item.id}')">调整</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// 获取状态文本
+function getStatusText(status) {
+  const statusMap = {
+    'normal': '正常',
+    'danger': '库存不足',
+    'high': '库存充足'
+  };
+  return statusMap[status] || status;
+}
+
+// 渲染分页
+function renderPagination() {
+  pagination.innerHTML = `
+    <button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="prevPage()">‹</button>
+    <button class="page-btn ${currentPage === 1 ? 'active' : ''}" onclick="goToPage(1)">1</button>
+    ${currentPage > 2 ? `<button class="page-btn" onclick="goToPage(${currentPage - 1})">${currentPage - 1}</button>` : ''}
+    ${currentPage > 1 && currentPage < totalPages ? `<button class="page-btn active" onclick="goToPage(${currentPage})">${currentPage}</button>` : ''}
+    ${currentPage < totalPages - 1 ? `<button class="page-btn" onclick="goToPage(${currentPage + 1})">${currentPage + 1}</button>` : ''}
+    ${totalPages > 1 ? `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="nextPage()">›</button>` : ''}
+    <span style="margin-left:16px;font-size:13px;color:#6b7b6b;">第 <input type="number" class="pagination-input" id="pageInput" value="${currentPage}" min="1" max="${totalPages}" onkeydown="if(event.keyCode===13)jumpToPage()"> 页 / 共 ${totalPages} 页，共 ${totalItems} 条记录</span>
+    <button class="jg-btn-outline" style="margin-left:12px;padding:2px 8px;font-size:12px;" onclick="jumpToPage()">跳转</button>
+  `;
+}
+
+// 上一页
+function prevPage() {
+  if (currentPage > 1) {
+    currentPage--;
+    renderTable();
+    renderPagination();
+  }
+}
+
+// 下一页
+function nextPage() {
+  if (currentPage < totalPages) {
+    currentPage++;
+    renderTable();
+    renderPagination();
+  }
+}
+
+// 跳转到指定页
+function goToPage(page) {
+  if (page >= 1 && page <= totalPages) {
+    currentPage = page;
+    renderTable();
+    renderPagination();
+  }
+}
+
+// 跳转按钮
+function jumpToPage() {
+  const pageInput = document.getElementById('pageInput');
+  const page = parseInt(pageInput.value);
+  if (!isNaN(page) && page >= 1 && page <= totalPages) {
+    currentPage = page;
+    renderTable();
+    renderPagination();
+  } else {
+    pageInput.value = currentPage;
+  }
+}
+
+// 搜索
+function search() {
+  const keyword = searchInput.value.toLowerCase().trim();
+  const warehouse = warehouseSelect.value;
+  const status = statusSelect.value;
+  
+  filteredData = inventoryData.filter(item => {
+    let match = true;
+    
+    if (keyword) {
+      match = match && (item.code.toLowerCase().includes(keyword) || item.name.toLowerCase().includes(keyword));
+    }
+    if (warehouse) {
+      match = match && item.warehouseCode === warehouse;
+    }
+    if (status) {
+      match = match && item.status === status;
+    }
+    
+    return match;
+  });
+  
+  totalItems = filteredData.length;
+  totalPages = Math.ceil(totalItems / pageSize);
+  currentPage = 1;
+  
+  renderTable();
+  renderPagination();
+}
+
+// 绑定事件
+function bindEvents() {
+  searchBtn.addEventListener('click', search);
+  
+  searchInput.addEventListener('keydown', function(e) {
+    if (e.keyCode === 13) {
+      search();
+    }
+  });
+  
+  warehouseSelect.addEventListener('change', search);
+  statusSelect.addEventListener('change', search);
+  
+  inboundBtn.addEventListener('click', openInboundModal);
+  exportBtn.addEventListener('click', openExportModal);
+  countBtn.addEventListener('click', openCountModal);
+  
+  // 点击遮罩层关闭弹窗
+  inboundModal.addEventListener('click', function(e) {
+    if (e.target === inboundModal) closeInboundModal();
+  });
+  countModal.addEventListener('click', function(e) {
+    if (e.target === countModal) closeCountModal();
+  });
+  viewModal.addEventListener('click', function(e) {
+    if (e.target === viewModal) closeViewModal();
+  });
+  adjustModal.addEventListener('click', function(e) {
+    if (e.target === adjustModal) closeAdjustModal();
+  });
+  exportModal.addEventListener('click', function(e) {
+    if (e.target === exportModal) closeExportModal();
+  });
+}
+
+// 填充农资选择框
+function populateMaterialSelect() {
+  const select = document.getElementById('inboundMaterial');
+  inventoryData.forEach(item => {
+    const option = document.createElement('option');
+    option.value = item.id;
+    option.textContent = `${item.code} - ${item.name}`;
+    select.appendChild(option);
+  });
+}
+
+// 打开入库弹窗
+function openInboundModal() {
+  document.getElementById('inboundCode').value = 'RK-' + Date.now().toString(36).toUpperCase();
+  document.getElementById('inboundWarehouse').value = 'warehouse1';
+  document.getElementById('inboundMaterial').value = '';
+  document.getElementById('inboundQty').value = '';
+  document.getElementById('inboundDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('inboundOperator').value = '';
+  document.getElementById('inboundRemark').value = '';
+  inboundModal.classList.add('show');
+}
+
+// 关闭入库弹窗
+function closeInboundModal() {
+  inboundModal.classList.remove('show');
+}
+
+// 保存入库
+function saveInbound() {
+  const materialId = document.getElementById('inboundMaterial').value;
+  const qty = document.getElementById('inboundQty').value;
+  
+  if (!materialId) {
+    alert('请选择农资');
+    return;
+  }
+  if (!qty || parseInt(qty) <= 0) {
+    alert('请输入有效数量');
+    return;
+  }
+  
+  const item = inventoryData.find(i => i.id === materialId);
+  if (item) {
+    item.stock = String(parseInt(item.stock) + parseInt(qty));
+    // 更新状态
+    item.status = parseInt(item.stock) > parseInt(item.minStock) ? 'normal' : 
+                  parseInt(item.stock) <= parseInt(item.minStock) ? 'danger' : 'normal';
+    if (parseInt(item.stock) > parseInt(item.minStock) * 1.5) {
+      item.status = 'high';
+    }
+  }
+  
+  alert('入库成功');
+  closeInboundModal();
+  search();
+}
+
+// 打开盘点弹窗
+function openCountModal() {
+  document.getElementById('countCode').value = 'PD-' + Date.now().toString(36).toUpperCase();
+  document.getElementById('countWarehouse').value = '';
+  document.getElementById('countDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('countOperator').value = '';
+  document.getElementById('countRemark').value = '';
+  countModal.classList.add('show');
+}
+
+// 关闭盘点弹窗
+function closeCountModal() {
+  countModal.classList.remove('show');
+}
+
+// 保存盘点
+function saveCount() {
+  const operator = document.getElementById('countOperator').value;
+  if (!operator.trim()) {
+    alert('请输入盘点人');
+    return;
+  }
+  alert('盘点任务已创建，请开始盘点');
+  closeCountModal();
+}
+
+// 查看库存详情
+function viewInventory(id) {
+  const item = inventoryData.find(i => i.id === id);
+  if (item) {
+    document.getElementById('viewWarehouse').textContent = item.warehouse;
+    document.getElementById('viewCode').textContent = item.code;
+    document.getElementById('viewName').textContent = item.name;
+    document.getElementById('viewSpec').textContent = item.spec;
+    document.getElementById('viewUnit').textContent = item.unit;
+    document.getElementById('viewStock').textContent = item.stock;
+    document.getElementById('viewMin').textContent = item.minStock;
+    document.getElementById('viewStatus').textContent = getStatusText(item.status);
+    viewModal.classList.add('show');
+  }
+}
+
+// 关闭查看弹窗
+function closeViewModal() {
+  viewModal.classList.remove('show');
+}
+
+// 打开调整弹窗
+function adjustInventory(id) {
+  const item = inventoryData.find(i => i.id === id);
+  if (item) {
+    document.getElementById('adjustId').value = item.id;
+    document.getElementById('adjustName').value = item.name;
+    document.getElementById('adjustCurrent').value = item.stock;
+    document.getElementById('adjustType').value = 'increase';
+    document.getElementById('adjustQty').value = '';
+    document.getElementById('adjustDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('adjustOperator').value = '';
+    document.getElementById('adjustReason').value = '';
+    adjustModal.classList.add('show');
+  }
+}
+
+// 关闭调整弹窗
+function closeAdjustModal() {
+  adjustModal.classList.remove('show');
+}
+
+// 保存调整
+function saveAdjust() {
+  const id = document.getElementById('adjustId').value;
+  const type = document.getElementById('adjustType').value;
+  const qty = document.getElementById('adjustQty').value;
+  
+  if (!qty || parseInt(qty) <= 0) {
+    alert('请输入有效数量');
+    return;
+  }
+  
+  const item = inventoryData.find(i => i.id === id);
+  if (item) {
+    if (type === 'increase') {
+      item.stock = String(parseInt(item.stock) + parseInt(qty));
+    } else {
+      const newStock = parseInt(item.stock) - parseInt(qty);
+      if (newStock < 0) {
+        alert('库存不足，无法减少');
+        return;
+      }
+      item.stock = String(newStock);
+    }
+    
+    // 更新状态
+    item.status = parseInt(item.stock) > parseInt(item.minStock) ? 'normal' : 
+                  parseInt(item.stock) <= parseInt(item.minStock) ? 'danger' : 'normal';
+    if (parseInt(item.stock) > parseInt(item.minStock) * 1.5) {
+      item.status = 'high';
+    }
+  }
+  
+  alert('调整成功');
+  closeAdjustModal();
+  search();
+}
+
+// 打开导出弹窗
+function openExportModal() {
+  exportModal.classList.add('show');
+}
+
+// 关闭导出弹窗
+function closeExportModal() {
+  exportModal.classList.remove('show');
+}
+
+// 执行导出
+function doExport() {
+  const format = document.getElementById('exportFormat').value;
+  alert(`库存数据将以${format === 'excel' ? 'Excel' : 'CSV'}格式导出`);
+  closeExportModal();
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

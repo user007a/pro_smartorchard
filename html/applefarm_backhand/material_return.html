@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 农资退货</title>
+<!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+  <link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 模块卡片 hover 效果 */
+  .module-card {
+    transition: all 0.2s ease;
+  }
+  .module-card:hover {
+    background: var(--bg-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* 弹窗遮罩层 */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.show {
+    display: flex;
+  }
+
+  /* 弹窗容器 */
+  .modal-container {
+    background: #fff;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 85vh;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+
+  @keyframes modalFadeIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  /* 弹窗头部 */
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e8e8e8;
+    background: #fafafa;
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f1f1f;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: #999;
+    transition: color 0.2s;
+  }
+
+  .modal-close:hover {
+    color: #666;
+  }
+
+  /* 弹窗内容 */
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(85vh - 100px);
+  }
+
+  /* 表单样式 */
+  .form-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .form-item {
+    flex: 1;
+  }
+
+  .form-item label {
+    display: block;
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 6px;
+  }
+
+  .form-item input,
+  .form-item select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+  }
+
+  .form-item input:focus,
+  .form-item select:focus {
+    outline: none;
+    border-color: #22a84a;
+  }
+
+  .form-item textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 80px;
+    box-sizing: border-box;
+  }
+
+  /* 弹窗底部 */
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid #e8e8e8;
+    background: #fafafa;
+  }
+
+  /* 详情弹窗样式 */
+  .detail-content {
+    font-size: 14px;
+  }
+
+  .detail-row {
+    display: flex;
+    padding: 12px 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .detail-label {
+    width: 120px;
+    color: #999;
+    flex-shrink: 0;
+  }
+
+  .detail-value {
+    color: #333;
+    font-weight: 500;
+  }
+
+  /* 分页输入框 */
+  .pagination-input {
+    width: 50px;
+    padding: 4px 8px;
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    text-align: center;
+    margin: 0 4px;
+  }
+</style>
+</head>
+<body data-active-menu="material" data-active-submenu="material-return">
+
+<!-- ===== 整体布局容器 ===== -->
+<div class="app-layout">
+
+  <!-- ===== 侧边栏 ===== -->
+  <nav class="sidebar" aria-label="主导航">
+    <!-- 品牌区 -->
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <!-- 苹果绿 Logo SVG -->
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 3C8 1 5 3 5 6.5C5 10 8 14 11 17C14 14 17 10 17 6.5C17 3 14 1 11 3Z" fill="rgba(34,168,74,0.2)"/>
+          <path d="M11 5C9.5 4 7.5 5 7.5 7C7.5 9 9.5 12 11 14"/>
+          <path d="M11 5C12.5 4 14.5 5 14.5 7C14.5 9 12.5 12 11 14"/>
+          <path d="M11 3V1"/>
+        </svg>
+      </div>
+      <span class="sidebar-brand-text">智慧果园</span>
+    </div>
+
+    <!-- 菜单主体（由 JS 动态渲染） -->
+    <div class="sidebar-body"></div>
+
+    <!-- 底部功能区 -->
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn sidebar-collapse-btn" title="折叠侧边栏">
+        <span class="collapse-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 3L6 9L11 15"/><path d="M14 3V15"/>
+          </svg>
+        </span>
+        <span class="btn-text">折叠</span>
+      </button>
+      <button class="sidebar-footer-btn" title="系统设置" id="btn-settings">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="9" r="2.5"/>
+          <path d="M9 2V4M9 14V16M2 9H4M14 9H16M4.2 4.2L5.6 5.6M12.4 12.4L13.8 13.8M13.8 4.2L12.4 5.6M5.6 12.4L4.2 13.8"/>
+        </svg>
+        <span class="btn-text">设置</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- 移动端遮罩层 -->
+  <div class="sidebar-overlay"></div>
+
+  <!-- ===== 主内容区 ===== -->
+  <div class="main-wrapper">
+
+    <!-- 顶栏 -->
+    <header class="topbar">
+      <!-- 移动端汉堡菜单 -->
+      <button class="topbar-hamburger" aria-label="打开导航菜单">
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M3 6H19M3 11H19M3 16H19"/>
+        </svg>
+      </button>
+      <!-- 右侧功能区 -->
+      <div class="topbar-right">
+        <!-- 通知铃铛 -->
+        <button class="topbar-notification" title="消息通知">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2C7 2 5 4.5 5 7.5V12L3 14H17L15 12V7.5C15 4.5 13 2 10 2Z"/>
+            <path d="M8.5 16C8.5 17 9.2 18 10 18C10.8 18 11.5 17 11.5 16"/>
+          </svg>
+          <span class="badge">3</span>
+        </button>
+
+        <!-- 用户信息 -->
+        <div class="topbar-user">
+          <div class="topbar-user-avatar">张</div>
+          <span class="topbar-user-name">张三</span>
+          <span class="topbar-user-arrow">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
+              <path d="M3 5L6 8L9 5"/>
+            </svg>
+          </span>
+        </div>
+
+        <!-- 用户下拉菜单 -->
+        <div class="topbar-user-dropdown">
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <circle cx="8" cy="5" r="3"/><path d="M2 15C2 11.5 5 10 8 10C11 10 14 11.5 14 15"/>
+            </svg>
+            个人中心
+          </div>
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M8 2V8L11 11"/><circle cx="8" cy="8" r="6"/>
+            </svg>
+            操作日志
+          </div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" style="color:var(--error);">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M6 2H3C2.45 2 2 2.45 2 3V13C2 13.55 2.45 14 3 14H6"/><path d="M10 11L14 8L10 5"/><path d="M14 8H6"/>
+            </svg>
+            退出登录
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tab 标签栏 -->
+    <div class="tab-bar">
+      <!-- Tab 标签由 JS 动态渲染 -->
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 页面头部 -->
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">农资退货</h1>
+            <p class="page-subtitle">管理农资退货流程，跟踪退货状态</p>
+          </div>
+        </div>
+        <!-- 搜索栏区 -->
+        <div class="page-section search-section">
+          <div class="search-filters">
+            <select class="filter-select" id="warehouseSelect">
+              <option value="">选择仓库</option>
+              <option value="wh1">中心仓库</option>
+              <option value="wh2">东区仓库</option>
+              <option value="wh3">西区仓库</option>
+            </select>
+            <select class="filter-select" id="returnTypeSelect">
+              <option value="">退库类型</option>
+              <option value="quality">质量问题</option>
+              <option value="expired">批次过期</option>
+              <option value="damage">运输损坏</option>
+              <option value="other">其他</option>
+            </select>
+            <input type="date" class="filter-input" id="startDate" placeholder="开始日期">
+            <input type="date" class="filter-input" id="endDate" placeholder="结束日期">
+            <input type="text" class="search-input" placeholder="搜索退库单号..." id="searchInput">
+            <button class="jg-btn jg-btn-primary">搜索</button>
+          </div>
+        </div>
+
+        <!-- 操作按钮区 -->
+        <div class="page-section action-bar">
+          <div class="action-left">
+            <button class="jg-btn jg-btn-primary" id="btnAddReturn">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:4px;">
+                <path d="M8 3V13M3 8H13"/>
+              </svg>
+              新建退库
+            </button>
+            <button class="jg-btn" id="btnExportReturn">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:4px;">
+                <path d="M3 10V13C3 13.55 3.45 14 4 14H12C12.55 14 13 13.55 13 13V10"/><path d="M8 3V10M8 10L5 7M8 10L11 7"/>
+              </svg>
+              导出退库记录
+            </button>
+          </div>
+          <div class="action-right">
+            <button class="jg-btn">待审核</button>
+            <button class="jg-btn">已审核</button>
+            <button class="jg-btn">已退款</button>
+            <button class="jg-btn">已完成</button>
+          </div>
+        </div>
+
+        <!-- 数据列表区 -->
+        <div class="page-section data-section">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="checkbox-col"><input type="checkbox" id="selectAll"></th>
+                <th>退库单号</th>
+                <th>仓库</th>
+                <th>退库类型</th>
+                <th>农资名称</th>
+                <th>数量</th>
+                <th>退库原因</th>
+                <th>经手人</th>
+                <th>日期</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-001"></td>
+                <td><strong>TH-2024-001</strong></td>
+                <td>中心仓库</td>
+                <td>质量问题</td>
+                <td>高效杀虫剂</td>
+                <td class="text-right">10 件</td>
+                <td>质量问题</td>
+                <td>张三</td>
+                <td>2024-05-20</td>
+                <td><span class="status-tag pending">待审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn approve">审核通过</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-002"></td>
+                <td><strong>TH-2024-002</strong></td>
+                <td>东区仓库</td>
+                <td>包装破损</td>
+                <td>NPK复合肥</td>
+                <td class="text-right">5 袋</td>
+                <td>包装破损</td>
+                <td>李四</td>
+                <td>2024-05-19</td>
+                <td><span class="status-tag approved">已审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn refund">确认退款</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-003"></td>
+                <td><strong>TH-2024-003</strong></td>
+                <td>西区仓库</td>
+                <td>批次过期</td>
+                <td>杀菌剂</td>
+                <td class="text-right">8 瓶</td>
+                <td>批次过期</td>
+                <td>王五</td>
+                <td>2024-05-18</td>
+                <td><span class="status-tag refunded">已退款</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-004"></td>
+                <td><strong>TH-2024-004</strong></td>
+                <td>中心仓库</td>
+                <td>运输损坏</td>
+                <td>有机肥料</td>
+                <td class="text-right">12 袋</td>
+                <td>运输损坏</td>
+                <td>赵六</td>
+                <td>2024-05-15</td>
+                <td><span class="status-tag completed">已完成</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-005"></td>
+                <td><strong>TH-2024-005</strong></td>
+                <td>东区仓库</td>
+                <td>质量问题</td>
+                <td>叶面肥</td>
+                <td class="text-right">15 瓶</td>
+                <td>有效成分不足</td>
+                <td>孙七</td>
+                <td>2024-05-14</td>
+                <td><span class="status-tag pending">待审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn approve">审核通过</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-006"></td>
+                <td><strong>TH-2024-006</strong></td>
+                <td>西区仓库</td>
+                <td>批次过期</td>
+                <td>除草剂</td>
+                <td class="text-right">20 瓶</td>
+                <td>保质期已过</td>
+                <td>周八</td>
+                <td>2024-05-13</td>
+                <td><span class="status-tag approved">已审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn refund">确认退款</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-007"></td>
+                <td><strong>TH-2024-007</strong></td>
+                <td>中心仓库</td>
+                <td>其他</td>
+                <td>授粉器</td>
+                <td class="text-right">3 个</td>
+                <td>型号不符</td>
+                <td>吴九</td>
+                <td>2024-05-12</td>
+                <td><span class="status-tag refunded">已退款</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-008"></td>
+                <td><strong>TH-2024-008</strong></td>
+                <td>东区仓库</td>
+                <td>运输损坏</td>
+                <td>修枝剪</td>
+                <td class="text-right">8 把</td>
+                <td>运输中损坏</td>
+                <td>郑十</td>
+                <td>2024-05-11</td>
+                <td><span class="status-tag completed">已完成</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-009"></td>
+                <td><strong>TH-2024-009</strong></td>
+                <td>西区仓库</td>
+                <td>质量问题</td>
+                <td>生物农药</td>
+                <td class="text-right">6 瓶</td>
+                <td>药效不佳</td>
+                <td>张三</td>
+                <td>2024-05-10</td>
+                <td><span class="status-tag pending">待审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn approve">审核通过</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-010"></td>
+                <td><strong>TH-2024-010</strong></td>
+                <td>中心仓库</td>
+                <td>包装破损</td>
+                <td>钾肥</td>
+                <td class="text-right">10 袋</td>
+                <td>包装破损漏撒</td>
+                <td>李四</td>
+                <td>2024-05-09</td>
+                <td><span class="status-tag approved">已审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn refund">确认退款</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-011"></td>
+                <td><strong>TH-2024-011</strong></td>
+                <td>东区仓库</td>
+                <td>批次过期</td>
+                <td>微量元素肥</td>
+                <td class="text-right">12 袋</td>
+                <td>已过期</td>
+                <td>王五</td>
+                <td>2024-05-08</td>
+                <td><span class="status-tag refunded">已退款</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-012"></td>
+                <td><strong>TH-2024-012</strong></td>
+                <td>西区仓库</td>
+                <td>其他</td>
+                <td>嫁接刀</td>
+                <td class="text-right">5 把</td>
+                <td>订单取消</td>
+                <td>赵六</td>
+                <td>2024-05-07</td>
+                <td><span class="status-tag completed">已完成</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-013"></td>
+                <td><strong>TH-2024-013</strong></td>
+                <td>中心仓库</td>
+                <td>质量问题</td>
+                <td>保鲜剂</td>
+                <td class="text-right">20 瓶</td>
+                <td>效果不达标</td>
+                <td>孙七</td>
+                <td>2024-05-06</td>
+                <td><span class="status-tag pending">待审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn approve">审核通过</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-014"></td>
+                <td><strong>TH-2024-014</strong></td>
+                <td>东区仓库</td>
+                <td>运输损坏</td>
+                <td>喷雾器</td>
+                <td class="text-right">4 个</td>
+                <td>外壳破损</td>
+                <td>周八</td>
+                <td>2024-05-05</td>
+                <td><span class="status-tag approved">已审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn refund">确认退款</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-015"></td>
+                <td><strong>TH-2024-015</strong></td>
+                <td>西区仓库</td>
+                <td>批次过期</td>
+                <td>生长调节剂</td>
+                <td class="text-right">8 瓶</td>
+                <td>即将过期</td>
+                <td>吴九</td>
+                <td>2024-05-04</td>
+                <td><span class="status-tag refunded">已退款</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-016"></td>
+                <td><strong>TH-2024-016</strong></td>
+                <td>中心仓库</td>
+                <td>其他</td>
+                <td>绑枝机</td>
+                <td class="text-right">6 个</td>
+                <td>需求变更</td>
+                <td>郑十</td>
+                <td>2024-05-03</td>
+                <td><span class="status-tag completed">已完成</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-017"></td>
+                <td><strong>TH-2024-017</strong></td>
+                <td>东区仓库</td>
+                <td>质量问题</td>
+                <td>钙肥</td>
+                <td class="text-right">15 袋</td>
+                <td>结块严重</td>
+                <td>张三</td>
+                <td>2024-05-02</td>
+                <td><span class="status-tag pending">待审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn approve">审核通过</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-018"></td>
+                <td><strong>TH-2024-018</strong></td>
+                <td>西区仓库</td>
+                <td>包装破损</td>
+                <td>杀虫灯</td>
+                <td class="text-right">2 盏</td>
+                <td>包装损坏</td>
+                <td>李四</td>
+                <td>2024-05-01</td>
+                <td><span class="status-tag approved">已审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn refund">确认退款</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-019"></td>
+                <td><strong>TH-2024-019</strong></td>
+                <td>中心仓库</td>
+                <td>运输损坏</td>
+                <td>土壤改良剂</td>
+                <td class="text-right">25 袋</td>
+                <td>运输挤压</td>
+                <td>王五</td>
+                <td>2024-04-30</td>
+                <td><span class="status-tag refunded">已退款</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-020"></td>
+                <td><strong>TH-2024-020</strong></td>
+                <td>东区仓库</td>
+                <td>批次过期</td>
+                <td>尿素</td>
+                <td class="text-right">30 袋</td>
+                <td>已过期</td>
+                <td>赵六</td>
+                <td>2024-04-29</td>
+                <td><span class="status-tag completed">已完成</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-021"></td>
+                <td><strong>TH-2024-021</strong></td>
+                <td>西区仓库</td>
+                <td>质量问题</td>
+                <td>杀螨剂</td>
+                <td class="text-right">12 瓶</td>
+                <td>效果差</td>
+                <td>孙七</td>
+                <td>2024-04-28</td>
+                <td><span class="status-tag pending">待审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn approve">审核通过</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-022"></td>
+                <td><strong>TH-2024-022</strong></td>
+                <td>中心仓库</td>
+                <td>其他</td>
+                <td>磷酸二铵</td>
+                <td class="text-right">5 袋</td>
+                <td>重复采购</td>
+                <td>周八</td>
+                <td>2024-04-27</td>
+                <td><span class="status-tag approved">已审核</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                    <button class="action-btn refund">确认退款</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td class="checkbox-col"><input type="checkbox" name="returnItem" value="TH-2024-023"></td>
+                <td><strong>TH-2024-023</strong></td>
+                <td>东区仓库</td>
+                <td>包装破损</td>
+                <td>疏花疏果剪</td>
+                <td class="text-right">10 把</td>
+                <td>包装破损</td>
+                <td>吴九</td>
+                <td>2024-04-26</td>
+                <td><span class="status-tag refunded">已退款</span></td>
+                <td>
+                  <div class="action-btns">
+                    <button class="action-btn detail">详情</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="pagination">
+            <button class="page-btn disabled">‹</button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <button class="page-btn">›</button>
+            <span style="margin-left:16px;font-size:13px;color:#6b7b6b;">共 23 条记录</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+</div>
+
+<!-- ===== 新建退库弹窗 ===== -->
+<div class="modal-overlay" id="addReturnModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">新建退库</h3>
+      <button class="modal-close" onclick="closeAddReturnModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="addReturnForm">
+        <div class="form-row">
+          <div class="form-item">
+            <label>退库单号</label>
+            <input type="text" id="returnCode" placeholder="自动生成" readonly>
+          </div>
+          <div class="form-item">
+            <label>仓库</label>
+            <select id="returnWarehouse">
+              <option value="wh1">中心仓库</option>
+              <option value="wh2">东区仓库</option>
+              <option value="wh3">西区仓库</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>退库类型</label>
+            <select id="returnType">
+              <option value="quality">质量问题</option>
+              <option value="expired">批次过期</option>
+              <option value="damage">运输损坏</option>
+              <option value="other">其他</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>农资名称</label>
+            <select id="returnMaterial">
+              <option value="">请选择农资</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>数量</label>
+            <input type="number" id="returnQty" placeholder="请输入数量" min="1">
+          </div>
+          <div class="form-item">
+            <label>经手人</label>
+            <input type="text" id="returnOperator" placeholder="请输入经手人">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>日期</label>
+            <input type="date" id="returnDate">
+          </div>
+          <div class="form-item">
+            <label>金额</label>
+            <input type="number" id="returnAmount" placeholder="请输入金额" min="0" step="0.01">
+          </div>
+        </div>
+        <div class="form-item">
+          <label>退库原因</label>
+          <textarea id="returnReason" placeholder="请输入退库原因"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn-outline" onclick="closeAddReturnModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="saveReturn()">提交退库</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 查看详情弹窗 ===== -->
+<div class="modal-overlay" id="viewModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">退库详情</h3>
+      <button class="modal-close" onclick="closeViewModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-content">
+        <div class="detail-row">
+          <span class="detail-label">退库单号</span>
+          <span class="detail-value" id="viewCode">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">仓库</span>
+          <span class="detail-value" id="viewWarehouse">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">退库类型</span>
+          <span class="detail-value" id="viewType">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">农资名称</span>
+          <span class="detail-value" id="viewMaterial">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">数量</span>
+          <span class="detail-value" id="viewQty">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">金额</span>
+          <span class="detail-value" id="viewAmount">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">退库原因</span>
+          <span class="detail-value" id="viewReason">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">经手人</span>
+          <span class="detail-value" id="viewOperator">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">日期</span>
+          <span class="detail-value" id="viewDate">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">状态</span>
+          <span class="detail-value" id="viewStatus">-</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn jg-btn-primary" onclick="closeViewModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 审核确认弹窗 ===== -->
+<div class="modal-overlay" id="approveModal">
+  <div class="modal-container" style="max-width: 400px;">
+    <div class="modal-header">
+      <h3 class="modal-title">审核确认</h3>
+      <button class="modal-close" onclick="closeApproveModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="approveId">
+      <p style="color:#666;margin-bottom:16px;">确定要通过该退库申请吗？</p>
+      <div class="form-item">
+        <label>审核意见</label>
+        <textarea id="approveComment" placeholder="请输入审核意见（可选）"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn-outline" onclick="closeApproveModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="doApprove()">确认通过</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 退款确认弹窗 ===== -->
+<div class="modal-overlay" id="refundModal">
+  <div class="modal-container" style="max-width: 400px;">
+    <div class="modal-header">
+      <h3 class="modal-title">退款确认</h3>
+      <button class="modal-close" onclick="closeRefundModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="refundId">
+      <p style="color:#666;margin-bottom:16px;">确定要执行退款操作吗？</p>
+      <div class="form-item">
+        <label>退款金额</label>
+        <input type="number" id="refundAmount" placeholder="请输入退款金额" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn-outline" onclick="closeRefundModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="doRefund()">确认退款</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 导出确认弹窗 ===== -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal-container" style="max-width: 400px;">
+    <div class="modal-header">
+      <h3 class="modal-title">导出退库记录</h3>
+      <button class="modal-close" onclick="closeExportModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="color:#666;margin-bottom:16px;">确定要导出退库记录吗？</p>
+      <div class="form-item">
+        <label>导出格式</label>
+        <select id="exportFormat">
+          <option value="excel">Excel (.xlsx)</option>
+          <option value="csv">CSV (.csv)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn-outline" onclick="closeExportModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="doExport()">确认导出</button>
+    </div>
+  </div>
+</div>
+
+<!-- 引入交互脚本 -->
+<script src="js/sidebar-layout.js"></script>
+
+<!-- 已通过质量审查（第2轮修正）- 严过审 2025-01-18 -->
+<script src="js/iframe-hide.js"></script>
+
+<script>
+// 退库数据
+const returnData = [
+  {"id":"1","code":"TH-2024-001","warehouse":"中心仓库","warehouseCode":"wh1","type":"quality","typeText":"质量问题","material":"高效杀虫剂","qty":"10","unit":"件","amount":"2500.00","reason":"质量问题","operator":"张三","date":"2024-05-20","status":"pending","statusText":"待审核"},
+  {"id":"2","code":"TH-2024-002","warehouse":"东区仓库","warehouseCode":"wh2","type":"damage","typeText":"包装破损","material":"NPK复合肥","qty":"5","unit":"袋","amount":"800.00","reason":"包装破损","operator":"李四","date":"2024-05-19","status":"approved","statusText":"已审核"},
+  {"id":"3","code":"TH-2024-003","warehouse":"西区仓库","warehouseCode":"wh3","type":"expired","typeText":"批次过期","material":"杀菌剂","qty":"8","unit":"瓶","amount":"1200.00","reason":"批次过期","operator":"王五","date":"2024-05-18","status":"refunded","statusText":"已退款"},
+  {"id":"4","code":"TH-2024-004","warehouse":"中心仓库","warehouseCode":"wh1","type":"damage","typeText":"运输损坏","material":"有机肥料","qty":"12","unit":"袋","amount":"1500.00","reason":"运输损坏","operator":"赵六","date":"2024-05-15","status":"completed","statusText":"已完成"},
+  {"id":"5","code":"TH-2024-005","warehouse":"东区仓库","warehouseCode":"wh2","type":"quality","typeText":"质量问题","material":"叶面肥","qty":"15","unit":"瓶","amount":"600.00","reason":"有效成分不足","operator":"孙七","date":"2024-05-14","status":"pending","statusText":"待审核"},
+  {"id":"6","code":"TH-2024-006","warehouse":"西区仓库","warehouseCode":"wh3","type":"expired","typeText":"批次过期","material":"除草剂","qty":"20","unit":"瓶","amount":"800.00","reason":"保质期已过","operator":"周八","date":"2024-05-13","status":"approved","statusText":"已审核"},
+  {"id":"7","code":"TH-2024-007","warehouse":"中心仓库","warehouseCode":"wh1","type":"other","typeText":"其他","material":"授粉器","qty":"3","unit":"个","amount":"900.00","reason":"型号不符","operator":"吴九","date":"2024-05-12","status":"refunded","statusText":"已退款"},
+  {"id":"8","code":"TH-2024-008","warehouse":"东区仓库","warehouseCode":"wh2","type":"damage","typeText":"运输损坏","material":"修枝剪","qty":"8","unit":"把","amount":"400.00","reason":"运输中损坏","operator":"郑十","date":"2024-05-11","status":"completed","statusText":"已完成"},
+  {"id":"9","code":"TH-2024-009","warehouse":"西区仓库","warehouseCode":"wh3","type":"quality","typeText":"质量问题","material":"生物农药","qty":"6","unit":"瓶","amount":"720.00","reason":"药效不佳","operator":"张三","date":"2024-05-10","status":"pending","statusText":"待审核"},
+  {"id":"10","code":"TH-2024-010","warehouse":"中心仓库","warehouseCode":"wh1","type":"damage","typeText":"包装破损","material":"钾肥","qty":"10","unit":"袋","amount":"1500.00","reason":"包装破损漏撒","operator":"李四","date":"2024-05-09","status":"approved","statusText":"已审核"},
+  {"id":"11","code":"TH-2024-011","warehouse":"东区仓库","warehouseCode":"wh2","type":"expired","typeText":"批次过期","material":"微量元素肥","qty":"12","unit":"袋","amount":"600.00","reason":"已过期","operator":"王五","date":"2024-05-08","status":"refunded","statusText":"已退款"},
+  {"id":"12","code":"TH-2024-012","warehouse":"西区仓库","warehouseCode":"wh3","type":"other","typeText":"其他","material":"嫁接刀","qty":"5","unit":"把","amount":"500.00","reason":"订单取消","operator":"赵六","date":"2024-05-07","status":"completed","statusText":"已完成"},
+  {"id":"13","code":"TH-2024-013","warehouse":"中心仓库","warehouseCode":"wh1","type":"quality","typeText":"质量问题","material":"保鲜剂","qty":"20","unit":"瓶","amount":"400.00","reason":"效果不达标","operator":"孙七","date":"2024-05-06","status":"pending","statusText":"待审核"},
+  {"id":"14","code":"TH-2024-014","warehouse":"东区仓库","warehouseCode":"wh2","type":"damage","typeText":"运输损坏","material":"喷雾器","qty":"4","unit":"个","amount":"800.00","reason":"外壳破损","operator":"周八","date":"2024-05-05","status":"approved","statusText":"已审核"},
+  {"id":"15","code":"TH-2024-015","warehouse":"西区仓库","warehouseCode":"wh3","type":"expired","typeText":"批次过期","material":"生长调节剂","qty":"8","unit":"瓶","amount":"480.00","reason":"即将过期","operator":"吴九","date":"2024-05-04","status":"refunded","statusText":"已退款"},
+  {"id":"16","code":"TH-2024-016","warehouse":"中心仓库","warehouseCode":"wh1","type":"other","typeText":"其他","material":"绑枝机","qty":"6","unit":"个","amount":"1200.00","reason":"需求变更","operator":"郑十","date":"2024-05-03","status":"completed","statusText":"已完成"},
+  {"id":"17","code":"TH-2024-017","warehouse":"东区仓库","warehouseCode":"wh2","type":"quality","typeText":"质量问题","material":"钙肥","qty":"15","unit":"袋","amount":"900.00","reason":"结块严重","operator":"张三","date":"2024-05-02","status":"pending","statusText":"待审核"},
+  {"id":"18","code":"TH-2024-018","warehouse":"西区仓库","warehouseCode":"wh3","type":"damage","typeText":"包装破损","material":"杀虫灯","qty":"2","unit":"盏","amount":"1600.00","reason":"包装损坏","operator":"李四","date":"2024-05-01","status":"approved","statusText":"已审核"},
+  {"id":"19","code":"TH-2024-019","warehouse":"中心仓库","warehouseCode":"wh1","type":"damage","typeText":"运输损坏","material":"土壤改良剂","qty":"25","unit":"袋","amount":"1250.00","reason":"运输挤压","operator":"王五","date":"2024-04-30","status":"refunded","statusText":"已退款"},
+  {"id":"20","code":"TH-2024-020","warehouse":"东区仓库","warehouseCode":"wh2","type":"expired","typeText":"批次过期","material":"尿素","qty":"30","unit":"袋","amount":"900.00","reason":"已过期","operator":"赵六","date":"2024-04-29","status":"completed","statusText":"已完成"},
+  {"id":"21","code":"TH-2024-021","warehouse":"西区仓库","warehouseCode":"wh3","type":"quality","typeText":"质量问题","material":"杀螨剂","qty":"12","unit":"瓶","amount":"360.00","reason":"效果差","operator":"孙七","date":"2024-04-28","status":"pending","statusText":"待审核"},
+  {"id":"22","code":"TH-2024-022","warehouse":"中心仓库","warehouseCode":"wh1","type":"other","typeText":"其他","material":"磷酸二铵","qty":"5","unit":"袋","amount":"500.00","reason":"重复采购","operator":"周八","date":"2024-04-27","status":"approved","statusText":"已审核"},
+  {"id":"23","code":"TH-2024-023","warehouse":"东区仓库","warehouseCode":"wh2","type":"damage","typeText":"包装破损","material":"疏花疏果剪","qty":"10","unit":"把","amount":"600.00","reason":"包装破损","operator":"吴九","date":"2024-04-26","status":"refunded","statusText":"已退款"}
+];
+
+// 当前页面、每页条数、总条数、总页数
+let currentPage = 1;
+const pageSize = 10;
+let totalItems = returnData.length;
+let totalPages = Math.ceil(totalItems / pageSize);
+let filteredData = [...returnData];
+
+// DOM元素
+const tableBody = document.querySelector('.data-table tbody');
+const pagination = document.querySelector('.pagination');
+const searchBtn = document.querySelector('.search-filters .jg-btn');
+const searchInput = document.getElementById('searchInput');
+const warehouseSelect = document.getElementById('warehouseSelect');
+const returnTypeSelect = document.getElementById('returnTypeSelect');
+const startDate = document.getElementById('startDate');
+const endDate = document.getElementById('endDate');
+const addReturnBtn = document.getElementById('btnAddReturn');
+const exportReturnBtn = document.getElementById('btnExportReturn');
+
+// 弹窗元素
+const addReturnModal = document.getElementById('addReturnModal');
+const viewModal = document.getElementById('viewModal');
+const approveModal = document.getElementById('approveModal');
+const refundModal = document.getElementById('refundModal');
+const exportModal = document.getElementById('exportModal');
+
+// 初始化
+function init() {
+  renderTable();
+  renderPagination();
+  bindEvents();
+  populateMaterialSelect();
+}
+
+// 渲染表格
+function renderTable() {
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  const pageData = filteredData.slice(start, end);
+  
+  tableBody.innerHTML = pageData.map(item => {
+    const actionBtns = getActionButtons(item);
+    return `
+      <tr>
+        <td class="checkbox-col"><input type="checkbox" name="returnItem" value="${item.code}"></td>
+        <td><strong>${item.code}</strong></td>
+        <td>${item.warehouse}</td>
+        <td>${item.typeText}</td>
+        <td>${item.material}</td>
+        <td class="text-right">${item.qty} ${item.unit}</td>
+        <td>${item.reason}</td>
+        <td>${item.operator}</td>
+        <td>${item.date}</td>
+        <td><span class="status-tag ${item.status}">${item.statusText}</span></td>
+        <td>
+          <div class="action-btns">
+            <button class="action-btn detail" onclick="viewDetail('${item.id}')">详情</button>
+            ${actionBtns}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// 获取操作按钮
+function getActionButtons(item) {
+  if (item.status === 'pending') {
+    return '<button class="action-btn approve" onclick="openApproveModal(\'' + item.id + '\')">审核通过</button>';
+  } else if (item.status === 'approved') {
+    return '<button class="action-btn refund" onclick="openRefundModal(\'' + item.id + '\')">确认退款</button>';
+  }
+  return '';
+}
+
+// 渲染分页
+function renderPagination() {
+  pagination.innerHTML = `
+    <button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="prevPage()">‹</button>
+    <button class="page-btn ${currentPage === 1 ? 'active' : ''}" onclick="goToPage(1)">1</button>
+    ${currentPage > 2 ? `<button class="page-btn" onclick="goToPage(${currentPage - 1})">${currentPage - 1}</button>` : ''}
+    ${currentPage > 1 && currentPage < totalPages ? `<button class="page-btn active" onclick="goToPage(${currentPage})">${currentPage}</button>` : ''}
+    ${currentPage < totalPages - 1 ? `<button class="page-btn" onclick="goToPage(${currentPage + 1})">${currentPage + 1}</button>` : ''}
+    ${totalPages > 1 ? `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="nextPage()">›</button>` : ''}
+    <span style="margin-left:16px;font-size:13px;color:#6b7b6b;">第 <input type="number" class="pagination-input" id="pageInput" value="${currentPage}" min="1" max="${totalPages}" onkeydown="if(event.keyCode===13)jumpToPage()"> 页 / 共 ${totalPages} 页，共 ${totalItems} 条记录</span>
+    <button class="jg-btn-outline" style="margin-left:12px;padding:2px 8px;font-size:12px;" onclick="jumpToPage()">跳转</button>
+  `;
+}
+
+// 上一页
+function prevPage() {
+  if (currentPage > 1) {
+    currentPage--;
+    renderTable();
+    renderPagination();
+  }
+}
+
+// 下一页
+function nextPage() {
+  if (currentPage < totalPages) {
+    currentPage++;
+    renderTable();
+    renderPagination();
+  }
+}
+
+// 跳转到指定页
+function goToPage(page) {
+  if (page >= 1 && page <= totalPages) {
+    currentPage = page;
+    renderTable();
+    renderPagination();
+  }
+}
+
+// 跳转按钮
+function jumpToPage() {
+  const pageInput = document.getElementById('pageInput');
+  const page = parseInt(pageInput.value);
+  if (!isNaN(page) && page >= 1 && page <= totalPages) {
+    currentPage = page;
+    renderTable();
+    renderPagination();
+  } else {
+    pageInput.value = currentPage;
+  }
+}
+
+// 搜索
+function search() {
+  const keyword = searchInput.value.toLowerCase().trim();
+  const warehouse = warehouseSelect.value;
+  const returnType = returnTypeSelect.value;
+  const from = startDate.value;
+  const to = endDate.value;
+  
+  filteredData = returnData.filter(item => {
+    let match = true;
+    
+    if (keyword) {
+      match = match && item.code.toLowerCase().includes(keyword);
+    }
+    if (warehouse) {
+      match = match && item.warehouseCode === warehouse;
+    }
+    if (returnType) {
+      match = match && item.type === returnType;
+    }
+    if (from) {
+      match = match && item.date >= from;
+    }
+    if (to) {
+      match = match && item.date <= to;
+    }
+    
+    return match;
+  });
+  
+  totalItems = filteredData.length;
+  totalPages = Math.ceil(totalItems / pageSize);
+  currentPage = 1;
+  
+  renderTable();
+  renderPagination();
+}
+
+// 状态筛选
+function filterByStatus(status) {
+  if (!status) {
+    filteredData = [...returnData];
+  } else {
+    filteredData = returnData.filter(item => item.status === status);
+  }
+  totalItems = filteredData.length;
+  totalPages = Math.ceil(totalItems / pageSize);
+  currentPage = 1;
+  renderTable();
+  renderPagination();
+}
+
+// 绑定事件
+function bindEvents() {
+  searchBtn.addEventListener('click', search);
+  
+  searchInput.addEventListener('keydown', function(e) {
+    if (e.keyCode === 13) {
+      search();
+    }
+  });
+  
+  warehouseSelect.addEventListener('change', search);
+  returnTypeSelect.addEventListener('change', search);
+  startDate.addEventListener('change', search);
+  endDate.addEventListener('change', search);
+  
+  addReturnBtn.addEventListener('click', openAddReturnModal);
+  exportReturnBtn.addEventListener('click', openExportModal);
+  
+  // 状态筛选按钮
+  document.querySelectorAll('.action-right .jg-btn').forEach((btn, index) => {
+    const statusMap = ['pending', 'approved', 'refunded', 'completed'];
+    btn.addEventListener('click', () => filterByStatus(statusMap[index]));
+  });
+  
+  // 点击遮罩层关闭弹窗
+  addReturnModal.addEventListener('click', function(e) {
+    if (e.target === addReturnModal) closeAddReturnModal();
+  });
+  viewModal.addEventListener('click', function(e) {
+    if (e.target === viewModal) closeViewModal();
+  });
+  approveModal.addEventListener('click', function(e) {
+    if (e.target === approveModal) closeApproveModal();
+  });
+  refundModal.addEventListener('click', function(e) {
+    if (e.target === refundModal) closeRefundModal();
+  });
+  exportModal.addEventListener('click', function(e) {
+    if (e.target === exportModal) closeExportModal();
+  });
+}
+
+// 填充农资选择框
+function populateMaterialSelect() {
+  const materials = ['高效杀虫剂', 'NPK复合肥', '杀菌剂', '有机肥料', '叶面肥', '除草剂', '授粉器', '修枝剪', '生物农药', '钾肥', '微量元素肥', '嫁接刀', '保鲜剂', '喷雾器', '生长调节剂', '绑枝机', '钙肥', '杀虫灯', '土壤改良剂', '尿素', '杀螨剂', '磷酸二铵', '疏花疏果剪'];
+  
+  const select = document.getElementById('returnMaterial');
+  materials.forEach(material => {
+    const option = document.createElement('option');
+    option.value = material;
+    option.textContent = material;
+    select.appendChild(option);
+  });
+}
+
+// 打开新建退库弹窗
+function openAddReturnModal() {
+  document.getElementById('returnCode').value = 'TH-' + new Date().getFullYear() + '-' + String(returnData.length + 1).padStart(3, '0');
+  document.getElementById('returnWarehouse').value = 'wh1';
+  document.getElementById('returnType').value = 'quality';
+  document.getElementById('returnMaterial').value = '';
+  document.getElementById('returnQty').value = '';
+  document.getElementById('returnOperator').value = '';
+  document.getElementById('returnDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('returnAmount').value = '';
+  document.getElementById('returnReason').value = '';
+  addReturnModal.classList.add('show');
+}
+
+// 关闭新建退库弹窗
+function closeAddReturnModal() {
+  addReturnModal.classList.remove('show');
+}
+
+// 保存退库
+function saveReturn() {
+  const material = document.getElementById('returnMaterial').value;
+  const qty = document.getElementById('returnQty').value;
+  
+  if (!material) {
+    alert('请选择农资');
+    return;
+  }
+  if (!qty || parseInt(qty) <= 0) {
+    alert('请输入有效数量');
+    return;
+  }
+  
+  alert('退库申请提交成功，待审核');
+  closeAddReturnModal();
+  search();
+}
+
+// 查看详情
+function viewDetail(id) {
+  const item = returnData.find(i => i.id === id);
+  if (item) {
+    document.getElementById('viewCode').textContent = item.code;
+    document.getElementById('viewWarehouse').textContent = item.warehouse;
+    document.getElementById('viewType').textContent = item.typeText;
+    document.getElementById('viewMaterial').textContent = item.material;
+    document.getElementById('viewQty').textContent = item.qty + ' ' + item.unit;
+    document.getElementById('viewAmount').textContent = '¥' + item.amount;
+    document.getElementById('viewReason').textContent = item.reason;
+    document.getElementById('viewOperator').textContent = item.operator;
+    document.getElementById('viewDate').textContent = item.date;
+    document.getElementById('viewStatus').textContent = item.statusText;
+    viewModal.classList.add('show');
+  }
+}
+
+// 关闭查看弹窗
+function closeViewModal() {
+  viewModal.classList.remove('show');
+}
+
+// 打开审核弹窗
+function openApproveModal(id) {
+  document.getElementById('approveId').value = id;
+  document.getElementById('approveComment').value = '';
+  approveModal.classList.add('show');
+}
+
+// 关闭审核弹窗
+function closeApproveModal() {
+  approveModal.classList.remove('show');
+}
+
+// 执行审核
+function doApprove() {
+  const id = document.getElementById('approveId').value;
+  const item = returnData.find(i => i.id === id);
+  if (item) {
+    item.status = 'approved';
+    item.statusText = '已审核';
+  }
+  alert('审核通过');
+  closeApproveModal();
+  search();
+}
+
+// 打开退款弹窗
+function openRefundModal(id) {
+  const item = returnData.find(i => i.id === id);
+  if (item) {
+    document.getElementById('refundId').value = id;
+    document.getElementById('refundAmount').value = item.amount;
+  }
+  refundModal.classList.add('show');
+}
+
+// 关闭退款弹窗
+function closeRefundModal() {
+  refundModal.classList.remove('show');
+}
+
+// 执行退款
+function doRefund() {
+  const id = document.getElementById('refundId').value;
+  const amount = document.getElementById('refundAmount').value;
+  
+  if (!amount || parseFloat(amount) <= 0) {
+    alert('请输入有效金额');
+    return;
+  }
+  
+  const item = returnData.find(i => i.id === id);
+  if (item) {
+    item.status = 'refunded';
+    item.statusText = '已退款';
+  }
+  alert('退款成功');
+  closeRefundModal();
+  search();
+}
+
+// 打开导出弹窗
+function openExportModal() {
+  exportModal.classList.add('show');
+}
+
+// 关闭导出弹窗
+function closeExportModal() {
+  exportModal.classList.remove('show');
+}
+
+// 执行导出
+function doExport() {
+  const format = document.getElementById('exportFormat').value;
+  alert(`退库记录将以${format === 'excel' ? 'Excel' : 'CSV'}格式导出`);
+  closeExportModal();
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

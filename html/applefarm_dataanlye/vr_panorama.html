@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>基地地图展示 - 智慧果园</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- API Mock 数据（内联） -->
+    <script>
+        var VRAPI = {
+            baseUrl: '/api',
+            plots: [
+                { id: 'plot_a1', name: 'A1地块（红富士核心区）', variety: '红富士', age: 8, area: 25, status: 'normal' },
+                { id: 'plot_a2', name: 'A2地块（新品种试验区）', variety: '红富士', age: 8, area: 22, status: 'normal' },
+                { id: 'plot_b1', name: 'B1地块（嘎啦早熟区）', variety: '嘎啦', age: 6, area: 20, status: 'warning' },
+                { id: 'plot_b2', name: 'B2地块（金帅区）', variety: '金帅', age: 5, area: 18, status: 'normal' },
+                { id: 'plot_c1', name: 'C1地块（有机种植区）', variety: '红富士', age: 10, area: 30, status: 'normal' },
+                { id: 'plot_c2', name: 'C2地块（国光区）', variety: '国光', age: 12, area: 25, status: 'error' }
+            ],
+            devices: [
+                { id: 'device_water1', name: '水肥一体化设备A区', type: '滴灌系统', status: 'online' },
+                { id: 'device_water2', name: '水肥一体化设备B区', type: '滴灌系统', status: 'online' },
+                { id: 'device_camera1', name: '高清监控摄像头-B1区东北角', type: '监控设备', status: 'online' },
+                { id: 'device_camera2', name: '高清监控摄像头-C1区西南角', type: '监控设备', status: 'warning' },
+                { id: 'device_meteor1', name: '农业气象站-C区', type: '气象设备', status: 'online' },
+                { id: 'device_sensor1', name: '土壤监测传感器-A1区', type: '传感器', status: 'online' },
+                { id: 'device_sensor2', name: '土壤监测传感器-C2区', type: '传感器', status: 'offline' },
+                { id: 'device_env1', name: '环境监测终端-包装车间', type: '环境监测', status: 'online' }
+            ],
+            buildings: [
+                { id: 'building_office', name: '综合办公楼', type: 'office', status: 'normal' },
+                { id: 'building_storage', name: '智能仓储中心', type: 'storage', status: 'normal' },
+                { id: 'building_workshop', name: '水果分选加工车间', type: 'workshop', status: 'normal' },
+                { id: 'building_cold', name: '冷链保鲜库', type: 'cold_storage', status: 'normal' }
+            ],
+            alerts: [
+                { id: 'alert_001', type: 'device', level: 'error', title: '土壤传感器离线告警', content: 'C2区土壤监测传感器离线超过30分钟', status: 'pending' },
+                { id: 'alert_002', type: 'plot', level: 'warning', title: '病虫害风险预警', content: 'C2地块轮纹病风险指数升至80%', status: 'pending' },
+                { id: 'alert_003', type: 'material', level: 'warning', title: '农资库存不足告警', content: '硫酸钾库存低于安全库存', status: 'pending' },
+                { id: 'alert_004', type: 'device', level: 'warning', title: '监控摄像头画面异常', content: 'C1区西南角摄像头画面被遮挡', status: 'pending' }
+            ],
+            getPlots: function(callback) {
+                setTimeout(function() { callback(null, { code: 200, data: VRAPI.plots }); }, 300);
+            },
+            getDevices: function(callback) {
+                setTimeout(function() { callback(null, { code: 200, data: VRAPI.devices }); }, 300);
+            },
+            getAlerts: function(callback) {
+                setTimeout(function() {
+                    var deviceAlerts = VRAPI.devices.filter(function(d) { return d.status === 'warning' || d.status === 'error'; }).map(function(d) {
+                        return { id: d.id, type: 'device', message: d.name + '状态异常', level: d.status === 'warning' ? 'warning' : 'error', time: new Date().toISOString() };
+                    });
+                    var plotAlerts = VRAPI.plots.filter(function(p) { return p.status === 'warning' || p.status === 'error'; }).map(function(p) {
+                        return { id: p.id, type: 'plot', message: p.name + (p.status === 'warning' ? '需关注' : '风险高'), level: p.status, time: new Date().toISOString() };
+                    });
+                    callback(null, { code: 200, data: deviceAlerts.concat(plotAlerts) });
+                }, 200);
+            }
+        };
+    </script>
+    <style>
+        :root {
+            --color-primary: #22a84a;
+            --color-primary-light: #4ade80;
+            --color-secondary: #3b82f6;
+            --color-warning: #faad14;
+            --color-error: #ff4d4f;
+            --color-building: #8b5cf6;
+            --color-bg-dark: #f0f4f3;
+            --color-bg-panel: rgba(255, 255, 255, 0.95);
+            --color-text-primary: #1e293b;
+            --color-text-secondary: #475569;
+            --color-text-muted: #94a3b8;
+            --color-border: rgba(34,168,74,0.1);
+            --shadow-glow: 0 4px 16px rgba(34,168,74,0.1);
+            --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --da-card-bg: #ffffff;
+            --da-card-border: rgba(34,168,74,0.08);
+            --da-card-shadow: 0 4px 16px rgba(34,168,74,0.06);
+            --da-card-radius: 20px;
+            --da-gradient-hero: linear-gradient(135deg, #146c31 0%, #22a84a 50%, #4ade80 100%);
+            --da-gradient-hero-light: linear-gradient(135deg, rgba(20,108,49,0.12) 0%, rgba(34,168,74,0.08) 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--color-bg-dark);
+            font-family: 'Segoe UI', 'Roboto', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            color: var(--color-text-primary);
+        }
+
+        .map-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .map-wrapper {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .map-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform var(--transition-normal);
+            transform-origin: center center;
+        }
+
+        .map-background {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center center;
+            filter: brightness(1.1) contrast(1.05);
+        }
+
+        .hotspot-marker {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            z-index: 10;
+        }
+
+        .hotspot-marker:hover {
+            transform: translate(-50%, -50%) scale(1.3);
+            z-index: 20;
+        }
+
+        .hotspot-marker.active {
+            animation: hotspotActive 0.6s ease-out;
+        }
+
+        .hotspot-marker.error .hotspot-dot {
+            width: 32px;
+            height: 32px;
+            font-size: 14px;
+        }
+
+        .hotspot-marker.warning .hotspot-dot {
+            width: 28px;
+            height: 28px;
+            font-size: 13px;
+        }
+
+        .hotspot-dot {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: #fff;
+            transition: all var(--transition-fast);
+        }
+
+        .hotspot-dot.plot { background: var(--color-primary); }
+        .hotspot-dot.device { background: var(--color-secondary); }
+        .hotspot-dot.task { background: var(--color-warning); }
+        .hotspot-dot.building { background: var(--color-building); }
+        .hotspot-dot.scene { background: #06b6d4; }
+
+        .hotspot-marker.warning .hotspot-dot {
+            background: var(--color-warning);
+            box-shadow: 0 0 16px rgba(250, 173, 20, 0.5);
+        }
+        .hotspot-marker.error .hotspot-dot {
+            background: var(--color-error);
+            box-shadow: 0 0 16px rgba(255, 77, 79, 0.5);
+        }
+
+        .hotspot-pulse {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(34, 168, 74, 0.2);
+            animation: pulse 2s infinite;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .hotspot-marker.warning .hotspot-pulse { background: rgba(250, 173, 20, 0.2); }
+        .hotspot-marker.error .hotspot-pulse { background: rgba(255, 77, 79, 0.2); }
+        .hotspot-marker.error .hotspot-pulse { width: 50px; height: 50px; }
+        .hotspot-marker.warning .hotspot-pulse { width: 45px; height: 45px; }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+        }
+
+        @keyframes hotspotActive {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.5); }
+            100% { transform: translate(-50%, -50%) scale(1.3); }
+        }
+
+        .header-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            padding: 12px 20px;
+            border-radius: 16px;
+            border: 1px solid var(--da-card-border);
+            box-shadow: var(--da-card-shadow);
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--da-gradient-hero);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #fff;
+        }
+
+        .logo-text {
+            color: var(--color-text-primary);
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            padding: 10px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--da-card-border);
+            box-shadow: var(--da-card-shadow);
+            gap: 10px;
+            width: 250px;
+            transition: all var(--transition-fast);
+        }
+
+        .search-box:focus-within {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 12px rgba(34, 168, 74, 0.15);
+        }
+
+        .search-icon {
+            color: var(--color-text-muted);
+            font-size: 14px;
+        }
+
+        .search-input {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--color-text-primary);
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .search-input::placeholder {
+            color: var(--color-text-muted);
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            padding: 12px 20px;
+            border-radius: 14px;
+            border: 1px solid var(--da-card-border);
+            box-shadow: var(--da-card-shadow);
+        }
+
+        .status-item {
+            color: var(--color-text-primary);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-item i {
+            color: var(--color-primary);
+        }
+
+        .status-value {
+            font-weight: 600;
+            color: var(--color-primary);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-btn {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            padding: 12px 20px;
+            border-radius: 10px;
+            color: var(--color-text-primary);
+            font-size: 14px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--da-card-border);
+            box-shadow: var(--da-card-shadow);
+        }
+
+        .action-btn:hover {
+            background: rgba(34, 168, 74, 0.1);
+            border-color: var(--color-primary);
+        }
+
+        .action-btn.exit:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.5);
+            color: #dc2626;
+        }
+
+        .action-btn.fullscreen:hover {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.5);
+            color: #2563eb;
+        }
+
+        .action-btn.refresh:hover {
+            background: rgba(139, 92, 246, 0.1);
+            border-color: rgba(139, 92, 246, 0.5);
+            color: #7c3aed;
+        }
+
+        .info-panel {
+            position: absolute;
+            background: var(--color-bg-panel);
+            backdrop-filter: blur(15px);
+            padding: 20px;
+            border-radius: var(--da-card-radius);
+            color: var(--color-text-primary);
+            width: 320px;
+            z-index: 100;
+            display: none;
+            border: 1px solid var(--da-card-border);
+            animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--da-card-shadow);
+        }
+
+        .info-panel.show {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from { 
+                transform: translateY(-10px) scale(0.98); 
+                opacity: 0; 
+            }
+            to { 
+                transform: translateY(0) scale(1); 
+                opacity: 1; 
+            }
+        }
+
+        .info-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .info-title {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-close {
+            width: 32px;
+            height: 32px;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all var(--transition-fast);
+            color: var(--color-text-muted);
+        }
+
+        .info-close:hover {
+            background: rgba(0, 0, 0, 0.1);
+            color: var(--color-text-primary);
+        }
+
+        .info-content {
+            font-size: 13px;
+            line-height: 1.8;
+            color: var(--color-text-secondary);
+        }
+
+        .info-content p {
+            margin-bottom: 10px;
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .info-content .label {
+            color: var(--color-text-muted);
+            margin-right: 8px;
+            min-width: 50px;
+        }
+
+        .info-content .value {
+            color: var(--color-text-primary);
+        }
+
+        .info-status {
+            display: inline-flex;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-top: 10px;
+            border: 1px solid transparent;
+        }
+
+        .info-status.normal {
+            background: rgba(34, 168, 74, 0.1);
+            color: var(--color-primary);
+            border-color: rgba(34, 168, 74, 0.2);
+        }
+        .info-status.warning {
+            background: rgba(250, 173, 20, 0.1);
+            color: #d48806;
+            border-color: rgba(250, 173, 20, 0.2);
+        }
+        .info-status.error {
+            background: rgba(255, 77, 79, 0.1);
+            color: #cf1322;
+            border-color: rgba(255, 77, 79, 0.2);
+        }
+
+        .legend-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            padding: 16px 20px;
+            border-radius: 14px;
+            z-index: 100;
+            border: 1px solid var(--da-card-border);
+            box-shadow: var(--da-card-shadow);
+        }
+
+        .legend-title {
+            color: var(--color-text-primary);
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all var(--transition-fast);
+        }
+
+        .legend-item:hover {
+            background: rgba(34,168,74,0.06);
+        }
+
+        .legend-item.disabled {
+            opacity: 0.4;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+        }
+
+        .legend-dot.plot { background: var(--color-primary); }
+        .legend-dot.device { background: var(--color-secondary); }
+        .legend-dot.task { background: var(--color-warning); }
+        .legend-dot.building { background: var(--color-building); }
+
+        .alert-panel {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            background: rgba(239, 68, 68, 0.95);
+            backdrop-filter: blur(12px);
+            padding: 16px 20px;
+            border-radius: 12px;
+            color: #fff;
+            z-index: 200;
+            display: none;
+            max-width: 320px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3);
+        }
+
+        .alert-panel.show {
+            display: block;
+            animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .alert-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .alert-body {
+            font-size: 13px;
+            opacity: 0.95;
+            line-height: 1.6;
+        }
+
+        .alert-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 24px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all var(--transition-fast);
+        }
+
+        .alert-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        .zoom-btn {
+            width: 48px;
+            height: 48px;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--da-card-border);
+            box-shadow: var(--da-card-shadow);
+            border-radius: 12px;
+            color: var(--color-text-primary);
+            font-size: 18px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .zoom-btn:hover {
+            background: rgba(34, 168, 74, 0.1);
+            border-color: var(--color-primary);
+            transform: translateY(-2px);
+        }
+
+        .zoom-btn:active {
+            transform: translateY(0);
+        }
+
+        .zoom-level {
+            text-align: center;
+            color: var(--color-text-muted);
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(240, 244, 243, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 300;
+            opacity: 0;
+            visibility: hidden;
+            transition: all var(--transition-normal);
+        }
+
+        .loading-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid rgba(34,168,74,0.1);
+            border-top-color: var(--color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 15px;
+            color: var(--color-text-secondary);
+            font-size: 14px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .hotspot-pulse { animation: none !important; }
+            .info-panel { animation: none !important; }
+            .action-btn, .zoom-btn, .legend-item { transition: none !important; }
+            .hotspot-marker:hover { transform: translate(-50%, -50%) !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div>
+            <div class="loading-spinner"></div>
+            <div class="loading-text">加载中...</div>
+        </div>
+    </div>
+
+    <div class="header-overlay">
+        <div class="logo-section">
+            <div class="logo-icon">
+                <i class="fas fa-apple-alt"></i>
+            </div>
+            <div class="logo-text">智慧果园 基地地图</div>
+        </div>
+
+        <div class="search-box">
+            <i class="fas fa-search search-icon"></i>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索地块、设备、任务..." />
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item" id="deviceStatus">
+                <i class="fas fa-server"></i> 
+                <span>设备在线:</span>
+                <span class="status-value" id="deviceOnline">0</span>
+                <span>/</span>
+                <span id="deviceTotal">0</span>
+            </div>
+            <div class="status-item" id="plotStatus">
+                <i class="fas fa-tree"></i> 
+                <span>地块正常:</span>
+                <span class="status-value" id="plotNormal">0</span>
+                <span>/</span>
+                <span id="plotTotal">0</span>
+            </div>
+            <div class="status-item" id="lastUpdate">
+                <i class="fas fa-clock"></i>
+                <span>更新时间:</span>
+                <span id="updateTime">-</span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <div class="action-btn refresh" onclick="refreshData()" title="刷新数据">
+                <i class="fas fa-refresh"></i>
+                刷新
+            </div>
+            <div class="action-btn fullscreen" onclick="toggleFullscreen()" title="全屏显示">
+                <i class="fas fa-expand"></i>
+                全屏
+            </div>
+            <div class="action-btn exit" onclick="goBack()">
+                <i class="fas fa-arrow-left"></i>
+                返回大屏
+            </div>
+        </div>
+    </div>
+
+    <div class="map-container" id="mapContainer">
+        <div class="map-wrapper">
+            <div class="map-inner" id="mapInner">
+                <img src="images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png"
+                     alt="基地航拍图"
+                     class="map-background"
+                     id="mapImage">
+                <div id="hotspotsContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-panel" id="infoPanel">
+        <div class="info-header">
+            <div class="info-title" id="infoTitle">
+                <i class="fas fa-info-circle"></i> 信息详情
+            </div>
+            <div class="info-close" onclick="closeInfoPanel()">
+                <i class="fas fa-times"></i>
+            </div>
+        </div>
+        <div class="info-content" id="infoContent"></div>
+    </div>
+
+    <div class="alert-panel" id="alertPanel">
+        <div class="alert-close" onclick="closeAlert()">
+            <i class="fas fa-times"></i>
+        </div>
+        <div class="alert-header">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>设备预警</span>
+        </div>
+        <div class="alert-body" id="alertBody"></div>
+    </div>
+
+    <div class="legend-panel">
+        <div class="legend-title">热点图例</div>
+        <div class="legend-items">
+            <div class="legend-item" data-type="plot" onclick="toggleHotspotType('plot')">
+                <span class="legend-dot plot"></span> 地块
+            </div>
+            <div class="legend-item" data-type="device" onclick="toggleHotspotType('device')">
+                <span class="legend-dot device"></span> 设备
+            </div>
+            <div class="legend-item" data-type="task" onclick="toggleHotspotType('task')">
+                <span class="legend-dot task"></span> 任务
+            </div>
+            <div class="legend-item" data-type="building" onclick="toggleHotspotType('building')">
+                <span class="legend-dot building"></span> 建筑
+            </div>
+        </div>
+    </div>
+
+    <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomIn()" title="放大">
+            <i class="fas fa-plus"></i>
+        </button>
+        <button class="zoom-btn" onclick="zoomOut()" title="缩小">
+            <i class="fas fa-minus"></i>
+        </button>
+        <button class="zoom-btn" onclick="resetZoom()" title="重置">
+            <i class="fas fa-compress-arrows-alt"></i>
+        </button>
+        <div class="zoom-level" id="zoomLevel">100%</div>
+    </div>
+
+    <script>
+        var currentZoom = 1;
+        var minZoom = 0.5;
+        var maxZoom = 3;
+        var hiddenTypes = [];
+        var lastUpdateTime = null;
+
+        var hotspotData = [
+            { id: "plot_a1", type: "plot", x: 25, y: 35, title: "A1地块", content: "<p><span class='label'>品种:</span><span class='value'>红富士</span></p><p><span class='label'>树龄:</span><span class='value'>8年</span></p><p><span class='label'>面积:</span><span class='value'>25亩</span></p><span class='info-status normal'>正常</span>", status: "normal" },
+            { id: "device_water1", type: "device", x: 40, y: 25, title: "水肥设备A区", content: "<p><span class='label'>类型:</span><span class='value'>滴灌系统</span></p><p><span class='label'>状态:</span><span class='value'>运行中</span></p><p><span class='label'>流量:</span><span class='value'>2.5 m³/h</span></p><span class='info-status normal'>在线</span>", status: "normal" },
+            { id: "task_pruning", type: "task", x: 55, y: 45, title: "修剪任务", content: "<p><span class='label'>地块:</span><span class='value'>A1-A3区</span></p><p><span class='label'>负责人:</span><span class='value'>李师傅</span></p><p><span class='label'>进度:</span><span class='value'>75%</span></p><span class='info-status warning'>进行中</span>", status: "warning" },
+            { id: "building_office", type: "building", x: 70, y: 60, title: "办公楼", content: "<p><span class='label'>建筑面积:</span><span class='value'>1200㎡</span></p><p><span class='label'>用途:</span><span class='value'>办公、会议室</span></p><span class='info-status normal'>正常</span>", status: "normal" },
+            { id: "plot_b1", type: "plot", x: 30, y: 55, title: "B1地块", content: "<p><span class='label'>品种:</span><span class='value'>嘎啦</span></p><p><span class='label'>树龄:</span><span class='value'>6年</span></p><p><span class='label'>面积:</span><span class='value'>20亩</span></p><span class='info-status warning'>需关注</span>", status: "warning" },
+            { id: "device_camera1", type: "device", x: 45, y: 70, title: "监控摄像头", content: "<p><span class='label'>位置:</span><span class='value'>B1区西北角</span></p><p><span class='label'>状态:</span><span class='value'>在线</span></p><span class='info-status normal'>实时监控中</span>", status: "normal" },
+            { id: "plot_b2", type: "plot", x: 60, y: 75, title: "B2地块", content: "<p><span class='label'>品种:</span><span class='value'>金帅</span></p><p><span class='label'>树龄:</span><span class='value'>5年</span></p><p><span class='label'>面积:</span><span class='value'>18亩</span></p><span class='info-status normal'>正常</span>", status: "normal" },
+            { id: "plot_c1", type: "plot", x: 75, y: 40, title: "C1地块", content: "<p><span class='label'>品种:</span><span class='value'>红富士</span></p><p><span class='label'>树龄:</span><span class='value'>10年</span></p><p><span class='label'>面积:</span><span class='value'>30亩</span></p><span class='info-status normal'>正常</span>", status: "normal" },
+            { id: "device_meteor1", type: "device", x: 85, y: 55, title: "气象站", content: "<p><span class='label'>温度:</span><span class='value'>26.5°C</span></p><p><span class='label'>湿度:</span><span class='value'>68%</span></p><p><span class='label'>风速:</span><span class='value'>3.2 m/s</span></p><span class='info-status normal'>在线</span>", status: "normal" }
+        ];
+
+        function createHotspots() {
+            var container = document.getElementById('hotspotsContainer');
+            container.innerHTML = '';
+
+            hotspotData.forEach(function(hotspot) {
+                if (hiddenTypes.includes(hotspot.type)) return;
+
+                var marker = document.createElement('div');
+                marker.className = 'hotspot-marker ' + hotspot.status;
+                marker.style.left = hotspot.x + '%';
+                marker.style.top = hotspot.y + '%';
+                marker.dataset.id = hotspot.id;
+                marker.dataset.type = hotspot.type;
+
+                var pulse = document.createElement('div');
+                pulse.className = 'hotspot-pulse';
+
+                var dot = document.createElement('div');
+                dot.className = 'hotspot-dot ' + hotspot.type;
+                dot.innerHTML = getTypeIcon(hotspot.type);
+
+                marker.appendChild(pulse);
+                marker.appendChild(dot);
+
+                marker.addEventListener('click', function() {
+                    selectHotspot(hotspot.id);
+                    showInfoPanel(hotspot);
+                });
+
+                marker.addEventListener('mouseenter', function() {
+                    marker.classList.add('hover');
+                });
+
+                marker.addEventListener('mouseleave', function() {
+                    marker.classList.remove('hover');
+                });
+
+                container.appendChild(marker);
+            });
+        }
+
+        function getTypeIcon(type) {
+            switch(type) {
+                case 'plot': return '<i class="fas fa-leaf"></i>';
+                case 'device': return '<i class="fas fa-microchip"></i>';
+                case 'task': return '<i class="fas fa-tasks"></i>';
+                case 'building': return '<i class="fas fa-building"></i>';
+                default: return '<i class="fas fa-map-marker-alt"></i>';
+            }
+        }
+
+        function selectHotspot(hotspotId) {
+            document.querySelectorAll('.hotspot-marker').forEach(function(marker) {
+                marker.classList.remove('active');
+            });
+            
+            var selectedMarker = document.querySelector('.hotspot-marker[data-id="' + hotspotId + '"]');
+            if (selectedMarker) {
+                selectedMarker.classList.add('active');
+            }
+        }
+
+        function showInfoPanel(hotspot) {
+            var panel = document.getElementById('infoPanel');
+            var mapRect = document.getElementById('mapContainer').getBoundingClientRect();
+            var panelWidth = 320;
+            var panelHeight = 220;
+
+            var x = (hotspot.x / 100) * mapRect.width;
+            var y = (hotspot.y / 100) * mapRect.height;
+
+            var posX = x < mapRect.width - panelWidth - 30 ? x + 20 : mapRect.width - panelWidth - 20;
+            var posY = y < mapRect.height - panelHeight - 120 ? y + 30 : y - panelHeight - 20;
+
+            panel.style.left = posX + 'px';
+            panel.style.top = posY + 'px';
+
+            var iconClass = getTypeIcon(hotspot.type).match(/fa-(\w+)/)[1];
+            document.getElementById('infoTitle').innerHTML = '<i class="fas fa-' + iconClass + '"></i> ' + hotspot.title;
+            document.getElementById('infoContent').innerHTML = hotspot.content;
+            panel.classList.add('show');
+        }
+
+        function closeInfoPanel() {
+            document.getElementById('infoPanel').classList.remove('show');
+            document.querySelectorAll('.hotspot-marker').forEach(function(marker) {
+                marker.classList.remove('active');
+            });
+        }
+
+        function closeAlert() {
+            document.getElementById('alertPanel').classList.remove('show');
+        }
+
+        function goBack() {
+            window.location.href = 'da_dashboard.html';
+        }
+
+        function zoomIn() {
+            if (currentZoom < maxZoom) {
+                currentZoom += 0.25;
+                applyZoom();
+            }
+        }
+
+        function zoomOut() {
+            if (currentZoom > minZoom) {
+                currentZoom -= 0.25;
+                applyZoom();
+            }
+        }
+
+        function resetZoom() {
+            currentZoom = 1;
+            applyZoom();
+        }
+
+        function applyZoom() {
+            document.getElementById('mapInner').style.transform = 'scale(' + currentZoom + ')';
+            document.getElementById('zoomLevel').textContent = Math.round(currentZoom * 100) + '%';
+        }
+
+        function toggleHotspotType(type) {
+            var index = hiddenTypes.indexOf(type);
+            if (index > -1) {
+                hiddenTypes.splice(index, 1);
+            } else {
+                hiddenTypes.push(type);
+            }
+            createHotspots();
+            updateLegendItems();
+        }
+
+        function updateLegendItems() {
+            document.querySelectorAll('.legend-item').forEach(function(item) {
+                var type = item.dataset.type;
+                if (hiddenTypes.includes(type)) {
+                    item.classList.add('disabled');
+                } else {
+                    item.classList.remove('disabled');
+                }
+            });
+        }
+
+        function initSearch() {
+            var searchInput = document.getElementById('searchInput');
+            searchInput.addEventListener('input', function(e) {
+                var query = e.target.value.toLowerCase().trim();
+                
+                document.querySelectorAll('.hotspot-marker').forEach(function(marker) {
+                    var hotspot = hotspotData.find(function(h) {
+                        return h.id === marker.dataset.id;
+                    });
+                    
+                    if (hotspot) {
+                        var match = hotspot.title.toLowerCase().includes(query) ||
+                                   hotspot.type.toLowerCase().includes(query);
+                        marker.style.opacity = query && !match ? 0.2 : 1;
+                        marker.style.pointerEvents = query && !match ? 'none' : 'auto';
+                    }
+                });
+            });
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('show', show);
+        }
+
+        function refreshData() {
+            showLoading(true);
+            setTimeout(function() {
+                loadDeviceData();
+                loadPlotData();
+                loadAlerts();
+                lastUpdateTime = new Date();
+                updateLastUpdateTime();
+                showLoading(false);
+            }, 800);
+        }
+
+        function updateLastUpdateTime() {
+            if (lastUpdateTime) {
+                var timeStr = lastUpdateTime.toLocaleTimeString('zh-CN', { 
+                    hour: '2-digit', 
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                document.getElementById('updateTime').textContent = timeStr;
+            }
+        }
+
+        function loadDeviceData() {
+            VRAPI.getDevices(function(err, result) {
+                if (!err && result.code === 200) {
+                    var onlineCount = result.data.filter(function(d) { return d.status === 'online'; }).length;
+                    var totalCount = result.data.length;
+                    document.getElementById('deviceOnline').textContent = onlineCount;
+                    document.getElementById('deviceTotal').textContent = totalCount;
+                }
+            });
+        }
+
+        function loadPlotData() {
+            VRAPI.getPlots(function(err, result) {
+                if (!err && result.code === 200) {
+                    var normalCount = result.data.filter(function(p) { return p.status === 'normal'; }).length;
+                    var totalCount = result.data.length;
+                    document.getElementById('plotNormal').textContent = normalCount;
+                    document.getElementById('plotTotal').textContent = totalCount;
+                }
+            });
+        }
+
+        function loadAlerts() {
+            VRAPI.getAlerts(function(err, result) {
+                if (!err && result.code === 200 && result.data.length > 0) {
+                    var alert = result.data[0];
+                    document.getElementById('alertBody').textContent = alert.message;
+                    document.getElementById('alertPanel').classList.add('show');
+                } else {
+                    document.getElementById('alertPanel').classList.remove('show');
+                }
+            });
+        }
+
+        function initWheelZoom() {
+            var container = document.getElementById('mapContainer');
+            container.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                var delta = e.deltaY > 0 ? -0.1 : 0.1;
+                currentZoom = Math.max(minZoom, Math.min(maxZoom, currentZoom + delta));
+                applyZoom();
+            }, { passive: false });
+        }
+
+        window.addEventListener('load', function() {
+            showLoading(true);
+            
+            setTimeout(function() {
+                createHotspots();
+                loadDeviceData();
+                loadPlotData();
+                loadAlerts();
+                initSearch();
+                initWheelZoom();
+                lastUpdateTime = new Date();
+                updateLastUpdateTime();
+                showLoading(false);
+            }, 500);
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === '+' || e.key === '=') zoomIn();
+            if (e.key === '-') zoomOut();
+            if (e.key === '0') resetZoom();
+            if (e.key === 'Escape') {
+                closeInfoPanel();
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                }
+            }
+            if (e.key === 'f' || e.key === 'F') {
+                if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    toggleFullscreen();
+                }
+            }
+        });
+
+        document.addEventListener('fullscreenchange', function() {
+            var btn = document.querySelector('.action-btn.fullscreen');
+            var icon = btn.querySelector('i');
+            if (document.fullscreenElement) {
+                icon.className = 'fas fa-compress';
+                btn.title = '退出全屏';
+            } else {
+                icon.className = 'fas fa-expand';
+                btn.title = '全屏显示';
+            }
+        });
+    </script>
+</body>
+</html>

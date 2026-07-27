@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>智慧果园 - 画地块</title>
+  <!-- H5设计系统 -->
+  <link rel="stylesheet" href="../applefarm_backhand/css/design-system.css">
+  <link rel="stylesheet" href="css/mobile-design-system.css">
+  <!-- 图标库 -->
+  <script src="../applefarm_backhand/icons/icons.js"></script>
+  <style>
+    /* 页面特定样式 - 使用设计系统变量 */
+    .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: 66px; }
+    .page-header { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); padding: var(--space-4) var(--space-4) var(--space-3); color: var(--bg-white); }
+    .page-header-title { font-size: var(--font-lg); font-weight: 700; }
+    .page-header-sub { font-size: var(--font-sm); opacity: 0.8; margin-top: var(--space-1); }
+    .tab-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 750px; height: 56px; background: var(--bg-white); display: flex; border-top: 1px solid var(--border); z-index: 100; }
+    .tab-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-1); color: var(--text-light); transition: color var(--transition-normal); position: relative; cursor: pointer; }
+    .tab-item.active { color: var(--primary); }
+    .tab-item svg { width: 22px; height: 22px; }
+    .tab-item span { font-size: var(--font-xs); }
+    .tab-badge { position: absolute; top: var(--space-1); right: 50%; margin-right: -18px; min-width: 16px; height: 16px; background: var(--error); color: var(--bg-white); border-radius: var(--radius-full); font-size: var(--font-xs); display: flex; align-items: center; justify-content: center; padding: 0 var(--space-1); }
+    .content { padding: var(--space-4); padding-bottom: 80px; }
+    .card { background: var(--bg-white); border-radius: var(--radius-lg); margin-bottom: var(--space-4); padding: var(--space-4); box-shadow: var(--shadow-card); border: 1px solid var(--border); }
+    .card-title { font-size: var(--font-md); font-weight: 600; color: var(--text); margin-bottom: 14px; }
+    .header-back { position: absolute; left: var(--space-3); top: var(--space-4); width: var(--space-8); height: var(--space-8); background: rgba(255,255,255,0.2); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .header-back svg { width: 18px; height: 18px; color: var(--bg-white); }
+    .map-container { width: 100%; height: 400px; background: linear-gradient(135deg, var(--primary-50) 0%, var(--primary-200) 100%); border-radius: var(--radius-lg); position: relative; overflow: hidden; margin-bottom: var(--space-4); border: 2px solid var(--primary-50); }
+    .map-grid { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: linear-gradient(rgba(46, 158, 90, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(46, 158, 90, 0.1) 1px, transparent 1px); background-size: 40px 40px; }
+    .plot-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair; }
+    .point-marker { position: absolute; width: 16px; height: 16px; background: var(--primary); border: 3px solid var(--bg-white); border-radius: 50%; transform: translate(-50%, -50%); cursor: pointer; z-index: 10; box-shadow: 0 2px 8px rgba(46, 158, 90, 0.4); }
+    .point-marker.remove { background: var(--error); }
+    .action-bar { display: flex; gap: var(--space-3); margin-bottom: var(--space-4); }
+    .action-btn { flex: 1; height: 44px; background: var(--bg-white); border: 1px solid var(--border); border-radius: var(--radius-lg); font-size: var(--font-base); font-weight: 600; color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: var(--space-2); transition: all var(--transition-normal); }
+    .action-btn:active { transform: scale(0.98); background: var(--gray-100); }
+    .action-btn.primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: var(--bg-white); border: none; }
+    .action-btn.danger { background: var(--error-bg); color: var(--error); border: none; }
+    .action-btn svg { width: 18px; height: 18px; }
+    .form-group { margin-bottom: var(--space-4); }
+    .form-label { font-size: var(--font-sm); color: var(--text-secondary); margin-bottom: var(--space-2); display: block; }
+    .form-input { width: 100%; height: 44px; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0 14px; font-size: var(--font-base); color: var(--text); background: var(--bg-white); transition: border-color var(--transition-normal); }
+    .form-input:focus { border-color: var(--primary); }
+    .form-textarea { width: 100%; min-height: 88px; border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3) 14px; font-size: var(--font-base); color: var(--text); resize: vertical; transition: border-color var(--transition-normal); }
+    .form-textarea:focus { border-color: var(--primary); }
+    .stats-row { display: flex; gap: var(--space-3); }
+    .stat-box { flex: 1; background: var(--primary-50); border-radius: var(--radius-md); padding: var(--space-3); text-align: center; }
+    .stat-value { font-size: var(--font-xl); font-weight: 700; color: var(--primary); }
+    .stat-label { font-size: var(--font-xs); color: var(--text-secondary); margin-top: var(--space-1); }
+    .btn-submit { width: 100%; height: 48px; background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: var(--bg-white); border: none; border-radius: var(--radius-2xl); font-size: var(--font-md); font-weight: 600; cursor: pointer; margin-top: var(--space-2); }
+    .btn-submit:active { opacity: 0.9; }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: none; justify-content: center; align-items: center; }
+    .modal-overlay.show { display: flex; }
+    .modal-box { background: var(--bg-white); border-radius: var(--radius-xl); padding: var(--space-6) var(--space-5); width: 85%; max-width: 320px; }
+    .modal-title { font-size: var(--font-md); font-weight: 600; text-align: center; margin-bottom: var(--space-4); }
+    .modal-btn { width: 100%; height: 44px; background: var(--primary); color: var(--bg-white); border: none; border-radius: var(--radius-2xl); font-size: var(--font-md); font-weight: 600; cursor: pointer; }
+    .success-icon { width: 56px; height: 56px; margin: 0 auto var(--space-4); background: var(--primary-50); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .success-icon svg { width: 32px; height: 32px; color: var(--primary-500); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="page-header">
+      <div class="header-back" onclick="goBack()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </div>
+      <div style="padding-left: 40px;">
+        <div class="page-header-title">绘制地块</div>
+        <div class="page-header-sub">点击地图添加地块边界</div>
+      </div>
+    </div>
+    
+    <div class="content">
+      <div class="map-container">
+        <div class="map-grid"></div>
+        <canvas id="plotCanvas" class="plot-canvas"></canvas>
+        <div id="pointsContainer"></div>
+      </div>
+
+      <div class="action-bar">
+        <button class="action-btn" onclick="clearPoints()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+          清除
+        </button>
+        <button class="action-btn danger" onclick="undoPoint()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7v6h6"/>
+            <path d="M21 17v-6h-6"/>
+            <path d="M5.64 17.36A8.5 8.5 0 0 1 12 11h6.36"/>
+            <path d="M18.36 6.64A8.5 8.5 0 0 0 12 13H5.64"/>
+          </svg>
+          撤销
+        </button>
+        <button class="action-btn primary" onclick="closePolygon()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14"/>
+            <path d="M12 5v14"/>
+          </svg>
+          闭合
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">地块信息</div>
+        <div class="stats-row">
+          <div class="stat-box">
+            <div class="stat-value" id="areaValue">0</div>
+            <div class="stat-label">面积（亩）</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value" id="pointCount">0</div>
+            <div class="stat-label">边界点</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="form-group">
+          <label class="form-label">地块名称</label>
+          <input type="text" class="form-input" id="plotName" placeholder="请输入地块名称">
+        </div>
+        <div class="form-group">
+          <label class="form-label">地块类型</label>
+          <div class="radio-group" id="plotTypeGroup">
+            <div class="radio-item active" data-type="apple">
+              <div class="radio-circle"></div>
+              <div class="radio-text">苹果园</div>
+            </div>
+            <div class="radio-item" data-type="peach">
+              <div class="radio-circle"></div>
+              <div class="radio-text">桃园</div>
+            </div>
+            <div class="radio-item" data-type="grape">
+              <div class="radio-circle"></div>
+              <div class="radio-text">葡萄园</div>
+            </div>
+            <div class="radio-item" data-type="other">
+              <div class="radio-circle"></div>
+              <div class="radio-text">其他</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">备注信息</label>
+          <textarea class="form-textarea" id="plotRemark" placeholder="请输入备注信息（选填）"></textarea>
+        </div>
+        <button class="btn-submit" id="saveBtn" onclick="savePlot()" disabled>保存地块</button>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item" onclick="navigateTo('mb_home.html')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+        <span>首页</span>
+      </div>
+      <div class="tab-item" onclick="navigateTo('mb_service.html')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+        <span>服务</span>
+      </div>
+      <div class="tab-item" onclick="navigateTo('mb_plot.html')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"/>
+          <rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        <span>地块</span>
+      </div>
+      <div class="tab-item" onclick="navigateTo('mb_mine.html')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+        <span>我的</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal">
+    <div class="modal-box">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="modal-title" id="modalTitle">保存成功</div>
+      <button class="modal-btn" onclick="closeModal()">确 定</button>
+    </div>
+  </div>
+
+  <script>
+    let points = [];
+    let isClosed = false;
+    let canvas, ctx;
+    let selectedType = 'apple';
+
+    function navigateTo(page) {
+      window.location.href = page;
+    }
+
+    function goBack() {
+      window.history.back();
+    }
+
+    function initCanvas() {
+      canvas = document.getElementById('plotCanvas');
+      const container = canvas.parentElement;
+      canvas.width = container.offsetWidth;
+      canvas.height = container.offsetHeight;
+      ctx = canvas.getContext('2d');
+      
+      canvas.addEventListener('click', handleCanvasClick);
+      
+      document.querySelectorAll('.radio-item').forEach(item => {
+        item.addEventListener('click', () => {
+          document.querySelectorAll('.radio-item').forEach(i => i.classList.remove('active'));
+          item.classList.add('active');
+          selectedType = item.dataset.type;
+        });
+      });
+    }
+
+    function handleCanvasClick(e) {
+      if (isClosed) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      points.push({ x, y });
+      updatePointCount();
+      render();
+      createPointMarker(x, y, points.length - 1);
+    }
+
+    function createPointMarker(x, y, index) {
+      const marker = document.createElement('div');
+      marker.className = 'point-marker';
+      marker.style.left = x + 'px';
+      marker.style.top = y + 'px';
+      marker.dataset.index = index;
+      marker.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!isClosed) {
+          removePoint(index);
+        }
+      });
+      document.getElementById('pointsContainer').appendChild(marker);
+    }
+
+    function removePoint(index) {
+      if (isClosed) return;
+      points.splice(index, 1);
+      updatePointCount();
+      render();
+      updateMarkers();
+    }
+
+    function updateMarkers() {
+      const container = document.getElementById('pointsContainer');
+      container.innerHTML = '';
+      points.forEach((point, index) => {
+        createPointMarker(point.x, point.y, index);
+      });
+    }
+
+    function clearPoints() {
+      if (points.length === 0) return;
+      points = [];
+      isClosed = false;
+      updatePointCount();
+      updateArea(0);
+      document.getElementById('saveBtn').disabled = true;
+      document.getElementById('pointsContainer').innerHTML = '';
+      render();
+    }
+
+    function undoPoint() {
+      if (points.length === 0 || isClosed) return;
+      points.pop();
+      updatePointCount();
+      if (!isClosed && points.length >= 3) {
+        calculateArea();
+      }
+      render();
+      updateMarkers();
+    }
+
+    function closePolygon() {
+      if (points.length < 3) {
+        alert('请至少添加3个点');
+        return;
+      }
+      isClosed = true;
+      calculateArea();
+      document.getElementById('saveBtn').disabled = false;
+      render();
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      if (points.length > 0) {
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].y);
+        }
+        
+        if (isClosed) {
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(46, 158, 90, 0.2)';
+          ctx.fill();
+        }
+        
+        ctx.strokeStyle = isClosed ? 'rgba(46, 158, 90, 1)' : 'rgba(46, 158, 90, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+    }
+
+    function calculateArea() {
+      let area = 0;
+      for (let i = 0; i < points.length; i++) {
+        const j = (i + 1) % points.length;
+        area += points[i].x * points[j].y;
+        area -= points[j].x * points[i].y;
+      }
+      area = Math.abs(area / 2);
+      
+      const pixelToMeter = 0.5;
+      const squareMeterToMu = 0.0015;
+      const areaMu = (area * pixelToMeter * pixelToMeter * squareMeterToMu).toFixed(2);
+      
+      updateArea(areaMu);
+    }
+
+    function updatePointCount() {
+      document.getElementById('pointCount').textContent = points.length;
+    }
+
+    function updateArea(value) {
+      document.getElementById('areaValue').textContent = value;
+    }
+
+    function savePlot() {
+      const name = document.getElementById('plotName').value;
+      const remark = document.getElementById('plotRemark').value;
+      
+      if (!name) {
+        alert('请输入地块名称');
+        return;
+      }
+      
+      if (!isClosed || points.length < 3) {
+        alert('请先完成地块绘制');
+        return;
+      }
+      
+      const plot = {
+        id: Date.now(),
+        name,
+        type: selectedType,
+        area: parseFloat(document.getElementById('areaValue').textContent),
+        points,
+        remark,
+        createTime: new Date().toISOString()
+      };
+      
+      const plots = JSON.parse(localStorage.getItem('plots') || '[]');
+      plots.push(plot);
+      localStorage.setItem('plots', JSON.stringify(plots));
+      
+      openModal('保存成功');
+    }
+
+    function openModal(title) {
+      document.getElementById('modalTitle').textContent = title;
+      document.getElementById('modal').classList.add('show');
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.remove('show');
+      navigateTo('mb_plot.html');
+    }
+
+    window.addEventListener('load', initCanvas);
+    window.addEventListener('resize', () => {
+      const oldWidth = canvas.width;
+      const oldHeight = canvas.height;
+      const container = canvas.parentElement;
+      canvas.width = container.offsetWidth;
+      canvas.height = container.offsetHeight;
+      
+      points = points.map(p => ({
+        x: p.x * canvas.width / oldWidth,
+        y: p.y * canvas.height / oldHeight
+      }));
+      updateMarkers();
+      render();
+      if (isClosed) calculateArea();
+    });
+  </script>
+</body>
+</html>

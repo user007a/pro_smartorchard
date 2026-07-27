@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>智慧果园 - 巡果园</title>
+  <!-- H5设计系统 v2 — Supabase × Airbnb × Notion 混合设计基因 -->
+  <link rel="stylesheet" href="css/mobile-design-system.css">
+  <!-- 图标库 -->
+  <script src="../applefarm_backhand/icons/icons.js"></script>
+  <style>
+    /* ========== 页面专属样式（仅保留设计系统未覆盖的部分） ========== */
+    
+    /* Header */
+    .page-header {
+      position: relative;
+      background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+      padding: 44px 16px 20px;
+      color: var(--bg-white);
+    }
+    
+    .header-back {
+      position: absolute;
+      left: 12px;
+      top: 44px;
+      width: 36px;
+      height: 36px;
+      background: rgba(255,255,255,0.2);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    
+    .header-back svg { width: 18px; height: 18px; }
+    
+    .header-content { padding-left: 44px; }
+    .header-title { font-size: var(--font-xl); font-weight: 700; }
+    .header-sub { font-size: var(--font-sm); opacity: 0.85; margin-top: 4px; }
+
+    /* --- 状态统计卡片 --- */
+    .patrol-stats {
+      display: flex;
+      justify-content: space-around;
+      padding: var(--space-4);
+      background: var(--bg-white);
+      margin: var(--space-3);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-card);
+    }
+    .patrol-stats-item { text-align: center; }
+    .patrol-stats-value {
+      font-size: var(--font-2xl);
+      font-weight: var(--font-extrabold);
+      color: var(--primary);
+      font-family: var(--font-family-number);
+    }
+    .patrol-stats-label {
+      font-size: var(--font-xs);
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* --- 地图区域 --- */
+    .map-area {
+      margin: 0 var(--space-3);
+      height: 280px;
+      background: var(--bg-white);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+    }
+    .map-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-3);
+    }
+    .map-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--info-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .map-icon svg { width: 36px; height: 36px; color: var(--info-dark); }
+    .map-text { font-size: var(--font-sm); color: var(--text-secondary); }
+
+    .map-grid {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background-image: 
+        linear-gradient(rgba(46,158,90,0.1) 1px, transparent 1px), 
+        linear-gradient(90deg, rgba(46,158,90,0.1) 1px, transparent 1px);
+      background-size: 30px 30px;
+    }
+
+    .checkpoint-marker {
+      position: absolute;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--orange);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .checkpoint-marker.current { animation: pulse 2s infinite; }
+    .checkpoint-marker.done { background: var(--success); }
+    .checkpoint-marker svg { width: 18px; height: 18px; color: var(--bg-white); }
+
+    .checkpoint-label {
+      position: absolute;
+      top: 100%; left: 50%;
+      transform: translateX(-50%);
+      font-size: var(--font-xs);
+      color: var(--text-secondary);
+      white-space: nowrap;
+      margin-top: 4px;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(243,156,18,0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(243,156,18,0); }
+      100% { box-shadow: 0 0 0 0 rgba(243,156,18,0); }
+    }
+
+    .user-marker {
+      position: absolute;
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: var(--info);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: bounce 1s infinite;
+    }
+    .user-marker svg { width: 20px; height: 20px; color: var(--bg-white); }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+
+    /* --- 打卡弹窗 --- */
+    .checkin-popup {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--bg-white);
+      border-radius: var(--radius-xl);
+      padding: var(--space-6);
+      width: 85%; max-width: 300px;
+      box-shadow: var(--shadow-float);
+      z-index: 100;
+      display: none;
+      animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translate(-50%, -40%); opacity: 0; }
+      to { transform: translate(-50%, -50%); opacity: 1; }
+    }
+    .checkin-popup.show { display: block; }
+
+    .checkin-icon {
+      width: 64px; height: 64px;
+      margin: 0 auto var(--space-4);
+      border-radius: 50%;
+      background: var(--success-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .checkin-icon svg { width: 36px; height: 36px; color: var(--success); }
+
+    .checkin-title {
+      font-size: var(--font-lg);
+      font-weight: var(--font-semibold);
+      text-align: center;
+      margin-bottom: var(--space-2);
+      color: var(--text);
+    }
+    .checkin-desc {
+      font-size: var(--font-sm);
+      color: var(--text-secondary);
+      text-align: center;
+      margin-bottom: var(--space-5);
+    }
+    .checkin-btn {
+      width: 100%; height: 48px;
+      background: var(--gradient-primary);
+      color: var(--text-on-primary);
+      border: none;
+      border-radius: var(--radius-full);
+      font-size: var(--font-base);
+      font-weight: var(--font-semibold);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      min-height: 44px;
+    }
+    .checkin-btn:active { transform: scale(0.98); }
+
+    /* --- 打卡列表项增强 --- */
+    .mb-list-item.checkpoint-item {
+      min-height: 56px;
+    }
+    .checkpoint-status {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .checkpoint-status svg { width: 14px; height: 14px; }
+    .checkpoint-status.pending { background: var(--gray-200); }
+    .checkpoint-status.pending svg { color: var(--text-tertiary); }
+    .checkpoint-status.current { background: var(--orange); }
+    .checkpoint-status.current svg { color: var(--bg-white); }
+    .checkpoint-status.done { background: var(--success); }
+    .checkpoint-status.done svg { color: var(--bg-white); }
+
+    .checkpoint-distance {
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+      margin-top: 2px;
+    }
+    .checkpoint-time {
+      font-size: var(--font-xs);
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    /* --- 异常上报按钮 --- */
+    .report-btn {
+      width: 100%; height: 48px;
+      background: var(--bg-white);
+      border: 2px dashed var(--border-strong);
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      min-height: 44px;
+    }
+    .report-btn:active {
+      border-color: var(--error);
+      background: var(--error-light);
+    }
+    .report-btn svg { width: 24px; height: 24px; color: var(--error); }
+    .report-text { font-size: var(--font-base); color: var(--text); font-weight: var(--font-medium); }
+
+    /* --- Modal 通用 --- */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: var(--z-overlay);
+      display: none;
+      justify-content: flex-end;
+    }
+    .modal-overlay.show { display: flex; }
+
+    .modal-panel {
+      width: 85%; max-width: 360px;
+      background: var(--bg-white);
+      border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+      padding: var(--space-5);
+      padding-bottom: var(--space-8);
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+    .modal-close {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--gray-100);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .modal-close:active { transform: scale(0.95); }
+    .modal-close svg { width: 18px; height: 18px; color: var(--text-secondary); }
+
+    .form-label {
+      font-size: var(--font-sm);
+      color: var(--text-secondary);
+      margin-bottom: var(--space-2);
+      display: block;
+    }
+
+    .photo-upload {
+      width: 100%; height: 160px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .photo-upload.has-photo {
+      border-style: solid;
+      border-color: var(--error);
+      background: var(--error-light);
+    }
+    .photo-upload svg { width: 32px; height: 32px; color: var(--text-tertiary); }
+    .photo-upload.has-photo svg { color: var(--error); }
+    .photo-text { font-size: var(--font-sm); color: var(--text-secondary); }
+
+    .type-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-2);
+    }
+    .type-item {
+      padding: var(--space-3);
+      background: var(--gray-100);
+      border-radius: var(--radius-md);
+      border: 2px solid transparent;
+      cursor: pointer;
+      text-align: center;
+      transition: all var(--transition-fast);
+      min-height: 44px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .type-item.active {
+      background: var(--error-light);
+      border-color: var(--error);
+    }
+    .type-item svg { width: 24px; height: 24px; margin-bottom: 6px; }
+    .type-item.pest svg { color: var(--error); }
+    .type-item.device svg { color: var(--warning); }
+    .type-item.other svg { color: var(--info); }
+    .type-name { font-size: var(--font-xs); color: var(--text); }
+
+    .remark-input {
+      width: 100%; min-height: 80px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
+      font-size: var(--font-sm);
+      color: var(--text);
+      font-family: var(--font-family);
+      resize: none;
+      transition: all var(--transition-fast);
+    }
+    .remark-input:focus {
+      outline: none;
+      border-color: var(--error);
+    }
+
+    /* --- 离开确认弹窗 --- */
+    .leave-modal-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(4px);
+    }
+    .leave-modal-overlay.show { display: flex; }
+    
+    .leave-modal {
+      width: 85%; max-width: 340px;
+      background: var(--bg-white);
+      border-radius: var(--radius-xl);
+      padding: var(--space-6);
+      animation: scaleIn 0.3s ease;
+      text-align: center;
+    }
+    
+    @keyframes scaleIn {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    
+    .leave-icon {
+      width: 64px; height: 64px;
+      margin: 0 auto var(--space-4);
+      border-radius: 50%;
+      background: var(--warning-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .leave-icon svg { width: 32px; height: 32px; color: var(--warning); }
+    
+    .leave-title {
+      font-size: var(--font-lg);
+      font-weight: var(--font-semibold);
+      color: var(--text);
+      margin-bottom: var(--space-2);
+    }
+    
+    .leave-desc {
+      font-size: var(--font-sm);
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: var(--space-5);
+    }
+    
+    .leave-buttons {
+      display: flex;
+      gap: var(--space-3);
+    }
+    
+    .leave-btn {
+      flex: 1;
+      height: 44px;
+      border-radius: var(--radius-lg);
+      font-size: var(--font-base);
+      font-weight: var(--font-medium);
+      border: none;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    
+    .leave-btn.cancel {
+      background: var(--gray-100);
+      color: var(--text-secondary);
+    }
+    
+    .leave-btn.confirm {
+      background: var(--gradient-primary);
+      color: var(--text-on-primary);
+    }
+    
+    .leave-btn:active { transform: scale(0.98); }
+
+    /* --- 底部提示 --- */
+    .footer-tip {
+      padding: var(--space-4);
+      text-align: center;
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+      padding-bottom: var(--space-8);
+    }
+  </style>
+</head>
+<body>
+  <div class="mb-app">
+    <!-- 详情页型 Header -->
+    <div class="mb-header-detail">
+      <div class="header-nav">
+        <div class="header-back" onclick="goBack()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 18l-6-6 6-6"/>
+          </svg>
+        </div>
+        <div class="header-title">巡果园</div>
+        <div class="header-actions">
+          <div class="header-action-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+              <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div class="header-content">
+        <div class="header-sub">今日路线：A区 → B区 → C区</div>
+      </div>
+    </div>
+
+    <!-- 状态统计 -->
+    <div class="patrol-stats">
+      <div class="patrol-stats-item">
+        <div class="patrol-stats-value">3</div>
+        <div class="patrol-stats-label">总打卡点</div>
+      </div>
+      <div class="patrol-stats-item">
+        <div class="patrol-stats-value">1</div>
+        <div class="patrol-stats-label">已完成</div>
+      </div>
+      <div class="patrol-stats-item">
+        <div class="patrol-stats-value">2</div>
+        <div class="patrol-stats-label">待打卡</div>
+      </div>
+    </div>
+
+    <!-- 地图区域 -->
+    <div class="map-area">
+      <div class="map-grid"></div>
+      <div class="map-placeholder">
+        <div class="map-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+            <line x1="8" y1="2" x2="8" y2="18"/>
+            <line x1="16" y1="6" x2="16" y2="22"/>
+          </svg>
+        </div>
+        <div class="map-text">GPS定位中，显示巡园路线</div>
+      </div>
+      <!-- 打卡点标记 -->
+      <div class="checkpoint-marker done" style="top: 30%; left: 25%;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        <div class="checkpoint-label">A1区</div>
+      </div>
+      <div class="checkpoint-marker current" style="top: 50%; left: 55%;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+        </svg>
+        <div class="checkpoint-label">B1区 (50m)</div>
+      </div>
+      <div class="checkpoint-marker" style="top: 70%; left: 75%;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+        </svg>
+        <div class="checkpoint-label">C1区</div>
+      </div>
+      <!-- 用户位置标记 -->
+      <div class="user-marker" style="top: 45%; left: 48%;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/>
+          <circle cx="12" cy="10" r="3"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 打卡提示弹窗 -->
+    <div class="checkin-popup" id="checkinPopup">
+      <div class="checkin-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8m6-2v8m6-8l2 8m-6 4l2-8h8l2 8M3 20l6-6m6 6l6-6"/>
+        </svg>
+      </div>
+      <div class="checkin-title">到达打卡点</div>
+      <div class="checkin-desc">您已到达 B1区 打卡点，距离50米范围内</div>
+      <button class="checkin-btn" onclick="checkin()">一键打卡</button>
+    </div>
+
+    <!-- 打卡列表 -->
+    <div class="mb-section">
+      <div class="mb-section-title"><span class="mb-section-dot"></span>巡园路线</div>
+      <div class="mb-list">
+        <div class="mb-list-item checkpoint-item">
+          <div class="checkpoint-status done">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <div class="mb-list-content">
+            <div class="mb-list-title">A1区 - 主入口</div>
+            <div class="checkpoint-distance">已完成 · 打卡时间：09:15</div>
+          </div>
+        </div>
+        <div class="mb-list-item checkpoint-item">
+          <div class="checkpoint-status current">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+            </svg>
+          </div>
+          <div class="mb-list-content">
+            <div class="mb-list-title">B1区 - 果园中部</div>
+            <div class="checkpoint-distance">距离50米，请前往打卡</div>
+          </div>
+          <div class="checkpoint-time">当前</div>
+        </div>
+        <div class="mb-list-item checkpoint-item">
+          <div class="checkpoint-status pending">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+            </svg>
+          </div>
+          <div class="mb-list-content">
+            <div class="mb-list-title">C1区 - 仓库附近</div>
+            <div class="checkpoint-distance">待打卡 · 预计15分钟</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 异常上报 -->
+    <div class="mb-section">
+      <div class="mb-section-title"><span class="mb-section-dot"></span>异常上报</div>
+      <div class="report-btn" onclick="openReportModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v6m0 6v6m4.6-13H7.4M21 12h-6"/>
+        </svg>
+        <span class="report-text">发现异常，立即上报</span>
+      </div>
+    </div>
+
+    <!-- 底部提示 -->
+    <div class="footer-tip">
+      提示：到达打卡点50米范围内将自动弹出打卡提示
+    </div>
+  </div>
+
+  <!-- 异常上报弹窗 -->
+  <div class="modal-overlay" id="reportModal">
+    <div class="modal-panel">
+      <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-5);">
+        <div style="font-size:var(--font-lg);font-weight:var(--font-semibold);color:var(--text);">上报异常</div>
+        <div class="modal-close" onclick="closeReportModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:var(--space-4);">
+        <div class="form-label">拍摄异常照片</div>
+        <div class="photo-upload" id="reportPhoto" onclick="uploadPhoto()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          <div class="photo-text">点击拍照上传</div>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:var(--space-4);">
+        <div class="form-label">选择异常类型</div>
+        <div class="type-grid">
+          <div class="type-item pest" onclick="selectReportType('病虫害')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            <div class="type-name">病虫害</div>
+          </div>
+          <div class="type-item device" onclick="selectReportType('设备故障')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="12" y="2" width="8" height="14" rx="2"/>
+              <line x1="8" y1="2" x2="8" y2="18"/>
+              <line x1="16" y1="18" x2="20" y2="18"/>
+            </svg>
+            <div class="type-name">设备故障</div>
+          </div>
+          <div class="type-item other" onclick="selectReportType('其他')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="4"/>
+              <circle cx="12" cy="12" r="2"/>
+            </svg>
+            <div class="type-name">其他</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:var(--space-4);">
+        <div class="form-label">备注说明</div>
+        <textarea class="remark-input" placeholder="请描述异常情况..." id="reportRemark"></textarea>
+      </div>
+
+      <button class="mb-btn mb-btn-block" style="background:var(--error);color:var(--text-on-primary);border-radius:var(--radius-full);" onclick="submitReport()">确认上报</button>
+    </div>
+  </div>
+
+  <!-- 成功提示弹窗 -->
+  <div class="modal-overlay" id="successModal" style="justify-content: center;">
+    <div class="checkin-popup" style="animation: none;">
+      <div class="checkin-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="checkin-title" style="color: var(--primary);">上报成功</div>
+      <div class="checkin-desc">异常信息已提交，将尽快处理</div>
+      <button class="checkin-btn" onclick="closeSuccessModal()">确 定</button>
+    </div>
+  </div>
+
+  <!-- 离开确认弹窗 -->
+  <div class="leave-modal-overlay" id="leaveModal">
+    <div class="leave-modal">
+      <div class="leave-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+      </div>
+      <div class="leave-title">确认离开</div>
+      <div class="leave-desc">您还有 <span style="color: var(--warning); font-weight: 600;">2</span> 个打卡点未完成，确定要退出吗？</div>
+      <div class="leave-buttons">
+        <button class="leave-btn cancel" onclick="cancelLeave()">留在页面</button>
+        <button class="leave-btn confirm" onclick="confirmLeave()">确认离开</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var reportType = '';
+
+    function goBack() {
+      var pendingCount = 2;
+      if (pendingCount > 0) {
+        document.getElementById('leaveModal').classList.add('show');
+      } else {
+        window.history.back();
+      }
+    }
+    
+    function cancelLeave() {
+      document.getElementById('leaveModal').classList.remove('show');
+    }
+    
+    function confirmLeave() {
+      document.getElementById('leaveModal').classList.remove('show');
+      window.history.back();
+    }
+
+    // 模拟到达打卡点触发弹窗
+    setTimeout(function() {
+      document.getElementById('checkinPopup').classList.add('show');
+    }, 2000);
+
+    function checkin() {
+      document.getElementById('checkinPopup').classList.remove('show');
+      alert('打卡成功！已记录当前位置');
+    }
+
+    function openReportModal() {
+      document.getElementById('reportModal').classList.add('show');
+    }
+
+    function closeReportModal() {
+      document.getElementById('reportModal').classList.remove('show');
+    }
+
+    function uploadPhoto() {
+      document.getElementById('reportPhoto').classList.add('has-photo');
+    }
+
+    function selectReportType(type) {
+      reportType = type;
+      var items = document.querySelectorAll('.type-item');
+      items.forEach(function(item) {
+        item.classList.remove('active');
+        if (item.querySelector('.type-name').textContent === type) {
+          item.classList.add('active');
+        }
+      });
+    }
+
+    function submitReport() {
+      if (!document.getElementById('reportPhoto').classList.contains('has-photo')) {
+        alert('请先拍摄异常照片');
+        return;
+      }
+      if (!reportType) {
+        alert('请选择异常类型');
+        return;
+      }
+      closeReportModal();
+      document.getElementById('successModal').classList.add('show');
+    }
+
+    function closeSuccessModal() {
+      document.getElementById('successModal').classList.remove('show');
+    }
+
+    // 页面关闭时提示未完成打卡
+    window.addEventListener('beforeunload', function(e) {
+      e.preventDefault();
+      e.returnValue = '您还有2个打卡点未完成，确定要退出吗？';
+      return e.returnValue;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 认养农事</title>
+<!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 统计卡片 */
+  .stats-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl);
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border-light);
+    position: relative;
+    overflow: hidden;
+    transition: all var(--transition-bounce);
+    cursor: pointer;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--gradient-primary);
+  }
+
+  .stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  .stat-card.green::before { background: linear-gradient(90deg, var(--primary-500), var(--primary-300)); }
+  .stat-card.blue::before { background: linear-gradient(90deg, var(--info), #40a9ff); }
+  .stat-card.orange::before { background: linear-gradient(90deg, var(--accent-500), #ffc53d); }
+  .stat-card.red::before { background: linear-gradient(90deg, var(--error), #ff7875); }
+
+  .stat-card .stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-sm);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .stat-card .stat-value {
+    font-size: 28px;
+    font-weight: var(--font-weight-bold);
+    line-height: 1.2;
+    margin-bottom: var(--space-sm);
+    background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .stat-card.blue .stat-value {
+    background: linear-gradient(135deg, var(--info), #096dd9);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .stat-card.orange .stat-value {
+    background: linear-gradient(135deg, var(--accent-500), var(--accent-600));
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .stat-card.red .stat-value {
+    background: linear-gradient(135deg, var(--error), #cf1322);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  /* 数据表格 */
+  .data-table-wrapper {
+    overflow-x: auto;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    margin-bottom: var(--space-lg);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: var(--font-size-base);
+    background: var(--bg-card);
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 12px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+    transition: background var(--transition-fast);
+  }
+
+  .data-table th {
+    background: linear-gradient(135deg, var(--gray-50), var(--gray-100));
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  .data-table th:first-child { border-top-left-radius: var(--radius-lg); }
+  .data-table th:last-child { border-top-right-radius: var(--radius-lg); }
+
+  .data-table tbody tr:hover td {
+    background: var(--bg-hover);
+  }
+
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:last-child td:first-child { border-bottom-left-radius: var(--radius-lg); }
+  .data-table tbody tr:last-child td:last-child { border-bottom-right-radius: var(--radius-lg); }
+
+  /* 操作按钮组 */
+  .action-btns {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .action-btn {
+    padding: 5px 10px;
+    font-size: var(--font-size-xs);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-default);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .action-btn:hover {
+    border-color: var(--primary-500);
+    color: var(--primary-500);
+  }
+
+  .action-btn.view { color: var(--info); border-color: var(--info-border); }
+  .action-btn.view:hover { background: var(--info-bg); }
+  .action-btn.repush { color: var(--primary-500); border-color: var(--primary-500); }
+  .action-btn.repush:hover { background: var(--primary-50); }
+
+  /* 状态标签 */
+  .status-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.4;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+
+  .status-tag.pushed {
+    background: var(--success-bg);
+    color: var(--success);
+    border-color: var(--success-border);
+  }
+
+  .status-tag.failed {
+    background: var(--error-bg);
+    color: var(--error);
+    border-color: var(--error-border);
+  }
+
+  .status-tag.pending {
+    background: var(--warning-bg);
+    color: #9a6700;
+    border-color: var(--warning-border);
+  }
+
+  /* 农事类型标签 */
+  .farming-type-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.4;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+
+  .farming-type-tag.fertilize { background: #f6ffed; color: var(--success); border-color: var(--success-border); }
+  .farming-type-tag.water { background: #e6f7ff; color: var(--info); border-color: var(--info-border); }
+  .farming-type-tag.prune { background: #fff7e6; color: #9a6700; border-color: var(--warning-border); }
+  .farming-type-tag.bag { background: #f5f0ff; color: #722ed1; border-color: rgba(114, 46, 209, 0.2); }
+  .farming-type-tag.pest { background: #fff2f0; color: var(--error); border-color: var(--error-border); }
+
+  /* 搜索栏 */
+  .search-section {
+    margin-bottom: var(--space-lg);
+  }
+
+  .search-bar {
+    display: flex;
+    gap: var(--space-lg);
+    align-items: center;
+    flex-wrap: wrap;
+    padding: var(--space-lg);
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border-light);
+  }
+
+  .search-input {
+    padding: 10px 14px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    width: 200px;
+    transition: all var(--transition-fast);
+    background: var(--bg-card);
+    outline: none;
+  }
+
+  .search-input:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(34, 168, 74, 0.1);
+  }
+
+  .search-select {
+    padding: 10px 32px 10px 12px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    cursor: pointer;
+    background: var(--bg-card);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c8c8c' stroke-width='2'%3E%3Cpath d='m6,9 6,6 6,-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    outline: none;
+    transition: all var(--transition-fast);
+    min-width: 120px;
+  }
+
+  .search-select:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(34, 168, 74, 0.1);
+  }
+
+  .search-date {
+    padding: 10px 14px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    cursor: pointer;
+    background: var(--bg-card);
+    outline: none;
+    transition: all var(--transition-fast);
+  }
+
+  .search-date:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(34, 168, 74, 0.1);
+  }
+
+  .date-separator {
+    color: var(--text-tertiary);
+    margin: 0 4px;
+  }
+
+  /* 操作栏 */
+  .action-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-lg);
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--border-light);
+    margin-bottom: var(--space-lg);
+  }
+
+  .action-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+  }
+
+  .action-right {
+    display: flex;
+    gap: var(--space-md);
+  }
+
+  .selected-info {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+  }
+
+  .selected-info strong {
+    color: var(--primary-500);
+  }
+
+  /* 分页 */
+  .pagination-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-xl);
+  }
+
+  .pagination-info {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+  }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .page-btn {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .page-btn:hover:not(.disabled):not(.active) {
+    border-color: var(--primary-500);
+    color: var(--primary-500);
+  }
+
+  .page-btn.active {
+    background: var(--gradient-primary);
+    color: #fff;
+    border-color: transparent;
+  }
+
+  .page-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* 弹窗样式 */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.show {
+    display: flex;
+  }
+
+  .modal {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow: hidden;
+    animation: modalIn 0.2s ease;
+  }
+
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-lg);
+    border-bottom: 1px solid var(--border-light);
+    background: linear-gradient(135deg, var(--gray-50), var(--gray-100));
+  }
+
+  .modal-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
+  }
+
+  .modal-close {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    color: var(--text-tertiary);
+  }
+
+  .modal-close:hover {
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+  }
+
+  .modal-body {
+    padding: var(--space-lg);
+    overflow-y: auto;
+    max-height: calc(80vh - 140px);
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-md);
+    padding: var(--space-lg);
+    border-top: 1px solid var(--border-light);
+  }
+
+  /* 表单样式 */
+  .form-group {
+    margin-bottom: var(--space-lg);
+  }
+
+  .form-label {
+    display: block;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-sm);
+  }
+
+  .form-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    background: var(--bg-card);
+    outline: none;
+    transition: all var(--transition-fast);
+    box-sizing: border-box;
+  }
+
+  .form-input:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(34, 168, 74, 0.1);
+  }
+
+  .form-textarea {
+    min-height: 100px;
+    resize: vertical;
+  }
+
+  .form-select {
+    width: 100%;
+    padding: 10px 32px 10px 14px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    cursor: pointer;
+    background: var(--bg-card);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c8c8c' stroke-width='2'%3E%3Cpath d='m6,9 6,6 6,-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    outline: none;
+    transition: all var(--transition-fast);
+  }
+
+  /* 详情信息 */
+  .detail-row {
+    display: flex;
+    padding: var(--space-md) 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .detail-label {
+    width: 100px;
+    font-weight: var(--font-weight-medium);
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+
+  .detail-value {
+    flex: 1;
+    color: var(--text-primary);
+  }
+
+  /* 警告提示 */
+  .alert-warning {
+    padding: var(--space-md);
+    background: var(--warning-bg);
+    border-radius: var(--radius-md);
+    color: #9a6700;
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-lg);
+  }
+
+  /* 表格行悬停动画 */
+  .data-table tbody tr {
+    transition: transform var(--transition-fast);
+  }
+
+  .data-table tbody tr:hover {
+    transform: scale(1.002);
+  }
+
+  /* 按钮点击效果 */
+  .jg-btn:active {
+    transform: scale(0.98);
+  }
+
+  /* 页面加载动画 */
+  .content-wrapper {
+    animation: pageIn var(--transition-slow) ease;
+  }
+
+  @keyframes pageIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 果树信息卡片 */
+  .tree-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .tree-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-50);
+    border-radius: var(--radius-md);
+    color: var(--primary-500);
+    flex-shrink: 0;
+  }
+
+  .tree-name {
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+  }
+
+  .tree-code {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+  }
+
+  /* 等宽字体 */
+  .text-mono {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+  }
+
+  /* 响应式布局 */
+  @media (max-width: 768px) {
+    .stats-cards {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .search-bar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .search-input, .search-select, .search-date {
+      width: 100%;
+    }
+    .action-bar {
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+    .pagination-wrapper {
+      flex-direction: column;
+      gap: var(--space-md);
+    }
+  }
+</style>
+</head>
+<body data-active-menu="adoption" data-active-submenu="adoption-farming">
+
+<!-- ===== 整体布局容器 ===== -->
+<div class="app-layout">
+
+  <!-- ===== 侧边栏 ===== -->
+  <nav class="sidebar" aria-label="主导航">
+    <!-- 品牌区 -->
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <!-- 苹果绿 Logo SVG -->
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 3C8 1 5 3 5 6.5C5 10 8 14 11 17C14 14 17 10 17 6.5C17 3 14 1 11 3Z" fill="rgba(34,168,74,0.2)"/>
+          <path d="M11 5C9.5 4 7.5 5 7.5 7C7.5 9 9.5 12 11 14"/>
+          <path d="M11 5C12.5 4 14.5 5 14.5 7C14.5 9 12.5 12 11 14"/>
+          <path d="M11 3V1"/>
+        </svg>
+      </div>
+      <span class="sidebar-brand-text">智慧果园</span>
+    </div>
+
+    <!-- 菜单主体（由 JS 动态渲染） -->
+    <div class="sidebar-body"></div>
+
+    <!-- 底部功能区 -->
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn sidebar-collapse-btn" title="折叠侧边栏">
+        <span class="collapse-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 3L6 9L11 15"/><path d="M14 3V15"/>
+          </svg>
+        </span>
+        <span class="btn-text">折叠</span>
+      </button>
+      <button class="sidebar-footer-btn" title="系统设置" id="btn-settings">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="9" r="2.5"/>
+          <path d="M9 2V4M9 14V16M2 9H4M14 9H16M4.2 4.2L5.6 5.6M12.4 12.4L13.8 13.8M13.8 4.2L12.4 5.6M5.6 12.4L4.2 13.8"/>
+        </svg>
+        <span class="btn-text">设置</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- 移动端遮罩层 -->
+  <div class="sidebar-overlay"></div>
+
+  <!-- ===== 主内容区 ===== -->
+  <div class="main-wrapper">
+
+    <!-- 顶栏 -->
+    <header class="topbar">
+      <!-- 移动端汉堡菜单 -->
+      <button class="topbar-hamburger" aria-label="打开导航菜单">
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M3 6H19M3 11H19M3 16H19"/>
+        </svg>
+      </button>
+      <!-- 右侧功能区 -->
+      <div class="topbar-right">
+        <!-- 通知铃铛 -->
+        <button class="topbar-notification" title="消息通知">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2C7 2 5 4.5 5 7.5V12L3 14H17L15 12V7.5C15 4.5 13 2 10 2Z"/>
+            <path d="M8.5 16C8.5 17 9.2 18 10 18C10.8 18 11.5 17 11.5 16"/>
+          </svg>
+          <span class="badge">3</span>
+        </button>
+
+        <!-- 用户信息 -->
+        <div class="topbar-user">
+          <div class="topbar-user-avatar">张</div>
+          <span class="topbar-user-name">张三</span>
+          <span class="topbar-user-arrow">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
+              <path d="M3 5L6 8L9 5"/>
+            </svg>
+          </span>
+        </div>
+
+        <!-- 用户下拉菜单 -->
+        <div class="topbar-user-dropdown">
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <circle cx="8" cy="5" r="3"/><path d="M2 15C2 11.5 5 10 8 10C11 10 14 11.5 14 15"/>
+            </svg>
+            个人中心
+          </div>
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M8 2V8L11 11"/><circle cx="8" cy="8" r="6"/>
+            </svg>
+            操作日志
+          </div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" style="color:var(--error);">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M6 2H3C2.45 2 2 2.45 2 3V13C2 13.55 2.45 14 3 14H6"/><path d="M10 11L14 8L10 5"/><path d="M14 8H6"/>
+            </svg>
+            退出登录
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tab 标签栏 -->
+    <div class="tab-bar">
+      <!-- Tab 标签由 JS 动态渲染 -->
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+    <div class="content-wrapper">
+      <!-- 页面头部 -->
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">认养农事</h1>
+          <p class="page-subtitle">认养果树的农事管理，记录并推送认养人</p>
+        </div>
+      </div>
+
+      <!-- 统计卡片 -->
+      <div class="stats-cards">
+        <div class="stat-card green">
+          <div class="stat-label">农事记录总数</div>
+          <div class="stat-value">128</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-label">已推送</div>
+          <div class="stat-value">112</div>
+        </div>
+        <div class="stat-card orange">
+          <div class="stat-label">待推送</div>
+          <div class="stat-value">12</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-label">推送失败</div>
+          <div class="stat-value">4</div>
+        </div>
+      </div>
+
+      <!-- 搜索栏区 -->
+      <div class="page-section search-section">
+        <div class="search-bar">
+          <select class="search-select" id="baseSelect">
+            <option value="">全部基地</option>
+            <option value="luochuan">洛川基地</option>
+            <option value="hengshan">衡山基地</option>
+            <option value="yichuan">伊川基地</option>
+          </select>
+          <input type="text" class="search-input" placeholder="搜索认养人..." id="adopterSearch">
+          <select class="search-select" id="typeSelect">
+            <option value="">全部类型</option>
+            <option value="fertilize">施肥</option>
+            <option value="water">浇水</option>
+            <option value="prune">修剪</option>
+            <option value="bag">套袋</option>
+            <option value="pest">病虫害防治</option>
+          </select>
+          <input type="date" class="search-date" id="startDate">
+          <span class="date-separator">至</span>
+          <input type="date" class="search-date" id="endDate">
+          <button class="jg-btn jg-btn-primary" onclick="handleSearch()">搜索</button>
+        </div>
+      </div>
+
+      <!-- 操作按钮区 -->
+      <div class="page-section action-bar">
+        <div class="action-left">
+          <span class="selected-info">已选择 <strong id="selectedCount">0</strong> 项</span>
+        </div>
+        <div class="action-right">
+          <button class="jg-btn jg-btn-primary" onclick="showAddModal()">新建农事记录</button>
+          <button class="jg-btn" onclick="handleExport()">导出记录</button>
+        </div>
+      </div>
+
+      <!-- 数据列表区 -->
+      <div class="page-section data-section">
+        <div class="data-table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                <th style="width:120px;">记录编号</th>
+                <th style="width:140px;">认养果树</th>
+                <th style="width:100px;">认养人</th>
+                <th style="width:100px;">农事类型</th>
+                <th style="width:120px;">执行日期</th>
+                <th style="width:80px;">状态</th>
+                <th style="width:100px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="farmingList">
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-wrapper">
+          <div class="pagination-info" id="paginationInfo">共 23 条记录，第 1/3 页</div>
+          <div class="pagination">
+            <button class="page-btn disabled" id="prevPage">‹</button>
+            <button class="page-btn active" onclick="goToPage(1)">1</button>
+            <button class="page-btn" onclick="goToPage(2)">2</button>
+            <button class="page-btn" onclick="goToPage(3)">3</button>
+            <button class="page-btn" id="nextPage" onclick="goToPage(2)">›</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    </main>
+  </div>
+
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">农事记录详情</h3>
+      <button class="modal-close" onclick="closeModal('detailModal')">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 1l8 8M9 9l8-8M9 9l-8 8M9 9l8 8"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body" id="detailContent">
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 重推弹窗 -->
+<div class="modal-overlay" id="repushModal">
+  <div class="modal" style="max-width: 400px;">
+    <div class="modal-header">
+      <h3 class="modal-title">重新推送</h3>
+      <button class="modal-close" onclick="closeModal('repushModal')">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 1l8 8M9 9l8-8M9 9l-8 8M9 9l8 8"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="alert-warning">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;float:left;margin-right:8px;">
+          <path d="M12 9v2m0 4h.01"/>
+          <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
+        </svg>
+        <span>确定要重新推送选中的农事记录吗？</span>
+      </div>
+      <p id="repushInfo" style="margin-top:var(--space-md);color:var(--text-secondary);font-size:var(--font-size-sm);"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('repushModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="confirmRepush()">确认推送</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新增农事记录弹窗 -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">新建农事记录</h3>
+      <button class="modal-close" onclick="closeModal('addModal')">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 1l8 8M9 9l8-8M9 9l-8 8M9 9l8 8"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">认养果树</label>
+        <select class="form-select" id="addTree">
+          <option value="A001">红富士 #A001 - 张三</option>
+          <option value="A002">红富士 #A002 - 李四</option>
+          <option value="B001">嘎啦 #B001 - 王五</option>
+          <option value="B004">嘎啦 #B004 - 赵六</option>
+          <option value="C003">秦冠 #C003 - 钱七</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">农事类型</label>
+        <select class="form-select" id="addType">
+          <option value="fertilize">施肥</option>
+          <option value="water">浇水</option>
+          <option value="prune">修剪</option>
+          <option value="bag">套袋</option>
+          <option value="pest">病虫害防治</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">执行日期</label>
+        <input type="date" class="form-input" id="addDate">
+      </div>
+      <div class="form-group">
+        <label class="form-label">备注</label>
+        <textarea class="form-input form-textarea" id="addRemark" placeholder="请输入备注信息"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('addModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="saveAdd()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 引入交互脚本 -->
+<script src="js/sidebar-layout.js"></script>
+<script>
+  // Mock数据
+  const mockData = [
+    { id: '1', code: 'FRM20260615001', treeCode: 'A001', treeName: '红富士 #A001', adopter: '张三', type: 'fertilize', typeText: '施肥', date: '2026-06-15 09:30', status: 'pushed', base: '洛川基地' },
+    { id: '2', code: 'FRM20260614102', treeCode: 'A002', treeName: '红富士 #A002', adopter: '李四', type: 'water', typeText: '浇水', date: '2026-06-14 14:20', status: 'pushed', base: '洛川基地' },
+    { id: '3', code: 'FRM20260613103', treeCode: 'B001', treeName: '嘎啦 #B001', adopter: '王五', type: 'prune', typeText: '修剪', date: '2026-06-13 10:15', status: 'failed', base: '洛川基地' },
+    { id: '4', code: 'FRM20260612104', treeCode: 'B004', treeName: '嘎啦 #B004', adopter: '赵六', type: 'bag', typeText: '套袋', date: '2026-06-12 15:45', status: 'pushed', base: '洛川基地' },
+    { id: '5', code: 'FRM20260611105', treeCode: 'C003', treeName: '秦冠 #C003', adopter: '钱七', type: 'pest', typeText: '病虫害防治', date: '2026-06-11 08:30', status: 'pending', base: '洛川基地' },
+    { id: '6', code: 'FRM20260610106', treeCode: 'D002', treeName: '金帅 #D002', adopter: '孙八', type: 'fertilize', typeText: '施肥', date: '2026-06-10 11:20', status: 'pushed', base: '白水基地' },
+    { id: '7', code: 'FRM20260609107', treeCode: 'E001', treeName: '红富士 #E001', adopter: '周九', type: 'water', typeText: '浇水', date: '2026-06-09 16:00', status: 'pushed', base: '宜川基地' },
+    { id: '8', code: 'FRM20260608108', treeCode: 'E004', treeName: '红富士 #E004', adopter: '吴十', type: 'prune', typeText: '修剪', date: '2026-06-08 09:15', status: 'pushed', base: '宜川基地' },
+    { id: '9', code: 'FRM20260607109', treeCode: 'F003', treeName: '嘎啦 #F003', adopter: '郑十一', type: 'bag', typeText: '套袋', date: '2026-06-07 14:30', status: 'failed', base: '宜川基地' },
+    { id: '10', code: 'FRM20260606110', treeCode: 'A001', treeName: '红富士 #A001', adopter: '张三', type: 'fertilize', typeText: '施肥', date: '2026-06-06 10:00', status: 'pushed', base: '洛川基地' },
+    { id: '11', code: 'FRM20260605111', treeCode: 'A002', treeName: '红富士 #A002', adopter: '李四', type: 'water', typeText: '浇水', date: '2026-06-05 15:45', status: 'pending', base: '洛川基地' },
+    { id: '12', code: 'FRM20260604112', treeCode: 'B001', treeName: '嘎啦 #B001', adopter: '王五', type: 'pest', typeText: '病虫害防治', date: '2026-06-04 08:20', status: 'pushed', base: '洛川基地' },
+    { id: '13', code: 'FRM20260603113', treeCode: 'B004', treeName: '嘎啦 #B004', adopter: '赵六', type: 'prune', typeText: '修剪', date: '2026-06-03 11:30', status: 'pushed', base: '洛川基地' },
+    { id: '14', code: 'FRM20260602114', treeCode: 'C003', treeName: '秦冠 #C003', adopter: '钱七', type: 'bag', typeText: '套袋', date: '2026-06-02 16:15', status: 'pushed', base: '洛川基地' },
+    { id: '15', code: 'FRM20260601115', treeCode: 'D002', treeName: '金帅 #D002', adopter: '孙八', type: 'fertilize', typeText: '施肥', date: '2026-06-01 09:00', status: 'pushed', base: '白水基地' },
+    { id: '16', code: 'FRM20260531116', treeCode: 'E001', treeName: '红富士 #E001', adopter: '周九', type: 'water', typeText: '浇水', date: '2026-05-31 14:00', status: 'failed', base: '宜川基地' },
+    { id: '17', code: 'FRM20260530117', treeCode: 'E004', treeName: '红富士 #E004', adopter: '吴十', type: 'prune', typeText: '修剪', date: '2026-05-30 10:30', status: 'pending', base: '宜川基地' },
+    { id: '18', code: 'FRM20260529118', treeCode: 'F003', treeName: '嘎啦 #F003', adopter: '郑十一', type: 'pest', typeText: '病虫害防治', date: '2026-05-29 08:45', status: 'pushed', base: '宜川基地' },
+    { id: '19', code: 'FRM20260528119', treeCode: 'A001', treeName: '红富士 #A001', adopter: '张三', type: 'bag', typeText: '套袋', date: '2026-05-28 15:20', status: 'pushed', base: '洛川基地' },
+    { id: '20', code: 'FRM20260527120', treeCode: 'A002', treeName: '红富士 #A002', adopter: '李四', type: 'fertilize', typeText: '施肥', date: '2026-05-27 09:30', status: 'pushed', base: '洛川基地' },
+    { id: '21', code: 'FRM20260526121', treeCode: 'B001', treeName: '嘎啦 #B001', adopter: '王五', type: 'water', typeText: '浇水', date: '2026-05-26 13:45', status: 'pushed', base: '洛川基地' },
+    { id: '22', code: 'FRM20260525122', treeCode: 'B004', treeName: '嘎啦 #B004', adopter: '赵六', type: 'prune', typeText: '修剪', date: '2026-05-25 11:00', status: 'pending', base: '洛川基地' },
+    { id: '23', code: 'FRM20260524123', treeCode: 'C003', treeName: '秦冠 #C003', adopter: '钱七', type: 'fertilize', typeText: '施肥', date: '2026-05-24 16:30', status: 'pushed', base: '洛川基地' },
+  ];
+
+  const pageSize = 8;
+  let currentPage = 1;
+
+  // 渲染表格
+  function renderTable(data) {
+    const tbody = document.getElementById('farmingList');
+    tbody.innerHTML = '';
+    
+    data.forEach(item => {
+      const statusText = item.status === 'pushed' ? '✓ 已推送' : item.status === 'failed' ? '✕ 推送失败' : '○ 待推送';
+      const statusClass = item.status;
+      const typeClass = item.type;
+      
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td><input type="checkbox" class="farming-checkbox" value="${item.id}"></td>
+        <td class="text-mono">${item.code}</td>
+        <td>
+          <div class="tree-info">
+            <span class="tree-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M12 22v-7"/><path d="M7 15h10l-5-8-5 8z"/><path d="M12 7l3.5-5h-7L12 7z"/></svg></span>
+            <div>
+              <div class="tree-name">${item.treeName}</div>
+              <div class="tree-code">${item.base}</div>
+            </div>
+          </div>
+        </td>
+        <td>${item.adopter}</td>
+        <td><span class="farming-type-tag ${typeClass}">${item.typeText}</span></td>
+        <td class="text-mono">${item.date}</td>
+        <td><span class="status-tag ${statusClass}">${statusText}</span></td>
+        <td>
+          <div class="action-btns">
+            <button class="action-btn view" onclick="showDetail('${item.id}')">详情</button>
+            <button class="action-btn repush" onclick="showRepush('${item.id}')">重推</button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    // 绑定复选框事件
+    document.querySelectorAll('.farming-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', updateSelectedCount);
+    });
+  }
+
+  // 分页
+  function goToPage(page) {
+    currentPage = page;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const pageData = mockData.slice(start, end);
+    
+    renderTable(pageData);
+    updatePagination();
+  }
+
+  // 更新分页状态
+  function updatePagination() {
+    const totalPages = Math.ceil(mockData.length / pageSize);
+    document.getElementById('paginationInfo').textContent = `共 ${mockData.length} 条记录，第 ${currentPage}/${totalPages} 页`;
+    
+    const prevBtn = document.getElementById('prevPage');
+    const nextBtn = document.getElementById('nextPage');
+    
+    prevBtn.classList.toggle('disabled', currentPage === 1);
+    nextBtn.classList.toggle('disabled', currentPage === totalPages);
+    
+    prevBtn.onclick = currentPage > 1 ? () => goToPage(currentPage - 1) : null;
+    nextBtn.onclick = currentPage < totalPages ? () => goToPage(currentPage + 1) : null;
+    
+    document.querySelectorAll('.page-btn').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    document.querySelector(`.page-btn[onclick="goToPage(${currentPage})"]`)?.classList.add('active');
+  }
+
+  // 全选功能
+  function toggleSelectAll() {
+    const checkboxes = document.querySelectorAll('.farming-checkbox');
+    const selectAll = document.getElementById('selectAll');
+    checkboxes.forEach(checkbox => {
+      checkbox.checked = selectAll.checked;
+    });
+    updateSelectedCount();
+  }
+
+  // 更新选中数量
+  function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.farming-checkbox:checked');
+    document.getElementById('selectedCount').textContent = checkboxes.length;
+  }
+
+  // 搜索功能
+  function handleSearch() {
+    const keyword = document.getElementById('adopterSearch').value.toLowerCase();
+    const base = document.getElementById('baseSelect').value;
+    const type = document.getElementById('typeSelect').value;
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    
+    let filtered = mockData.filter(item => {
+      const matchKeyword = !keyword || item.adopter.toLowerCase().includes(keyword);
+      const matchBase = !base || item.base.includes(base);
+      const matchType = !type || item.type === type;
+      const matchDate = (!startDate && !endDate) || 
+                       (startDate && item.date >= startDate) && 
+                       (endDate && item.date <= endDate);
+      return matchKeyword && matchBase && matchType && matchDate;
+    });
+    
+    document.getElementById('paginationInfo').textContent = `共 ${filtered.length} 条记录，第 1/1 页`;
+    renderTable(filtered);
+  }
+
+  // 弹窗操作
+  function showModal(modalId) {
+    document.getElementById(modalId).classList.add('show');
+  }
+
+  function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('show');
+  }
+
+  // 详情弹窗
+  function showDetail(id) {
+    const item = mockData.find(d => d.id === id);
+    if (item) {
+      const statusText = item.status === 'pushed' ? '已推送' : item.status === 'failed' ? '推送失败' : '待推送';
+      const typeText = item.type === 'fertilize' ? '施肥' : item.type === 'water' ? '浇水' : item.type === 'prune' ? '修剪' : item.type === 'bag' ? '套袋' : '病虫害防治';
+      document.getElementById('detailContent').innerHTML = `
+        <div class="detail-row"><div class="detail-label">记录编号</div><div class="detail-value text-mono">${item.code}</div></div>
+        <div class="detail-row"><div class="detail-label">认养果树</div><div class="detail-value">${item.treeName}</div></div>
+        <div class="detail-row"><div class="detail-label">认养人</div><div class="detail-value">${item.adopter}</div></div>
+        <div class="detail-row"><div class="detail-label">所属基地</div><div class="detail-value">${item.base}</div></div>
+        <div class="detail-row"><div class="detail-label">农事类型</div><div class="detail-value"><span class="farming-type-tag ${item.type}">${typeText}</span></div></div>
+        <div class="detail-row"><div class="detail-label">执行日期</div><div class="detail-value">${item.date}</div></div>
+        <div class="detail-row"><div class="detail-label">状态</div><div class="detail-value"><span class="status-tag ${item.status}">${statusText}</span></div></div>
+      `;
+      showModal('detailModal');
+    }
+  }
+
+  // 重推弹窗
+  function showRepush(id) {
+    const item = mockData.find(d => d.id === id);
+    document.getElementById('repushInfo').textContent = `将重新推送：${item?.code} - ${item?.treeName}`;
+    showModal('repushModal');
+  }
+
+  function confirmRepush() {
+    alert('推送成功！');
+    closeModal('repushModal');
+  }
+
+  // 新增弹窗
+  function showAddModal() {
+    document.getElementById('addTree').value = 'A001';
+    document.getElementById('addType').value = 'fertilize';
+    document.getElementById('addDate').value = '';
+    document.getElementById('addRemark').value = '';
+    showModal('addModal');
+  }
+
+  function saveAdd() {
+    alert('新增成功！');
+    closeModal('addModal');
+  }
+
+  // 导出功能
+  function handleExport() {
+    const selected = document.querySelectorAll('.farming-checkbox:checked');
+    if (selected.length === 0) {
+      alert('请先选择要导出的记录');
+      return;
+    }
+    alert(`已导出 ${selected.length} 条记录`);
+  }
+
+  // 初始化
+  goToPage(1);
+</script>
+
+<!-- 已通过质量审查（第2轮修正）- 严过审 2025-01-18 -->
+<script src="js/iframe-hide.js"></script>
+</body>
+</html>

@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 溯源查询</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+  }
+  .modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+  .modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 560px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
+    transform: scale(0.9);
+    transition: all 0.3s ease;
+  }
+  .modal-overlay.active .modal {
+    transform: scale(1);
+  }
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e8ece8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #22a84a 0%, #1a8a3a 100%);
+    color: #fff;
+  }
+  .modal-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .modal-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .modal-close:hover { background: rgba(255,255,255,0.3); }
+  .modal-body { padding: 24px; max-height: 60vh; overflow-y: auto; }
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #e8ece8;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f4f0;
+  }
+  .detail-grid:last-child { border-bottom: none; }
+  .detail-label { color: #6b7b6b; font-size: 14px; }
+  .detail-value { color: #1a2e1a; font-size: 14px; font-weight: 500; }
+  .qrcode-container {
+    text-align: center;
+    padding: 24px;
+    background: #f8faf8;
+    border-radius: 12px;
+    margin: 16px 0;
+  }
+  .qrcode-box {
+    width: 180px;
+    height: 180px;
+    background: #fff;
+    border-radius: 12px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #22a84a;
+  }
+  .qrcode-code { font-size: 16px; font-weight: 600; color: #1a2e1a; margin-bottom: 8px; }
+  .qrcode-hint { font-size: 12px; color: #6b7b6b; }
+  .trace-timeline { margin-top: 16px; }
+  .trace-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px 0;
+    position: relative;
+  }
+  .trace-item::before {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 32px;
+    bottom: -12px;
+    width: 2px;
+    background: #e0e5e0;
+  }
+  .trace-item:last-child::before { display: none; }
+  .trace-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #22a84a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .trace-dot svg { width: 12px; height: 12px; color: #fff; }
+  .trace-content { flex: 1; }
+  .trace-title { font-weight: 500; color: #1a2e1a; margin-bottom: 4px; }
+  .trace-time { font-size: 12px; color: #6b7b6b; }
+  .toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 14px 20px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 2000;
+    transform: translateX(120%);
+    transition: all 0.3s ease;
+  }
+  .toast.show { transform: translateX(0); }
+  .toast.success { border-left: 4px solid #22a84a; }
+  .toast.error { border-left: 4px solid #ef4444; }
+  .toast-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #e8f5ec;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #22a84a;
+  }
+</style>
+</head>
+<body data-active-menu="trace" data-active-submenu="trace-query">
+
+<div class="app-layout">
+
+  <nav class="sidebar" aria-label="主导航">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 3C8 1 5 3 5 6.5C5 10 8 14 11 17C14 14 17 10 17 6.5C17 3 14 1 11 3Z" fill="rgba(34,168,74,0.2)"/>
+          <path d="M11 5C9.5 4 7.5 5 7.5 7C7.5 9 9.5 12 11 14"/><path d="M11 5C12.5 4 14.5 5 14.5 7C14.5 9 12.5 12 11 14"/><path d="M11 3V1"/>
+        </svg>
+      </div>
+      <span class="sidebar-brand-text">智慧果园</span>
+    </div>
+    <div class="sidebar-body"></div>
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn sidebar-collapse-btn" title="折叠侧边栏">
+        <span class="collapse-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 3L6 9L11 15"/><path d="M14 3V15"/>
+          </svg>
+        </span>
+        <span class="btn-text">折叠</span>
+      </button>
+      <button class="sidebar-footer-btn" title="系统设置" id="btn-settings">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="9" r="2.5"/>
+          <path d="M9 2V4M9 14V16M2 9H4M14 9H16M4.2 4.2L5.6 5.6M12.4 12.4L13.8 13.8M13.8 4.2L12.4 5.6M5.6 12.4L4.2 13.8"/>
+        </svg>
+        <span class="btn-text">设置</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="sidebar-overlay"></div>
+
+  <div class="main-wrapper">
+    <header class="topbar">
+      <button class="topbar-hamburger" aria-label="打开导航菜单">
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M3 6H19M3 11H19M3 16H19"/>
+        </svg>
+      </button>
+      <div class="topbar-right">
+        <button class="topbar-notification" title="消息通知">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2C7 2 5 4.5 5 7.5V12L3 14H17L15 12V7.5C15 4.5 13 2 10 2Z"/>
+            <path d="M8.5 16C8.5 17 9.2 18 10 18C10.8 18 11.5 17 11.5 16"/>
+          </svg>
+          <span class="badge">3</span>
+        </button>
+        <div class="topbar-user">
+          <div class="topbar-user-avatar">张</div>
+          <span class="topbar-user-name">张三</span>
+          <span class="topbar-user-arrow">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
+              <path d="M3 5L6 8L9 5"/>
+            </svg>
+          </span>
+        </div>
+        <div class="topbar-user-dropdown">
+          <div class="dropdown-item">个人中心</div>
+          <div class="dropdown-item">操作日志</div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" style="color:var(--error);">退出登录</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">溯源查询管理</h1>
+            <p class="page-subtitle">查询产品溯源信息，记录追溯轨迹</p>
+          </div>
+        </div>
+
+        <div class="patrol-stats">
+          <div class="patrol-stat-card green">
+            <div class="stat-value">1,847</div>
+            <div class="stat-label">已追溯记录</div>
+          </div>
+          <div class="patrol-stat-card blue">
+            <div class="stat-value">234</div>
+            <div class="stat-label">溯源中</div>
+          </div>
+          <div class="patrol-stat-card orange">
+            <div class="stat-value">89</div>
+            <div class="stat-label">待追溯</div>
+          </div>
+          <div class="patrol-stat-card purple">
+            <div class="stat-value">523</div>
+            <div class="stat-label">今日查询</div>
+          </div>
+        </div>
+
+        <div class="search-section">
+          <div class="search-bar" style="flex-wrap: wrap; gap: 12px;">
+            <input type="text" class="search-input" placeholder="输入溯源码..." id="traceCodeInput" style="width: 180px;">
+            <input type="text" class="search-input" placeholder="输入产品名称..." id="productNameInput" style="width: 180px;">
+            <select class="search-select" id="statusSelect" style="width: 140px;">
+              <option value="">全部状态</option>
+              <option value="completed">已完成</option>
+              <option value="processing">进行中</option>
+              <option value="pending">待追溯</option>
+            </select>
+            <input type="text" class="search-input" placeholder="输入批次号..." id="batchInput" style="width: 160px;">
+            <button class="jg-btn jg-btn-primary" onclick="searchData()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+              </svg>
+              查询
+            </button>
+            <button class="jg-btn" onclick="resetSearch()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+              </svg>
+              重置
+            </button>
+          </div>
+        </div>
+
+        <div class="data-section">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>溯源码</th>
+                <th>产品名称</th>
+                <th>批次号</th>
+                <th>溯源状态</th>
+                <th>查询次数</th>
+                <th>最后查询</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="dataTableBody"></tbody>
+          </table>
+          <div class="pagination" id="paginationContainer"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>溯源详情</h3>
+      <button class="modal-close" onclick="closeModal('detailModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="detailContent"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
+      <button class="jg-btn jg-btn-primary" onclick="showDetailQRCode()">查看二维码</button>
+    </div>
+  </div>
+</div>
+
+<!-- 二维码弹窗 -->
+<div class="modal-overlay" id="qrcodeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>溯源二维码</h3>
+      <button class="modal-close" onclick="closeModal('qrcodeModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="qrcode-container">
+        <div class="qrcode-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#22a84a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:80px;height:80px;">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            <path d="M6.5 6.5h1v1h-1zM16.5 6.5h1v1h-1zM6.5 16.5h1v1h-1z"/>
+          </svg>
+        </div>
+        <div class="qrcode-code" id="qrcodeValue">SNZG-2024-0001</div>
+        <div class="qrcode-hint">扫描二维码查看产品溯源信息</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('qrcodeModal')">关闭</button>
+      <button class="jg-btn jg-btn-primary" onclick="downloadQRCode()">下载二维码</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast提示 -->
+<div class="toast" id="toast">
+  <div class="toast-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+    </svg>
+  </div>
+  <span id="toastMessage">操作成功</span>
+</div>
+
+<script src="js/sidebar-layout.js"></script>
+<script src="js/iframe-hide.js"></script>
+<script>
+// Mock数据 - 23条记录
+const mockData = [
+  { code: 'SNZG-2024-0001', product: '烟台红富士苹果', batch: 'PC-20240515-01', status: 'completed', queries: 156, lastQuery: '2024-06-10 14:30:00', trace: [{title: '包装出厂', time: '2024-05-20 10:00:00'}, {title: '质量检测', time: '2024-05-18 15:30:00'}, {title: '采摘入库', time: '2024-05-15 08:00:00'}] },
+  { code: 'SNZG-2024-0002', product: '招远黄金苹果', batch: 'PC-20240516-02', status: 'completed', queries: 98, lastQuery: '2024-06-10 11:20:00', trace: [{title: '包装出厂', time: '2024-05-22 09:00:00'}, {title: '质量检测', time: '2024-05-20 14:00:00'}, {title: '采摘入库', time: '2024-05-16 07:30:00'}] },
+  { code: 'SNZG-2024-0003', product: '蓬莱苹果礼盒', batch: 'PC-20240517-03', status: 'processing', queries: 45, lastQuery: '2024-06-09 16:45:00', trace: [{title: '质量检测', time: '2024-05-25 10:00:00'}, {title: '采摘入库', time: '2024-05-17 09:15:00'}] },
+  { code: 'SNZG-2024-0004', product: '威海苹果汁', batch: 'PC-20240518-04', status: 'pending', queries: 23, lastQuery: '2024-06-08 09:30:00', trace: [{title: '原料入库', time: '2024-05-18 16:45:00'}] },
+  { code: 'SNZG-2024-0005', product: '龙口苹果干', batch: 'PC-20240520-05', status: 'completed', queries: 87, lastQuery: '2024-06-10 10:15:00', trace: [{title: '包装出厂', time: '2024-05-28 11:00:00'}, {title: '质量检测', time: '2024-05-26 14:30:00'}, {title: '加工生产', time: '2024-05-22 08:00:00'}, {title: '原料入库', time: '2024-05-20 11:00:00'}] },
+  { code: 'SNZG-2024-0006', product: '栖霞红将军苹果', batch: 'PC-20240521-06', status: 'completed', queries: 134, lastQuery: '2024-06-09 15:20:00', trace: [{title: '包装出厂', time: '2024-05-28 09:30:00'}, {title: '质量检测', time: '2024-05-25 16:00:00'}, {title: '采摘入库', time: '2024-05-21 08:30:00'}] },
+  { code: 'SNZG-2024-0007', product: '牟平富士苹果', batch: 'PC-20240522-07', status: 'processing', queries: 67, lastQuery: '2024-06-10 08:45:00', trace: [{title: '质量检测', time: '2024-05-30 10:30:00'}, {title: '采摘入库', time: '2024-05-22 15:20:00'}] },
+  { code: 'SNZG-2024-0008', product: '莱阳苹果醋', batch: 'PC-20240523-08', status: 'pending', queries: 34, lastQuery: '2024-06-07 14:00:00', trace: [{title: '加工生产', time: '2024-05-23 10:45:00'}] },
+  { code: 'SNZG-2024-0009', product: '海阳水晶苹果', batch: 'PC-20240524-09', status: 'completed', queries: 112, lastQuery: '2024-06-10 13:30:00', trace: [{title: '包装出厂', time: '2024-06-01 10:00:00'}, {title: '质量检测', time: '2024-05-29 15:30:00'}, {title: '采摘入库', time: '2024-05-24 13:00:00'}] },
+  { code: 'SNZG-2024-0010', product: '福山苹果酱', batch: 'PC-20240525-10', status: 'completed', queries: 78, lastQuery: '2024-06-09 11:00:00', trace: [{title: '包装出厂', time: '2024-06-02 09:30:00'}, {title: '质量检测', time: '2024-05-30 14:00:00'}, {title: '加工生产', time: '2024-05-27 08:00:00'}, {title: '原料入库', time: '2024-05-25 09:30:00'}] },
+  { code: 'SNZG-2024-0011', product: '长岛苹果脆片', batch: 'PC-20240526-11', status: 'processing', queries: 56, lastQuery: '2024-06-08 16:20:00', trace: [{title: '质量检测', time: '2024-06-03 11:00:00'}, {title: '加工生产', time: '2024-05-30 09:00:00'}, {title: '原料入库', time: '2024-05-26 14:15:00'}] },
+  { code: 'SNZG-2024-0012', product: '芝罘苹果饮料', batch: 'PC-20240527-12', status: 'completed', queries: 91, lastQuery: '2024-06-10 09:45:00', trace: [{title: '包装出厂', time: '2024-06-05 10:00:00'}, {title: '质量检测', time: '2024-06-02 15:30:00'}, {title: '加工生产', time: '2024-05-29 08:00:00'}, {title: '原料入库', time: '2024-05-27 11:20:00'}] },
+  { code: 'SNZG-2024-0013', product: '开发苹果酒', batch: 'PC-20240528-13', status: 'pending', queries: 42, lastQuery: '2024-06-06 13:15:00', trace: [{title: '加工生产', time: '2024-05-28 16:30:00'}] },
+  { code: 'SNZG-2024-0014', product: '蓬莱黄金富士', batch: 'PC-20240529-14', status: 'completed', queries: 103, lastQuery: '2024-06-09 14:30:00', trace: [{title: '包装出厂', time: '2024-06-06 09:00:00'}, {title: '质量检测', time: '2024-06-03 16:00:00'}, {title: '采摘入库', time: '2024-05-29 08:45:00'}] },
+  { code: 'SNZG-2024-0015', product: '招远有机苹果', batch: 'PC-20240530-15', status: 'processing', queries: 72, lastQuery: '2024-06-10 12:00:00', trace: [{title: '质量检测', time: '2024-06-07 10:30:00'}, {title: '采摘入库', time: '2024-05-30 10:00:00'}] },
+  { code: 'SNZG-2024-0016', product: '龙口精品苹果', batch: 'PC-20240601-16', status: 'completed', queries: 88, lastQuery: '2024-06-09 10:30:00', trace: [{title: '包装出厂', time: '2024-06-08 09:30:00'}, {title: '质量检测', time: '2024-06-05 14:00:00'}, {title: '采摘入库', time: '2024-06-01 09:15:00'}] },
+  { code: 'SNZG-2024-0017', product: '烟台苹果干礼盒', batch: 'PC-20240602-17', status: 'pending', queries: 29, lastQuery: '2024-06-07 15:45:00', trace: [{title: '加工生产', time: '2024-06-02 14:30:00'}] },
+  { code: 'SNZG-2024-0018', product: '威海生态苹果', batch: 'PC-20240603-18', status: 'completed', queries: 95, lastQuery: '2024-06-10 11:45:00', trace: [{title: '包装出厂', time: '2024-06-09 10:00:00'}, {title: '质量检测', time: '2024-06-06 15:30:00'}, {title: '采摘入库', time: '2024-06-03 11:45:00'}] },
+  { code: 'SNZG-2024-0019', product: '栖霞冰糖心苹果', batch: 'PC-20240604-19', status: 'processing', queries: 61, lastQuery: '2024-06-08 10:15:00', trace: [{title: '质量检测', time: '2024-06-10 09:00:00'}, {title: '采摘入库', time: '2024-06-04 15:20:00'}] },
+  { code: 'SNZG-2024-0020', product: '莱山苹果脯', batch: 'PC-20240605-20', status: 'completed', queries: 76, lastQuery: '2024-06-09 16:00:00', trace: [{title: '包装出厂', time: '2024-06-10 09:00:00'}, {title: '质量检测', time: '2024-06-07 14:30:00'}, {title: '加工生产', time: '2024-06-05 10:30:00'}, {title: '原料入库', time: '2024-06-05 10:30:00'}] },
+  { code: 'SNZG-2024-0021', product: '牟平红富士', batch: 'PC-20240606-21', status: 'pending', queries: 38, lastQuery: '2024-06-06 14:30:00', trace: [{title: '采摘入库', time: '2024-06-06 13:15:00'}] },
+  { code: 'SNZG-2024-0022', product: '海阳苹果派', batch: 'PC-20240607-22', status: 'completed', queries: 84, lastQuery: '2024-06-10 08:00:00', trace: [{title: '包装出厂', time: '2024-06-09 10:30:00'}, {title: '质量检测', time: '2024-06-08 15:00:00'}, {title: '加工生产', time: '2024-06-07 08:00:00'}] },
+  { code: 'SNZG-2024-0023', product: '福山苹果酵素', batch: 'PC-20240608-23', status: 'processing', queries: 47, lastQuery: '2024-06-09 13:00:00', trace: [{title: '加工生产', time: '2024-06-08 16:45:00'}] }
+];
+
+let currentPage = 1;
+const pageSize = 10;
+let filteredData = [...mockData];
+let currentDetailCode = '';
+
+document.addEventListener('DOMContentLoaded', function() {
+  renderTable();
+  renderPagination();
+});
+
+function renderTable() {
+  const tbody = document.getElementById('dataTableBody');
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  const pageData = filteredData.slice(start, end);
+  
+  tbody.innerHTML = pageData.map(item => `
+    <tr>
+      <td><strong>${item.code}</strong></td>
+      <td>${item.product}</td>
+      <td>${item.batch}</td>
+      <td><span class="status-tag ${item.status === 'completed' ? 'active' : item.status === 'pending' ? 'inactive' : 'warning'}">${item.status === 'completed' ? '已完成' : item.status === 'pending' ? '待追溯' : '进行中'}</span></td>
+      <td>${item.queries} 次</td>
+      <td>${item.lastQuery}</td>
+      <td>
+        <div class="action-btns">
+          <button class="action-btn detail" onclick="viewDetail('${item.code}')">详情</button>
+          <button class="action-btn qrcode" onclick="showQRCode('${item.code}')">二维码</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderPagination() {
+  const container = document.getElementById('paginationContainer');
+  const totalPages = Math.ceil(filteredData.length / pageSize);
+  
+  if (totalPages <= 1) { container.innerHTML = ''; return; }
+  
+  let html = `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="goToPage(${currentPage - 1})">‹</button>`;
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+      html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+    } else if (i === currentPage - 2 || i === currentPage + 2) {
+      html += '<span class="page-ellipsis">...</span>';
+    }
+  }
+  html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="goToPage(${currentPage + 1})">›</button>`;
+  container.innerHTML = html;
+}
+
+function goToPage(page) {
+  const totalPages = Math.ceil(filteredData.length / pageSize);
+  if (page < 1 || page > totalPages) return;
+  currentPage = page;
+  renderTable();
+  renderPagination();
+}
+
+function searchData() {
+  const code = document.getElementById('traceCodeInput').value.toLowerCase();
+  const product = document.getElementById('productNameInput').value.toLowerCase();
+  const status = document.getElementById('statusSelect').value;
+  const batch = document.getElementById('batchInput').value.toLowerCase();
+  
+  filteredData = mockData.filter(item => {
+    if (code && !item.code.toLowerCase().includes(code)) return false;
+    if (product && !item.product.toLowerCase().includes(product)) return false;
+    if (status && item.status !== status) return false;
+    if (batch && !item.batch.toLowerCase().includes(batch)) return false;
+    return true;
+  });
+  
+  currentPage = 1;
+  renderTable();
+  renderPagination();
+  showToast(`找到 ${filteredData.length} 条记录`);
+}
+
+function resetSearch() {
+  document.getElementById('traceCodeInput').value = '';
+  document.getElementById('productNameInput').value = '';
+  document.getElementById('statusSelect').value = '';
+  document.getElementById('batchInput').value = '';
+  filteredData = [...mockData];
+  currentPage = 1;
+  renderTable();
+  renderPagination();
+  showToast('已重置筛选条件');
+}
+
+function viewDetail(code) {
+  currentDetailCode = code;
+  const item = mockData.find(d => d.code === code);
+  if (!item) return;
+  
+  const traceHtml = item.trace.map((t, i) => `
+    <div class="trace-item">
+      <div class="trace-dot">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </div>
+      <div class="trace-content">
+        <div class="trace-title">${t.title}</div>
+        <div class="trace-time">${t.time}</div>
+      </div>
+    </div>
+  `).join('');
+  
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-grid"><span class="detail-label">溯源码</span><span class="detail-value">${item.code}</span></div>
+    <div class="detail-grid"><span class="detail-label">产品名称</span><span class="detail-value">${item.product}</span></div>
+    <div class="detail-grid"><span class="detail-label">批次号</span><span class="detail-value">${item.batch}</span></div>
+    <div class="detail-grid"><span class="detail-label">溯源状态</span><span class="detail-value"><span class="status-tag ${item.status === 'completed' ? 'active' : item.status === 'pending' ? 'inactive' : 'warning'}">${item.status === 'completed' ? '已完成' : item.status === 'pending' ? '待追溯' : '进行中'}</span></span></div>
+    <div class="detail-grid"><span class="detail-label">查询次数</span><span class="detail-value">${item.queries} 次</span></div>
+    <div class="detail-grid"><span class="detail-label">最后查询</span><span class="detail-value">${item.lastQuery}</span></div>
+    <div style="margin-top: 16px; font-weight: 500; color: #1a2e1a;">溯源轨迹</div>
+    <div class="trace-timeline">${traceHtml}</div>
+  `;
+  
+  openModal('detailModal');
+}
+
+function showQRCode(code) {
+  currentDetailCode = code;
+  document.getElementById('qrcodeValue').textContent = code;
+  openModal('qrcodeModal');
+}
+
+function showDetailQRCode() {
+  closeModal('detailModal');
+  setTimeout(() => showQRCode(currentDetailCode), 200);
+}
+
+function downloadQRCode() {
+  showToast(`下载二维码：${currentDetailCode}`);
+}
+
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  document.getElementById('toastMessage').textContent = message;
+  toast.className = `toast ${type}`;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

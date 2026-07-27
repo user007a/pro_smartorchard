@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2b6e3c">
+    <title>VR基地全景 - 智慧果园</title>
+    <!-- H5设计系统 -->
+    <link rel="stylesheet" href="../applefarm_backhand/css/design-system.css">
+    <link rel="stylesheet" href="css/mobile-design-system.css">
+    <!-- 图标库 -->
+    <script src="../applefarm_backhand/icons/icons.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="../common/js/vr-hotspots.js"></script>
+    <script src="../common/js/api-mock.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+        #panorama {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        .mobile-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 56px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            z-index: 100;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .back-btn {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 18px;
+        }
+        .logo-text {
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .header-right {
+            display: flex;
+            gap: 8px;
+        }
+        .header-btn {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 16px;
+        }
+        .scene-tabs {
+            position: absolute;
+            top: 68px;
+            left: 12px;
+            right: 12px;
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+        }
+        .scene-tab {
+            flex: 1;
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 13px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .scene-tab.active {
+            background: #2b6e3c;
+            border-color: #2b6e3c;
+        }
+        .hotspot-info {
+            position: absolute;
+            bottom: 140px;
+            left: 12px;
+            right: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 16px;
+            color: #fff;
+            z-index: 100;
+            display: none;
+            animation: slideUp 0.3s ease;
+        }
+        .hotspot-info.show {
+            display: block;
+        }
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        .info-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .info-title {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .info-close {
+            width: 28px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .info-body {
+            font-size: 13px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        .info-action {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+        .action-btn {
+            display: inline-block;
+            padding: 8px 24px;
+            background: #2b6e3c;
+            border-radius: 20px;
+            color: #fff;
+            font-size: 13px;
+        }
+        .bottom-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            padding: 0 20px;
+            z-index: 100;
+        }
+        .control-ring {
+            width: 160px;
+            height: 160px;
+            margin: 0 auto;
+            position: relative;
+        }
+        .ring-bg {
+            width: 100%;
+            height: 100%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+        }
+        .ring-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 12px;
+            text-align: center;
+        }
+        .ring-btn {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 18px;
+        }
+        .ring-btn.up { top: 0; left: 50%; transform: translateX(-50%); }
+        .ring-btn.down { bottom: 0; left: 50%; transform: translateX(-50%); }
+        .ring-btn.left { left: 0; top: 50%; transform: translateY(-50%); }
+        .ring-btn.right { right: 0; top: 50%; transform: translateY(-50%); }
+        .zoom-controls {
+            position: absolute;
+            right: 20px;
+            bottom: 200px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .zoom-btn {
+            width: 44px;
+            height: 44px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 18px;
+        }
+        .legend-bar {
+            position: absolute;
+            top: 130px;
+            right: 12px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 10px;
+            z-index: 100;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .legend-item:last-child { margin-bottom: 0; }
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .legend-dot.plot { background: #22c55e; }
+        .legend-dot.device { background: #3b82f6; }
+        .legend-dot.task { background: #f59e0b; }
+        .legend-dot.scene { background: #06b6d4; }
+        .tap-hint {
+            position: absolute;
+            bottom: 200px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 12px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="panorama"></div>
+    
+    <div class="mobile-header">
+        <div class="header-left">
+            <div class="back-btn" onclick="goBack()">
+                <i class="fas fa-arrow-left"></i>
+            </div>
+            <div class="logo-text">VR全景</div>
+        </div>
+        <div class="header-right">
+            <div class="header-btn" onclick="toggleAutoRotate()">
+                <i class="fas fa-refresh"></i>
+            </div>
+            <div class="header-btn" onclick="viewer.reset()">
+                <i class="fas fa-home"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="scene-tabs">
+        <div class="scene-tab active" data-scene="scene_main">主入口</div>
+        <div class="scene-tab" data-scene="scene_b">B区</div>
+        <div class="scene-tab" data-scene="scene_c">C区</div>
+    </div>
+    
+    <div class="legend-bar">
+        <div class="legend-item"><span class="legend-dot plot"></span> 地块</div>
+        <div class="legend-item"><span class="legend-dot device"></span> 设备</div>
+        <div class="legend-item"><span class="legend-dot task"></span> 任务</div>
+        <div class="legend-item"><span class="legend-dot scene"></span> 切换</div>
+    </div>
+    
+    <div class="hotspot-info" id="hotspotInfo">
+        <div class="info-header">
+            <div class="info-title" id="infoTitle">信息详情</div>
+            <div class="info-close" onclick="closeInfo()">✕</div>
+        </div>
+        <div class="info-body" id="infoBody"></div>
+        <div class="info-action" id="infoAction"></div>
+    </div>
+    
+    <div class="tap-hint">点击热点查看详情</div>
+    
+    <div class="bottom-controls">
+        <div class="control-ring">
+            <div class="ring-bg"></div>
+            <div class="ring-center">移动</div>
+            <div class="ring-btn up" onclick="viewer.setPitch(viewer.getPitch() + 12)">
+                <i class="fas fa-chevron-up"></i>
+            </div>
+            <div class="ring-btn down" onclick="viewer.setPitch(viewer.getPitch() - 12)">
+                <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="ring-btn left" onclick="viewer.setYaw(viewer.getYaw() - 15)">
+                <i class="fas fa-chevron-left"></i>
+            </div>
+            <div class="ring-btn right" onclick="viewer.setYaw(viewer.getYaw() + 15)">
+                <i class="fas fa-chevron-right"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="zoom-controls">
+        <div class="zoom-btn" onclick="viewer.setHfov(viewer.getHfov() + 8)">
+            <i class="fas fa-plus"></i>
+        </div>
+        <div class="zoom-btn" onclick="viewer.setHfov(viewer.getHfov() - 8)">
+            <i class="fas fa-minus"></i>
+        </div>
+    </div>
+    
+    <script src="../common/js/vr-hotspots.js"></script>
+    <script>
+        var viewer;
+        var currentSceneId = 'scene_main';
+        var isAutoRotating = false;
+        
+        function initViewer(sceneId) {
+            var sceneData = vrHotspotsData.getSceneById(sceneId);
+            if (!sceneData) return;
+            
+            if (viewer) {
+                viewer.destroy();
+            }
+            
+            var config = {
+                type: 'equirectangular',
+                panorama: sceneData.image,
+                title: sceneData.name,
+                author: '智慧果园',
+                sceneFov: sceneData.hfov || 100,
+                autoLoad: true,
+                showControls: false,
+                mouseZoom: true,
+                draggable: true,
+                keyboardZoom: false,
+                compass: false,
+                hotSpots: []
+            };
+            
+            sceneData.hotspots.forEach(function(hotspot) {
+                var hotspotConfig = {
+                    pitch: hotspot.pitch,
+                    yaw: hotspot.yaw,
+                    type: 'custom',
+                    custom: getHotspotIcon(hotspot.type, hotspot.status),
+                    clickHandler: function() {
+                        showInfo(hotspot);
+                    }
+                };
+                config.hotSpots.push(hotspotConfig);
+            });
+            
+            viewer = pannellum.viewer('panorama', config);
+            currentSceneId = sceneId;
+            updateSceneTabs(sceneId);
+        }
+        
+        function getHotspotIcon(type, status) {
+            var color = '#22c55e';
+            switch(type) {
+                case 'plot': color = '#22c55e'; break;
+                case 'device': color = '#3b82f6'; break;
+                case 'task': color = '#f59e0b'; break;
+                case 'building': color = '#8b5cf6'; break;
+                case 'scene': color = '#06b6d4'; break;
+            }
+            if (status === 'warning') color = '#f59e0b';
+            if (status === 'error') color = '#ef4444';
+            
+            return '<div style="width:24px;height:24px;border-radius:50%;background:' + color + ';box-shadow:0 0 12px ' + color + ';border:3px solid #fff;cursor:pointer;"></div>';
+        }
+        
+        function showInfo(hotspot) {
+            document.getElementById('infoTitle').innerHTML = hotspot.title;
+            document.getElementById('infoBody').innerHTML = hotspot.content;
+            
+            if (hotspot.type === 'scene') {
+                document.getElementById('infoAction').innerHTML = '<div class="action-btn" onclick="switchScene(\'' + hotspot.targetId + '\');closeInfo();">查看全景</div>';
+            } else {
+                document.getElementById('infoAction').innerHTML = '';
+            }
+            
+            document.getElementById('hotspotInfo').classList.add('show');
+        }
+        
+        function closeInfo() {
+            document.getElementById('hotspotInfo').classList.remove('show');
+        }
+        
+        function switchScene(sceneId) {
+            initViewer(sceneId);
+        }
+        
+        function updateSceneTabs(sceneId) {
+            var tabs = document.querySelectorAll('.scene-tab');
+            tabs.forEach(function(tab) {
+                tab.classList.remove('active');
+                if (tab.dataset.scene === sceneId) {
+                    tab.classList.add('active');
+                }
+            });
+        }
+        
+        function toggleAutoRotate() {
+            if (isAutoRotating) {
+                viewer.stopAutoRotate();
+            } else {
+                viewer.startAutoRotate(2);
+            }
+            isAutoRotating = !isAutoRotating;
+        }
+        
+        function goBack() {
+            window.location.href = 'mb_home.html';
+        }
+        
+        document.querySelectorAll('.scene-tab').forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                switchScene(this.dataset.scene);
+            });
+        });
+        
+        window.addEventListener('load', function() {
+            initViewer('scene_main');
+        });
+    </script>
+</body>
+</html>

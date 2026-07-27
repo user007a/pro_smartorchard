@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>智慧果园 - 识病虫</title>
+  <!-- H5设计系统 v2 — Supabase × Airbnb × Notion 混合设计基因 -->
+  <link rel="stylesheet" href="css/mobile-design-system.css">
+  <!-- 图标库 -->
+  <script src="../applefarm_backhand/icons/icons.js"></script>
+  <style>
+    /* ========== 页面专属样式（仅保留设计系统未覆盖的部分） ========== */
+    
+    /* Header */
+    .page-header {
+      position: relative;
+      background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+      padding: 44px 16px 20px;
+      color: var(--bg-white);
+    }
+    
+    .header-back {
+      position: absolute;
+      left: 12px;
+      top: 44px;
+      width: 36px;
+      height: 36px;
+      background: rgba(255,255,255,0.2);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    
+    .header-back svg { width: 18px; height: 18px; }
+    
+    .header-content { padding-left: 44px; }
+    .header-title { font-size: var(--font-xl); font-weight: 700; }
+    .header-sub { font-size: var(--font-sm); opacity: 0.85; margin-top: 4px; }
+
+    /* --- 上传区域 --- */
+    .upload-area {
+      width: 100%;
+      height: 200px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-3);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      background: var(--bg-white);
+    }
+    .upload-area:active { background: var(--gray-50); border-color: var(--primary-300); }
+    .upload-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: var(--radius-full);
+      background: var(--primary-50);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .upload-icon svg { width: 28px; height: 28px; color: var(--primary-700); }
+    .upload-text { font-size: var(--font-base); color: var(--text-secondary); }
+    .upload-hint { font-size: var(--font-xs); color: var(--text-tertiary); }
+
+    /* --- 识别结果卡片 --- */
+    .result-header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+    .result-icon {
+      width: 56px; height: 56px;
+      border-radius: var(--radius-lg);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .result-icon svg { width: 28px; height: 28px; }
+    .result-icon.danger { background: var(--error-light); color: var(--error-dark); }
+    .result-icon.warning { background: var(--warning-light); color: var(--warning-dark); }
+    .result-icon.success { background: var(--success-light); color: var(--success-dark); }
+    .result-info { flex: 1; }
+    .result-name { font-size: var(--font-lg); font-weight: var(--font-bold); color: var(--text); }
+    .result-confidence { font-size: var(--font-sm); color: var(--text-secondary); margin-top: var(--space-1); }
+
+    /* --- 提示框 --- */
+    .tips-box {
+      padding: var(--space-4);
+      background: var(--info-light);
+      border-radius: var(--radius-md);
+      border-left: 3px solid var(--info-dark);
+      margin-top: var(--space-4);
+    }
+    .tips-title { font-size: var(--font-base); font-weight: var(--font-semibold); color: var(--info-dark); margin-bottom: var(--space-2); }
+    .tips-content { font-size: var(--font-sm); color: var(--text-secondary); line-height: 1.7; }
+
+    /* --- 历史记录 --- */
+    .history-thumb {
+      width: 56px; height: 56px;
+      border-radius: var(--radius-md);
+      background: var(--gray-50);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+    }
+    .history-thumb svg { width: 24px; height: 24px; color: var(--text-tertiary); }
+
+    /* --- 模态框 --- */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); z-index: 1000;
+      display: none; justify-content: center; align-items: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      background: var(--bg-white);
+      border-radius: var(--radius-xl);
+      padding: var(--space-8) var(--space-6);
+      width: 90%; max-width: 340px;
+      text-align: center;
+    }
+    .modal-text { font-size: var(--font-md); color: var(--text); margin-top: var(--space-4); }
+
+    /* --- 骨架屏 --- */
+    .skeleton-state { display: none; }
+    .mb-app.loading .real-content { display: none; }
+    .mb-app.loading .skeleton-state { display: block; }
+  </style>
+</head>
+<body>
+  <div class="mb-app loading">
+    <!-- ===================== 骨架屏 ===================== -->
+    <div class="skeleton-state">
+      <div class="mb-header-detail">
+        <div class="header-nav">
+          <div style="width:36px;height:36px;"></div>
+          <div class="header-title"></div>
+        </div>
+      </div>
+      <div class="mb-section">
+        <div class="mb-skeleton-card">
+          <div class="mb-skeleton" style="width:80px;height:16px;margin-bottom:16px;"></div>
+          <div class="mb-skeleton-card" style="height:160px;padding:0;margin:0;border:none;box-shadow:none;"></div>
+          <div style="height:16px;"></div>
+          <div class="mb-skeleton" style="width:100%;height:48px;border-radius:24px;"></div>
+        </div>
+        <div style="height:20px;"></div>
+        <div class="mb-skeleton-card">
+          <div class="mb-skeleton" style="width:80px;height:16px;margin-bottom:16px;"></div>
+          <div class="mb-skeleton-line long"></div>
+          <div class="mb-skeleton-line medium"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== 真实内容 ===================== -->
+    <div class="real-content">
+      <!-- 详情页型 Header -->
+      <div class="mb-header-detail">
+        <div class="header-nav">
+          <div class="header-back" onclick="goBack()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </div>
+          <div class="header-title">病虫害识别</div>
+          <div class="header-actions">
+            <div class="header-action-btn" onclick="navigateTo('mb_pest_risk.html')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="header-content">
+          <div class="header-sub">拍照或上传图片，AI智能识别果树病虫害</div>
+        </div>
+      </div>
+
+      <div class="mb-section">
+        <!-- 上传卡片 -->
+        <div class="mb-card">
+          <div class="mb-section-title"><span class="mb-section-dot"></span>上传图片</div>
+          <div class="upload-area" onclick="triggerUpload()">
+            <div class="upload-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </div>
+            <div class="upload-text">点击拍照或上传图片</div>
+            <div class="upload-hint">支持 JPG、PNG 格式</div>
+          </div>
+          <input type="file" id="imageInput" accept="image/*" style="display:none;" onchange="handleUpload(event)">
+          <button class="mb-btn mb-btn-primary mb-btn-block" style="margin-top: var(--space-4);" onclick="startIdentify()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            开始识别
+          </button>
+        </div>
+
+        <!-- 识别结果 -->
+        <div id="resultArea" style="display:none;">
+          <div class="mb-card" style="margin-top: var(--space-4);">
+            <div class="mb-section-title"><span class="mb-section-dot"></span>识别结果</div>
+            <div class="result-header">
+              <div class="result-icon danger">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              </div>
+              <div class="result-info">
+                <div class="result-name">苹果轮纹病</div>
+                <div class="result-confidence">置信度：92%</div>
+              </div>
+              <span class="mb-tag error mb-tag-lg">高风险</span>
+            </div>
+            <div class="tips-box">
+              <div class="tips-title">防治建议</div>
+              <div class="tips-content">1. 及时清除病枝病果<br>2. 春季发芽前喷布波尔多液<br>3. 谢花后喷施甲基托布津<br>4. 加强果园排水通风</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 识别历史 -->
+        <div class="mb-card" style="margin-top: var(--space-4);">
+          <div class="mb-section-title"><span class="mb-section-dot"></span>识别历史</div>
+          <div class="mb-list-item" style="padding: 12px 0; border-bottom: 1px solid var(--border-light);">
+            <div class="history-thumb">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </div>
+            <div class="mb-list-content">
+              <div class="mb-list-title">苹果斑点落叶病</div>
+              <div class="mb-list-desc">2026-05-20 14:30</div>
+            </div>
+            <span class="mb-tag warning">中风险</span>
+          </div>
+          <div class="mb-list-item" style="padding: 12px 0; border-bottom: none;">
+            <div class="history-thumb">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </div>
+            <div class="mb-list-content">
+              <div class="mb-list-title">红蜘蛛虫害</div>
+              <div class="mb-list-desc">2026-05-18 09:15</div>
+            </div>
+            <span class="mb-tag error">高风险</span>
+          </div>
+        </div>
+      </div>
+    </div><!-- /real-content -->
+
+    <!-- 底部导航 -->
+    <div class="mb-tab-bar">
+      <div class="mb-tab-item" onclick="navigateTo('mb_home.html')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>首页</span>
+      </div>
+      <div class="mb-tab-item" onclick="navigateTo('mb_service.html')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>服务</span>
+      </div>
+      <div class="mb-tab-item" onclick="navigateTo('mb_ai_assistant.html')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        <span>AI</span>
+      </div>
+      <div class="mb-tab-item" onclick="navigateTo('mb_plot.html')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>地块</span>
+      </div>
+      <div class="mb-tab-item" onclick="navigateTo('mb_mine.html')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>我的</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 识别中模态框 -->
+  <div class="modal-overlay" id="loadingModal">
+    <div class="modal-box">
+      <div class="mb-skeleton" style="width:48px;height:48px;border-radius:50%;margin:0 auto;"></div>
+      <div class="modal-text">正在识别中...</div>
+    </div>
+  </div>
+
+  <script>
+    function navigateTo(page) {
+      window.location.href = page;
+    }
+
+    function goBack() {
+      window.history.back();
+    }
+
+    function triggerUpload() {
+      document.getElementById('imageInput').click();
+    }
+
+    function handleUpload(e) {
+      const file = e.target.files[0];
+      if (file) {
+        console.log('Uploaded:', file.name);
+      }
+    }
+
+    function startIdentify() {
+      document.getElementById('loadingModal').classList.add('show');
+      setTimeout(() => {
+        document.getElementById('loadingModal').classList.remove('show');
+        document.getElementById('resultArea').style.display = 'block';
+      }, 2000);
+    }
+
+    // 骨架屏加载模拟
+    (function() {
+      var app = document.querySelector('.mb-app');
+      setTimeout(function() {
+        app.classList.remove('loading');
+      }, 600);
+    })();
+  </script>
+</body>
+</html>

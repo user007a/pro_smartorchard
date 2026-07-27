@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 任务调度</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+  }
+  .modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+  .modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 520px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
+    transform: scale(0.9);
+    transition: all 0.3s ease;
+  }
+  .modal-overlay.active .modal {
+    transform: scale(1);
+  }
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e8ece8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #22a84a 0%, #1a8a3a 100%);
+    color: #fff;
+  }
+  .modal-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .modal-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .modal-close:hover {
+    background: rgba(255,255,255,0.3);
+  }
+  .modal-body {
+    padding: 24px;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #e8ece8;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f4f0;
+  }
+  .detail-grid:last-child {
+    border-bottom: none;
+  }
+  .detail-label {
+    color: #6b7b6b;
+    font-size: 14px;
+  }
+  .detail-value {
+    color: #1a2e1a;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .generate-form {
+    display: grid;
+    gap: 16px;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .form-group label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1a2e1a;
+  }
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    padding: 10px 14px;
+    border: 1px solid #e0e5e0;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: #22a84a;
+    box-shadow: 0 0 0 3px rgba(34,168,74,0.1);
+  }
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .form-group textarea {
+    min-height: 80px;
+    resize: vertical;
+  }
+  .toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 14px 20px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 2000;
+    transform: translateX(120%);
+    transition: all 0.3s ease;
+  }
+  .toast.show {
+    transform: translateX(0);
+  }
+  .toast.success {
+    border-left: 4px solid #22a84a;
+  }
+  .toast.error {
+    border-left: 4px solid #dc2626;
+  }
+  .toast-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #e8f5ec;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #22a84a;
+  }
+  .toast.error .toast-icon {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+  .pagination-info {
+    display: flex;
+    align-items: center;
+    color: #6b7b6b;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body data-active-menu="task" data-active-submenu="task-schedule">
+
+<div class="app-layout">
+
+  <nav class="sidebar" aria-label="主导航">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 3C8 1 5 3 5 6.5C5 10 8 14 11 17C14 14 17 10 17 6.5C17 3 14 1 11 3Z" fill="rgba(34,168,74,0.2)"/>
+          <path d="M11 5C9.5 4 7.5 5 7.5 7C7.5 9 9.5 12 11 14"/>
+          <path d="M11 5C12.5 4 14.5 5 14.5 7C14.5 9 12.5 12 11 14"/>
+          <path d="M11 3V1"/>
+        </svg>
+      </div>
+      <span class="sidebar-brand-text">智慧果园</span>
+    </div>
+    <div class="sidebar-body"></div>
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn sidebar-collapse-btn" title="折叠侧边栏">
+        <span class="collapse-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 3L6 9L11 15"/><path d="M14 3V15"/>
+          </svg>
+        </span>
+        <span class="btn-text">折叠</span>
+      </button>
+      <button class="sidebar-footer-btn" title="系统设置" id="btn-settings">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="9" r="2.5"/>
+          <path d="M9 2V4M9 14V16M2 9H4M14 9H16M4.2 4.2L5.6 5.6M12.4 12.4L13.8 13.8M13.8 4.2L12.4 5.6M5.6 12.4L4.2 13.8"/>
+        </svg>
+        <span class="btn-text">设置</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="sidebar-overlay"></div>
+
+  <div class="main-wrapper">
+    <header class="topbar">
+      <button class="topbar-hamburger" aria-label="打开导航菜单">
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M3 6H19M3 11H19M3 16H19"/>
+        </svg>
+      </button>
+      <div class="topbar-right">
+        <button class="topbar-notification" title="消息通知">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2C7 2 5 4.5 5 7.5V12L3 14H17L15 12V7.5C15 4.5 13 2 10 2Z"/>
+            <path d="M8.5 16C8.5 17 9.2 18 10 18C10.8 18 11.5 17 11.5 16"/>
+          </svg>
+          <span class="badge">3</span>
+        </button>
+        <div class="topbar-user">
+          <div class="topbar-user-avatar">张</div>
+          <span class="topbar-user-name">张三</span>
+          <span class="topbar-user-arrow">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
+              <path d="M3 5L6 8L9 5"/>
+            </svg>
+          </span>
+        </div>
+        <div class="topbar-user-dropdown">
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <circle cx="8" cy="5" r="3"/><path d="M2 15C2 11.5 5 10 8 10C11 10 14 11.5 14 15"/>
+            </svg>
+            个人中心
+          </div>
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M8 2V8L11 11"/><circle cx="8" cy="8" r="6"/>
+            </svg>
+            操作日志
+          </div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" style="color:var(--error);">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M6 2H3C2.45 2 2 2.45 2 3V13C2 13.55 2.45 14 3 14H6"/><path d="M10 11L14 8L10 5"/><path d="M14 8H6"/>
+            </svg>
+            退出登录
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">任务调度管理</h1>
+            <p class="page-subtitle">规划和调度果园各项农事任务</p>
+          </div>
+        </div>
+
+        <div class="patrol-stats">
+          <div class="patrol-stat-card green">
+            <div class="stat-value">126</div>
+            <div class="stat-label">总任务数</div>
+          </div>
+          <div class="patrol-stat-card blue">
+            <div class="stat-value">45</div>
+            <div class="stat-label">待执行任务</div>
+          </div>
+          <div class="patrol-stat-card orange">
+            <div class="stat-value">68</div>
+            <div class="stat-label">已完成任务</div>
+          </div>
+          <div class="patrol-stat-card purple">
+            <div class="stat-value">13</div>
+            <div class="stat-label">执行中任务</div>
+          </div>
+        </div>
+
+        <div class="search-section">
+          <div class="search-bar">
+            <select class="search-select" id="baseSelect">
+              <option value="">全部基地</option>
+              <option value="东区果园">东区果园</option>
+              <option value="西区果园">西区果园</option>
+              <option value="南区果园">南区果园</option>
+              <option value="北区果园">北区果园</option>
+            </select>
+            <select class="search-select" id="typeSelect">
+              <option value="">全部类型</option>
+              <option value="施肥作业">施肥作业</option>
+              <option value="病虫害防治">病虫害防治</option>
+              <option value="修剪作业">修剪作业</option>
+              <option value="灌溉作业">灌溉作业</option>
+              <option value="采收作业">采收作业</option>
+            </select>
+            <select class="search-select" id="statusSelect">
+              <option value="">全部状态</option>
+              <option value="pending">待执行</option>
+              <option value="running">执行中</option>
+              <option value="completed">已完成</option>
+              <option value="cancelled">已取消</option>
+            </select>
+            <input type="text" class="search-input" placeholder="搜索任务名称或负责人..." id="searchInput">
+            <button class="jg-btn jg-btn-primary" onclick="searchData()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+              </svg>
+              搜索
+            </button>
+          </div>
+        </div>
+
+        <div class="action-bar">
+          <div class="action-left">
+            <button class="jg-btn jg-btn-primary" onclick="openCreateModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+                <path d="M12 4v16m8-8H4"/>
+              </svg>
+              新建任务
+            </button>
+            <button class="jg-btn" onclick="batchAssign()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              批量分配
+            </button>
+            <button class="jg-btn" onclick="exportTasks()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+              </svg>
+              导出任务
+            </button>
+          </div>
+          <div class="action-right">
+            <span class="selected-info" id="recordCount">共 126 条记录</span>
+          </div>
+        </div>
+
+        <div class="data-section">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="checkbox-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                <th>任务编号</th>
+                <th>任务名称</th>
+                <th>类型</th>
+                <th>负责人</th>
+                <th>计划时间</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="dataTableBody">
+            </tbody>
+          </table>
+          <div class="pagination" id="paginationContainer">
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+</div>
+
+<!-- 新建任务弹窗 -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>新建任务</h3>
+      <button class="modal-close" onclick="closeModal('createModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="generate-form">
+        <div class="form-group">
+          <label>任务名称</label>
+          <input type="text" id="createName" placeholder="请输入任务名称">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>所属基地</label>
+            <select id="createBase">
+              <option value="">请选择基地</option>
+              <option value="东区果园">东区果园</option>
+              <option value="西区果园">西区果园</option>
+              <option value="南区果园">南区果园</option>
+              <option value="北区果园">北区果园</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>任务类型</label>
+            <select id="createType">
+              <option value="">请选择类型</option>
+              <option value="施肥作业">施肥作业</option>
+              <option value="病虫害防治">病虫害防治</option>
+              <option value="修剪作业">修剪作业</option>
+              <option value="灌溉作业">灌溉作业</option>
+              <option value="采收作业">采收作业</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>负责人</label>
+            <select id="createPerson">
+              <option value="">请选择负责人</option>
+              <option value="张三">张三</option>
+              <option value="李四">李四</option>
+              <option value="王五">王五</option>
+              <option value="赵六">赵六</option>
+              <option value="孙七">孙七</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>计划时间</label>
+            <input type="datetime-local" id="createTime">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>任务描述</label>
+          <textarea id="createDesc" placeholder="请输入任务描述（选填）"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('createModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="confirmCreate()">确认创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>任务详情</h3>
+      <button class="modal-close" onclick="closeModal('detailModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body" id="detailContent">
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
+      <button class="jg-btn jg-btn-primary" onclick="openEditModal()">编辑任务</button>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑任务弹窗 -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>编辑任务</h3>
+      <button class="modal-close" onclick="closeModal('editModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="generate-form">
+        <div class="form-group">
+          <label>任务编号</label>
+          <input type="text" id="editCode" disabled>
+        </div>
+        <div class="form-group">
+          <label>任务名称</label>
+          <input type="text" id="editName">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>所属基地</label>
+            <select id="editBase">
+              <option value="东区果园">东区果园</option>
+              <option value="西区果园">西区果园</option>
+              <option value="南区果园">南区果园</option>
+              <option value="北区果园">北区果园</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>任务类型</label>
+            <select id="editType">
+              <option value="施肥作业">施肥作业</option>
+              <option value="病虫害防治">病虫害防治</option>
+              <option value="修剪作业">修剪作业</option>
+              <option value="灌溉作业">灌溉作业</option>
+              <option value="采收作业">采收作业</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>负责人</label>
+            <select id="editPerson">
+              <option value="张三">张三</option>
+              <option value="李四">李四</option>
+              <option value="王五">王五</option>
+              <option value="赵六">赵六</option>
+              <option value="孙七">孙七</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>计划时间</label>
+            <input type="datetime-local" id="editTime">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>状态</label>
+          <select id="editStatus">
+            <option value="pending">待执行</option>
+            <option value="running">执行中</option>
+            <option value="completed">已完成</option>
+            <option value="cancelled">已取消</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>任务描述</label>
+          <textarea id="editDesc"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('editModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="confirmEdit()">确认修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- 批量分配弹窗 -->
+<div class="modal-overlay" id="batchModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>批量分配</h3>
+      <button class="modal-close" onclick="closeModal('batchModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="generate-form">
+        <div class="form-group">
+          <label>负责人</label>
+          <select id="batchPerson">
+            <option value="">请选择负责人</option>
+            <option value="张三">张三</option>
+            <option value="李四">李四</option>
+            <option value="王五">王五</option>
+            <option value="赵六">赵六</option>
+            <option value="孙七">孙七</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>计划时间</label>
+          <input type="datetime-local" id="batchTime">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('batchModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="confirmBatchAssign()">确认分配</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast提示 -->
+<div class="toast" id="toast">
+  <div class="toast-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+    </svg>
+  </div>
+  <span id="toastMessage">操作成功</span>
+</div>
+
+<script src="js/sidebar-layout.js"></script>
+<script src="js/iframe-hide.js"></script>
+<script>
+const mockData = [
+  { id: 1, code: 'RW-202606001', name: '苹果园夏季施肥', type: '施肥作业', person: '张三', time: '2026-06-15 08:00', status: 'pending', base: '东区果园', desc: '对东区果园进行夏季追肥作业' },
+  { id: 2, code: 'RW-202606002', name: '东区果园病虫害防治', type: '病虫害防治', person: '李四', time: '2026-06-15 14:00', status: 'running', base: '东区果园', desc: '喷洒杀虫剂防治病虫害' },
+  { id: 3, code: 'RW-202606003', name: '果树修剪作业', type: '修剪作业', person: '王五', time: '2026-06-14 09:00', status: 'completed', base: '西区果园', desc: '春季修剪整形' },
+  { id: 4, code: 'RW-202606004', name: '智能灌溉调度', type: '灌溉作业', person: '赵六', time: '2026-06-15 06:00', status: 'running', base: '南区果园', desc: '根据土壤湿度自动灌溉' },
+  { id: 5, code: 'RW-202606005', name: '苹果采收任务', type: '采收作业', person: '孙七', time: '2026-06-16 07:00', status: 'pending', base: '北区果园', desc: '红富士苹果采收' },
+  { id: 6, code: 'RW-202606006', name: '西区果园施肥', type: '施肥作业', person: '张三', time: '2026-06-15 10:00', status: 'pending', base: '西区果园', desc: '复合肥施用' },
+  { id: 7, code: 'RW-202606007', name: '南区病虫害监测', type: '病虫害防治', person: '李四', time: '2026-06-15 09:00', status: 'running', base: '南区果园', desc: '定期病虫害监测' },
+  { id: 8, code: 'RW-202606008', name: '北区果树修剪', type: '修剪作业', person: '王五', time: '2026-06-14 14:00', status: 'completed', base: '北区果园', desc: '冬季修剪' },
+  { id: 9, code: 'RW-202606009', name: '东区灌溉作业', type: '灌溉作业', person: '赵六', time: '2026-06-15 05:00', status: 'completed', base: '东区果园', desc: '清晨灌溉' },
+  { id: 10, code: 'RW-202606010', name: '西区采收准备', type: '采收作业', person: '孙七', time: '2026-06-17 08:00', status: 'pending', base: '西区果园', desc: '采收前准备工作' },
+  { id: 11, code: 'RW-202606011', name: '南区施肥作业', type: '施肥作业', person: '张三', time: '2026-06-16 09:00', status: 'pending', base: '南区果园', desc: '有机肥施用' },
+  { id: 12, code: 'RW-202606012', name: '北区病虫害防治', type: '病虫害防治', person: '李四', time: '2026-06-16 14:00', status: 'pending', base: '北区果园', desc: '综合防治' },
+  { id: 13, code: 'RW-202606013', name: '东区修剪作业', type: '修剪作业', person: '王五', time: '2026-06-17 10:00', status: 'pending', base: '东区果园', desc: '夏季修剪' },
+  { id: 14, code: 'RW-202606014', name: '西区灌溉调度', type: '灌溉作业', person: '赵六', time: '2026-06-15 07:00', status: 'running', base: '西区果园', desc: '智能灌溉系统调度' },
+  { id: 15, code: 'RW-202606015', name: '南区苹果采收', type: '采收作业', person: '孙七', time: '2026-06-18 06:00', status: 'pending', base: '南区果园', desc: '金帅苹果采收' },
+  { id: 16, code: 'RW-202606016', name: '北区施肥任务', type: '施肥作业', person: '张三', time: '2026-06-17 14:00', status: 'pending', base: '北区果园', desc: '叶面喷肥' },
+  { id: 17, code: 'RW-202606017', name: '东区病虫防治', type: '病虫害防治', person: '李四', time: '2026-06-18 09:00', status: 'pending', base: '东区果园', desc: '病害预防' },
+  { id: 18, code: 'RW-202606018', name: '西区修剪整形', type: '修剪作业', person: '王五', time: '2026-06-19 08:00', status: 'pending', base: '西区果园', desc: '树形整理' },
+  { id: 19, code: 'RW-202606019', name: '南区灌溉作业', type: '灌溉作业', person: '赵六', time: '2026-06-15 08:00', status: 'completed', base: '南区果园', desc: '定时灌溉' },
+  { id: 20, code: 'RW-202606020', name: '北区采收任务', type: '采收作业', person: '孙七', time: '2026-06-20 07:00', status: 'pending', base: '北区果园', desc: '晚熟品种采收' },
+  { id: 21, code: 'RW-202606021', name: '全园施肥计划', type: '施肥作业', person: '张三', time: '2026-06-21 09:00', status: 'pending', base: '东区果园', desc: '秋季基肥施用' },
+  { id: 22, code: 'RW-202606022', name: '病虫害综合防治', type: '病虫害防治', person: '李四', time: '2026-06-22 10:00', status: 'pending', base: '西区果园', desc: '综合防治方案' },
+  { id: 23, code: 'RW-202606023', name: '冬季修剪准备', type: '修剪作业', person: '王五', time: '2026-06-23 08:00', status: 'pending', base: '南区果园', desc: '修剪工具准备' },
+  { id: 24, code: 'RW-202606024', name: '智能灌溉维护', type: '灌溉作业', person: '赵六', time: '2026-06-24 14:00', status: 'pending', base: '北区果园', desc: '设备检修' },
+  { id: 25, code: 'RW-202606025', name: '采收总结', type: '采收作业', person: '孙七', time: '2026-06-25 09:00', status: 'pending', base: '东区果园', desc: '采收工作总结' }
+];
+
+let currentPage = 1;
+const pageSize = 10;
+let filteredData = [...mockData];
+let currentDetailId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+  renderTable();
+  renderPagination();
+});
+
+function renderTable() {
+  const tbody = document.getElementById('dataTableBody');
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  const pageData = filteredData.slice(start, end);
+  
+  tbody.innerHTML = pageData.map(item => `
+    <tr>
+      <td class="checkbox-col"><input type="checkbox" class="row-checkbox" data-id="${item.id}" onchange="updateSelectAll()"></td>
+      <td><strong>${item.code}</strong></td>
+      <td>${item.name}</td>
+      <td><span class="status-tag ${getTypeClass(item.type)}">${item.type}</span></td>
+      <td>${item.person}</td>
+      <td>${item.time}</td>
+      <td><span class="status-tag ${getStatusClass(item.status)}">${getStatusText(item.status)}</span></td>
+      <td>
+        <div class="action-btns">
+          <button class="action-btn detail" onclick="viewDetail(${item.id})">查看</button>
+          <button class="action-btn edit" onclick="openEditModal(${item.id})">编辑</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+  
+  document.getElementById('recordCount').textContent = `共 ${filteredData.length} 条记录`;
+}
+
+function getTypeClass(type) {
+  const classes = {
+    '施肥作业': 'active',
+    '病虫害防治': 'error',
+    '修剪作业': 'warning',
+    '灌溉作业': 'blue',
+    '采收作业': 'purple'
+  };
+  return classes[type] || 'inactive';
+}
+
+function getStatusClass(status) {
+  const classes = {
+    'pending': 'inactive',
+    'running': 'warning',
+    'completed': 'active',
+    'cancelled': 'error'
+  };
+  return classes[status] || 'inactive';
+}
+
+function getStatusText(status) {
+  const texts = {
+    'pending': '待执行',
+    'running': '执行中',
+    'completed': '已完成',
+    'cancelled': '已取消'
+  };
+  return texts[status] || status;
+}
+
+function renderPagination() {
+  const container = document.getElementById('paginationContainer');
+  const totalPages = Math.ceil(filteredData.length / pageSize);
+  
+  if (totalPages <= 1) {
+    container.innerHTML = '<div class="pagination-info">显示 1-' + filteredData.length + ' 条，共 ' + filteredData.length + ' 条</div>';
+    return;
+  }
+  
+  let html = '<div class="pagination-info">显示 ' + ((currentPage - 1) * pageSize + 1) + '-' + Math.min(currentPage * pageSize, filteredData.length) + ' 条，共 ' + filteredData.length + ' 条</div>';
+  html += '<div class="pagination-controls">';
+  html += `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="goToPage(${currentPage - 1})">‹</button>`;
+  
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+      html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+    } else if (i === currentPage - 2 || i === currentPage + 2) {
+      html += '<span class="page-ellipsis">...</span>';
+    }
+  }
+  
+  html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="goToPage(${currentPage + 1})">›</button>`;
+  html += '</div>';
+  
+  container.innerHTML = html;
+}
+
+function goToPage(page) {
+  const totalPages = Math.ceil(filteredData.length / pageSize);
+  if (page < 1 || page > totalPages) return;
+  currentPage = page;
+  renderTable();
+  renderPagination();
+}
+
+function searchData() {
+  const base = document.getElementById('baseSelect').value;
+  const type = document.getElementById('typeSelect').value;
+  const status = document.getElementById('statusSelect').value;
+  const keyword = document.getElementById('searchInput').value.toLowerCase();
+  
+  filteredData = mockData.filter(item => {
+    if (base && item.base !== base) return false;
+    if (type && item.type !== type) return false;
+    if (status && item.status !== status) return false;
+    if (keyword && !item.name.toLowerCase().includes(keyword) && !item.person.toLowerCase().includes(keyword)) return false;
+    return true;
+  });
+  
+  currentPage = 1;
+  renderTable();
+  renderPagination();
+  showToast(`找到 ${filteredData.length} 条记录`);
+}
+
+function toggleSelectAll() {
+  const checked = document.getElementById('selectAll').checked;
+  document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = checked);
+}
+
+function updateSelectAll() {
+  const allChecked = document.querySelectorAll('.row-checkbox').length === document.querySelectorAll('.row-checkbox:checked').length;
+  document.getElementById('selectAll').checked = allChecked;
+}
+
+function viewDetail(id) {
+  currentDetailId = id;
+  const item = mockData.find(d => d.id === id);
+  if (!item) return;
+  
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-grid">
+      <span class="detail-label">任务编号</span>
+      <span class="detail-value">${item.code}</span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">任务名称</span>
+      <span class="detail-value">${item.name}</span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">所属基地</span>
+      <span class="detail-value">${item.base}</span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">任务类型</span>
+      <span class="detail-value"><span class="status-tag ${getTypeClass(item.type)}">${item.type}</span></span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">负责人</span>
+      <span class="detail-value">${item.person}</span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">计划时间</span>
+      <span class="detail-value">${item.time}</span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">状态</span>
+      <span class="detail-value"><span class="status-tag ${getStatusClass(item.status)}">${getStatusText(item.status)}</span></span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">任务描述</span>
+      <span class="detail-value">${item.desc || '—'}</span>
+    </div>
+  `;
+  
+  openModal('detailModal');
+}
+
+function openCreateModal() {
+  document.getElementById('createName').value = '';
+  document.getElementById('createBase').value = '';
+  document.getElementById('createType').value = '';
+  document.getElementById('createPerson').value = '';
+  document.getElementById('createTime').value = '';
+  document.getElementById('createDesc').value = '';
+  openModal('createModal');
+}
+
+function confirmCreate() {
+  const name = document.getElementById('createName').value;
+  const base = document.getElementById('createBase').value;
+  const type = document.getElementById('createType').value;
+  const person = document.getElementById('createPerson').value;
+  
+  if (!name) {
+    showToast('请输入任务名称', 'error');
+    return;
+  }
+  if (!base) {
+    showToast('请选择所属基地', 'error');
+    return;
+  }
+  if (!type) {
+    showToast('请选择任务类型', 'error');
+    return;
+  }
+  if (!person) {
+    showToast('请选择负责人', 'error');
+    return;
+  }
+  
+  closeModal('createModal');
+  showToast('任务创建成功');
+}
+
+function openEditModal(id) {
+  currentDetailId = id || currentDetailId;
+  const item = mockData.find(d => d.id === currentDetailId);
+  if (!item) return;
+  
+  document.getElementById('editCode').value = item.code;
+  document.getElementById('editName').value = item.name;
+  document.getElementById('editBase').value = item.base;
+  document.getElementById('editType').value = item.type;
+  document.getElementById('editPerson').value = item.person;
+  document.getElementById('editTime').value = item.time.replace(' ', 'T');
+  document.getElementById('editStatus').value = item.status;
+  document.getElementById('editDesc').value = item.desc || '';
+  
+  closeModal('detailModal');
+  openModal('editModal');
+}
+
+function confirmEdit() {
+  closeModal('editModal');
+  showToast('任务修改成功');
+}
+
+function batchAssign() {
+  const checked = document.querySelectorAll('.row-checkbox:checked');
+  if (checked.length === 0) {
+    showToast('请先选择要分配的任务', 'error');
+    return;
+  }
+  
+  document.getElementById('batchPerson').value = '';
+  document.getElementById('batchTime').value = '';
+  openModal('batchModal');
+}
+
+function confirmBatchAssign() {
+  const person = document.getElementById('batchPerson').value;
+  
+  if (!person) {
+    showToast('请选择负责人', 'error');
+    return;
+  }
+  
+  closeModal('batchModal');
+  const count = document.querySelectorAll('.row-checkbox:checked').length;
+  showToast(`已成功分配 ${count} 条任务`);
+}
+
+function exportTasks() {
+  const checked = document.querySelectorAll('.row-checkbox:checked');
+  if (checked.length === 0) {
+    showToast('请先选择要导出的任务', 'error');
+    return;
+  }
+  showToast(`已导出 ${checked.length} 条任务`);
+}
+
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  document.getElementById('toastMessage').textContent = message;
+  toast.className = `toast ${type}`;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 溯源编码</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+  }
+  .modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+  .modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 520px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
+    transform: scale(0.9);
+    transition: all 0.3s ease;
+  }
+  .modal-overlay.active .modal {
+    transform: scale(1);
+  }
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #e8ece8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #22a84a 0%, #1a8a3a 100%);
+    color: #fff;
+  }
+  .modal-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .modal-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .modal-close:hover {
+    background: rgba(255,255,255,0.3);
+  }
+  .modal-body {
+    padding: 24px;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #e8ece8;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f4f0;
+  }
+  .detail-grid:last-child {
+    border-bottom: none;
+  }
+  .detail-label {
+    color: #6b7b6b;
+    font-size: 14px;
+  }
+  .detail-value {
+    color: #1a2e1a;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .qrcode-container {
+    text-align: center;
+    padding: 24px;
+    background: #f8faf8;
+    border-radius: 12px;
+    margin: 16px 0;
+  }
+  .qrcode-box {
+    width: 180px;
+    height: 180px;
+    background: #fff;
+    border-radius: 12px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #22a84a;
+    overflow: hidden;
+  }
+  .qrcode-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #22a84a;
+  }
+  .qrcode-code {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a2e1a;
+    margin-bottom: 8px;
+  }
+  .qrcode-hint {
+    font-size: 12px;
+    color: #6b7b6b;
+  }
+  .generate-form {
+    display: grid;
+    gap: 16px;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .form-group label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1a2e1a;
+  }
+  .form-group input,
+  .form-group select {
+    padding: 10px 14px;
+    border: 1px solid #e0e5e0;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+  .form-group input:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: #22a84a;
+    box-shadow: 0 0 0 3px rgba(34,168,74,0.1);
+  }
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 14px 20px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 2000;
+    transform: translateX(120%);
+    transition: all 0.3s ease;
+  }
+  .toast.show {
+    transform: translateX(0);
+  }
+  .toast.success {
+    border-left: 4px solid #22a84a;
+  }
+  .toast-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #e8f5ec;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #22a84a;
+  }
+</style>
+</head>
+<body data-active-menu="trace" data-active-submenu="trace-code">
+
+<div class="app-layout">
+
+  <nav class="sidebar" aria-label="主导航">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 3C8 1 5 3 5 6.5C5 10 8 14 11 17C14 14 17 10 17 6.5C17 3 14 1 11 3Z" fill="rgba(34,168,74,0.2)"/>
+          <path d="M11 5C9.5 4 7.5 5 7.5 7C7.5 9 9.5 12 11 14"/>
+          <path d="M11 5C12.5 4 14.5 5 14.5 7C14.5 9 12.5 12 11 14"/>
+          <path d="M11 3V1"/>
+        </svg>
+      </div>
+      <span class="sidebar-brand-text">智慧果园</span>
+    </div>
+    <div class="sidebar-body"></div>
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-btn sidebar-collapse-btn" title="折叠侧边栏">
+        <span class="collapse-icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 3L6 9L11 15"/><path d="M14 3V15"/>
+          </svg>
+        </span>
+        <span class="btn-text">折叠</span>
+      </button>
+      <button class="sidebar-footer-btn" title="系统设置" id="btn-settings">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="9" r="2.5"/>
+          <path d="M9 2V4M9 14V16M2 9H4M14 9H16M4.2 4.2L5.6 5.6M12.4 12.4L13.8 13.8M13.8 4.2L12.4 5.6M5.6 12.4L4.2 13.8"/>
+        </svg>
+        <span class="btn-text">设置</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="sidebar-overlay"></div>
+
+  <div class="main-wrapper">
+    <header class="topbar">
+      <button class="topbar-hamburger" aria-label="打开导航菜单">
+        <svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <path d="M3 6H19M3 11H19M3 16H19"/>
+        </svg>
+      </button>
+      <div class="topbar-right">
+        <button class="topbar-notification" title="消息通知">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2C7 2 5 4.5 5 7.5V12L3 14H17L15 12V7.5C15 4.5 13 2 10 2Z"/>
+            <path d="M8.5 16C8.5 17 9.2 18 10 18C10.8 18 11.5 17 11.5 16"/>
+          </svg>
+          <span class="badge">3</span>
+        </button>
+        <div class="topbar-user">
+          <div class="topbar-user-avatar">张</div>
+          <span class="topbar-user-name">张三</span>
+          <span class="topbar-user-arrow">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
+              <path d="M3 5L6 8L9 5"/>
+            </svg>
+          </span>
+        </div>
+        <div class="topbar-user-dropdown">
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <circle cx="8" cy="5" r="3"/><path d="M2 15C2 11.5 5 10 8 10C11 10 14 11.5 14 15"/>
+            </svg>
+            个人中心
+          </div>
+          <div class="dropdown-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M8 2V8L11 11"/><circle cx="8" cy="8" r="6"/>
+            </svg>
+            操作日志
+          </div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" style="color:var(--error);">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+              <path d="M6 2H3C2.45 2 2 2.45 2 3V13C2 13.55 2.45 14 3 14H6"/><path d="M10 11L14 8L10 5"/><path d="M14 8H6"/>
+            </svg>
+            退出登录
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">溯源编码管理</h1>
+            <p class="page-subtitle">管理产品溯源码的生成、导出和打印</p>
+          </div>
+        </div>
+
+        <div class="patrol-stats">
+          <div class="patrol-stat-card green">
+            <div class="stat-value">2,456</div>
+            <div class="stat-label">已生成溯源码</div>
+          </div>
+          <div class="patrol-stat-card blue">
+            <div class="stat-value">1,832</div>
+            <div class="stat-label">已使用溯源码</div>
+          </div>
+          <div class="patrol-stat-card orange">
+            <div class="stat-value">624</div>
+            <div class="stat-label">未使用溯源码</div>
+          </div>
+          <div class="patrol-stat-card purple">
+            <div class="stat-value">156</div>
+            <div class="stat-label">已过期溯源码</div>
+          </div>
+        </div>
+
+        <div class="search-section">
+          <div class="search-bar">
+            <select class="search-select" id="batchSelect">
+              <option value="">全部批次</option>
+              <option value="PC-20240515-01">PC-20240515-01</option>
+              <option value="PC-20240516-02">PC-20240516-02</option>
+              <option value="PC-20240517-03">PC-20240517-03</option>
+              <option value="PC-20240518-04">PC-20240518-04</option>
+              <option value="PC-20240520-05">PC-20240520-05</option>
+            </select>
+            <input type="text" class="search-input" placeholder="输入产品名称搜索..." id="productNameInput">
+            <select class="search-select" id="statusSelect">
+              <option value="">全部状态</option>
+              <option value="used">已使用</option>
+              <option value="unused">未使用</option>
+              <option value="expired">已过期</option>
+            </select>
+            <button class="jg-btn jg-btn-primary" onclick="searchData()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+              </svg>
+              搜索
+            </button>
+          </div>
+        </div>
+
+        <div class="action-bar">
+          <div class="action-left">
+            <button class="jg-btn jg-btn-primary" onclick="openGenerateModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+                <path d="M12 4v16m8-8H4"/>
+              </svg>
+              生成追溯码
+            </button>
+            <button class="jg-btn" onclick="batchExport()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              批量导出
+            </button>
+            <button class="jg-btn" onclick="printLabels()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+                <path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+              </svg>
+              打印标签
+            </button>
+          </div>
+          <div class="action-right">
+            <span class="selected-info" id="recordCount">共 23 条记录</span>
+          </div>
+        </div>
+
+        <div class="data-section">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="checkbox-col"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                <th>追溯码</th>
+                <th>批次号</th>
+                <th>产品名称</th>
+                <th>规格</th>
+                <th>生成时间</th>
+                <th>使用状态</th>
+                <th>关联订单</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="dataTableBody">
+            </tbody>
+          </table>
+          <div class="pagination" id="paginationContainer">
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>溯源码详情</h3>
+      <button class="modal-close" onclick="closeModal('detailModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body" id="detailContent">
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
+      <button class="jg-btn jg-btn-primary" onclick="printSingleLabel()">打印标签</button>
+    </div>
+  </div>
+</div>
+
+<!-- 二维码弹窗 -->
+<div class="modal-overlay" id="qrcodeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>溯源二维码</h3>
+      <button class="modal-close" onclick="closeModal('qrcodeModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="qrcode-container">
+        <div class="qrcode-box">
+          <div class="qrcode-placeholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:64px;height:64px;">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+              <path d="M6.5 6.5h1v1h-1zM16.5 6.5h1v1h-1zM6.5 16.5h1v1h-1z"/>
+            </svg>
+          </div>
+        </div>
+        <div class="qrcode-code" id="qrcodeValue">SNZG-2024-0001</div>
+        <div class="qrcode-hint">扫描二维码查看产品溯源信息</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('qrcodeModal')">关闭</button>
+      <button class="jg-btn jg-btn-primary" onclick="downloadQRCode()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        下载二维码
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 生成追溯码弹窗 -->
+<div class="modal-overlay" id="generateModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>生成追溯码</h3>
+      <button class="modal-close" onclick="closeModal('generateModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="generate-form">
+        <div class="form-group">
+          <label>产品名称</label>
+          <select id="generateProduct">
+            <option value="">请选择产品</option>
+            <option value="烟台红富士苹果">烟台红富士苹果</option>
+            <option value="招远黄金苹果">招远黄金苹果</option>
+            <option value="蓬莱苹果礼盒">蓬莱苹果礼盒</option>
+            <option value="威海苹果汁">威海苹果汁</option>
+            <option value="龙口苹果干">龙口苹果干</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>生成数量</label>
+            <input type="number" id="generateCount" value="100" min="1" max="10000">
+          </div>
+          <div class="form-group">
+            <label>批次号</label>
+            <input type="text" id="generateBatch" placeholder="自动生成">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>备注</label>
+          <input type="text" id="generateRemark" placeholder="选填">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('generateModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="confirmGenerate()">确认生成</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast提示 -->
+<div class="toast" id="toast">
+  <div class="toast-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+    </svg>
+  </div>
+  <span id="toastMessage">操作成功</span>
+</div>
+
+<script src="js/sidebar-layout.js"></script>
+<script src="js/iframe-hide.js"></script>
+<script>
+// Mock数据 - 23条记录
+const mockData = [
+  { code: 'SNZG-2024-0001', batch: 'PC-20240515-01', product: '烟台红富士苹果', spec: '5kg/箱', time: '2024-05-15 10:30:00', status: 'used', order: 'ORD-20240515001' },
+  { code: 'SNZG-2024-0002', batch: 'PC-20240516-02', product: '招远黄金苹果', spec: '3kg/箱', time: '2024-05-16 14:20:00', status: 'used', order: 'ORD-20240516002' },
+  { code: 'SNZG-2024-0003', batch: 'PC-20240517-03', product: '蓬莱苹果礼盒', spec: '8kg/盒', time: '2024-05-17 09:15:00', status: 'unused', order: '—' },
+  { code: 'SNZG-2024-0004', batch: 'PC-20240518-04', product: '威海苹果汁', spec: '1L*6/箱', time: '2024-05-18 16:45:00', status: 'unused', order: '—' },
+  { code: 'SNZG-2024-0005', batch: 'PC-20240520-05', product: '龙口苹果干', spec: '200g/袋', time: '2024-05-20 11:00:00', status: 'expired', order: '—' },
+  { code: 'SNZG-2024-0006', batch: 'PC-20240521-06', product: '栖霞红将军苹果', spec: '5kg/箱', time: '2024-05-21 08:30:00', status: 'used', order: 'ORD-20240521001' },
+  { code: 'SNZG-2024-0007', batch: 'PC-20240522-07', product: '牟平富士苹果', spec: '4kg/箱', time: '2024-05-22 15:20:00', status: 'used', order: 'ORD-20240522002' },
+  { code: 'SNZG-2024-0008', batch: 'PC-20240523-08', product: '莱阳苹果醋', spec: '500ml*8/箱', time: '2024-05-23 10:45:00', status: 'unused', order: '—' },
+  { code: 'SNZG-2024-0009', batch: 'PC-20240524-09', product: '海阳水晶苹果', spec: '6kg/箱', time: '2024-05-24 13:00:00', status: 'used', order: 'ORD-20240524001' },
+  { code: 'SNZG-2024-0010', batch: 'PC-20240525-10', product: '福山苹果酱', spec: '300g/罐', time: '2024-05-25 09:30:00', status: 'unused', order: '—' },
+  { code: 'SNZG-2024-0011', batch: 'PC-20240526-11', product: '长岛苹果脆片', spec: '150g/袋', time: '2024-05-26 14:15:00', status: 'used', order: 'ORD-20240526001' },
+  { code: 'SNZG-2024-0012', batch: 'PC-20240527-12', product: '芝罘苹果饮料', spec: '330ml*12/箱', time: '2024-05-27 11:20:00', status: 'expired', order: '—' },
+  { code: 'SNZG-2024-0013', batch: 'PC-20240528-13', product: '开发苹果酒', spec: '750ml/瓶', time: '2024-05-28 16:30:00', status: 'used', order: 'ORD-20240528001' },
+  { code: 'SNZG-2024-0014', batch: 'PC-20240529-14', product: '蓬莱黄金富士', spec: '5kg/箱', time: '2024-05-29 08:45:00', status: 'unused', order: '—' },
+  { code: 'SNZG-2024-0015', batch: 'PC-20240530-15', product: '招远有机苹果', spec: '4kg/箱', time: '2024-05-30 10:00:00', status: 'used', order: 'ORD-20240530001' },
+  { code: 'SNZG-2024-0016', batch: 'PC-20240601-16', product: '龙口精品苹果', spec: '6kg/箱', time: '2024-06-01 09:15:00', status: 'unused', order: '—' },
+  { code: 'SNZG-2024-0017', batch: 'PC-20240602-17', product: '烟台苹果干礼盒', spec: '500g/盒', time: '2024-06-02 14:30:00', status: 'used', order: 'ORD-20240602001' },
+  { code: 'SNZG-2024-0018', batch: 'PC-20240603-18', product: '威海生态苹果', spec: '5kg/箱', time: '2024-06-03 11:45:00', status: 'unused', order: '—' },
+  { code: 'SNZG-2024-0019', batch: 'PC-20240604-19', product: '栖霞冰糖心苹果', spec: '4kg/箱', time: '2024-06-04 15:20:00', status: 'used', order: 'ORD-20240604001' },
+  { code: 'SNZG-2024-0020', batch: 'PC-20240605-20', product: '莱山苹果脯', spec: '250g/袋', time: '2024-06-05 10:30:00', status: 'unused', order: '—' },
+  { code: 'SNZG-2024-0021', batch: 'PC-20240606-21', product: '牟平红富士', spec: '5kg/箱', time: '2024-06-06 13:15:00', status: 'used', order: 'ORD-20240606001' },
+  { code: 'SNZG-2024-0022', batch: 'PC-20240607-22', product: '海阳苹果派', spec: '300g/个', time: '2024-06-07 08:00:00', status: 'unused', order: '—' },
+  { code: 'SNZG-2024-0023', batch: 'PC-20240608-23', product: '福山苹果酵素', spec: '500ml/瓶', time: '2024-06-08 16:45:00', status: 'expired', order: '—' }
+];
+
+let currentPage = 1;
+const pageSize = 10;
+let filteredData = [...mockData];
+let currentDetailCode = '';
+
+// 页面初始化
+document.addEventListener('DOMContentLoaded', function() {
+  renderTable();
+  renderPagination();
+});
+
+// 渲染表格
+function renderTable() {
+  const tbody = document.getElementById('dataTableBody');
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  const pageData = filteredData.slice(start, end);
+  
+  tbody.innerHTML = pageData.map(item => `
+    <tr>
+      <td class="checkbox-col"><input type="checkbox" class="row-checkbox" data-id="${item.code}" onchange="updateSelectAll()"></td>
+      <td><strong>${item.code}</strong></td>
+      <td>${item.batch}</td>
+      <td>${item.product}</td>
+      <td>${item.spec}</td>
+      <td>${item.time}</td>
+      <td><span class="status-tag ${item.status === 'used' ? 'active' : item.status === 'expired' ? 'error' : 'inactive'}">${item.status === 'used' ? '已使用' : item.status === 'expired' ? '已过期' : '未使用'}</span></td>
+      <td>${item.order}</td>
+      <td>
+        <div class="action-btns">
+          <button class="action-btn detail" onclick="viewDetail('${item.code}')">详情</button>
+          <button class="action-btn qrcode" onclick="showQRCode('${item.code}')">二维码</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+  
+  document.getElementById('recordCount').textContent = `共 ${filteredData.length} 条记录`;
+}
+
+// 渲染分页
+function renderPagination() {
+  const container = document.getElementById('paginationContainer');
+  const totalPages = Math.ceil(filteredData.length / pageSize);
+  
+  if (totalPages <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+  
+  let html = '';
+  html += `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="goToPage(${currentPage - 1})">‹</button>`;
+  
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+      html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+    } else if (i === currentPage - 2 || i === currentPage + 2) {
+      html += '<span class="page-ellipsis">...</span>';
+    }
+  }
+  
+  html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="goToPage(${currentPage + 1})">›</button>`;
+  
+  container.innerHTML = html;
+}
+
+// 跳转页面
+function goToPage(page) {
+  const totalPages = Math.ceil(filteredData.length / pageSize);
+  if (page < 1 || page > totalPages) return;
+  currentPage = page;
+  renderTable();
+  renderPagination();
+}
+
+// 搜索
+function searchData() {
+  const batch = document.getElementById('batchSelect').value;
+  const product = document.getElementById('productNameInput').value.toLowerCase();
+  const status = document.getElementById('statusSelect').value;
+  
+  filteredData = mockData.filter(item => {
+    if (batch && item.batch !== batch) return false;
+    if (product && !item.product.toLowerCase().includes(product)) return false;
+    if (status && item.status !== status) return false;
+    return true;
+  });
+  
+  currentPage = 1;
+  renderTable();
+  renderPagination();
+  showToast(`找到 ${filteredData.length} 条记录`);
+}
+
+// 全选/取消全选
+function toggleSelectAll() {
+  const checked = document.getElementById('selectAll').checked;
+  document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = checked);
+}
+
+function updateSelectAll() {
+  const allChecked = document.querySelectorAll('.row-checkbox').length === document.querySelectorAll('.row-checkbox:checked').length;
+  document.getElementById('selectAll').checked = allChecked;
+}
+
+// 查看详情
+function viewDetail(code) {
+  currentDetailCode = code;
+  const item = mockData.find(d => d.code === code);
+  if (!item) return;
+  
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-grid">
+      <span class="detail-label">追溯码</span>
+      <span class="detail-value">${item.code}</span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">批次号</span>
+      <span class="detail-value">${item.batch}</span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">产品名称</span>
+      <span class="detail-value">${item.product}</span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">产品规格</span>
+      <span class="detail-value">${item.spec}</span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">生成时间</span>
+      <span class="detail-value">${item.time}</span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">使用状态</span>
+      <span class="detail-value"><span class="status-tag ${item.status === 'used' ? 'active' : item.status === 'expired' ? 'error' : 'inactive'}">${item.status === 'used' ? '已使用' : item.status === 'expired' ? '已过期' : '未使用'}</span></span>
+    </div>
+    <div class="detail-grid">
+      <span class="detail-label">关联订单</span>
+      <span class="detail-value">${item.order}</span>
+    </div>
+  `;
+  
+  openModal('detailModal');
+}
+
+// 显示二维码
+function showQRCode(code) {
+  currentDetailCode = code;
+  document.getElementById('qrcodeValue').textContent = code;
+  openModal('qrcodeModal');
+}
+
+// 生成追溯码弹窗
+function openGenerateModal() {
+  document.getElementById('generateBatch').value = 'PC-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + String(Math.floor(Math.random() * 100)).padStart(2, '0');
+  openModal('generateModal');
+}
+
+// 确认生成
+function confirmGenerate() {
+  const product = document.getElementById('generateProduct').value;
+  const count = document.getElementById('generateCount').value;
+  const batch = document.getElementById('generateBatch').value;
+  
+  if (!product) {
+    showToast('请选择产品', 'error');
+    return;
+  }
+  
+  closeModal('generateModal');
+  showToast(`已成功生成 ${count} 个追溯码，批次号：${batch}`);
+  
+  // 重置表单
+  document.getElementById('generateProduct').value = '';
+  document.getElementById('generateCount').value = '100';
+  document.getElementById('generateBatch').value = '';
+  document.getElementById('generateRemark').value = '';
+}
+
+// 批量导出
+function batchExport() {
+  const checked = document.querySelectorAll('.row-checkbox:checked');
+  if (checked.length === 0) {
+    showToast('请先选择要导出的记录', 'error');
+    return;
+  }
+  showToast(`已导出 ${checked.length} 条记录`);
+}
+
+// 打印标签
+function printLabels() {
+  const checked = document.querySelectorAll('.row-checkbox:checked');
+  if (checked.length === 0) {
+    showToast('请先选择要打印的记录', 'error');
+    return;
+  }
+  showToast(`正在准备打印 ${checked.length} 个标签...`);
+}
+
+function printSingleLabel() {
+  showToast(`正在打印标签：${currentDetailCode}`);
+  closeModal('detailModal');
+}
+
+// 下载二维码
+function downloadQRCode() {
+  showToast(`下载二维码：${currentDetailCode}`);
+}
+
+// 弹窗操作
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+}
+
+// Toast提示
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  document.getElementById('toastMessage').textContent = message;
+  toast.className = `toast ${type}`;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
