@@ -153,7 +153,7 @@ const PageActions = (function() {
     if (!container) return;
 
     let html = '<thead><tr>';
-    html += '<th><input type="checkbox" id="checkAll" onchange="PageActions.toggleSelectAll(this)"></th>';
+    html += '<th style="width:60px;">序号</th>';
     columns.forEach(col => {
       html += `<th>${col.label}</th>`;
     });
@@ -161,7 +161,7 @@ const PageActions = (function() {
 
     data.forEach((row, index) => {
       html += `<tr data-id="${row.id}" data-index="${index}">`;
-      html += `<td><input type="checkbox" name="rowItem" value="${row.id}"></td>`;
+      html += `<td>${index + 1}</td>`;
       columns.forEach(col => {
         let value = row[col.field];
         if (col.type === 'status') {

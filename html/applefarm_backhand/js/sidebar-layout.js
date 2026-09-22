@@ -913,34 +913,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   sidebarManager.init();
 
-  /* 非框架页：初始化 Tab 栏 */
-  if (!isFramePage) {
-    tabManager = new TabManager({
-      maxTabs: 15,
-      onTabSwitch: (id, tab) => {
-      /* Tab 切换回调：同步侧边栏高亮 + 页面导航 */
-      if (sidebarManager) {
-        sidebarManager._setActive(id);
-      }
-
-      /* 如果有目标路径且不是当前页面，执行跳转 */
-      if (tab && tab.path) {
-        const currentPage = window.location.pathname.split('/').pop() || '';
-        if (currentPage !== tab.path) {
-          window.location.href = tab.path;
-          return;
-        }
-      }
-
-      /* 更新内容区标题 */
-      const contentTitle = document.querySelector('.main-content .page-title');
-      if (contentTitle && tab) {
-        contentTitle.textContent = tab.label;
-      }
-    }
-  });
-  tabManager.init();
-  }
+  /* Tab 标签栏已按需求移除（2026-09-22）：不再初始化 TabManager，
+     页面顶部不再加载与显示多标签导航。侧边栏为唯一导航入口。
+     .tab-bar 容器由 sidebar-layout.css 统一 display:none 隐藏。 */
 
   /* 根据当前 URL 路径自动匹配菜单 */
   const currentPath = window.location.pathname;

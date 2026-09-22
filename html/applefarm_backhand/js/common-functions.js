@@ -288,4 +288,5 @@ window.Modal = Modal;
 window.Pagination = Pagination;
 window.Search = Search;
 window.ConfirmDialog = ConfirmDialog;
-window.Toast = Toast;
+window.Toast = Toast;;
+

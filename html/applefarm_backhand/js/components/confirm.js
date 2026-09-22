@@ -73,8 +73,8 @@ const Confirm = (function() {
     });
   }
 
-  // 删除确认
-  function delete(message = '确定要删除吗？此操作不可撤销。') {
+  // 删除确认（delete 为 JS 保留字，不能作函数名，2026-09-22 修复语法错误）
+  function confirmDelete(message = '确定要删除吗？此操作不可撤销。') {
     return open(message, {
       title: '删除确认',
       confirmText: '删除',
@@ -117,7 +117,7 @@ const Confirm = (function() {
 
   return {
     open,
-    delete,
+    delete: confirmDelete,
     success,
     warning,
     batch
@@ -126,3 +126,17 @@ const Confirm = (function() {
 
 // 导出
 window.Confirm = Confirm;
+
+// 兼容别名：部分页面以 ConfirmDialog.show({title, message, onConfirm}) 形式调用
+window.ConfirmDialog = {
+  show: function(config) {
+    config = config || {};
+    Confirm.open(config.message || '', {
+      title: config.title,
+      confirmText: config.confirmText || '确定',
+      danger: config.danger !== false
+    }).then(function(ok) {
+      if (ok && typeof config.onConfirm === 'function') config.onConfirm();
+    });
+  }
+};

@@ -11,19 +11,29 @@ const Chart = (function() {
   // ECharts 实例缓存
   const instances = new Map();
 
-  // 默认配色方案
+  // 默认配色方案（分类色板，需保证各色可区分）
   const COLORS = [
-    '#22a84a', // primary green
-    '#1890ff', // info blue
+    '#1890ff', // primary blue
+    '#52c41a', // success green
     '#ff6b35', // accent orange
     '#722ed1', // purple
     '#13c2c2', // cyan
     '#faad14', // warning yellow
     '#ff4d4f', // error red
-    '#52c41a'  // success green
+    '#eb2f96'  // magenta
   ];
 
   // 默认主题配置
+  // 统一字体排版（与 css/typography.css 保持一致；demo 图表沿用 ECharts 12px 基线）
+  const FONT_FAMILY = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', " +
+    "'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif";
+  const FS_AXIS = 12;    // 轴标签 / 图例
+  const FS_TIP = 13;     // 悬浮提示
+  const FS_LABEL = 12;   // 图形上数据标签
+  const C_AXIS = '#8c8c8c';   // 弱化的坐标轴文字
+  const C_TEXT = '#595959';   // 图例 / 常规
+  const C_STRONG = '#262626'; // 提示主文字
+
   const BASE_OPTONS = {
     grid: {
       containLabel: true,
@@ -34,31 +44,54 @@ const Chart = (function() {
     },
     legend: {
       bottom: 0,
+      itemWidth: 12,
+      itemHeight: 12,
+      itemGap: 16,
       textStyle: {
-        color: '#595959',
-        fontSize: 13
+        color: C_TEXT,
+        fontSize: FS_AXIS,
+        fontFamily: FONT_FAMILY,
+        lineHeight: 16
       }
     },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      backgroundColor: 'rgba(255, 255, 255, 0.96)',
       borderColor: '#e8e8e8',
       borderWidth: 1,
+      padding: [8, 12],
       textStyle: {
-        color: '#1f1f1f',
-        fontSize: 13
+        color: C_STRONG,
+        fontSize: FS_TIP,
+        fontFamily: FONT_FAMILY
       },
       axisPointer: {
-        type: 'shadow',
-        shadowStyle: {
-          color: 'rgba(34, 168, 74, 0.05)'
+        type: 'cross',
+        lineStyle: { color: '#1890ff', width: 1, type: 'dashed' },
+        crossStyle: { color: '#1890ff', width: 1, type: 'dashed' },
+        label: {
+          backgroundColor: '#1890ff',
+          fontSize: FS_AXIS,
+          fontFamily: FONT_FAMILY
         }
       }
     },
     textStyle: {
-      fontFamily: "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+      fontFamily: FONT_FAMILY,
+      fontSize: FS_AXIS,
+      color: C_TEXT
     }
   };
+
+  // 坐标轴文字统一（各图表可用 options 覆盖）
+  function axisCommon() {
+    return {
+      axisLine: { lineStyle: { color: '#e8e8e8' } },
+      axisTick: { show: false },
+      axisLabel: { color: C_AXIS, fontSize: FS_AXIS, fontFamily: FONT_FAMILY },
+      nameTextStyle: { color: C_AXIS, fontSize: FS_AXIS, fontFamily: FONT_FAMILY }
+    };
+  }
 
   // 加载 ECharts
   function loadECharts() {
@@ -126,39 +159,56 @@ const Chart = (function() {
         type: 'category',
         data: data.categories || [],
         axisLine: { lineStyle: { color: '#d9d9d9' } },
-        axisLabel: { color: '#595959' },
+        ...axisCommon(),
         axisTick: { show: false }
       },
       yAxis: {
         type: 'value',
         axisLine: { show: false },
-        axisLabel: { color: '#595959' },
-        splitLine: { lineStyle: { color: '#f0f0f0' } }
+        ...axisCommon(),
+        splitLine: { lineStyle: { color: '#f0f0f0', type: 'dashed' } }
       },
-      series: (data.series || []).map((s, i) => ({
-        name: s.name,
-        type: 'line',
-        data: s.data || [],
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        lineStyle: { width: 2 },
-        itemStyle: { color: s.color || COLORS[i % COLORS.length] },
-        areaStyle: s.area ? {
-          color: {
-            type: 'linear',
-            x: 0, y: 0, x2: 0, y2: 1,
-            colorStops: [
-              { offset: 0, color: (s.color || COLORS[i % COLORS.length]) + '30' },
-              { offset: 1, color: (s.color || COLORS[i % COLORS.length]) + '05' }
-            ]
-          }
-        } : null
-      }))
+      series: (data.series || []).map((s, i) => {
+        const color = s.color || COLORS[i % COLORS.length];
+        // 单系列默认开启渐变面积（demo 范式）；多系列避免填充叠加糊成一团，需显式传 area
+        const useArea = s.area !== undefined ? s.area : (data.series || []).length === 1;
+        return {
+          name: s.name,
+          type: 'line',
+          data: s.data || [],
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 6,
+          showSymbol: false,
+          lineStyle: { width: 2.5, color: color },
+          itemStyle: { color: color },
+          areaStyle: useArea ? {
+            color: {
+              type: 'linear',
+              x: 0, y: 0, x2: 0, y2: 1,
+              colorStops: [
+                { offset: 0, color: color + '26' },
+                { offset: 1, color: color + '00' }
+              ]
+            }
+          } : null
+        };
+      })
     };
 
     chart.setOption(mergeOptions(defaultOptions, options), true);
     return chart;
+  }
+
+  /** demo 规范渐变：#1890FF → #69c0ff（自上而下） */
+  function primaryGradient() {
+    if (typeof echarts !== 'undefined' && echarts.graphic && echarts.graphic.LinearGradient) {
+      return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+        { offset: 0, color: '#1890FF' },
+        { offset: 1, color: '#69c0ff' }
+      ]);
+    }
+    return '#1890ff';
   }
 
   // 柱状图
@@ -172,23 +222,24 @@ const Chart = (function() {
         type: 'category',
         data: data.categories || [],
         axisLine: { lineStyle: { color: '#d9d9d9' } },
-        axisLabel: { color: '#595959' },
+        ...axisCommon(),
         axisTick: { show: false }
       },
       yAxis: {
         type: 'value',
         axisLine: { show: false },
-        axisLabel: { color: '#595959' },
-        splitLine: { lineStyle: { color: '#f0f0f0' } }
+        ...axisCommon(),
+        splitLine: { lineStyle: { color: '#f0f0f0', type: 'dashed' } }
       },
       series: (data.series || []).map((s, i) => ({
         name: s.name,
         type: 'bar',
         data: s.data || [],
-        barWidth: '60%',
+        barWidth: '40%',
         itemStyle: {
-          color: s.color || COLORS[i % COLORS.length],
-          borderRadius: s.radius ? [4, 4, 0, 0] : 0
+          // demo 规范：单系列柱图使用 #1890FF → #69c0ff 竖向渐变
+          color: s.color || ((data.series || []).length === 1 ? primaryGradient() : COLORS[i % COLORS.length]),
+          borderRadius: s.radius === false ? 0 : [4, 4, 0, 0]
         }
       }))
     };
@@ -219,7 +270,7 @@ const Chart = (function() {
         center: ['35%', '50%'],
         avoidLabelOverlap: true,
         itemStyle: {
-          borderRadius: 4,
+          borderRadius: 10,
           borderColor: '#fff',
           borderWidth: 2
         },
@@ -229,8 +280,10 @@ const Chart = (function() {
         emphasis: {
           label: {
             show: true,
-            fontSize: 14,
-            fontWeight: 'bold'
+            fontSize: FS_LABEL,
+            fontWeight: '600',
+            fontFamily: FONT_FAMILY,
+            color: '#262626'
           }
         },
         data: (data.series || []).map((s, i) => ({
@@ -265,9 +318,9 @@ const Chart = (function() {
         center: ['50%', '45%'],
         avoidLabelOverlap: true,
         itemStyle: {
-          borderRadius: 6,
+          borderRadius: 10,
           borderColor: '#fff',
-          borderWidth: 3
+          borderWidth: 2
         },
         label: {
           show: false
@@ -275,8 +328,10 @@ const Chart = (function() {
         emphasis: {
           label: {
             show: true,
-            fontSize: 14,
-            fontWeight: 'bold'
+            fontSize: FS_LABEL,
+            fontWeight: '600',
+            fontFamily: FONT_FAMILY,
+            color: '#262626'
           }
         },
         data: (data.series || []).map((s, i) => ({
@@ -359,14 +414,14 @@ const Chart = (function() {
         type: 'category',
         data: data.categories || [],
         axisLine: { lineStyle: { color: '#d9d9d9' } },
-        axisLabel: { color: '#595959' },
+        ...axisCommon(),
         axisTick: { show: false }
       },
       yAxis: {
         type: 'value',
         axisLine: { show: false },
-        axisLabel: { color: '#595959' },
-        splitLine: { lineStyle: { color: '#f0f0f0' } }
+        ...axisCommon(),
+        splitLine: { lineStyle: { color: '#f0f0f0', type: 'dashed' } }
       },
       series: (data.series || []).map((s, i) => ({
         name: s.name,
@@ -399,7 +454,7 @@ const Chart = (function() {
         color: '#595959',
         formatter: axis.formatter || '{value}'
       },
-      splitLine: { show: i === 0 }
+      splitLine: { show: i === 0, lineStyle: { color: '#f0f0f0', type: 'dashed' } }
     }));
 
     const defaultOptions = {
@@ -408,7 +463,7 @@ const Chart = (function() {
         type: 'category',
         data: data.categories || [],
         axisLine: { lineStyle: { color: '#d9d9d9' } },
-        axisLabel: { color: '#595959' },
+        ...axisCommon(),
         axisTick: { show: false }
       },
       yAxis: yAxes,
@@ -493,7 +548,7 @@ const Chart = (function() {
     if (chart) {
       chart.showLoading({
         text: text,
-        color: '#22a84a',
+        color: '#1890ff',
         textColor: '#595959',
         maskColor: 'rgba(255, 255, 255, 0.8)',
         fontSize: 14
