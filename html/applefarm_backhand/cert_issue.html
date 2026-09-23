@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智慧果园 - 证书签发</title>
+<title>智慧果园 - 农产品合格证</title>
 <link rel="stylesheet" href="css/design-system.css">
 <link rel="stylesheet" href="css/sidebar-layout.css">
 <link rel="stylesheet" href="css/page-content.css">
@@ -200,40 +200,45 @@
             <div class="form-row">
               <div class="form-item">
                 <label>选择模板</label>
-                <select>
-                  <option>花牛苹果合格证</option>
+                <select id="certTemplate">
                   <option>花牛苹果合格证</option>
                   <option>礼盒装合格证</option>
                 </select>
               </div>
               <div class="form-item">
                 <label>产品名称</label>
-                <input type="text" value="花牛苹果" readonly>
+                <select id="certProduct">
+                  <option value="花牛苹果">花牛苹果</option>
+                  <option value="金帅苹果">金帅苹果</option>
+                  <option value="秦冠苹果">秦冠苹果</option>
+                  <option value="礼盒装苹果">礼盒装苹果</option>
+                </select>
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-item">
                 <label>批次号</label>
-                <input type="text" placeholder="输入批次号">
+                <select id="certBatch"></select>
               </div>
               <div class="form-item">
                 <label>生产日期</label>
-                <input type="date">
+                <input type="date" id="certProduceDate">
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-item">
                 <label>净含量</label>
-                <input type="text" placeholder="如：500g/袋">
+                <input type="text" id="certNetWeight" placeholder="如：5kg/箱">
               </div>
               <div class="form-item">
                 <label>等级</label>
-                <select>
+                <select id="certGrade">
                   <option>特级</option>
                   <option>一级</option>
                   <option>二级</option>
+                  <option>三级</option>
                 </select>
               </div>
             </div>
@@ -241,14 +246,14 @@
             <div class="form-row">
               <div class="form-item">
                 <label>检测结论</label>
-                <select>
+                <select id="certResult">
                   <option>合格</option>
                   <option>不合格</option>
                 </select>
               </div>
               <div class="form-item">
                 <label>检测人</label>
-                <input type="text" placeholder="输入检测人姓名">
+                <input type="text" id="certTester" placeholder="输入检测人姓名">
               </div>
             </div>
 
@@ -339,9 +344,81 @@
 <script src="js/components/confirm.js"></script>
 <script src="js/page-actions.js"></script>
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    PageActions.init('cert-issue');
+/* ============================================================
+ * 合格证开具 —— 批次来自「批次管理」主数据，产品复用证书签发源
+ * 开具后写入本地存储，可在「证书管理」中查询
+ * ============================================================ */
+
+// 批次主数据（与 trace_batch.html 保持一致）
+const CERT_BATCHES = [
+  {batchNo:'PC-20260901-001',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-01'},
+  {batchNo:'PC-20260902-002',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-02'},
+  {batchNo:'PC-20260903-003',product:'金帅苹果',spec:'4kg/箱',grade:'二级',harvestDate:'2026-09-03'},
+  {batchNo:'PC-20260904-004',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-04'},
+  {batchNo:'PC-20260905-005',product:'花牛苹果',spec:'5kg/箱',grade:'二级',harvestDate:'2026-09-05'},
+  {batchNo:'PC-20260906-006',product:'花牛苹果',spec:'4kg/箱',grade:'三级',harvestDate:'2026-09-06'},
+  {batchNo:'PC-20260907-007',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-07'},
+  {batchNo:'PC-20260908-008',product:'花牛苹果',spec:'5kg/箱',grade:'二级',harvestDate:'2026-09-08'},
+  {batchNo:'PC-20260909-009',product:'花牛苹果',spec:'4kg/箱',grade:'一级',harvestDate:'2026-09-09'},
+  {batchNo:'PC-20260910-010',product:'金帅苹果',spec:'4kg/箱',grade:'二级',harvestDate:'2026-09-10'},
+  {batchNo:'PC-20260911-011',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-11'},
+  {batchNo:'PC-20260912-012',product:'秦冠苹果',spec:'6kg/箱',grade:'三级',harvestDate:'2026-09-12'},
+  {batchNo:'PC-20260913-013',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-13'},
+  {batchNo:'PC-20260914-014',product:'花牛苹果',spec:'5kg/箱',grade:'二级',harvestDate:'2026-09-14'},
+  {batchNo:'PC-20260915-015',product:'花牛苹果',spec:'4kg/箱',grade:'一级',harvestDate:'2026-09-15'},
+  {batchNo:'PC-20260916-016',product:'金帅苹果',spec:'4kg/箱',grade:'二级',harvestDate:'2026-09-16'},
+  {batchNo:'PC-20260917-017',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-17'},
+  {batchNo:'PC-20260918-018',product:'花牛苹果',spec:'5kg/箱',grade:'三级',harvestDate:'2026-09-18'},
+  {batchNo:'PC-20260919-019',product:'花牛苹果',spec:'4kg/箱',grade:'一级',harvestDate:'2026-09-19'},
+  {batchNo:'PC-20260920-020',product:'秦冠苹果',spec:'6kg/箱',grade:'二级',harvestDate:'2026-09-20'}
+];
+
+// 选择批次后带出产品 / 净含量 / 等级 / 生产日期
+function syncFromBatch() {
+  const batchNo = document.getElementById('certBatch').value;
+  const b = CERT_BATCHES.find(x => x.batchNo === batchNo);
+  if (!b) return;
+  document.getElementById('certProduct').value = b.product;
+  document.getElementById('certNetWeight').value = b.spec;
+  document.getElementById('certGrade').value = b.grade;
+  document.getElementById('certProduceDate').value = b.harvestDate;
+  syncPreview();
+}
+
+// 实时预览
+function syncPreview() {
+  const get = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const values = [
+    get('certProduct'),
+    get('certBatch'),
+    get('certProduceDate'),
+    get('certNetWeight'),
+    get('certGrade'),
+    get('certResult')
+  ];
+  document.querySelectorAll('.cert-preview .cert-body .cert-value').forEach((el, i) => {
+    if (values[i] !== undefined) el.textContent = values[i] || '—';
   });
+  const stamp = document.querySelector('.cert-preview .cert-stamp');
+  if (stamp) stamp.textContent = '天水花牛苹果（集团）有限责任公司';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const batchSelect = document.getElementById('certBatch');
+  batchSelect.innerHTML = CERT_BATCHES
+    .map(b => `<option value="${b.batchNo}">${b.batchNo} · ${b.product} · ${b.spec}</option>`)
+    .join('');
+  batchSelect.addEventListener('change', syncFromBatch);
+
+  ['certProduct', 'certProduceDate', 'certNetWeight', 'certGrade', 'certResult'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', syncPreview);
+    if (el) el.addEventListener('input', syncPreview);
+  });
+
+  syncFromBatch();
+  PageActions.init('cert-issue');
+});
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>

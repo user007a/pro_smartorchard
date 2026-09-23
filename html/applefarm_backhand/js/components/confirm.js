@@ -47,7 +47,7 @@ const Confirm = (function() {
     `;
 
     const footer = `
-      <button class="jg-btn ${config.cancelClass}" data-action="cancel">${config.cancelText}</button>
+      ${config.cancelText ? `<button class="jg-btn ${config.cancelClass}" data-action="cancel">${config.cancelText}</button>` : ''}
       <button class="jg-btn ${config.confirmClass}" data-action="confirm">${config.confirmText}</button>
     `;
 
@@ -61,15 +61,21 @@ const Confirm = (function() {
         onClose: () => resolve(false)
       });
 
-      modal.querySelector('[data-action="cancel"]').addEventListener('click', () => {
-        Modal.close();
-        resolve(false);
-      });
+      const cancelBtn = modal.querySelector('[data-action="cancel"]');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+          Modal.close();
+          resolve(false);
+        });
+      }
 
-      modal.querySelector('[data-action="confirm"]').addEventListener('click', () => {
-        Modal.close();
-        resolve(true);
-      });
+      const confirmBtn = modal.querySelector('[data-action="confirm"]');
+      if (confirmBtn) {
+        confirmBtn.addEventListener('click', () => {
+          Modal.close();
+          resolve(true);
+        });
+      }
     });
   }
 

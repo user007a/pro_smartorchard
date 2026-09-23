@@ -474,7 +474,7 @@
                   <th style="width:140px;">操作</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="dataTableBody">
                 <tr>
                   <td>1</td>
                   <td><strong>设备离线：水肥一体化设备离线超过30分钟</strong></td>
@@ -814,16 +814,7 @@
               </tbody>
             </table>
           </div>
-          <div class="pagination-wrapper">
-            <div class="pagination-info">共 <span class="num">23</span> 条记录，第 <span class="num">1</span>/<span class="num">3</span> 页</div>
-            <div class="pagination">
-              <button class="page-btn disabled">‹</button>
-              <button class="page-btn active">1</button>
-              <button class="page-btn">2</button>
-              <button class="page-btn">3</button>
-              <button class="page-btn">›</button>
-            </div>
-          </div>
+          <div id="pagination-container"></div>
         </div>
       </div>
     </main>
@@ -1048,16 +1039,30 @@
     { id: 'DEV023', title: '设备维护提醒：虫情灯需要清理', level: 'info', levelText: '通知', device: '虫情灯-I02', location: '青岛莱西基地 - 地块C3', time: '2026-09-13 16:30', status: 'pending', statusText: '待处理', desc: '虫情灯收集盒已满，需要清理。', history: ['系统自动生成预警'] }
   ];
   
-  let currentPage = 1;
-  const pageSize = 10;
   let filteredData = [...mockData];
   
   document.addEventListener('DOMContentLoaded', function() {
-    renderTable();
-    renderPagination();
+    Pagination.init({
+      currentPage: 1,
+      pageSize: 10,
+      data: filteredData,
+      containerId: 'pagination-container',
+      tbodyId: 'dataTableBody',
+      renderRow: renderRow
+    });
     
-    const detailBtns = document.querySelectorAll('.action-btn.detail');
-    const editBtns = document.querySelectorAll('.action-btn.edit');
+    document.addEventListener('click', function(e) {
+      const btn = e.target.closest('.action-btn');
+      if (!btn) return;
+      if (btn.classList.contains('detail')) {
+        showDetailModal(btn.dataset.id);
+        document.getElementById('detailModal').classList.add('show');
+      } else if (btn.classList.contains('edit')) {
+        showHandleModal(btn.dataset.id);
+        document.getElementById('handleModal').classList.add('show');
+      }
+    });
+    
     const modal = document.getElementById('detailModal');
     const closeBtn = document.getElementById('closeModal');
     const btnHandleModal = document.getElementById('btnHandleModal');
@@ -1065,22 +1070,6 @@
     const exportModal = document.getElementById('exportModal');
     const printModal = document.getElementById('printModal');
     const handleModal = document.getElementById('handleModal');
-    
-    detailBtns.forEach(btn => {
-      btn.addEventListener('click', function() {
-        const id = this.dataset.id;
-        showDetailModal(id);
-        modal.classList.add('show');
-      });
-    });
-    
-    editBtns.forEach(btn => {
-      btn.addEventListener('click', function() {
-        const id = this.dataset.id;
-        showHandleModal(id);
-        handleModal.classList.add('show');
-      });
-    });
     
     closeBtn.addEventListener('click', function() {
       modal.classList.remove('show');
@@ -1123,9 +1112,7 @@
         return matchKeyword && matchLevel && matchStatus && matchBase;
       });
       
-      currentPage = 1;
-      renderTable();
-      renderPagination();
+      Pagination.updateData(filteredData);
       showToast('搜索完成，共找到 ' + filteredData.length + ' 条记录');
     });
     
@@ -1134,9 +1121,7 @@
         el.value = '';
       });
       filteredData = [...mockData];
-      currentPage = 1;
-      renderTable();
-      renderPagination();
+      Pagination.updateData(filteredData);
     });
     
     const batchBtn = document.getElementById('btnBatch');
@@ -1233,15 +1218,10 @@
     return map[action] || '';
   }
   
-  function renderTable() {
-    const tableBody = document.querySelector('.data-table tbody');
-    const start = (currentPage - 1) * pageSize;
-    const end = start + pageSize;
-    const pageData = filteredData.slice(start, end);
-    
-    tableBody.innerHTML = pageData.map((item, __seq) => `
+  function renderRow(item, index) {
+    return `
       <tr>
-        <td>${__seq + 1}</td>
+        <td>${index + 1}</td>
         <td><strong>${item.title}</strong></td>
         <td><span class="status-tag ${item.level}">${item.levelText}</span></td>
         <td>${item.device}</td>
@@ -1255,24 +1235,7 @@
           </div>
         </td>
       </tr>
-    `).join('');
-    
-    document.querySelectorAll('.action-btn.detail').forEach(btn => {
-      btn.addEventListener('click', function() {
-        showDetailModal(this.dataset.id);
-        document.getElementById('detailModal').classList.add('show');
-      });
-    });
-    
-    document.querySelectorAll('.action-btn.edit').forEach(btn => {
-      btn.addEventListener('click', function() {
-        showHandleModal(this.dataset.id);
-        document.getElementById('handleModal').classList.add('show');
-      });
-    });
-    
-    if (document.getElementById('selectAll')) document.getElementById('selectAll').checked = false;
-    updateSelectedCount();
+    `;
   }
   
   function getStatusClass(status) {
@@ -1282,33 +1245,6 @@
       'completed': 'success'
     };
     return map[status] || 'info';
-  }
-  
-  function renderPagination() {
-    const total = filteredData.length;
-    const totalPages = Math.ceil(total / pageSize);
-    const pagination = document.querySelector('.pagination');
-    const info = document.querySelector('.pagination-info');
-    
-    info.innerHTML = `共 <span class="num">${total}</span> 条记录，第 <span class="num">${currentPage}</span>/<span class="num">${totalPages}</span> 页`;
-    
-    let html = `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="changePage(${currentPage - 1})">‹</button>`;
-    
-    for (let i = 1; i <= totalPages; i++) {
-      html += `<button class="page-btn ${currentPage === i ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
-    }
-    
-    html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="changePage(${currentPage + 1})">›</button>`;
-    
-    pagination.innerHTML = html;
-  }
-  
-  function changePage(page) {
-    const totalPages = Math.ceil(filteredData.length / pageSize);
-    if (page < 1 || page > totalPages) return;
-    currentPage = page;
-    renderTable();
-    renderPagination();
   }
   
   function showDetailModal(id) {

@@ -136,15 +136,15 @@
           <div class="block-info">
             <div class="block-item">
               <div class="item-label">区块高度</div>
-              <div class="item-value" style="color:var(--accent-green);">#1,847,329</div>
+              <div class="item-value" id="latestBlock" style="color:var(--accent-green);">#1,847,323</div>
             </div>
             <div class="block-item">
-              <div class="item-label">交易数量</div>
-              <div class="item-value">1,247</div>
+              <div class="item-label">上链记录数</div>
+              <div class="item-value" id="latestTxCount">23</div>
             </div>
             <div class="block-item">
-              <div class="item-label">区块时间</div>
-              <div class="item-value" style="color:var(--accent-teal);">2026-09-10 15:32:18</div>
+              <div class="item-label">最新上链时间</div>
+              <div class="item-value" id="latestTime" style="color:var(--accent-teal);">2026-09-20 17:50:00</div>
             </div>
           </div>
         </div>
@@ -160,7 +160,7 @@
               <option value="pending">验证中</option>
             </select>
             
-          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
+          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="resetSearch()">重置</button></div>
           </div>
         </div>
 
@@ -178,7 +178,7 @@
             </thead>
             <tbody id="dataTableBody"></tbody>
           </table>
-          <div class="pagination" id="paginationContainer"></div>
+          <div id="pagination-container"></div>
         </div>
       </div>
     </main>
@@ -229,56 +229,102 @@
 </div>
 
 <script>
-// Mock数据 - 23条记录
+// Mock数据 - 23条上链存证记录（与溯源编码 trace_code.html 同一批追溯码，上链时间晚于生成时间）
 const mockData = [
-  { code: 'SNZG-2024-0001', hash: '0x7f8e...3a2b', block: 1847329, time: '2026-09-10 15:32:18', status: 'passed' },
-  { code: 'SNZG-2024-0002', hash: '0x8a1c...4d5e', block: 1847328, time: '2026-09-10 14:28:45', status: 'passed' },
-  { code: 'SNZG-2024-0003', hash: '0x9b2d...5e6f', block: 1847327, time: '2026-09-10 13:15:32', status: 'passed' },
-  { code: 'SNZG-2024-0004', hash: '0xac3e...6f7g', block: 1847326, time: '2026-09-10 12:08:19', status: 'failed' },
-  { code: 'SNZG-2024-0005', hash: '0xbd4f...7g8h', block: 1847325, time: '2026-09-10 11:42:56', status: 'passed' },
-  { code: 'SNZG-2024-0006', hash: '0xce5g...8h9i', block: 1847324, time: '2026-09-10 10:35:21', status: 'passed' },
-  { code: 'SNZG-2024-0007', hash: '0xdf6h...9i0j', block: 1847323, time: '2026-09-10 09:28:43', status: 'pending' },
-  { code: 'SNZG-2024-0008', hash: '0xea7i...0j1k', block: 1847322, time: '2026-09-10 08:19:07', status: 'passed' },
-  { code: 'SNZG-2024-0009', hash: '0xfb8j...1k2l', block: 1847321, time: '2026-09-09 17:45:29', status: 'passed' },
-  { code: 'SNZG-2024-0010', hash: '0xac9k...2l3m', block: 1847320, time: '2026-09-09 16:32:14', status: 'failed' },
-  { code: 'SNZG-2024-0011', hash: '0xbd0l...3m4n', block: 1847319, time: '2026-09-09 15:28:51', status: 'passed' },
-  { code: 'SNZG-2024-0012', hash: '0xce1m...4n5o', block: 1847318, time: '2026-09-09 14:15:38', status: 'passed' },
-  { code: 'SNZG-2024-0013', hash: '0xdf2n...5o6p', block: 1847317, time: '2026-09-09 13:08:22', status: 'passed' },
-  { code: 'SNZG-2024-0014', hash: '0xea3o...6p7q', block: 1847316, time: '2026-09-09 12:45:09', status: 'passed' },
-  { code: 'SNZG-2024-0015', hash: '0xfb4p...7q8r', block: 1847315, time: '2026-09-09 11:32:47', status: 'pending' },
-  { code: 'SNZG-2024-0016', hash: '0xac5q...8r9s', block: 1847314, time: '2026-09-09 10:28:35', status: 'passed' },
-  { code: 'SNZG-2024-0017', hash: '0xbd6r...9s0t', block: 1847313, time: '2026-09-09 09:15:19', status: 'passed' },
-  { code: 'SNZG-2024-0018', hash: '0xce7s...0t1u', block: 1847312, time: '2026-09-08 18:42:58', status: 'passed' },
-  { code: 'SNZG-2024-0019', hash: '0xdf8t...1u2v', block: 1847311, time: '2026-09-08 17:35:24', status: 'failed' },
-  { code: 'SNZG-2024-0020', hash: '0xea9u...2v3w', block: 1847310, time: '2026-09-08 16:28:41', status: 'passed' },
-  { code: 'SNZG-2024-0021', hash: '0xfb0v...3w4x', block: 1847309, time: '2026-09-08 15:19:07', status: 'passed' },
-  { code: 'SNZG-2024-0022', hash: '0xac1w...4x5y', block: 1847308, time: '2026-09-08 14:08:53', status: 'passed' },
-  { code: 'SNZG-2024-0023', hash: '0xbd2x...5y6z', block: 1847307, time: '2026-09-08 13:42:18', status: 'passed' }
+  { code: 'SNZG-20260901-0001', hash: '0x7f8e41c2...3a2b9d', block: 1847301, time: '2026-09-01 18:30:00', status: 'passed' },
+  { code: 'SNZG-20260901-0002', hash: '0x8a1c52d3...4d5e0e', block: 1847302, time: '2026-09-01 18:45:00', status: 'passed' },
+  { code: 'SNZG-20260902-0003', hash: '0x9b2d63e4...5e6f1f', block: 1847303, time: '2026-09-02 17:20:00', status: 'passed' },
+  { code: 'SNZG-20260902-0004', hash: '0xac3e74f5...6f7020', block: 1847304, time: '2026-09-02 17:35:00', status: 'passed' },
+  { code: 'SNZG-20260903-0005', hash: '0xbd4f8506...7a8131', block: 1847305, time: '2026-09-03 19:10:00', status: 'failed' },
+  { code: 'SNZG-20260903-0006', hash: '0xce5a9617...8b9242', block: 1847306, time: '2026-09-03 19:22:00', status: 'passed' },
+  { code: 'SNZG-20260904-0007', hash: '0xdf6ba728...9ca353', block: 1847307, time: '2026-09-04 18:50:00', status: 'passed' },
+  { code: 'SNZG-20260905-0008', hash: '0xea7cb839...adb464', block: 1847308, time: '2026-09-05 18:15:00', status: 'passed' },
+  { code: 'SNZG-20260906-0009', hash: '0xfb8dc94a...bec575', block: 1847309, time: '2026-09-06 17:58:00', status: 'passed' },
+  { code: 'SNZG-20260907-0010', hash: '0x0c9eda5b...cfd686', block: 1847310, time: '2026-09-07 19:30:00', status: 'passed' },
+  { code: 'SNZG-20260908-0011', hash: '0x1dafeb6c...d0e797', block: 1847311, time: '2026-09-08 18:40:00', status: 'passed' },
+  { code: 'SNZG-20260909-0012', hash: '0x2eb0fc7d...e1f8a8', block: 1847312, time: '2026-09-09 18:05:00', status: 'passed' },
+  { code: 'SNZG-20260910-0013', hash: '0x3fc10d8e...f209b9', block: 1847313, time: '2026-09-10 18:25:00', status: 'failed' },
+  { code: 'SNZG-20260911-0014', hash: '0x40d21e9f...031aca', block: 1847314, time: '2026-09-11 19:15:00', status: 'passed' },
+  { code: 'SNZG-20260912-0015', hash: '0x51e32fa0...142bdb', block: 1847315, time: '2026-09-12 19:00:00', status: 'passed' },
+  { code: 'SNZG-20260913-0016', hash: '0x62f43gb1...253cec', block: 1847316, time: '2026-09-13 17:45:00', status: 'passed' },
+  { code: 'SNZG-20260914-0017', hash: '0x73054hc2...364dfd', block: 1847317, time: '2026-09-14 18:55:00', status: 'passed' },
+  { code: 'SNZG-20260915-0018', hash: '0x84165id3...475e0e', block: 1847318, time: '2026-09-15 19:25:00', status: 'passed' },
+  { code: 'SNZG-20260916-0019', hash: '0x95276je4...586f1f', block: 1847319, time: '2026-09-16 17:30:00', status: 'passed' },
+  { code: 'SNZG-20260917-0020', hash: '0xa6387kf5...697020', block: 1847320, time: '2026-09-17 18:35:00', status: 'passed' },
+  { code: 'SNZG-20260918-0021', hash: '0xb7498lg6...7a8131', block: 1847321, time: '2026-09-18 19:40:00', status: 'failed' },
+  { code: 'SNZG-20260919-0022', hash: '0xc85a9mh7...8b9242', block: 1847322, time: '2026-09-19 18:20:00', status: 'pending' },
+  { code: 'SNZG-20260920-0023', hash: '0xd96bani8...9ca353', block: 1847323, time: '2026-09-20 17:50:00', status: 'pending' }
 ];
 
-let currentPage = 1;
-const pageSize = 10;
-let filteredData = [...mockData];
+// 验证状态说明：批次检测报告已过期时，对应存证校验不通过
+const VERIFY_TEXT = { passed: '已通过', failed: '未通过', pending: '验证中' };
+
 let currentDetailCode = '';
 
-document.addEventListener('DOMContentLoaded', function() {
-  renderTable();
-  renderPagination();
-});
+function verifyTagClass(status) {
+  return status === 'passed' ? 'active' : status === 'failed' ? 'error' : 'warning';
+}
 
-function renderTable() {
-  const tbody = document.getElementById('dataTableBody');
-  const start = (currentPage - 1) * pageSize;
-  const end = start + pageSize;
-  const pageData = filteredData.slice(start, end);
-  
-  tbody.innerHTML = pageData.map(item => `
-    <tr>
+/* ---------- 分页组件（与农事计划、批次管理一致） ---------- */
+const Pagination = {
+  currentPage: 1, pageSize: 10, filteredData: [],
+  containerId: 'pagination-container', tbodyId: 'dataTableBody', renderRow: null,
+  init: function(options) {
+    this.currentPage = options.currentPage || 1;
+    this.pageSize = options.pageSize || 10;
+    this.filteredData = options.data || [];
+    this.containerId = options.containerId || 'pagination-container';
+    this.tbodyId = options.tbodyId || 'dataTableBody';
+    this.renderRow = options.renderRow || null;
+    this.render();
+  },
+  renderTable: function() {
+    const tbody = document.getElementById(this.tbodyId);
+    if (!tbody || !this.renderRow) return;
+    const start = (this.currentPage - 1) * this.pageSize;
+    const pageData = this.filteredData.slice(start, start + this.pageSize);
+    tbody.innerHTML = pageData.map((item, i) => this.renderRow(item, start + i + 1)).join('');
+  },
+  render: function() {
+    const container = document.getElementById(this.containerId);
+    if (!container) return;
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    let html = '<div class="pagination">';
+    html += `<button class="page-btn ${this.currentPage <= 1 ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage - 1})">‹</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= this.currentPage - 1 && i <= this.currentPage + 1)) {
+        html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" onclick="Pagination.goToPage(${i})">${i}</button>`;
+      } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
+        html += '<span class="page-ellipsis" style="padding:0 8px;color:#6b7b6b;">...</span>';
+      }
+    }
+    html += `<button class="page-btn ${this.currentPage >= totalPages ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage + 1})">›</button>`;
+    html += `<span style="margin-left:16px;font-size:13px;color:#6b7b6b;">第 ${this.currentPage} 页/共 ${totalPages} 页，共 ${this.filteredData.length} 条记录</span>`;
+    html += '</div>';
+    container.innerHTML = html;
+    this.renderTable();
+  },
+  goToPage: function(page) {
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    if (page < 1 || page > totalPages) return;
+    this.currentPage = page;
+    this.render();
+  },
+  updateData: function(data) {
+    this.filteredData = data;
+    this.currentPage = 1;
+    this.render();
+  }
+};
+
+function renderChainRow(item, seq) {
+  return `
+    <tr data-id="${item.code}">
       <td><strong>${item.code}</strong></td>
       <td style="font-family:monospace; color:var(--text-secondary);">${item.hash}</td>
       <td>${item.block.toLocaleString()}</td>
       <td>${item.time}</td>
-      <td><span class="status-tag ${item.status === 'passed' ? 'active' : item.status === 'failed' ? 'error' : 'warning'}">${item.status === 'passed' ? '已通过' : item.status === 'failed' ? '未通过' : '验证中'}</span></td>
+      <td><span class="status-tag ${verifyTagClass(item.status)}">${VERIFY_TEXT[item.status]}</span></td>
       <td>
         <div class="action-btns">
           <button class="action-btn detail" onclick="viewDetail('${item.code}')">详情</button>
@@ -286,50 +332,31 @@ function renderTable() {
         </div>
       </td>
     </tr>
-  `).join('');
-}
-
-function renderPagination() {
-  const container = document.getElementById('paginationContainer');
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  if (totalPages <= 1) { container.innerHTML = ''; return; }
-  
-  let html = `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="goToPage(${currentPage - 1})">‹</button>`;
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-      html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
-    } else if (i === currentPage - 2 || i === currentPage + 2) {
-      html += '<span class="page-ellipsis">...</span>';
-    }
-  }
-  html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="goToPage(${currentPage + 1})">›</button>`;
-  container.innerHTML = html;
-}
-
-function goToPage(page) {
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  if (page < 1 || page > totalPages) return;
-  currentPage = page;
-  renderTable();
-  renderPagination();
+  `;
 }
 
 function searchData() {
-  const code = document.getElementById('traceCodeInput').value.toLowerCase();
-  const hash = document.getElementById('txHashInput').value.toLowerCase();
+  const code = document.getElementById('traceCodeInput').value.trim().toLowerCase();
+  const hash = document.getElementById('txHashInput').value.trim().toLowerCase();
   const status = document.getElementById('statusSelect').value;
-  
-  filteredData = mockData.filter(item => {
+
+  const filtered = mockData.filter(item => {
     if (code && !item.code.toLowerCase().includes(code)) return false;
     if (hash && !item.hash.toLowerCase().includes(hash)) return false;
     if (status && item.status !== status) return false;
     return true;
   });
-  
-  currentPage = 1;
-  renderTable();
-  renderPagination();
-  showToast(`找到 ${filteredData.length} 条记录`);
+
+  Pagination.updateData(filtered);
+  showToast(`找到 ${filtered.length} 条记录`);
+}
+
+function resetSearch() {
+  document.getElementById('traceCodeInput').value = '';
+  document.getElementById('txHashInput').value = '';
+  document.getElementById('statusSelect').value = '';
+  Pagination.updateData(mockData);
+  showToast('已重置筛选条件');
 }
 
 function viewDetail(code) {
@@ -342,8 +369,8 @@ function viewDetail(code) {
     <div class="detail-grid"><span class="detail-label">交易哈希</span><span class="detail-value" style="font-family:monospace;">${item.hash}</span></div>
     <div class="detail-grid"><span class="detail-label">区块高度</span><span class="detail-value">${item.block.toLocaleString()}</span></div>
     <div class="detail-grid"><span class="detail-label">上链时间</span><span class="detail-value">${item.time}</span></div>
-    <div class="detail-grid"><span class="detail-label">验证状态</span><span class="detail-value"><span class="status-tag ${item.status === 'passed' ? 'active' : item.status === 'failed' ? 'error' : 'warning'}">${item.status === 'passed' ? '已通过' : item.status === 'failed' ? '未通过' : '验证中'}</span></span></div>
-    <div class="detail-grid"><span class="detail-label">数据摘要</span><span class="detail-value" style="font-family:monospace; font-size:12px;">SHA256: ${item.hash}abc123</span></div>
+    <div class="detail-grid"><span class="detail-label">验证状态</span><span class="detail-value"><span class="status-tag ${verifyTagClass(item.status)}">${VERIFY_TEXT[item.status]}</span></span></div>
+    <div class="detail-grid"><span class="detail-label">数据摘要</span><span class="detail-value" style="font-family:monospace; font-size:12px;">SHA256: ${item.hash.replace('0x', '')}</span></div>
   `;
   openModal('detailModal');
 }
@@ -374,8 +401,14 @@ function verifyRecord(code) {
   openModal('verifyModal');
 }
 
-function openModal(id) { document.getElementById(id).classList.add('active'); }
-function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+  document.body.style.overflow = '';
+}
 
 function showToast(message) {
   const toast = document.getElementById('toast');
@@ -384,11 +417,41 @@ function showToast(message) {
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), 3000);
 }
+
+// 页面初始化
+document.addEventListener('DOMContentLoaded', function() {
+  // 最新区块信息取自当前存证数据
+  const latest = mockData.reduce((a, b) => (b.block > a.block ? b : a), mockData[0]);
+  document.getElementById('latestBlock').textContent = '#' + latest.block.toLocaleString();
+  document.getElementById('latestTxCount').textContent = mockData.length;
+  document.getElementById('latestTime').textContent = latest.time;
+
+  Pagination.init({
+    currentPage: 1,
+    pageSize: 10,
+    data: mockData,
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderChainRow
+  });
+});
+
+// 点击遮罩关闭弹窗
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeModal(overlay.id);
+  });
+});
+
+// ESC 关闭弹窗
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.active').forEach(o => closeModal(o.id));
+  }
+});
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-<script src="js/common-functions.js"></script>
-  <script src="js/search-helper.js"></script>
   <script src="js/typography.js"></script>
 </body>
 </html>

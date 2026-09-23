@@ -6,6 +6,8 @@
 const PageActions = (function() {
   // 模拟数据
   const mockData = {
+    // 产品源（证书签发 / 批次管理 / 溯源编码共用）
+    products: ['花牛苹果', '金帅苹果', '秦冠苹果', '礼盒装苹果'],
     enterprises: [
       { id: 'ENT001', code: 'JD-001', name: '天水麦积区基地', address: '甘肃省天水市麦积区市', area: 2800, manager: '张经理', phone: '138-0000-1001', status: 'active' },
       { id: 'ENT002', code: 'JD-002', name: '天水荣成基地', address: '甘肃省天水市荣成市', area: 1600, manager: '李经理', phone: '138-0000-1002', status: 'active' },
@@ -56,29 +58,29 @@ const PageActions = (function() {
       { id: 'PLOT023', name: '北区5号地', enterprise: '甘肃麦积区苹果基地', variety: '金帅', area: 81, year: 2020, status: 'normal', manager: '王师傅' },
     ],
     certificates: [
-      { id: 'CERT001', type: '质量合格证', batch: 'PC-20260601-001', customer: '北京华联超市', validStart: '2026-09-01', validEnd: '2027-09-01', status: 'enabled', issueTime: '2026-09-01' },
-      { id: 'CERT002', type: '检测报告', batch: 'PC-20260605-003', customer: '上海果蔬配送中心', validStart: '2026-09-15', validEnd: '2027-09-15', status: 'enabled', issueTime: '2026-09-15' },
-      { id: 'CERT003', type: '原产地证明', batch: 'PC-20260520-012', customer: '广州江南市场', validStart: '2026-09-20', validEnd: '2026-09-20', status: 'error', issueTime: '2026-09-20' },
-      { id: 'CERT004', type: '质量合格证', batch: 'PC-20260510-008', customer: '深圳沃尔玛超市', validStart: '2026-09-10', validEnd: '2026-09-10', status: 'disabled', issueTime: '2026-09-10' },
-      { id: 'CERT005', type: '质量合格证', batch: 'PC-20260602-004', customer: '天津家乐福', validStart: '2026-09-02', validEnd: '2027-09-02', status: 'enabled', issueTime: '2026-09-02' },
-      { id: 'CERT006', type: '检测报告', batch: 'PC-20260603-005', customer: '重庆永辉超市', validStart: '2026-09-03', validEnd: '2027-09-03', status: 'enabled', issueTime: '2026-09-03' },
-      { id: 'CERT007', type: '原产地证明', batch: 'PC-20260604-006', customer: '成都伊藤洋华堂', validStart: '2026-09-04', validEnd: '2027-09-04', status: 'enabled', issueTime: '2026-09-04' },
-      { id: 'CERT008', type: '质量合格证', batch: 'PC-20260501-001', customer: '武汉中百仓储', validStart: '2026-09-01', validEnd: '2027-09-01', status: 'enabled', issueTime: '2026-09-01' },
-      { id: 'CERT009', type: '检测报告', batch: 'PC-20260502-002', customer: '杭州世纪联华', validStart: '2026-09-02', validEnd: '2027-09-02', status: 'enabled', issueTime: '2026-09-02' },
-      { id: 'CERT010', type: '质量合格证', batch: 'PC-20260401-001', customer: '南京苏果超市', validStart: '2026-09-01', validEnd: '2026-09-01', status: 'error', issueTime: '2026-09-01' },
-      { id: 'CERT011', type: '原产地证明', batch: 'PC-20260405-003', customer: '苏州大润发', validStart: '2026-09-05', validEnd: '2027-09-05', status: 'enabled', issueTime: '2026-09-05' },
-      { id: 'CERT012', type: '质量合格证', batch: 'PC-20260410-006', customer: '无锡欧尚', validStart: '2026-09-10', validEnd: '2027-09-10', status: 'enabled', issueTime: '2026-09-10' },
-      { id: 'CERT013', type: '检测报告', batch: 'PC-20260315-002', customer: '宁波三江购物', validStart: '2026-09-15', validEnd: '2027-09-15', status: 'enabled', issueTime: '2026-09-15' },
-      { id: 'CERT014', type: '质量合格证', batch: 'PC-20260320-004', customer: '温州人本超市', validStart: '2026-09-20', validEnd: '2027-09-20', status: 'enabled', issueTime: '2026-09-20' },
-      { id: 'CERT015', type: '原产地证明', batch: 'PC-20260225-001', customer: '青岛利群集团', validStart: '2026-09-25', validEnd: '2027-09-25', status: 'enabled', issueTime: '2026-09-25' },
-      { id: 'CERT016', type: '质量合格证', batch: 'PC-20260228-003', customer: '济南银座商城', validStart: '2026-09-28', validEnd: '2027-09-28', status: 'enabled', issueTime: '2026-09-28' },
-      { id: 'CERT017', type: '检测报告', batch: 'PC-20260110-002', customer: '大连大商集团', validStart: '2026-09-10', validEnd: '2027-09-10', status: 'enabled', issueTime: '2026-09-10' },
-      { id: 'CERT018', type: '质量合格证', batch: 'PC-20261215-001', customer: '沈阳兴隆大家庭', validStart: '2026-12-15', validEnd: '2026-12-15', status: 'error', issueTime: '2026-12-15' },
-      { id: 'CERT019', type: '原产地证明', batch: 'PC-20260120-004', customer: '哈尔滨中央红', validStart: '2026-09-20', validEnd: '2027-09-20', status: 'enabled', issueTime: '2026-09-20' },
-      { id: 'CERT020', type: '质量合格证', batch: 'PC-20261101-001', customer: '长春欧亚集团', validStart: '2026-11-01', validEnd: '2026-11-01', status: 'disabled', issueTime: '2026-11-01' },
-      { id: 'CERT021', type: '检测报告', batch: 'PC-20260515-007', customer: '合肥百大集团', validStart: '2026-09-15', validEnd: '2027-09-15', status: 'enabled', issueTime: '2026-09-15' },
-      { id: 'CERT022', type: '质量合格证', batch: 'PC-20260525-010', customer: '福州永辉超市', validStart: '2026-09-25', validEnd: '2027-09-25', status: 'enabled', issueTime: '2026-09-25' },
-      { id: 'CERT023', type: '原产地证明', batch: 'PC-20260610-015', customer: '厦门夏商集团', validStart: '2026-09-10', validEnd: '2027-09-10', status: 'enabled', issueTime: '2026-09-10' },
+      { id: 'CERT001', type: '质量合格证', batch: 'PC-20260901-001', customer: '北京华联超市', validStart: '2026-09-01', validEnd: '2027-09-01', status: 'enabled', issueTime: '2026-09-01' },
+      { id: 'CERT002', type: '检测报告', batch: 'PC-20260902-002', customer: '上海果蔬配送中心', validStart: '2026-09-02', validEnd: '2027-09-02', status: 'enabled', issueTime: '2026-09-02' },
+      { id: 'CERT003', type: '检测报告', batch: 'PC-20260903-003', customer: '广州江南市场', validStart: '2026-08-20', validEnd: '2026-09-10', status: 'error', issueTime: '2026-08-20' },
+      { id: 'CERT004', type: '质量合格证', batch: 'PC-20260904-004', customer: '深圳沃尔玛超市', validStart: '2026-09-04', validEnd: '2027-09-04', status: 'disabled', issueTime: '2026-09-04' },
+      { id: 'CERT005', type: '质量合格证', batch: 'PC-20260905-005', customer: '天津家乐福', validStart: '2026-09-05', validEnd: '2027-09-05', status: 'enabled', issueTime: '2026-09-05' },
+      { id: 'CERT006', type: '检测报告', batch: 'PC-20260906-006', customer: '重庆永辉超市', validStart: '2026-09-06', validEnd: '2027-09-06', status: 'enabled', issueTime: '2026-09-06' },
+      { id: 'CERT007', type: '原产地证明', batch: 'PC-20260907-007', customer: '成都伊藤洋华堂', validStart: '2026-09-07', validEnd: '2027-09-07', status: 'enabled', issueTime: '2026-09-07' },
+      { id: 'CERT008', type: '质量合格证', batch: 'PC-20260908-008', customer: '武汉中百仓储', validStart: '2026-09-08', validEnd: '2027-09-08', status: 'enabled', issueTime: '2026-09-08' },
+      { id: 'CERT009', type: '检测报告', batch: 'PC-20260909-009', customer: '杭州世纪联华', validStart: '2026-09-09', validEnd: '2027-09-09', status: 'enabled', issueTime: '2026-09-09' },
+      { id: 'CERT010', type: '检测报告', batch: 'PC-20260910-010', customer: '南京苏果超市', validStart: '2026-08-25', validEnd: '2026-09-15', status: 'error', issueTime: '2026-08-25' },
+      { id: 'CERT011', type: '原产地证明', batch: 'PC-20260911-011', customer: '苏州大润发', validStart: '2026-09-11', validEnd: '2027-09-11', status: 'enabled', issueTime: '2026-09-11' },
+      { id: 'CERT012', type: '质量合格证', batch: 'PC-20260912-012', customer: '无锡欧尚', validStart: '2026-09-12', validEnd: '2027-09-12', status: 'enabled', issueTime: '2026-09-12' },
+      { id: 'CERT013', type: '检测报告', batch: 'PC-20260913-013', customer: '宁波三江购物', validStart: '2026-09-13', validEnd: '2027-09-13', status: 'enabled', issueTime: '2026-09-13' },
+      { id: 'CERT014', type: '质量合格证', batch: 'PC-20260914-014', customer: '温州人本超市', validStart: '2026-09-14', validEnd: '2027-09-14', status: 'enabled', issueTime: '2026-09-14' },
+      { id: 'CERT015', type: '原产地证明', batch: 'PC-20260915-015', customer: '青岛利群集团', validStart: '2026-09-15', validEnd: '2027-09-15', status: 'enabled', issueTime: '2026-09-15' },
+      { id: 'CERT016', type: '质量合格证', batch: 'PC-20260916-016', customer: '济南银座商城', validStart: '2026-09-16', validEnd: '2027-09-16', status: 'enabled', issueTime: '2026-09-16' },
+      { id: 'CERT017', type: '检测报告', batch: 'PC-20260917-017', customer: '大连大商集团', validStart: '2026-09-17', validEnd: '2027-09-17', status: 'enabled', issueTime: '2026-09-17' },
+      { id: 'CERT018', type: '检测报告', batch: 'PC-20260918-018', customer: '沈阳兴隆大家庭', validStart: '2026-08-30', validEnd: '2026-09-20', status: 'error', issueTime: '2026-08-30' },
+      { id: 'CERT019', type: '原产地证明', batch: 'PC-20260919-019', customer: '哈尔滨中央红', validStart: '2026-09-19', validEnd: '2027-09-19', status: 'enabled', issueTime: '2026-09-19' },
+      { id: 'CERT020', type: '质量合格证', batch: 'PC-20260920-020', customer: '长春欧亚集团', validStart: '2026-09-20', validEnd: '2027-09-20', status: 'disabled', issueTime: '2026-09-20' },
+      { id: 'CERT021', type: '检测报告', batch: 'PC-20260901-001', customer: '合肥百大集团', validStart: '2026-09-01', validEnd: '2027-09-01', status: 'enabled', issueTime: '2026-09-01' },
+      { id: 'CERT022', type: '质量合格证', batch: 'PC-20260902-002', customer: '福州永辉超市', validStart: '2026-09-02', validEnd: '2027-09-02', status: 'enabled', issueTime: '2026-09-02' },
+      { id: 'CERT023', type: '原产地证明', batch: 'PC-20260903-003', customer: '厦门夏商集团', validStart: '2026-09-03', validEnd: '2027-09-03', status: 'enabled', issueTime: '2026-09-03' },
     ],
     certRecords: [
       { id: 1, certId: 'SN202606130001', product: '花牛苹果', queryTime: '2026-09-13 14:30:00', ip: '192.168.1.100', status: 'success' },
@@ -482,6 +484,7 @@ const PageActions = (function() {
             { value: '花牛苹果合格证', label: '花牛苹果合格证' },
             { value: '礼盒装合格证', label: '礼盒装合格证' }
           ]},
+          { name: 'product', label: '产品名称', type: 'select', options: mockData.products.map(p => ({ value: p, label: p })) },
           { name: 'batch', label: '批次号', type: 'text', required: true },
           { name: 'produceDate', label: '生产日期', type: 'date', required: true },
           { name: 'netWeight', label: '净含量', type: 'text', required: true },
@@ -743,18 +746,65 @@ const PageActions = (function() {
     Toast.show(`切换到第 ${page} 页`, 'info');
   }
 
-  // 开具证书
+  // 已签发合格证的本地存储键（证书管理页会合并展示）
+  const ISSUED_CERT_KEY = 'smartorchard_issued_certs';
+
+  function readIssuedCerts() {
+    try {
+      const raw = localStorage.getItem(ISSUED_CERT_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  }
+
+  function writeIssuedCerts(list) {
+    try { localStorage.setItem(ISSUED_CERT_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+
+  // 开具证书：校验表单 → 生成证书编号 → 落库（证书管理页可查询）
   function issueCert() {
+    const get = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+    const batch = get('certBatch');
+    const netWeight = get('certNetWeight').trim();
+    const tester = get('certTester').trim();
+
+    if (!batch) { Toast.show('请选择批次号', 'error'); return; }
+    if (!netWeight) { Toast.show('请输入净含量', 'error'); return; }
+    if (!tester) { Toast.show('请输入检测人', 'error'); return; }
+
     Modal.loading('正在生成合格证...');
     setTimeout(() => {
       Modal.hideLoading();
-      Confirm.success('合格证已生成！', {
+
+      const issued = readIssuedCerts();
+      const now = new Date();
+      const p = n => String(n).padStart(2, '0');
+      const issueDate = get('certProduceDate') || `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+      const end = new Date(issueDate + 'T00:00:00');
+      end.setFullYear(end.getFullYear() + 1);
+      const validEnd = `${end.getFullYear()}-${p(end.getMonth() + 1)}-${p(end.getDate())}`;
+      const certNo = 'ZH-' + now.getFullYear() + '-' + p(now.getMonth() + 1) + String(200 + issued.length + 1);
+
+      const record = {
+        id: 'CERT' + String(mockData.certificates.length + issued.length + 1).padStart(3, '0'),
+        certNo: certNo,
+        type: '质量合格证',
+        product: get('certProduct'),
+        batchNo: batch,
+        supplier: '未指定',
+        validity: issueDate + ' 至 ' + validEnd,
+        status: 'enabled',
+        statusText: '有效'
+      };
+      issued.push(record);
+      writeIssuedCerts(issued);
+
+      Confirm.success('合格证已生成！证书编号：' + certNo, {
         confirmText: '下载证书',
         icon: '✅'
       }).then(() => {
-        downloadCert('new');
+        downloadCert(record.id);
       });
-    }, 2000);
+    }, 800);
   }
 
   // 初始化页面交互

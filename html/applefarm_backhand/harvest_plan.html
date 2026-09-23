@@ -59,16 +59,16 @@
           <div class="search-bar">
             <select class="search-select" id="baseSelect">
               <option value="">全部基地</option>
-              <option value="qixia">天水麦积区基地</option>
-              <option value="zhaoyuan">招远基地</option>
-              <option value="rongcheng">天水荣成基地</option>
-              <option value="penglai">麦积区阁基地</option>
-              <option value="nanshan">龙口南山基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水荣成基地">天水荣成基地</option>
+              <option value="麦积区阁基地">麦积区阁基地</option>
+              <option value="龙口南山基地">龙口南山基地</option>
             </select>
             <select class="search-select" id="statusSelect">
               <option value="">全部状态</option>
-              <option value="planned">待执行</option>
-              <option value="in_progress">执行中</option>
+              <option value="pending">待执行</option>
+              <option value="executing">执行中</option>
               <option value="completed">已完成</option>
             </select>
             <input type="date" class="search-input date-input" id="startDate" placeholder="开始日期">
@@ -94,6 +94,7 @@
             </svg>
             导出计划
           </button>
+          <button class="jg-btn jg-btn-danger" onclick="batchDelete()">批量删除</button>
         </div>
 
         <!-- 数据列表区 -->
@@ -101,11 +102,14 @@
           <table class="data-table">
             <thead>
               <tr>
+                <th style="width:44px;"><input type="checkbox" id="checkAll" onclick="toggleAll(this)" title="全选本页"></th>
                 <th class="checkbox-col" style="width:60px;">序号</th>
                 <th>计划编号</th>
+                <th>批次号</th>
                 <th>计划名称</th>
                 <th>基地</th>
                 <th>预计采收量</th>
+                <th>负责人</th>
                 <th>计划开始时间</th>
                 <th>计划结束时间</th>
                 <th>状态</th>
@@ -139,38 +143,38 @@
         <form id="form-add-plan" class="modal-form">
           <div class="form-group">
             <label>计划名称</label>
-            <input type="text" class="form-control" placeholder="请输入计划名称">
+            <input type="text" class="form-control" id="add-name" placeholder="请输入计划名称">
           </div>
           <div class="form-group">
             <label>所属基地</label>
-            <select class="form-control">
+            <select class="form-control" id="add-base">
               <option value="">请选择基地</option>
-              <option value="qixia">天水麦积区基地</option>
-              <option value="zhaoyuan">招远基地</option>
-              <option value="rongcheng">天水荣成基地</option>
-              <option value="penglai">麦积区阁基地</option>
-              <option value="nanshan">龙口南山基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水荣成基地">天水荣成基地</option>
+              <option value="麦积区阁基地">麦积区阁基地</option>
+              <option value="龙口南山基地">龙口南山基地</option>
             </select>
           </div>
           <div class="form-group">
             <label>预计采收量(kg)</label>
-            <input type="number" class="form-control" placeholder="请输入预计采收量">
+            <input type="number" class="form-control" id="add-quantity" placeholder="请输入预计采收量">
           </div>
           <div class="form-group">
             <label>计划开始时间</label>
-            <input type="datetime-local" class="form-control">
+            <input type="datetime-local" class="form-control" id="add-start">
           </div>
           <div class="form-group">
             <label>计划结束时间</label>
-            <input type="datetime-local" class="form-control">
+            <input type="datetime-local" class="form-control" id="add-end">
           </div>
           <div class="form-group">
             <label>负责人</label>
-            <input type="text" class="form-control" placeholder="请输入负责人">
+            <input type="text" class="form-control" id="add-manager" placeholder="请输入负责人">
           </div>
           <div class="form-group">
             <label>备注</label>
-            <textarea class="form-control" rows="3" placeholder="请输入备注信息"></textarea>
+            <textarea class="form-control" rows="3" id="add-remark" placeholder="请输入备注信息"></textarea>
           </div>
         </form>
       </div>
@@ -193,26 +197,34 @@
         </button>
       </div>
       <div class="modal-body">
-        <p style="color:var(--text-secondary); margin-bottom:16px;">请选择导出格式：</p>
-        <div style="display:flex; gap:12px;">
-          <button class="jg-btn jg-btn-primary" onclick="exportPlan('excel')">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px;">
-              <path d="M10 2H2v16h16V8l-6-6z"/>
-              <path d="M14 2v6h6M13 9H7M13 13H7M13 17H7"/>
-            </svg>
-            Excel格式
-          </button>
-          <button class="jg-btn" onclick="exportPlan('pdf')">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px;">
-              <path d="M10 2H2v16h16V8l-6-6z"/>
-              <path d="M14 2v6h6M13 9H7M13 13H7M13 17H7"/>
-            </svg>
-            PDF格式
-          </button>
+        <div class="form-row">
+          <div class="form-item">
+            <label>选择导出格式</label>
+            <select class="form-select" id="exportFormat">
+              <option value="excel">Excel (.xlsx)</option>
+              <option value="csv">CSV (.csv)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>导出范围</label>
+            <div style="display:flex;gap:16px;">
+              <label class="checkbox-label">
+                <input type="radio" name="exportScope" value="all" checked>
+                <span>全部数据</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="radio" name="exportScope" value="filtered">
+                <span>当前筛选结果</span>
+              </label>
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="jg-btn" onclick="Modal.hide('modal-export')">关闭</button>
+        <button class="jg-btn" onclick="Modal.hide('modal-export')">取消</button>
+        <button class="jg-btn jg-btn-primary" onclick="exportPlan()">导出</button>
       </div>
     </div>
   </div>
@@ -233,40 +245,40 @@
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
             <div style="padding:12px; background:var(--gray-50); border-radius:8px;">
               <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">计划编号</div>
-              <div id="detail-id" style="font-weight:600;">HS-2024-001</div>
+              <div id="detail-id" style="font-weight:600;"></div>
             </div>
             <div style="padding:12px; background:var(--gray-50); border-radius:8px;">
               <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">计划名称</div>
-              <div style="font-weight:600;">麦积区花牛苹果第一批</div>
+              <div id="detail-name" style="font-weight:600;"></div>
             </div>
             <div style="padding:12px; background:var(--gray-50); border-radius:8px;">
               <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">所属基地</div>
-              <div style="font-weight:600;">天水麦积区基地</div>
+              <div id="detail-base" style="font-weight:600;"></div>
             </div>
             <div style="padding:12px; background:var(--gray-50); border-radius:8px;">
               <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">预计采收量</div>
-              <div style="font-weight:600;">5,000 kg</div>
+              <div id="detail-amount" style="font-weight:600;"></div>
             </div>
             <div style="padding:12px; background:var(--gray-50); border-radius:8px;">
               <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">计划开始时间</div>
-              <div style="font-weight:600;">2026-09-20 08:00</div>
+              <div id="detail-start" style="font-weight:600;"></div>
             </div>
             <div style="padding:12px; background:var(--gray-50); border-radius:8px;">
               <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">计划结束时间</div>
-              <div style="font-weight:600;">2026-09-20 17:00</div>
+              <div id="detail-end" style="font-weight:600;"></div>
             </div>
             <div style="padding:12px; background:var(--gray-50); border-radius:8px;">
               <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">负责人</div>
-              <div style="font-weight:600;">李技术员</div>
+              <div id="detail-manager" style="font-weight:600;"></div>
             </div>
             <div style="padding:12px; background:var(--gray-50); border-radius:8px;">
               <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">状态</div>
-              <div style="font-weight:600;"><span class="status-tag in_progress">执行中</span></div>
+              <div id="detail-status" style="font-weight:600;"></div>
             </div>
           </div>
           <div style="margin-top:16px; padding:12px; background:var(--gray-50); border-radius:8px;">
             <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">备注</div>
-            <div style="font-weight:500;">根据市场需求，提前做好采收准备工作。</div>
+            <div id="detail-remark" style="font-weight:500;">-</div>
           </div>
         </div>
       </div>
@@ -291,37 +303,37 @@
         <form id="form-edit-plan" class="modal-form">
           <div class="form-group">
             <label>计划名称</label>
-            <input type="text" class="form-control" id="edit-name" value="麦积区花牛苹果第一批">
+            <input type="text" class="form-control" id="edit-name">
           </div>
           <div class="form-group">
             <label>所属基地</label>
             <select class="form-control" id="edit-base">
-              <option value="qixia" selected>天水麦积区基地</option>
-              <option value="zhaoyuan">招远基地</option>
-              <option value="rongcheng">天水荣成基地</option>
-              <option value="penglai">麦积区阁基地</option>
-              <option value="nanshan">龙口南山基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水荣成基地">天水荣成基地</option>
+              <option value="麦积区阁基地">麦积区阁基地</option>
+              <option value="龙口南山基地">龙口南山基地</option>
             </select>
           </div>
           <div class="form-group">
             <label>预计采收量(kg)</label>
-            <input type="number" class="form-control" id="edit-quantity" value="5000">
+            <input type="number" class="form-control" id="edit-quantity">
           </div>
           <div class="form-group">
             <label>计划开始时间</label>
-            <input type="datetime-local" class="form-control" id="edit-start" value="2026-09-20T08:00">
+            <input type="datetime-local" class="form-control" id="edit-start">
           </div>
           <div class="form-group">
             <label>计划结束时间</label>
-            <input type="datetime-local" class="form-control" id="edit-end" value="2026-09-20T17:00">
+            <input type="datetime-local" class="form-control" id="edit-end">
           </div>
           <div class="form-group">
             <label>负责人</label>
-            <input type="text" class="form-control" id="edit-manager" value="李技术员">
+            <input type="text" class="form-control" id="edit-manager">
           </div>
           <div class="form-group">
             <label>备注</label>
-            <textarea class="form-control" rows="3" id="edit-remark">根据市场需求，提前做好采收准备工作。</textarea>
+            <textarea class="form-control" rows="3" id="edit-remark"></textarea>
           </div>
         </form>
       </div>
@@ -332,59 +344,85 @@
     </div>
   </div>
 
+  <!-- 删除确认模态框 -->
+  <div id="modal-delete" class="modal-overlay">
+    <div class="modal-box" style="max-width:400px;">
+      <div class="modal-header">
+        <h3 class="modal-title">确认删除</h3>
+        <button class="modal-close">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4L12 12M12 4L4 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>确定要删除这条采收计划吗？此操作不可撤销。</p>
+      </div>
+      <div class="modal-footer">
+        <button class="jg-btn" onclick="Modal.hide('modal-delete')">取消</button>
+        <button class="jg-btn jg-btn-danger" onclick="confirmDelete()">删除</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- 引入交互脚本 -->
 <script src="js/common-functions.js"></script>
+<script src="js/export-helper.js"></script>
 <script>
 // 当前计划ID
 var currentPlanId = '';
+// 当前删除的计划ID
+var deletingPlanId = '';
 
-// Mock数据 - 23条采收计划
+// Mock数据 - 20条采收计划（与批次 PC-YYYYMMDD-NNN 一一对应）
 const mockData = [
-  { id: 'HS-2024-001', name: '麦积区花牛苹果第一批', base: '天水麦积区基地', amount: '5,000 kg', startTime: '2026-09-20 08:00', endTime: '2026-09-20 17:00', status: 'executing' },
-  { id: 'HS-2024-002', name: '招远黄金苹果第一批', base: '招远基地', amount: '3,000 kg', startTime: '2026-09-22 07:00', endTime: '2026-09-22 16:00', status: 'pending' },
-  { id: 'HS-2024-003', name: '荣成花牛苹果第一批', base: '天水荣成基地', amount: '4,000 kg', startTime: '2026-09-25 08:00', endTime: '2026-09-25 17:00', status: 'pending' },
-  { id: 'HS-2024-004', name: '麦积区花牛苹果第一批', base: '麦积区阁基地', amount: '2,500 kg', startTime: '2026-09-28 07:30', endTime: '2026-09-28 16:30', status: 'pending' },
-  { id: 'HS-2024-005', name: '麦积区花牛苹果第二批', base: '天水麦积区基地', amount: '6,000 kg', startTime: '2026-09-01 08:00', endTime: '2026-09-01 17:00', status: 'pending' },
-  { id: 'HS-2024-006', name: '招远黄金苹果第二批', base: '招远基地', amount: '3,500 kg', startTime: '2026-09-05 07:00', endTime: '2026-09-05 16:00', status: 'completed' },
-  { id: 'HS-2024-007', name: '荣成花牛苹果第二批', base: '天水荣成基地', amount: '4,500 kg', startTime: '2026-09-10 08:00', endTime: '2026-09-10 17:00', status: 'completed' },
-  { id: 'HS-2024-008', name: '麦积区花牛苹果第二批', base: '麦积区阁基地', amount: '2,800 kg', startTime: '2026-09-15 07:30', endTime: '2026-09-15 16:30', status: 'completed' },
-  { id: 'HS-2024-009', name: '麦积区花牛苹果第三批', base: '天水麦积区基地', amount: '5,500 kg', startTime: '2026-09-20 08:00', endTime: '2026-09-20 17:00', status: 'completed' },
-  { id: 'HS-2024-010', name: '招远黄金苹果第三批', base: '招远基地', amount: '3,200 kg', startTime: '2026-09-25 07:00', endTime: '2026-09-25 16:00', status: 'completed' },
-  { id: 'HS-2024-011', name: '荣成花牛苹果第三批', base: '天水荣成基地', amount: '4,200 kg', startTime: '2026-09-30 08:00', endTime: '2026-09-30 17:00', status: 'completed' },
-  { id: 'HS-2024-012', name: '麦积区花牛苹果第三批', base: '麦积区阁基地', amount: '2,600 kg', startTime: '2026-09-05 07:30', endTime: '2026-09-05 16:30', status: 'completed' },
-  { id: 'HS-2024-013', name: '麦积区花牛苹果第四批', base: '天水麦积区基地', amount: '5,800 kg', startTime: '2026-09-10 08:00', endTime: '2026-09-10 17:00', status: 'completed' },
-  { id: 'HS-2024-014', name: '招远黄金苹果第四批', base: '招远基地', amount: '3,600 kg', startTime: '2026-09-15 07:00', endTime: '2026-09-15 16:00', status: 'completed' },
-  { id: 'HS-2024-015', name: '荣成花牛苹果第四批', base: '天水荣成基地', amount: '4,800 kg', startTime: '2026-09-20 08:00', endTime: '2026-09-20 17:00', status: 'completed' },
-  { id: 'HS-2024-016', name: '麦积区花牛苹果第四批', base: '麦积区阁基地', amount: '2,900 kg', startTime: '2026-09-25 07:30', endTime: '2026-09-25 16:30', status: 'completed' },
-  { id: 'HS-2024-017', name: '麦积区花牛苹果第五批', base: '天水麦积区基地', amount: '6,200 kg', startTime: '2026-09-30 08:00', endTime: '2026-09-30 17:00', status: 'completed' },
-  { id: 'HS-2024-018', name: '招远黄金苹果第五批', base: '招远基地', amount: '3,800 kg', startTime: '2026-09-05 07:00', endTime: '2026-09-05 16:00', status: 'completed' },
-  { id: 'HS-2024-019', name: '荣成花牛苹果第五批', base: '天水荣成基地', amount: '5,000 kg', startTime: '2026-09-10 08:00', endTime: '2026-09-10 17:00', status: 'completed' },
-  { id: 'HS-2024-020', name: '麦积区花牛苹果第五批', base: '麦积区阁基地', amount: '3,000 kg', startTime: '2026-09-15 07:30', endTime: '2026-09-15 16:30', status: 'completed' },
-  { id: 'HS-2024-021', name: '麦积区花牛苹果第六批', base: '天水麦积区基地', amount: '6,500 kg', startTime: '2026-09-20 08:00', endTime: '2026-09-20 17:00', status: 'completed' },
-  { id: 'HS-2024-022', name: '招远黄金苹果第六批', base: '招远基地', amount: '4,000 kg', startTime: '2026-09-25 07:00', endTime: '2026-09-25 16:00', status: 'completed' },
-  { id: 'HS-2024-023', name: '荣成花牛苹果第六批', base: '天水荣成基地', amount: '5,200 kg', startTime: '2026-09-30 08:00', endTime: '2026-09-30 17:00', status: 'completed' }
+  { id: 'HS-2026-001', batchNo: 'PC-20260901-001', name: '花牛苹果第1批', base: '天水麦积区基地', amount: '1,250 kg', manager: '李技术员', startTime: '2026-09-01 08:00', endTime: '2026-09-01 17:00', status: 'completed', remark: '根据市场需求，提前做好采收准备工作。' },
+  { id: 'HS-2026-002', batchNo: 'PC-20260902-002', name: '花牛苹果第2批', base: '天水麦积区基地', amount: '890 kg', manager: '王技术员', startTime: '2026-09-02 08:00', endTime: '2026-09-02 17:00', status: 'completed', remark: '' },
+  { id: 'HS-2026-003', batchNo: 'PC-20260903-003', name: '金帅苹果第3批', base: '天水麦积区基地', amount: '1,560 kg', manager: '赵班长', startTime: '2026-09-03 08:00', endTime: '2026-09-03 17:00', status: 'completed', remark: '金帅早熟品种，优先采收。' },
+  { id: 'HS-2026-004', batchNo: 'PC-20260904-004', name: '花牛苹果第4批', base: '天水荣成基地', amount: '780 kg', manager: '孙班长', startTime: '2026-09-04 08:00', endTime: '2026-09-04 17:00', status: 'completed', remark: '' },
+  { id: 'HS-2026-005', batchNo: 'PC-20260905-005', name: '花牛苹果第5批', base: '天水荣成基地', amount: '1,100 kg', manager: '周技术员', startTime: '2026-09-05 08:00', endTime: '2026-09-05 17:00', status: 'completed', remark: '人工与机械配合采收。' },
+  { id: 'HS-2026-006', batchNo: 'PC-20260906-006', name: '花牛苹果第6批', base: '甘肃吉县苹果园', amount: '920 kg', manager: '李技术员', startTime: '2026-09-06 08:00', endTime: '2026-09-06 17:00', status: 'completed', remark: '' },
+  { id: 'HS-2026-007', batchNo: 'PC-20260907-007', name: '花牛苹果第7批', base: '甘肃麦积区苹果园', amount: '1,340 kg', manager: '王技术员', startTime: '2026-09-07 08:00', endTime: '2026-09-07 17:00', status: 'completed', remark: '' },
+  { id: 'HS-2026-008', batchNo: 'PC-20260908-008', name: '花牛苹果第8批', base: '天水麦积区苹果基地', amount: '650 kg', manager: '赵班长', startTime: '2026-09-08 08:00', endTime: '2026-09-08 17:00', status: 'completed', remark: '' },
+  { id: 'HS-2026-009', batchNo: 'PC-20260909-009', name: '花牛苹果第9批', base: '甘肃麦积区苹果基地', amount: '1,420 kg', manager: '孙班长', startTime: '2026-09-09 08:00', endTime: '2026-09-09 17:00', status: 'completed', remark: '优质果，单独码放。' },
+  { id: 'HS-2026-010', batchNo: 'PC-20260910-010', name: '金帅苹果第10批', base: '天水麦积区苹果基地', amount: '870 kg', manager: '周技术员', startTime: '2026-09-10 08:00', endTime: '2026-09-10 17:00', status: 'completed', remark: '' },
+  { id: 'HS-2026-011', batchNo: 'PC-20260911-011', name: '花牛苹果第11批', base: '甘肃麦积区苹果园', amount: '1,680 kg', manager: '李技术员', startTime: '2026-09-11 08:00', endTime: '2026-09-11 17:00', status: 'completed', remark: '' },
+  { id: 'HS-2026-012', batchNo: 'PC-20260912-012', name: '秦冠苹果第12批', base: '天水麦积区苹果基地', amount: '720 kg', manager: '王技术员', startTime: '2026-09-12 08:00', endTime: '2026-09-12 17:00', status: 'completed', remark: '' },
+  { id: 'HS-2026-013', batchNo: 'PC-20260913-013', name: '花牛苹果第13批', base: '甘肃麦积区苹果基地', amount: '1,200 kg', manager: '赵班长', startTime: '2026-09-13 08:00', endTime: '2026-09-13 17:00', status: 'completed', remark: '' },
+  { id: 'HS-2026-014', batchNo: 'PC-20260914-014', name: '花牛苹果第14批', base: '甘肃吉县苹果园', amount: '980 kg', manager: '孙班长', startTime: '2026-09-14 08:00', endTime: '2026-09-14 17:00', status: 'completed', remark: '' },
+  { id: 'HS-2026-015', batchNo: 'PC-20260915-015', name: '花牛苹果第15批', base: '天水麦积区苹果基地', amount: '1,550 kg', manager: '周技术员', startTime: '2026-09-15 08:00', endTime: '2026-09-15 17:00', status: 'completed', remark: '高产批次。' },
+  { id: 'HS-2026-016', batchNo: 'PC-20260916-016', name: '金帅苹果第16批', base: '甘肃麦积区苹果园', amount: '830 kg', manager: '李技术员', startTime: '2026-09-16 08:00', endTime: '2026-09-16 17:00', status: 'executing', remark: '受降雨影响，顺延至今日执行。' },
+  { id: 'HS-2026-017', batchNo: 'PC-20260917-017', name: '花牛苹果第17批', base: '天水麦积区苹果基地', amount: '1,120 kg', manager: '王技术员', startTime: '2026-09-17 08:00', endTime: '2026-09-17 17:00', status: 'executing', remark: '加派人手，保证当天入库。' },
+  { id: 'HS-2026-018', batchNo: 'PC-20260918-018', name: '花牛苹果第18批', base: '甘肃麦积区苹果基地', amount: '690 kg', manager: '赵班长', startTime: '2026-09-18 08:00', endTime: '2026-09-18 17:00', status: 'executing', remark: '' },
+  { id: 'HS-2026-019', batchNo: 'PC-20260919-019', name: '花牛苹果第19批', base: '甘肃吉县苹果园', amount: '1,380 kg', manager: '孙班长', startTime: '2026-09-19 08:00', endTime: '2026-09-19 17:00', status: 'executing', remark: '' },
+  { id: 'HS-2026-020', batchNo: 'PC-20260920-020', name: '秦冠苹果第20批', base: '天水麦积区苹果基地', amount: '950 kg', manager: '周技术员', startTime: '2026-09-20 08:00', endTime: '2026-09-20 17:00', status: 'executing', remark: '' }
 ];
 
 // 获取状态标签
 function getStatusTag(status) {
   const statusMap = {
     'completed': '<span class="status-tag completed">已完成</span>',
-    'executing': '<span class="status-tag in_progress">执行中</span>',
+    'executing': '<span class="status-tag processing">执行中</span>',
     'pending': '<span class="status-tag pending">待执行</span>'
   };
   return statusMap[status] || statusMap['pending'];
 }
 
+const STATUS_NAME = { 'pending': '待执行', 'executing': '执行中', 'completed': '已完成' };
+
 // 渲染表格行
 function renderRow(item, index) {
   return `<tr>
+    <td><input type="checkbox" class="row-check" value="${item.id}" onclick="syncCheckAll()"></td>
     <td class="checkbox-col">${index + 1}</td>
     <td><strong>${item.id}</strong></td>
+    <td>${item.batchNo}</td>
     <td>${item.name}</td>
     <td>${item.base}</td>
     <td class="text-right">${item.amount}</td>
+    <td>${item.manager || '-'}</td>
     <td>${item.startTime}</td>
     <td>${item.endTime}</td>
     <td>${getStatusTag(item.status)}</td>
@@ -392,57 +430,173 @@ function renderRow(item, index) {
       <div class="action-btns">
         <button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>
         <button class="action-btn edit" onclick="showEdit('${item.id}')">编辑</button>
+        <button class="action-btn delete" onclick="showDeleteConfirm('${item.id}')">删除</button>
       </div>
     </td>
   </tr>`;
 }
 
-// 搜索功能
+// 全选 / 反选（仅作用当前页）
+function toggleAll(box) {
+  document.querySelectorAll('.row-check').forEach(c => { c.checked = box.checked; });
+}
+
+function syncCheckAll() {
+  const boxes = Array.from(document.querySelectorAll('.row-check'));
+  const all = document.getElementById('checkAll');
+  if (all) all.checked = boxes.length > 0 && boxes.every(c => c.checked);
+}
+
+function selectedPlanIds() {
+  return Array.from(document.querySelectorAll('.row-check:checked')).map(c => c.value);
+}
+
+function showDeleteConfirm(id) {
+  deletingPlanId = id;
+  Modal.show('modal-delete');
+}
+
+function confirmDelete() {
+  const index = mockData.findIndex(p => p.id === deletingPlanId);
+  if (index !== -1) mockData.splice(index, 1);
+  Modal.hide('modal-delete');
+  handleSearch();
+  Toast.success('删除成功');
+}
+
+// 批量删除（已勾选记录）
+function batchDelete() {
+  const ids = selectedPlanIds();
+  if (ids.length === 0) {
+    Toast.warning('请先勾选要删除的计划');
+    return;
+  }
+  ids.forEach(id => {
+    const index = mockData.findIndex(p => p.id === id);
+    if (index !== -1) mockData.splice(index, 1);
+  });
+  const all = document.getElementById('checkAll');
+  if (all) all.checked = false;
+  handleSearch();
+  Toast.success('已删除 ' + ids.length + ' 条计划');
+}
+
+// 搜索功能：基地 + 状态 + 日期范围 + 关键词
 function handleSearch() {
   var keyword = document.getElementById('searchInput').value.trim();
   var base = document.getElementById('baseSelect').value;
   var status = document.getElementById('statusSelect').value;
+  var startDate = document.getElementById('startDate').value;
+  var endDate = document.getElementById('endDate').value;
 
   var filteredData = mockData.filter(item => {
     if (keyword && !item.id.includes(keyword) && !item.name.includes(keyword)) return false;
     if (base && !item.base.includes(base)) return false;
     if (status && item.status !== status) return false;
+    var planDate = item.startTime.slice(0, 10);
+    if (startDate && planDate < startDate) return false;
+    if (endDate && planDate > endDate) return false;
     return true;
   });
 
+  var all = document.getElementById('checkAll');
+  if (all) all.checked = false;
   Pagination.updateData(filteredData);
   Toast.info('找到 ' + filteredData.length + ' 条记录');
 }
 
-// 显示详情
+function findPlan(id) {
+  return mockData.find(p => p.id === id);
+}
+
+// 显示详情（按行回填）
 function showDetail(id) {
+  const item = findPlan(id);
+  if (!item) return;
   currentPlanId = id;
-  document.getElementById('detail-id').textContent = id;
+  document.getElementById('detail-id').textContent = item.id;
+  document.getElementById('detail-name').textContent = item.name;
+  document.getElementById('detail-base').textContent = item.base;
+  document.getElementById('detail-amount').textContent = item.amount;
+  document.getElementById('detail-start').textContent = item.startTime;
+  document.getElementById('detail-end').textContent = item.endTime;
+  document.getElementById('detail-manager').textContent = item.manager || '-';
+  document.getElementById('detail-status').innerHTML = getStatusTag(item.status);
+  document.getElementById('detail-remark').textContent = item.remark || '-';
   Modal.show('modal-detail');
 }
 
-// 显示编辑
+// 显示编辑（按行回填）
 function showEdit(id) {
+  const item = findPlan(id);
+  if (!item) return;
   currentPlanId = id;
+  document.getElementById('edit-name').value = item.name;
+  document.getElementById('edit-base').value = item.base;
+  document.getElementById('edit-quantity').value = parseInt(item.amount.replace(/[^\d]/g, ''), 10) || '';
+  document.getElementById('edit-start').value = item.startTime.replace(' ', 'T');
+  document.getElementById('edit-end').value = item.endTime.replace(' ', 'T');
+  document.getElementById('edit-manager').value = item.manager || '';
+  document.getElementById('edit-remark').value = item.remark || '';
   Modal.show('modal-edit');
 }
 
 // 提交新建计划
 function submitAddPlan() {
-  Toast.success('采收计划创建成功');
+  const name = document.getElementById('add-name').value.trim();
+  const base = document.getElementById('add-base').value;
+  const quantity = document.getElementById('add-quantity').value;
+  if (!name || !base || !quantity) {
+    Toast.warning('请填写计划名称、所属基地和预计采收量');
+    return;
+  }
+  const newPlan = {
+    id: 'HS-2026-' + String(mockData.length + 1).padStart(3, '0'),
+    name: name,
+    base: base,
+    amount: Number(quantity).toLocaleString() + ' kg',
+    manager: document.getElementById('add-manager').value.trim(),
+    startTime: (document.getElementById('add-start').value || '').replace('T', ' '),
+    endTime: (document.getElementById('add-end').value || '').replace('T', ' '),
+    status: 'pending',
+    remark: document.getElementById('add-remark').value.trim()
+  };
+  mockData.unshift(newPlan);
+  document.getElementById('form-add-plan').reset();
   Modal.hide('modal-add-plan');
+  handleSearch();
+  Toast.success('采收计划创建成功');
 }
 
 // 提交编辑计划
 function submitEditPlan() {
-  Toast.success('采收计划 "' + currentPlanId + '" 已更新');
+  const item = findPlan(currentPlanId);
+  if (item) {
+    item.name = document.getElementById('edit-name').value.trim();
+    item.base = document.getElementById('edit-base').value;
+    item.amount = Number(document.getElementById('edit-quantity').value).toLocaleString() + ' kg';
+    item.startTime = document.getElementById('edit-start').value.replace('T', ' ');
+    item.endTime = document.getElementById('edit-end').value.replace('T', ' ');
+    item.manager = document.getElementById('edit-manager').value.trim();
+    item.remark = document.getElementById('edit-remark').value.trim();
+  }
   Modal.hide('modal-edit');
+  handleSearch();
+  Toast.success('采收计划 "' + currentPlanId + '" 已更新');
 }
 
-// 导出计划
-function exportPlan(format) {
-  Toast.success('采收计划已导出为' + (format === 'excel' ? 'Excel' : 'PDF') + '格式');
+// 真实导出（Excel / CSV）
+async function exportPlan() {
+  const scope = document.querySelector('input[name="exportScope"]:checked').value;
+  const rows = (scope === 'filtered' ? Pagination.filteredData : mockData);
+  const result = await ExportHelper.exportData({
+    filename: '采收计划_' + ExportHelper.stamp(),
+    format: document.getElementById('exportFormat').value,
+    headers: ['计划编号', '计划名称', '基地', '预计采收量', '负责人', '计划开始时间', '计划结束时间', '状态', '备注'],
+    rows: rows.map(p => [p.id, p.name, p.base, p.amount, p.manager || '', p.startTime, p.endTime, STATUS_NAME[p.status], p.remark || ''])
+  });
   Modal.hide('modal-export');
+  Toast.success(result === 'csv-fallback' ? 'Excel 组件加载失败，已导出为 CSV' : '导出成功，文件已下载');
 }
 
 // 初始化分页

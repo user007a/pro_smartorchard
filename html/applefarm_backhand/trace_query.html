@@ -137,6 +137,21 @@
   .trace-content { flex:1; }
   .trace-title { font-weight:500; color:var(--text-primary); margin-bottom:4px; }
   .trace-time { font-size:12px; color:var(--text-tertiary); }
+  .trace-desc { font-size:12px; color:var(--text-secondary); margin-top:4px; line-height:1.6; }
+  .trace-status { font-size:12px; margin-left:8px; }
+  .qrcode-url {
+    margin-top:10px;
+    font-size:12px;
+    color:var(--text-tertiary);
+    word-break:break-all;
+    font-family:var(--font-mono, monospace);
+  }
+  .chain-box { background:#f8faf8; border-radius:12px; padding:16px 20px; margin-bottom:16px; }
+  .chain-title { font-weight:600; color:var(--text-primary); font-size:14px; margin-bottom:10px; }
+  .chain-list { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .chain-node { background:var(--bg-card); border:1px solid var(--border-default); border-radius:8px; padding:6px 12px; font-size:13px; color:var(--text-secondary); }
+  .chain-node.hl { border-color:#1890ff; color:#1890ff; font-weight:500; }
+  .chain-arrow { color:var(--text-tertiary); font-size:13px; }
   .toast {
     position:fixed;
     top:20px;
@@ -195,9 +210,9 @@
             <input type="text" class="search-input" placeholder="输入产品名称..." id="productNameInput" style="width:180px;">
             <select class="search-select" id="statusSelect" style="width:140px;">
               <option value="">全部状态</option>
-              <option value="completed">已完成</option>
-              <option value="processing">进行中</option>
-              <option value="pending">待追溯</option>
+              <option value="inactive">未激活</option>
+              <option value="active">已激活</option>
+              <option value="expired">已过期</option>
             </select>
             <input type="text" class="search-input" placeholder="输入批次号..." id="batchInput" style="width:160px;">
 
@@ -220,7 +235,7 @@
             </thead>
             <tbody id="dataTableBody"></tbody>
           </table>
-          <div class="pagination" id="paginationContainer"></div>
+          <div id="pagination-container"></div>
         </div>
       </div>
     </main>
@@ -240,7 +255,8 @@
     <div class="modal-body" id="detailContent"></div>
     <div class="modal-footer">
       <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
-      <button class="jg-btn jg-btn-primary" onclick="showDetailQRCode()">查看二维码</button>
+      <button class="jg-btn" onclick="showDetailQRCode()">二维码</button>
+      <button class="jg-btn jg-btn-primary" onclick="previewConsumerPage()">预览消费者页</button>
     </div>
   </div>
 </div>
@@ -257,17 +273,22 @@
     <div class="modal-body">
       <div class="qrcode-container">
         <div class="qrcode-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#1890ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:80px;height:80px;">
-            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-            <path d="M6.5 6.5h1v1h-1zM16.5 6.5h1v1h-1zM6.5 16.5h1v1h-1z"/>
-          </svg>
+          <img id="qrcodeImg" alt="溯源二维码" style="width:100%;height:100%;display:none;">
+          <div class="qrcode-placeholder" id="qrcodePlaceholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#1890ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:80px;height:80px;">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+              <path d="M6.5 6.5h1v1h-1zM16.5 6.5h1v1h-1zM6.5 16.5h1v1h-1z"/>
+            </svg>
+          </div>
         </div>
-        <div class="qrcode-code" id="qrcodeValue">SNZG-2024-0001</div>
-        <div class="qrcode-hint">扫描二维码查看产品溯源信息</div>
+        <div class="qrcode-code" id="qrcodeValue">SNZG-20260901-0001</div>
+        <div class="qrcode-hint">扫描二维码打开消费者溯源页</div>
+        <div class="qrcode-url" id="qrcodeUrl"></div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="jg-btn" onclick="closeModal('qrcodeModal')">关闭</button>
+      <button class="jg-btn" onclick="openH5Page()">打开消费者页</button>
       <button class="jg-btn jg-btn-primary" onclick="downloadQRCode()">下载二维码</button>
     </div>
   </div>
@@ -284,111 +305,267 @@
 </div>
 
 <script>
-// Mock数据 - 23条记录
+// Mock数据 - 23条追溯码（与溯源编码 trace_code.html 同一批数据）
 const mockData = [
-  { code: 'SNZG-2024-0001', product: '天水花牛苹果', batch: 'PC-20260515-01', status: 'completed', queries: 156, lastQuery: '2026-09-10 14:30:00', trace: [{title: '包装出厂', time: '2026-09-20 10:00:00'}, {title: '质量检测', time: '2026-09-18 15:30:00'}, {title: '采摘入库', time: '2026-09-15 08:00:00'}] },
-  { code: 'SNZG-2024-0002', product: '招远黄金苹果', batch: 'PC-20260516-02', status: 'completed', queries: 98, lastQuery: '2026-09-10 11:20:00', trace: [{title: '包装出厂', time: '2026-09-22 09:00:00'}, {title: '质量检测', time: '2026-09-20 14:00:00'}, {title: '采摘入库', time: '2026-09-16 07:30:00'}] },
-  { code: 'SNZG-2024-0003', product: '麦积区苹果礼盒', batch: 'PC-20260517-03', status: 'processing', queries: 45, lastQuery: '2026-09-09 16:45:00', trace: [{title: '质量检测', time: '2026-09-25 10:00:00'}, {title: '采摘入库', time: '2026-09-17 09:15:00'}] },
-  { code: 'SNZG-2024-0004', product: '天水苹果汁', batch: 'PC-20260518-04', status: 'pending', queries: 23, lastQuery: '2026-09-08 09:30:00', trace: [{title: '原料入库', time: '2026-09-18 16:45:00'}] },
-  { code: 'SNZG-2024-0005', product: '龙口苹果干', batch: 'PC-20260520-05', status: 'completed', queries: 87, lastQuery: '2026-09-10 10:15:00', trace: [{title: '包装出厂', time: '2026-09-28 11:00:00'}, {title: '质量检测', time: '2026-09-26 14:30:00'}, {title: '加工生产', time: '2026-09-22 08:00:00'}, {title: '原料入库', time: '2026-09-20 11:00:00'}] },
-  { code: 'SNZG-2024-0006', product: '麦积区红将军苹果', batch: 'PC-20260521-06', status: 'completed', queries: 134, lastQuery: '2026-09-09 15:20:00', trace: [{title: '包装出厂', time: '2026-09-28 09:30:00'}, {title: '质量检测', time: '2026-09-25 16:00:00'}, {title: '采摘入库', time: '2026-09-21 08:30:00'}] },
-  { code: 'SNZG-2024-0007', product: '牟平富士苹果', batch: 'PC-20260522-07', status: 'processing', queries: 67, lastQuery: '2026-09-10 08:45:00', trace: [{title: '质量检测', time: '2026-09-30 10:30:00'}, {title: '采摘入库', time: '2026-09-22 15:20:00'}] },
-  { code: 'SNZG-2024-0008', product: '天水苹果醋', batch: 'PC-20260523-08', status: 'pending', queries: 34, lastQuery: '2026-09-07 14:00:00', trace: [{title: '加工生产', time: '2026-09-23 10:45:00'}] },
-  { code: 'SNZG-2024-0009', product: '海阳水晶苹果', batch: 'PC-20260524-09', status: 'completed', queries: 112, lastQuery: '2026-09-10 13:30:00', trace: [{title: '包装出厂', time: '2026-09-01 10:00:00'}, {title: '质量检测', time: '2026-09-29 15:30:00'}, {title: '采摘入库', time: '2026-09-24 13:00:00'}] },
-  { code: 'SNZG-2024-0010', product: '福山苹果酱', batch: 'PC-20260525-10', status: 'completed', queries: 78, lastQuery: '2026-09-09 11:00:00', trace: [{title: '包装出厂', time: '2026-09-02 09:30:00'}, {title: '质量检测', time: '2026-09-30 14:00:00'}, {title: '加工生产', time: '2026-09-27 08:00:00'}, {title: '原料入库', time: '2026-09-25 09:30:00'}] },
-  { code: 'SNZG-2024-0011', product: '长岛苹果脆片', batch: 'PC-20260526-11', status: 'processing', queries: 56, lastQuery: '2026-09-08 16:20:00', trace: [{title: '质量检测', time: '2026-09-03 11:00:00'}, {title: '加工生产', time: '2026-09-30 09:00:00'}, {title: '原料入库', time: '2026-09-26 14:15:00'}] },
-  { code: 'SNZG-2024-0012', product: '芝罘苹果饮料', batch: 'PC-20260527-12', status: 'completed', queries: 91, lastQuery: '2026-09-10 09:45:00', trace: [{title: '包装出厂', time: '2026-09-05 10:00:00'}, {title: '质量检测', time: '2026-09-02 15:30:00'}, {title: '加工生产', time: '2026-09-29 08:00:00'}, {title: '原料入库', time: '2026-09-27 11:20:00'}] },
-  { code: 'SNZG-2024-0013', product: '开发苹果酒', batch: 'PC-20260528-13', status: 'pending', queries: 42, lastQuery: '2026-09-06 13:15:00', trace: [{title: '加工生产', time: '2026-09-28 16:30:00'}] },
-  { code: 'SNZG-2024-0014', product: '麦积区黄金富士', batch: 'PC-20260529-14', status: 'completed', queries: 103, lastQuery: '2026-09-09 14:30:00', trace: [{title: '包装出厂', time: '2026-09-06 09:00:00'}, {title: '质量检测', time: '2026-09-03 16:00:00'}, {title: '采摘入库', time: '2026-09-29 08:45:00'}] },
-  { code: 'SNZG-2024-0015', product: '招远有机苹果', batch: 'PC-20260530-15', status: 'processing', queries: 72, lastQuery: '2026-09-10 12:00:00', trace: [{title: '质量检测', time: '2026-09-07 10:30:00'}, {title: '采摘入库', time: '2026-09-30 10:00:00'}] },
-  { code: 'SNZG-2024-0016', product: '龙口精品苹果', batch: 'PC-20260601-16', status: 'completed', queries: 88, lastQuery: '2026-09-09 10:30:00', trace: [{title: '包装出厂', time: '2026-09-08 09:30:00'}, {title: '质量检测', time: '2026-09-05 14:00:00'}, {title: '采摘入库', time: '2026-09-01 09:15:00'}] },
-  { code: 'SNZG-2024-0017', product: '天水苹果干礼盒', batch: 'PC-20260602-17', status: 'pending', queries: 29, lastQuery: '2026-09-07 15:45:00', trace: [{title: '加工生产', time: '2026-09-02 14:30:00'}] },
-  { code: 'SNZG-2024-0018', product: '天水生态苹果', batch: 'PC-20260603-18', status: 'completed', queries: 95, lastQuery: '2026-09-10 11:45:00', trace: [{title: '包装出厂', time: '2026-09-09 10:00:00'}, {title: '质量检测', time: '2026-09-06 15:30:00'}, {title: '采摘入库', time: '2026-09-03 11:45:00'}] },
-  { code: 'SNZG-2024-0019', product: '麦积区冰糖心苹果', batch: 'PC-20260604-19', status: 'processing', queries: 61, lastQuery: '2026-09-08 10:15:00', trace: [{title: '质量检测', time: '2026-09-10 09:00:00'}, {title: '采摘入库', time: '2026-09-04 15:20:00'}] },
-  { code: 'SNZG-2024-0020', product: '莱山苹果脯', batch: 'PC-20260605-20', status: 'completed', queries: 76, lastQuery: '2026-09-09 16:00:00', trace: [{title: '包装出厂', time: '2026-09-10 09:00:00'}, {title: '质量检测', time: '2026-09-07 14:30:00'}, {title: '加工生产', time: '2026-09-05 10:30:00'}, {title: '原料入库', time: '2026-09-05 10:30:00'}] },
-  { code: 'SNZG-2024-0021', product: '牟平花牛苹果', batch: 'PC-20260606-21', status: 'pending', queries: 38, lastQuery: '2026-09-06 14:30:00', trace: [{title: '采摘入库', time: '2026-09-06 13:15:00'}] },
-  { code: 'SNZG-2024-0022', product: '海阳苹果派', batch: 'PC-20260607-22', status: 'completed', queries: 84, lastQuery: '2026-09-10 08:00:00', trace: [{title: '包装出厂', time: '2026-09-09 10:30:00'}, {title: '质量检测', time: '2026-09-08 15:00:00'}, {title: '加工生产', time: '2026-09-07 08:00:00'}] },
-  { code: 'SNZG-2024-0023', product: '福山苹果酵素', batch: 'PC-20260608-23', status: 'processing', queries: 47, lastQuery: '2026-09-09 13:00:00', trace: [{title: '加工生产', time: '2026-09-08 16:45:00'}] }
+  { code: 'SNZG-20260901-0001', batch: 'PC-20260901-001', status: 'active',   queries: 156, lastQuery: '2026-09-22 14:30:00' },
+  { code: 'SNZG-20260901-0002', batch: 'PC-20260901-001', status: 'active',   queries: 98,  lastQuery: '2026-09-21 11:20:00' },
+  { code: 'SNZG-20260902-0003', batch: 'PC-20260902-002', status: 'active',   queries: 134, lastQuery: '2026-09-22 09:15:00' },
+  { code: 'SNZG-20260902-0004', batch: 'PC-20260902-002', status: 'active',   queries: 87,  lastQuery: '2026-09-20 16:40:00' },
+  { code: 'SNZG-20260903-0005', batch: 'PC-20260903-003', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260903-0006', batch: 'PC-20260903-003', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260904-0007', batch: 'PC-20260904-004', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260905-0008', batch: 'PC-20260905-005', status: 'active',   queries: 112, lastQuery: '2026-09-19 10:05:00' },
+  { code: 'SNZG-20260906-0009', batch: 'PC-20260906-006', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260907-0010', batch: 'PC-20260907-007', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260908-0011', batch: 'PC-20260908-008', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260909-0012', batch: 'PC-20260909-009', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260910-0013', batch: 'PC-20260910-010', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260911-0014', batch: 'PC-20260911-011', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260912-0015', batch: 'PC-20260912-012', status: 'active',   queries: 76,  lastQuery: '2026-09-21 15:25:00' },
+  { code: 'SNZG-20260913-0016', batch: 'PC-20260913-013', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260914-0017', batch: 'PC-20260914-014', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260915-0018', batch: 'PC-20260915-015', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260916-0019', batch: 'PC-20260916-016', status: 'inactive', queries: 0,   lastQuery: '—' },
+  { code: 'SNZG-20260917-0020', batch: 'PC-20260917-017', status: 'active',   queries: 64,  lastQuery: '2026-09-20 09:35:00' },
+  { code: 'SNZG-20260918-0021', batch: 'PC-20260918-018', status: 'expired',  queries: 42,  lastQuery: '2026-09-22 14:00:00' },
+  { code: 'SNZG-20260919-0022', batch: 'PC-20260919-019', status: 'expired',  queries: 29,  lastQuery: '2026-09-21 10:20:00' },
+  { code: 'SNZG-20260920-0023', batch: 'PC-20260920-020', status: 'inactive', queries: 0,   lastQuery: '—' }
 ];
 
-let currentPage = 1;
-const pageSize = 10;
-let filteredData = [...mockData];
+/* ---------- 上游数据源（用于动态组装溯源轨迹） ---------- */
+
+// 批次主数据（与批次管理 trace_batch.html 一致）
+const BATCH_SOURCE = [
+  {batchNo:'PC-20260901-001',plotCode:'D-001',plotName:'东区1号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-01',planNo:'HS-2026-001',processNo:'PP-2026-001',quantity:5000,grade:'一级'},
+  {batchNo:'PC-20260902-002',plotCode:'D-002',plotName:'东区2号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-02',planNo:'HS-2026-002',processNo:'PP-2026-002',quantity:4600,grade:'一级'},
+  {batchNo:'PC-20260903-003',plotCode:'D-003',plotName:'西区1号地',base:'天水麦积区基地',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-03',planNo:'HS-2026-003',processNo:'PP-2026-003',quantity:3200,grade:'二级'},
+  {batchNo:'PC-20260904-004',plotCode:'D-004',plotName:'北区1号地',base:'天水荣成基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-04',planNo:'HS-2026-004',processNo:'PP-2026-004',quantity:4200,grade:'一级'},
+  {batchNo:'PC-20260905-005',plotCode:'D-005',plotName:'南区1号地',base:'天水荣成基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-05',planNo:'HS-2026-005',processNo:'PP-2026-005',quantity:5800,grade:'一级'},
+  {batchNo:'PC-20260906-006',plotCode:'D-006',plotName:'中区1号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-06',planNo:'HS-2026-006',processNo:'PP-2026-006',quantity:3600,grade:'二级'},
+  {batchNo:'PC-20260907-007',plotCode:'D-007',plotName:'南区2号地',base:'甘肃麦积区苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-07',planNo:'HS-2026-007',processNo:'PP-2026-007',quantity:4400,grade:'一级'},
+  {batchNo:'PC-20260908-008',plotCode:'D-008',plotName:'西区2号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-08',planNo:'HS-2026-008',processNo:'PP-2026-008',quantity:5200,grade:'一级'},
+  {batchNo:'PC-20260909-009',plotCode:'D-009',plotName:'北区2号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-09',planNo:'HS-2026-009',processNo:'PP-2026-009',quantity:3900,grade:'二级'},
+  {batchNo:'PC-20260910-010',plotCode:'D-010',plotName:'东区3号地',base:'天水麦积区苹果基地',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-10',planNo:'HS-2026-010',processNo:'PP-2026-010',quantity:3100,grade:'二级'},
+  {batchNo:'PC-20260911-011',plotCode:'D-011',plotName:'南区3号地',base:'甘肃麦积区苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-11',planNo:'HS-2026-011',processNo:'PP-2026-011',quantity:4700,grade:'一级'},
+  {batchNo:'PC-20260912-012',plotCode:'D-012',plotName:'西区3号地',base:'天水麦积区苹果基地',product:'秦冠苹果',spec:'6kg/箱',harvestDate:'2026-09-12',planNo:'HS-2026-012',processNo:'PP-2026-012',quantity:3400,grade:'特级'},
+  {batchNo:'PC-20260913-013',plotCode:'D-013',plotName:'北区3号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-13',planNo:'HS-2026-013',processNo:'PP-2026-013',quantity:4300,grade:'一级'},
+  {batchNo:'PC-20260914-014',plotCode:'D-014',plotName:'中区2号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-14',planNo:'HS-2026-014',processNo:'PP-2026-014',quantity:5100,grade:'一级'},
+  {batchNo:'PC-20260915-015',plotCode:'D-015',plotName:'东区4号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-15',planNo:'HS-2026-015',processNo:'PP-2026-015',quantity:3700,grade:'二级'},
+  {batchNo:'PC-20260916-016',plotCode:'D-016',plotName:'南区4号地',base:'甘肃麦积区苹果园',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-16',planNo:'HS-2026-016',processNo:'PP-2026-016',quantity:2900,grade:'二级'},
+  {batchNo:'PC-20260917-017',plotCode:'D-017',plotName:'西区4号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-17',planNo:'HS-2026-017',processNo:'PP-2026-017',quantity:4900,grade:'一级'},
+  {batchNo:'PC-20260918-018',plotCode:'D-018',plotName:'北区4号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-18',planNo:'HS-2026-018',processNo:'PP-2026-018',quantity:4500,grade:'一级'},
+  {batchNo:'PC-20260919-019',plotCode:'D-019',plotName:'中区3号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-19',planNo:'HS-2026-019',processNo:'PP-2026-019',quantity:3800,grade:'二级'},
+  {batchNo:'PC-20260920-020',plotCode:'D-020',plotName:'东区5号地',base:'天水麦积区苹果基地',product:'秦冠苹果',spec:'6kg/箱',harvestDate:'2026-09-20',planNo:'HS-2026-020',processNo:'PP-2026-020',quantity:3300,grade:'特级'}
+];
+
+// 农事作业（取自农事记录 farming_record.html，按地块）
+const FARM_BY_PLOT = {
+  'D-001':{typeName:'施肥',executor:'李技术员',date:'2026-09-05'},
+  'D-002':{typeName:'修剪',executor:'王主管',date:'2026-09-15'},
+  'D-003':{typeName:'疏花疏果',executor:'赵技术员',date:'2026-09-12'},
+  'D-004':{typeName:'喷药',executor:'张技术员',date:'2026-09-03'},
+  'D-005':{typeName:'病虫害防治',executor:'张技术员',date:'2026-09-08'},
+  'D-006':{typeName:'灌溉',executor:'刘技术员',date:'2026-09-10'},
+  'D-007':{typeName:'施肥',executor:'孙技术员',date:'2026-09-15'},
+  'D-008':{typeName:'套袋',executor:'周技术员',date:'2026-09-20'},
+  'D-009':{typeName:'病虫害防治',executor:'吴技术员',date:'2026-09-18'},
+  'D-010':{typeName:'灌溉',executor:'郑技术员',date:'2026-09-01'},
+  'D-011':{typeName:'修剪',executor:'王技术员',date:'2026-09-05'},
+  'D-012':{typeName:'追肥',executor:'冯技术员',date:'2026-09-10'},
+  'D-013':{typeName:'喷药',executor:'陈技术员',date:'2026-09-15'},
+  'D-014':{typeName:'灌溉',executor:'褚技术员',date:'2026-09-20'},
+  'D-015':{typeName:'套袋',executor:'卫技术员',date:'2026-09-19'},
+  'D-016':{typeName:'施肥',executor:'蒋技术员',date:'2026-09-01'},
+  'D-017':{typeName:'病虫害防治',executor:'沈技术员',date:'2026-09-05'},
+  'D-018':{typeName:'修剪',executor:'韩技术员',date:'2026-09-10'},
+  'D-019':{typeName:'灌溉',executor:'杨技术员',date:'2026-09-15'},
+  'D-020':{typeName:'追肥',executor:'朱技术员',date:'2026-09-20'}
+};
+
+// 农资投入（取自农资使用 material_usage.html，按地块，同一地块取最近一次）
+const MATERIAL_BY_PLOT = {
+  'D-001':{name:'尿素',spec:'50kg/袋',quantity:'10袋',operator:'李技术员',date:'2026-09-01'},
+  'D-002':{name:'杀虫灯',spec:'太阳能',quantity:'2盏',operator:'张技术员',date:'2026-09-02'},
+  'D-003':{name:'绑枝机',spec:'半自动',quantity:'3个',operator:'郑技术员',date:'2026-09-03'},
+  'D-004':{name:'生长调节剂',spec:'250ml/瓶',quantity:'6瓶',operator:'吴技术员',date:'2026-09-04'},
+  'D-005':{name:'微量元素肥',spec:'5kg/袋',quantity:'8袋',operator:'周技术员',date:'2026-09-05'},
+  'D-006':{name:'喷雾器',spec:'手动',quantity:'4个',operator:'孙技术员',date:'2026-09-06'},
+  'D-007':{name:'保鲜剂',spec:'100ml/瓶',quantity:'15瓶',operator:'赵技术员',date:'2026-09-07'},
+  'D-008':{name:'嫁接刀',spec:'特种钢',quantity:'3把',operator:'王技术员',date:'2026-09-08'},
+  'D-009':{name:'钙肥',spec:'20kg/袋',quantity:'6袋',operator:'李技术员',date:'2026-09-09'},
+  'D-010':{name:'生物农药',spec:'1L/瓶',quantity:'10瓶',operator:'张技术员',date:'2026-09-10'},
+  'D-011':{name:'授粉器',spec:'电动',quantity:'2个',operator:'郑技术员',date:'2026-09-11'},
+  'D-012':{name:'除草剂',spec:'2L/瓶',quantity:'3瓶',operator:'吴技术员',date:'2026-09-12'},
+  'D-013':{name:'钾肥',spec:'50kg/袋',quantity:'4袋',operator:'周技术员',date:'2026-09-13'},
+  'D-014':{name:'修枝剪',spec:'不锈钢',quantity:'5把',operator:'孙技术员',date:'2026-09-14'},
+  'D-015':{name:'叶面肥',spec:'500ml/瓶',quantity:'6瓶',operator:'赵技术员',date:'2026-09-15'},
+  'D-016':{name:'杀菌剂',spec:'1L/瓶',quantity:'8瓶',operator:'张技术员',date:'2026-09-16'},
+  'D-017':{name:'磷酸二铵',spec:'40kg/袋',quantity:'5袋',operator:'赵技术员',date:'2026-09-14'},
+  'D-018':{name:'杀螨剂',spec:'1L/瓶',quantity:'4瓶',operator:'王技术员',date:'2026-09-16'},
+  'D-019':{name:'高效杀虫剂',spec:'500ml/瓶',quantity:'5瓶',operator:'张技术员',date:'2026-09-19'},
+  'D-020':{name:'NPK复合肥',spec:'40kg/袋',quantity:'2袋',operator:'李技术员',date:'2026-09-20'}
+};
+
+// 质量检测（取自证书管理 cert_manage.html，按批次）
+const CERT_BY_BATCH = {
+  'PC-20260901-001':[{certNo:'ZH-2026-09101',type:'质量合格证',date:'2026-09-01',status:'有效'},{certNo:'ZH-2026-09121',type:'检测报告',date:'2026-09-01',status:'有效'}],
+  'PC-20260902-002':[{certNo:'ZH-2026-09102',type:'检测报告',date:'2026-09-02',status:'有效'},{certNo:'ZH-2026-09122',type:'质量合格证',date:'2026-09-02',status:'有效'}],
+  'PC-20260903-003':[{certNo:'ZH-2026-09103',type:'检测报告',date:'2026-08-20',status:'已过期'},{certNo:'ZH-2026-09123',type:'原产地证明',date:'2026-09-03',status:'有效'}],
+  'PC-20260904-004':[{certNo:'ZH-2026-09104',type:'质量合格证',date:'2026-09-04',status:'已撤销'}],
+  'PC-20260905-005':[{certNo:'ZH-2026-09105',type:'质量合格证',date:'2026-09-05',status:'有效'}],
+  'PC-20260906-006':[{certNo:'ZH-2026-09106',type:'检测报告',date:'2026-09-06',status:'有效'}],
+  'PC-20260907-007':[{certNo:'ZH-2026-09107',type:'原产地证明',date:'2026-09-07',status:'有效'}],
+  'PC-20260908-008':[{certNo:'ZH-2026-09108',type:'质量合格证',date:'2026-09-08',status:'有效'}],
+  'PC-20260909-009':[{certNo:'ZH-2026-09109',type:'检测报告',date:'2026-09-09',status:'有效'}],
+  'PC-20260910-010':[{certNo:'ZH-2026-09110',type:'检测报告',date:'2026-08-25',status:'已过期'}],
+  'PC-20260911-011':[{certNo:'ZH-2026-09111',type:'原产地证明',date:'2026-09-11',status:'有效'}],
+  'PC-20260912-012':[{certNo:'ZH-2026-09112',type:'质量合格证',date:'2026-09-12',status:'有效'}],
+  'PC-20260913-013':[{certNo:'ZH-2026-09113',type:'检测报告',date:'2026-09-13',status:'有效'}],
+  'PC-20260914-014':[{certNo:'ZH-2026-09114',type:'质量合格证',date:'2026-09-14',status:'有效'}],
+  'PC-20260915-015':[{certNo:'ZH-2026-09115',type:'原产地证明',date:'2026-09-15',status:'有效'}],
+  'PC-20260916-016':[{certNo:'ZH-2026-09116',type:'质量合格证',date:'2026-09-16',status:'有效'}],
+  'PC-20260917-017':[{certNo:'ZH-2026-09117',type:'检测报告',date:'2026-09-17',status:'有效'}],
+  'PC-20260918-018':[{certNo:'ZH-2026-09118',type:'检测报告',date:'2026-08-30',status:'已过期'}],
+  'PC-20260919-019':[{certNo:'ZH-2026-09119',type:'原产地证明',date:'2026-09-19',status:'有效'}],
+  'PC-20260920-020':[{certNo:'ZH-2026-09120',type:'质量合格证',date:'2026-09-20',status:'已撤销'}]
+};
+
+// 冷链配送（取自采收发货 harvest_post.html，按采后处理单号）
+const SHIP_BY_PROCESS = {
+  'PP-2026-001':{id:'FH-2026-001',customer:'天水市秦州区华联超市',logistics:'顺丰速运',tracking:'SF1023456789',date:'2026-09-02',status:'已签收'},
+  'PP-2026-002':{id:'FH-2026-002',customer:'兰州高原夏菜批发市场',logistics:'中通快递',tracking:'ZT2034567890',date:'2026-09-03',status:'已签收'},
+  'PP-2026-003':{id:'FH-2026-003',customer:'西安雨润农产品批发市场',logistics:'德邦物流',tracking:'DB3045678901',date:'2026-09-04',status:'已签收'},
+  'PP-2026-004':{id:'FH-2026-018',customer:'郑州万邦国际农产品市场',logistics:'德邦物流',tracking:'DB1789012345',date:'2026-09-23',status:'运输异常'},
+  'PP-2026-005':{id:'FH-2026-004',customer:'京东生鲜西北仓',logistics:'京东物流',tracking:'JD4056789012',date:'2026-09-05',status:'已签收'},
+  'PP-2026-006':{id:'FH-2026-005',customer:'天水花牛苹果直营店',logistics:'自有冷链车队',tracking:'ZC5067890123',date:'2026-09-06',status:'已签收'},
+  'PP-2026-007':{id:'FH-2026-006',customer:'甘肃果品进出口有限公司',logistics:'顺丰速运',tracking:'SF6078901234',date:'2026-09-08',status:'已签收'},
+  'PP-2026-008':{id:'FH-2026-007',customer:'麦积区电商服务中心',logistics:'中通快递',tracking:'ZT7089012345',date:'2026-09-09',status:'已签收'},
+  'PP-2026-009':{id:'FH-2026-017',customer:'拼多多西北仓',logistics:'中通快递',tracking:'',date:'2026-09-22',status:'待发货'},
+  'PP-2026-010':{id:'FH-2026-008',customer:'拼多多西北仓',logistics:'德邦物流',tracking:'DB8090123456',date:'2026-09-11',status:'已签收'},
+  'PP-2026-012':{id:'FH-2026-009',customer:'成都濛阳农副产品市场',logistics:'顺丰速运',tracking:'SF9101234567',date:'2026-09-13',status:'运输中'},
+  'PP-2026-013':{id:'FH-2026-010',customer:'郑州万邦国际农产品市场',logistics:'中通快递',tracking:'ZT0112345678',date:'2026-09-14',status:'运输中'},
+  'PP-2026-015':{id:'FH-2026-011',customer:'天水市秦州区华联超市',logistics:'自有冷链车队',tracking:'ZC1123456789',date:'2026-09-16',status:'运输中'},
+  'PP-2026-016':{id:'FH-2026-012',customer:'兰州高原夏菜批发市场',logistics:'京东物流',tracking:'JD1234567890',date:'2026-09-17',status:'已发货'},
+  'PP-2026-017':{id:'FH-2026-013',customer:'西安雨润农产品批发市场',logistics:'德邦物流',tracking:'DB1345678901',date:'2026-09-18',status:'已发货'},
+  'PP-2026-019':{id:'FH-2026-014',customer:'麦积区电商服务中心（认养订单）',logistics:'中通快递',tracking:'ZT1456789012',date:'2026-09-19',status:'已发货'}
+};
+
+const STATUS_TEXT = { inactive:'未激活', active:'已激活', expired:'已过期' };
+
+// H5 溯源端地址
+const H5_BASE = window.location.href.split('?')[0].replace(/[^/]*$/, '').replace(/applefarm_backhand\/$/, 'applefarm_h5/');
+const H5_TRACE_PAGE = H5_BASE + 'trace_h5.html';
+function buildH5Url(code) { return H5_TRACE_PAGE + '?code=' + encodeURIComponent(code); }
+
 let currentDetailCode = '';
 
-document.addEventListener('DOMContentLoaded', function() {
-  renderTable();
-  renderPagination();
-});
+function getBatchInfo(batchNo) {
+  return BATCH_SOURCE.find(b => b.batchNo === batchNo) || null;
+}
+function enrichCode(item) {
+  const b = getBatchInfo(item.batch) || { product:'—', base:'—', plotCode:'—', plotName:'—' };
+  return Object.assign({}, item, {
+    product: b.product,
+    base: b.base,
+    plotCode: b.plotCode,
+    plotName: b.plotName,
+    statusText: STATUS_TEXT[item.status] || item.status
+  });
+}
+function statusTagClass(status) {
+  return status === 'active' ? 'active' : status === 'expired' ? 'error' : 'inactive';
+}
 
-function renderTable() {
-  const tbody = document.getElementById('dataTableBody');
-  const start = (currentPage - 1) * pageSize;
-  const end = start + pageSize;
-  const pageData = filteredData.slice(start, end);
-  
-  tbody.innerHTML = pageData.map(item => `
-    <tr>
-      <td><strong>${item.code}</strong></td>
-      <td>${item.product}</td>
-      <td>${item.batch}</td>
-      <td><span class="status-tag ${item.status === 'completed' ? 'active' : item.status === 'pending' ? 'inactive' : 'warning'}">${item.status === 'completed' ? '已完成' : item.status === 'pending' ? '待追溯' : '进行中'}</span></td>
-      <td>${item.queries} 次</td>
-      <td>${item.lastQuery}</td>
+/* ---------- 分页组件（与农事计划、批次管理一致） ---------- */
+const Pagination = {
+  currentPage: 1, pageSize: 10, filteredData: [],
+  containerId: 'pagination-container', tbodyId: 'dataTableBody', renderRow: null,
+  init: function(options) {
+    this.currentPage = options.currentPage || 1;
+    this.pageSize = options.pageSize || 10;
+    this.filteredData = options.data || [];
+    this.containerId = options.containerId || 'pagination-container';
+    this.tbodyId = options.tbodyId || 'dataTableBody';
+    this.renderRow = options.renderRow || null;
+    this.render();
+  },
+  renderTable: function() {
+    const tbody = document.getElementById(this.tbodyId);
+    if (!tbody || !this.renderRow) return;
+    const start = (this.currentPage - 1) * this.pageSize;
+    const pageData = this.filteredData.slice(start, start + this.pageSize);
+    tbody.innerHTML = pageData.map((item, i) => this.renderRow(item, start + i + 1)).join('');
+  },
+  render: function() {
+    const container = document.getElementById(this.containerId);
+    if (!container) return;
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    let html = '<div class="pagination">';
+    html += `<button class="page-btn ${this.currentPage <= 1 ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage - 1})">‹</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= this.currentPage - 1 && i <= this.currentPage + 1)) {
+        html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" onclick="Pagination.goToPage(${i})">${i}</button>`;
+      } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
+        html += '<span class="page-ellipsis" style="padding:0 8px;color:#6b7b6b;">...</span>';
+      }
+    }
+    html += `<button class="page-btn ${this.currentPage >= totalPages ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage + 1})">›</button>`;
+    html += `<span style="margin-left:16px;font-size:13px;color:#6b7b6b;">第 ${this.currentPage} 页/共 ${totalPages} 页，共 ${this.filteredData.length} 条记录</span>`;
+    html += '</div>';
+    container.innerHTML = html;
+    this.renderTable();
+  },
+  goToPage: function(page) {
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    if (page < 1 || page > totalPages) return;
+    this.currentPage = page;
+    this.render();
+  },
+  updateData: function(data) {
+    this.filteredData = data;
+    this.currentPage = 1;
+    this.render();
+  }
+};
+
+// 渲染表格行
+function renderCodeRow(item, seq) {
+  const c = enrichCode(item);
+  return `
+    <tr data-id="${c.code}">
+      <td><strong>${c.code}</strong></td>
+      <td>${c.product}</td>
+      <td>${c.batch}</td>
+      <td><span class="status-tag ${statusTagClass(c.status)}">${c.statusText}</span></td>
+      <td>${c.queries} 次</td>
+      <td>${c.lastQuery}</td>
       <td>
         <div class="action-btns">
-          <button class="action-btn detail" onclick="viewDetail('${item.code}')">详情</button>
-          <button class="action-btn qrcode" onclick="showQRCode('${item.code}')">二维码</button>
+          <button class="action-btn detail" onclick="viewDetail('${c.code}')">详情</button>
+          <button class="action-btn qrcode" onclick="showQRCode('${c.code}')">二维码</button>
         </div>
       </td>
     </tr>
-  `).join('');
-}
-
-function renderPagination() {
-  const container = document.getElementById('paginationContainer');
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  
-  if (totalPages <= 1) { container.innerHTML = ''; return; }
-  
-  let html = `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="goToPage(${currentPage - 1})">‹</button>`;
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-      html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
-    } else if (i === currentPage - 2 || i === currentPage + 2) {
-      html += '<span class="page-ellipsis">...</span>';
-    }
-  }
-  html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="goToPage(${currentPage + 1})">›</button>`;
-  container.innerHTML = html;
-}
-
-function goToPage(page) {
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  if (page < 1 || page > totalPages) return;
-  currentPage = page;
-  renderTable();
-  renderPagination();
+  `;
 }
 
 function searchData() {
-  const code = document.getElementById('traceCodeInput').value.toLowerCase();
-  const product = document.getElementById('productNameInput').value.toLowerCase();
+  const code = document.getElementById('traceCodeInput').value.trim().toLowerCase();
+  const product = document.getElementById('productNameInput').value.trim().toLowerCase();
   const status = document.getElementById('statusSelect').value;
-  const batch = document.getElementById('batchInput').value.toLowerCase();
-  
-  filteredData = mockData.filter(item => {
-    if (code && !item.code.toLowerCase().includes(code)) return false;
-    if (product && !item.product.toLowerCase().includes(product)) return false;
-    if (status && item.status !== status) return false;
-    if (batch && !item.batch.toLowerCase().includes(batch)) return false;
+  const batch = document.getElementById('batchInput').value.trim().toLowerCase();
+
+  const filtered = mockData.filter(item => {
+    const c = enrichCode(item);
+    if (code && !c.code.toLowerCase().includes(code)) return false;
+    if (product && !c.product.toLowerCase().includes(product)) return false;
+    if (status && c.status !== status) return false;
+    if (batch && !c.batch.toLowerCase().includes(batch)) return false;
     return true;
   });
-  
-  currentPage = 1;
-  renderTable();
-  renderPagination();
-  showToast(`找到 ${filteredData.length} 条记录`);
+
+  Pagination.updateData(filtered);
+  showToast(`找到 ${filtered.length} 条记录`);
 }
 
 function resetSearch() {
@@ -396,61 +573,153 @@ function resetSearch() {
   document.getElementById('productNameInput').value = '';
   document.getElementById('statusSelect').value = '';
   document.getElementById('batchInput').value = '';
-  filteredData = [...mockData];
-  currentPage = 1;
-  renderTable();
-  renderPagination();
+  Pagination.updateData(mockData);
   showToast('已重置筛选条件');
+}
+
+// 按批次动态组装溯源轨迹：农事作业 → 农资投入 → 采收入库 → 质量检测 → 冷链配送
+function buildTrack(batchNo) {
+  const b = getBatchInfo(batchNo);
+  if (!b) return [];
+  const stages = [];
+
+  const farm = FARM_BY_PLOT[b.plotCode];
+  stages.push(farm ? {
+    title: `农事作业 · ${farm.typeName}`,
+    time: farm.date,
+    desc: `作业人：${farm.executor}　地块：${b.plotCode} · ${b.plotName}`,
+    warn: false
+  } : { title: '农事作业', time: '—', desc: '暂无该地块的农事记录', warn: true });
+
+  const mat = MATERIAL_BY_PLOT[b.plotCode];
+  stages.push(mat ? {
+    title: `农资投入 · ${mat.name}`,
+    time: mat.date,
+    desc: `规格：${mat.spec}　用量：${mat.quantity}　领用人：${mat.operator}`,
+    warn: false
+  } : { title: '农资投入', time: '—', desc: '暂无该地块的农资使用记录', warn: true });
+
+  stages.push({
+    title: `采收入库 · ${b.planNo}`,
+    time: b.harvestDate,
+    desc: `采收 ${b.quantity} kg　等级：${b.grade}　采后处理单：${b.processNo}`,
+    warn: false
+  });
+
+  const certs = CERT_BY_BATCH[batchNo] || [];
+  if (certs.length) {
+    certs.forEach(c => stages.push({
+      title: `质量检测 · ${c.type}`,
+      time: c.date,
+      desc: `证书编号：${c.certNo}　结论：${c.status}`,
+      warn: c.status !== '有效'
+    }));
+  } else {
+    stages.push({ title: '质量检测', time: '—', desc: '暂无该批次的检测或认证记录', warn: true });
+  }
+
+  const ship = SHIP_BY_PROCESS[b.processNo];
+  stages.push(ship ? {
+    title: `冷链配送 · ${ship.logistics}`,
+    time: ship.date,
+    desc: `发货单 ${ship.id}　客户：${ship.customer}　运单号：${ship.tracking || '待分配'}　状态：${ship.status}`,
+    warn: ship.status === '运输异常'
+  } : { title: '冷链配送', time: '—', desc: '该批次尚未安排发货', warn: true });
+
+  return stages;
 }
 
 function viewDetail(code) {
   currentDetailCode = code;
   const item = mockData.find(d => d.code === code);
   if (!item) return;
-  
-  const traceHtml = item.trace.map((t, i) => `
+  const c = enrichCode(item);
+  const b = getBatchInfo(item.batch);
+
+  const traceHtml = buildTrack(item.batch).map(t => `
     <div class="trace-item">
       <div class="trace-dot">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       </div>
       <div class="trace-content">
-        <div class="trace-title">${t.title}</div>
+        <div class="trace-title">${t.title}${t.warn ? '<span class="trace-status" style="color:#ef4444;">待补充</span>' : ''}</div>
         <div class="trace-time">${t.time}</div>
+        <div class="trace-desc">${t.desc}</div>
       </div>
     </div>
   `).join('');
-  
+
   document.getElementById('detailContent').innerHTML = `
-    <div class="detail-grid"><span class="detail-label">溯源码</span><span class="detail-value">${item.code}</span></div>
-    <div class="detail-grid"><span class="detail-label">产品名称</span><span class="detail-value">${item.product}</span></div>
-    <div class="detail-grid"><span class="detail-label">批次号</span><span class="detail-value">${item.batch}</span></div>
-    <div class="detail-grid"><span class="detail-label">溯源状态</span><span class="detail-value"><span class="status-tag ${item.status === 'completed' ? 'active' : item.status === 'pending' ? 'inactive' : 'warning'}">${item.status === 'completed' ? '已完成' : item.status === 'pending' ? '待追溯' : '进行中'}</span></span></div>
-    <div class="detail-grid"><span class="detail-label">查询次数</span><span class="detail-value">${item.queries} 次</span></div>
-    <div class="detail-grid"><span class="detail-label">最后查询</span><span class="detail-value">${item.lastQuery}</span></div>
+    <div class="chain-box">
+      <div class="chain-title">溯源链路</div>
+      <div class="chain-list">
+        <span class="chain-node">${b ? b.plotCode + ' · ' + b.plotName : '—'}</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-node hl">${c.batch}</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-node">${c.code}</span>
+      </div>
+    </div>
+    <div class="detail-grid"><span class="detail-label">溯源码</span><span class="detail-value">${c.code}</span></div>
+    <div class="detail-grid"><span class="detail-label">产品名称</span><span class="detail-value">${c.product}</span></div>
+    <div class="detail-grid"><span class="detail-label">批次号</span><span class="detail-value">${c.batch}</span></div>
+    <div class="detail-grid"><span class="detail-label">产地</span><span class="detail-value">${c.base} / ${c.plotCode} · ${c.plotName}</span></div>
+    <div class="detail-grid"><span class="detail-label">溯源状态</span><span class="detail-value"><span class="status-tag ${statusTagClass(c.status)}">${c.statusText}</span></span></div>
+    <div class="detail-grid"><span class="detail-label">查询次数</span><span class="detail-value">${c.queries} 次</span></div>
+    <div class="detail-grid"><span class="detail-label">最后查询</span><span class="detail-value">${c.lastQuery}</span></div>
+    <div class="detail-grid"><span class="detail-label">二维码链接</span><span class="detail-value" style="word-break:break-all;font-size:12px;">${buildH5Url(c.code)}</span></div>
     <div style="margin-top:16px; font-weight:500; color:var(--text-primary);">溯源轨迹</div>
     <div class="trace-timeline">${traceHtml}</div>
   `;
-  
+
   openModal('detailModal');
 }
 
 function showQRCode(code) {
   currentDetailCode = code;
+  const url = buildH5Url(code);
   document.getElementById('qrcodeValue').textContent = code;
+  document.getElementById('qrcodeUrl').textContent = url;
+
+  const img = document.getElementById('qrcodeImg');
+  const ph = document.getElementById('qrcodePlaceholder');
+  img.style.display = 'none';
+  ph.style.display = 'flex';
+  img.onload = function() { img.style.display = 'block'; ph.style.display = 'none'; };
+  img.onerror = function() { img.style.display = 'none'; ph.style.display = 'flex'; };
+  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=' + encodeURIComponent(url);
+
   openModal('qrcodeModal');
 }
 
 function showDetailQRCode() {
+  const code = currentDetailCode;
   closeModal('detailModal');
-  setTimeout(() => showQRCode(currentDetailCode), 200);
+  setTimeout(() => showQRCode(code), 200);
+}
+
+function openH5Page() {
+  if (!currentDetailCode) return;
+  window.open(buildH5Url(currentDetailCode), '_blank');
+}
+
+function previewConsumerPage() {
+  openH5Page();
 }
 
 function downloadQRCode() {
-  showToast(`下载二维码：${currentDetailCode}`);
+  if (!currentDetailCode) return;
+  showToast(`已导出二维码：${currentDetailCode}`);
 }
 
-function openModal(id) { document.getElementById(id).classList.add('active'); }
-function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+  document.body.style.overflow = '';
+}
 
 function showToast(message, type = 'success') {
   const toast = document.getElementById('toast');
@@ -459,11 +728,39 @@ function showToast(message, type = 'success') {
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), 3000);
 }
+
+// 页面初始化
+document.addEventListener('DOMContentLoaded', function() {
+  Pagination.init({
+    currentPage: 1,
+    pageSize: 10,
+    data: mockData,
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderCodeRow
+  });
+
+  // 由其它页面跳转过来时按溯源码直接打开详情
+  const preset = new URLSearchParams(window.location.search).get('code');
+  if (preset) viewDetail(preset);
+});
+
+// 点击遮罩关闭弹窗
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeModal(overlay.id);
+  });
+});
+
+// ESC 关闭弹窗
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.active').forEach(o => closeModal(o.id));
+  }
+});
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-<script src="js/common-functions.js"></script>
-  <script src="js/search-helper.js"></script>
   <script src="js/typography.js"></script>
 </body>
 </html>

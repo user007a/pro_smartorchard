@@ -607,20 +607,11 @@
                   <th style="width:140px;">操作</th>
                 </tr>
               </thead>
-              <tbody id="tableBody">
+              <tbody id="dataTableBody">
               </tbody>
             </table>
           </div>
-          <div class="pagination-wrapper">
-            <div class="pagination-info" id="paginationInfo">共 <span class="num">23</span> 条记录，第 <span class="num">1</span>/<span class="num">3</span> 页</div>
-            <div class="pagination" id="pagination">
-              <button class="page-btn disabled">‹</button>
-              <button class="page-btn active">1</button>
-              <button class="page-btn">2</button>
-              <button class="page-btn">3</button>
-              <button class="page-btn">›</button>
-            </div>
-          </div>
+          <div id="pagination-container"></div>
         </div>
       </div>
     </main>
@@ -903,13 +894,29 @@
     { id: 'RPT023', title: '龙口南山基地专项报告', type: 'custom', typeText: '自定义报告', time: '2026-09-09 16:00', base: '龙口南山基地', author: '张三', statDevice: '28', statFarming: '22', statUrgent: '4', statRate: '97%', overview: '龙口南山基地预警情况专项分析。', deviceDetail: '设备运行稳定。', farmingDetail: '农事预警处理及时。', suggestion: '继续保持良好态势。' }
   ];
 
-  let currentPage = 1;
-  const pageSize = 10;
   let filteredData = [...mockData];
 
   document.addEventListener('DOMContentLoaded', function() {
-    renderTable();
-    renderPagination();
+    Pagination.init({
+      currentPage: 1,
+      pageSize: 10,
+      data: filteredData,
+      containerId: 'pagination-container',
+      tbodyId: 'dataTableBody',
+      renderRow: renderRow
+    });
+
+    document.addEventListener('click', function(e) {
+      const btn = e.target.closest('.action-btn');
+      if (!btn) return;
+      if (btn.classList.contains('detail')) {
+        showDetailModal(btn.dataset.id);
+      } else if (btn.classList.contains('download')) {
+        showDownloadModal(btn.dataset.id);
+      } else if (btn.classList.contains('delete')) {
+        showConfirmModal('确认删除', '确定要删除此报告吗？此操作不可撤销。', 'error');
+      }
+    });
 
     document.getElementById('btnSearch').addEventListener('click', function() {
       const keyword = document.getElementById('searchInput').value.toLowerCase();
@@ -928,9 +935,7 @@
         return matchKeyword && matchType && matchDate && matchBase;
       });
 
-      currentPage = 1;
-      renderTable();
-      renderPagination();
+      Pagination.updateData(filteredData);
       showToast('搜索完成，共找到 ' + filteredData.length + ' 条记录');
     });
 
@@ -941,9 +946,7 @@
       document.getElementById('endDate').value = '';
       document.getElementById('baseSelect').value = '';
       filteredData = [...mockData];
-      currentPage = 1;
-      renderTable();
-      renderPagination();
+      Pagination.updateData(filteredData);
     });
 
     document.getElementById('btnGenerateDaily').addEventListener('click', function() {
@@ -983,8 +986,7 @@
     document.getElementById('confirmGenerate').addEventListener('click', function() {
       document.getElementById('generateModal').classList.remove('show');
       showToast('报告生成成功', 'success');
-      renderTable();
-      renderPagination();
+      Pagination.updateData(filteredData);
     });
 
     document.getElementById('confirmExport').addEventListener('click', function() {
@@ -997,9 +999,7 @@
       filteredData = filteredData.filter(d => !ids.includes(d.id));
       document.getElementById('deleteModal').classList.remove('show');
       showToast('报告删除成功', 'success');
-      currentPage = 1;
-      renderTable();
-      renderPagination();
+      Pagination.updateData(filteredData);
     });
 
     document.getElementById('confirmDownload').addEventListener('click', function() {
@@ -1023,15 +1023,10 @@
     });
   });
 
-  function renderTable() {
-    const tableBody = document.getElementById('tableBody');
-    const start = (currentPage - 1) * pageSize;
-    const end = start + pageSize;
-    const pageData = filteredData.slice(start, end);
-    
-    tableBody.innerHTML = pageData.map((item, __seq) => `
+  function renderRow(item, index) {
+    return `
       <tr>
-        <td>${__seq + 1}</td>
+        <td>${index + 1}</td>
         <td><strong>${item.title}</strong></td>
         <td><span class="status-tag ${getTypeClass(item.type)}">${item.typeText}</span></td>
         <td>${item.base}</td>
@@ -1046,59 +1041,7 @@
           </div>
         </td>
       </tr>
-    `).join('');
-    
-    document.querySelectorAll('.action-btn.detail').forEach(btn => {
-      btn.addEventListener('click', function() {
-        showDetailModal(this.dataset.id);
-      });
-    });
-    
-    document.querySelectorAll('.action-btn.download').forEach(btn => {
-      btn.addEventListener('click', function() {
-        showDownloadModal(this.dataset.id);
-      });
-    });
-    
-    document.querySelectorAll('.action-btn.delete').forEach(btn => {
-      btn.addEventListener('click', function() {
-        showConfirmModal('确认删除', '确定要删除此报告吗？此操作不可撤销。', 'error');
-      });
-    });
-    
-    document.querySelectorAll('.row-checkbox').forEach(cb => {
-      cb.addEventListener('change', updateSelectedCount);
-    });
-    
-    if (document.getElementById('selectAll')) document.getElementById('selectAll').checked = false;
-    updateSelectedCount();
-  }
-
-  function renderPagination() {
-    const totalPages = Math.ceil(filteredData.length / pageSize);
-    const pagination = document.getElementById('pagination');
-    const paginationInfo = document.getElementById('paginationInfo');
-    
-    paginationInfo.innerHTML = `共 <span class="num">${filteredData.length}</span> 条记录，第 <span class="num">${currentPage}</span>/<span class="num">${totalPages}</span> 页`;
-    
-    let html = '';
-    html += `<button class="page-btn ${currentPage <= 1 ? 'disabled' : ''}" onclick="goToPage(${currentPage - 1})">‹</button>`;
-    
-    for (let i = 1; i <= totalPages; i++) {
-      html += `<button class="page-btn ${currentPage === i ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
-    }
-    
-    html += `<button class="page-btn ${currentPage >= totalPages ? 'disabled' : ''}" onclick="goToPage(${currentPage + 1})">›</button>`;
-    
-    pagination.innerHTML = html;
-  }
-
-  function goToPage(page) {
-    const totalPages = Math.ceil(filteredData.length / pageSize);
-    if (page < 1 || page > totalPages) return;
-    currentPage = page;
-    renderTable();
-    renderPagination();
+    `;
   }
 
   function showDetailModal(id) {

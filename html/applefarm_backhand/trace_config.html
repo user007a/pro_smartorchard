@@ -38,6 +38,8 @@
   .form-group input, .form-group select, .form-group textarea { padding:10px 14px; border:1px solid var(--border-default); border-radius:8px; font-size:14px; transition:all 0.2s; }
   .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline:none; border-color:var(--border-primary); box-shadow:0 0 0 3px rgba(24,144,255,0.1); }
   .form-group textarea { resize:vertical; min-height:80px; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .form-hint { font-size:12px; color:var(--text-tertiary); }
   .module-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
   .module-tag { display:flex; align-items:center; gap:6px; background:var(--gray-50); padding:6px 12px; border-radius:6px; font-size:13px; cursor:pointer; transition:all 0.2s; }
   .module-tag:hover { background:var(--gray-100); }
@@ -81,7 +83,7 @@
               <option value="inactive">已禁用</option>
             </select>
             
-          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
+          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="resetSearch()">重置</button></div>
           </div>
         </div>
 
@@ -90,8 +92,9 @@
             <thead>
               <tr>
                 <th>模板名称</th>
-                <th>企业名称</th>
+                <th>适用产品</th>
                 <th>展示模块</th>
+                <th>绑定批次</th>
                 <th>创建时间</th>
                 <th>状态</th>
                 <th>操作</th>
@@ -99,7 +102,7 @@
             </thead>
             <tbody id="dataTableBody"></tbody>
           </table>
-          <div class="pagination" id="paginationContainer"></div>
+          <div id="pagination-container"></div>
         </div>
       </div>
     </main>
@@ -134,24 +137,35 @@
     </div>
     <div class="modal-body">
       <div class="edit-form">
-        <div class="form-group">
-          <label>模板名称</label>
-          <input type="text" id="editName" placeholder="请输入模板名称">
+        <div class="form-row">
+          <div class="form-group">
+            <label>模板名称</label>
+            <input type="text" id="editName" placeholder="请输入模板名称">
+          </div>
+          <div class="form-group">
+            <label>适用产品</label>
+            <select id="editProduct"></select>
+          </div>
         </div>
         <div class="form-group">
-          <label>企业名称</label>
-          <input type="text" id="editCompany" placeholder="请输入企业名称">
+          <label>绑定批次</label>
+          <select id="editBatch"></select>
+          <span class="form-hint">绑定后，该批次生成的追溯码将按此模板展示</span>
         </div>
         <div class="form-group">
           <label>展示模块</label>
           <div class="module-list">
-            <label class="module-tag"><input type="checkbox" value="base" checked>基地介绍</label>
-            <label class="module-tag"><input type="checkbox" value="story" checked>品种故事</label>
-            <label class="module-tag"><input type="checkbox" value="farming" checked>农事记录</label>
-            <label class="module-tag"><input type="checkbox" value="quality">质检报告</label>
-            <label class="module-tag"><input type="checkbox" value="process">种植过程</label>
-            <label class="module-tag"><input type="checkbox" value="cert">企业认证</label>
+            <label class="module-tag"><input type="checkbox" value="基地介绍" checked>基地介绍</label>
+            <label class="module-tag"><input type="checkbox" value="种植管理" checked>种植管理</label>
+            <label class="module-tag"><input type="checkbox" value="修剪疏果">修剪疏果</label>
+            <label class="module-tag"><input type="checkbox" value="套袋保护">套袋保护</label>
+            <label class="module-tag"><input type="checkbox" value="施肥喷药" checked>施肥喷药</label>
+            <label class="module-tag"><input type="checkbox" value="农残检测" checked>农残检测</label>
+            <label class="module-tag"><input type="checkbox" value="采摘入库" checked>采摘入库</label>
+            <label class="module-tag"><input type="checkbox" value="冷链配送" checked>冷链配送</label>
+            <label class="module-tag"><input type="checkbox" value="企业认证">企业认证</label>
           </div>
+          <span class="form-hint">模块名称与消费者溯源页（H5）展示环节一一对应</span>
         </div>
         <div class="form-group">
           <label>模板描述</label>
@@ -182,54 +196,111 @@
 </div>
 
 <script>
-// Mock数据 - 23条记录
-const mockData = [
-  { id: 1, name: '标准版履历模板', company: '甘肃智慧果园农业科技', modules: ['基地介绍', '品种故事', '农事记录'], createTime: '2026-09-15', status: 'active', desc: '适用于一般农产品溯源，包含基础模块' },
-  { id: 2, name: '精简版履历模板', company: '甘肃智慧果园农业科技', modules: ['基地介绍', '质检报告'], createTime: '2026-09-18', status: 'inactive', desc: '简洁版模板，适用于快速溯源' },
-  { id: 3, name: '品牌故事版模板', company: '甘肃智慧果园农业科技', modules: ['基地介绍', '品种故事', '种植过程', '企业认证'], createTime: '2026-09-20', status: 'inactive', desc: '强调品牌故事，适用于高端产品' },
-  { id: 4, name: '有机认证版模板', company: '有机农业发展公司', modules: ['基地介绍', '品种故事', '农事记录', '质检报告', '企业认证'], createTime: '2026-09-22', status: 'active', desc: '有机产品专用模板' },
-  { id: 5, name: '出口认证版模板', company: '出口贸易有限公司', modules: ['基地介绍', '质检报告', '企业认证'], createTime: '2026-09-25', status: 'inactive', desc: '符合出口标准的溯源模板' },
-  { id: 6, name: '采摘体验版模板', company: '乡村旅游开发公司', modules: ['基地介绍', '品种故事', '种植过程'], createTime: '2026-09-28', status: 'active', desc: '适用于采摘园体验溯源' },
-  { id: 7, name: '企业定制版A', company: '大型农业集团', modules: ['基地介绍', '品种故事', '农事记录', '质检报告', '种植过程'], createTime: '2026-09-01', status: 'inactive', desc: '企业定制模板A版本' },
-  { id: 8, name: '企业定制版B', company: '大型农业集团', modules: ['基地介绍', '品种故事', '企业认证'], createTime: '2026-09-03', status: 'inactive', desc: '企业定制模板B版本' },
-  { id: 9, name: '礼品套装版模板', company: '果业礼品公司', modules: ['基地介绍', '品种故事', '质检报告'], createTime: '2026-09-05', status: 'active', desc: '礼品套装专用模板' },
-  { id: 10, name: '会员专供版模板', company: '会员服务中心', modules: ['基地介绍', '品种故事', '农事记录', '质检报告'], createTime: '2026-09-08', status: 'inactive', desc: '会员专享产品模板' },
-  { id: 11, name: '预售尝鲜版模板', company: '农产品预售平台', modules: ['基地介绍', '品种故事'], createTime: '2026-09-10', status: 'active', desc: '预售产品专用模板' },
-  { id: 12, name: '亲子农庄版模板', company: '亲子农庄运营', modules: ['基地介绍', '品种故事', '种植过程'], createTime: '2026-09-12', status: 'inactive', desc: '亲子农庄体验模板' },
-  { id: 13, name: '扶贫助农版模板', company: '扶贫电商平台', modules: ['基地介绍', '品种故事', '农事记录'], createTime: '2026-09-15', status: 'active', desc: '扶贫产品溯源模板' },
-  { id: 14, name: '社区团购版模板', company: '社区团购平台', modules: ['基地介绍', '质检报告'], createTime: '2026-09-18', status: 'inactive', desc: '社区团购产品模板' },
-  { id: 15, name: '直播带货版模板', company: '直播电商基地', modules: ['基地介绍', '品种故事', '种植过程'], createTime: '2026-09-20', status: 'active', desc: '直播带货专用模板' },
-  { id: 16, name: '农旅融合版模板', company: '农旅开发公司', modules: ['基地介绍', '品种故事', '种植过程', '企业认证'], createTime: '2026-09-22', status: 'inactive', desc: '农旅融合产品模板' },
-  { id: 17, name: '区域公用品牌模板', company: '区域公用品牌协会', modules: ['基地介绍', '品种故事', '农事记录', '质检报告', '企业认证'], createTime: '2026-09-25', status: 'active', desc: '区域公用品牌专用' },
-  { id: 18, name: '地标产品版模板', company: '地理标志产品协会', modules: ['基地介绍', '品种故事', '农事记录', '质检报告', '企业认证'], createTime: '2026-09-28', status: 'inactive', desc: '地理标志产品模板' },
-  { id: 19, name: '认养农业版模板', company: '认养农业平台', modules: ['基地介绍', '品种故事', '农事记录'], createTime: '2026-09-01', status: 'active', desc: '认养农业产品模板' },
-  { id: 20, name: '盆栽花卉版模板', company: '盆栽花卉基地', modules: ['基地介绍', '种植过程'], createTime: '2026-09-05', status: 'inactive', desc: '盆栽花卉产品模板' },
-  { id: 21, name: '深加工产品版模板', company: '农产品深加工厂', modules: ['基地介绍', '质检报告', '企业认证'], createTime: '2026-09-08', status: 'active', desc: '深加工农产品模板' },
-  { id: 22, name: '冷链物流版模板', company: '冷链物流公司', modules: ['基地介绍', '质检报告'], createTime: '2026-09-10', status: 'inactive', desc: '冷链配送产品模板' },
-  { id: 23, name: '跨境电商版模板', company: '跨境电商平台', modules: ['基地介绍', '品种故事', '质检报告', '企业认证'], createTime: '2026-09-12', status: 'active', desc: '跨境电商产品模板' }
+// 企业主体（与企业管理 - 企业信息一致）
+const COMPANY_NAME = '天水花牛苹果（集团）有限责任公司';
+
+// 产品源（与证书签发一致）
+const PRODUCT_SOURCE = ['花牛苹果', '金帅苹果', '秦冠苹果', '礼盒装苹果'];
+
+// 批次主数据（与批次管理 trace_batch.html 一致）
+const BATCH_SOURCE = [
+  'PC-20260901-001','PC-20260902-002','PC-20260903-003','PC-20260904-004','PC-20260905-005',
+  'PC-20260906-006','PC-20260907-007','PC-20260908-008','PC-20260909-009','PC-20260910-010',
+  'PC-20260911-011','PC-20260912-012','PC-20260913-013','PC-20260914-014','PC-20260915-015',
+  'PC-20260916-016','PC-20260917-017','PC-20260918-018','PC-20260919-019','PC-20260920-020'
 ];
 
-let currentPage = 1;
-const pageSize = 10;
-let filteredData = [...mockData];
+// 展示模块（与 H5 溯源页展示环节一一对应）
+const MODULE_SOURCE = ['基地介绍','种植管理','修剪疏果','套袋保护','施肥喷药','农残检测','采摘入库','冷链配送','企业认证'];
+
+// Mock数据 - 23条展示模板
+const mockData = [
+  { id: 1, name: '标准版履历模板', product: '花牛苹果', modules: ['基地介绍','种植管理','施肥喷药','农残检测','采摘入库'], boundBatches: ['PC-20260901-001'], createTime: '2026-08-25', status: 'active', desc: '适用于一般批次溯源，包含核心农事与检测环节' },
+  { id: 2, name: '精简版履历模板', product: '花牛苹果', modules: ['基地介绍','采摘入库'], boundBatches: ['PC-20260911-011'], createTime: '2026-08-28', status: 'active', desc: '精简展示，仅保留产地与采收信息' },
+  { id: 3, name: '品牌故事版模板', product: '花牛苹果', modules: ['基地介绍','种植管理','修剪疏果','套袋保护'], boundBatches: ['PC-20260912-012'], createTime: '2026-09-01', status: 'active', desc: '强调种植故事，适用于高端礼盒' },
+  { id: 4, name: '有机认证版模板', product: '花牛苹果', modules: ['基地介绍','种植管理','施肥喷药','农残检测','企业认证'], boundBatches: ['PC-20260902-002'], createTime: '2026-09-02', status: 'active', desc: '有机产品专用，突出检测与认证' },
+  { id: 5, name: '出口认证版模板', product: '花牛苹果', modules: ['基地介绍','农残检测','企业认证','冷链配送'], boundBatches: ['PC-20260901-001'], createTime: '2026-08-30', status: 'active', desc: '符合出口标准的溯源模板' },
+  { id: 6, name: '礼盒装版模板', product: '礼盒装苹果', modules: ['基地介绍','采摘入库','冷链配送'], boundBatches: [], createTime: '2026-09-03', status: 'active', desc: '礼品套装专用模板' },
+  { id: 7, name: '电商专供版模板', product: '花牛苹果', modules: ['基地介绍','种植管理','采摘入库','冷链配送'], boundBatches: [], createTime: '2026-09-04', status: 'inactive', desc: '电商渠道专供' },
+  { id: 8, name: '商超直供版模板', product: '花牛苹果', modules: ['基地介绍','农残检测','采摘入库'], boundBatches: [], createTime: '2026-09-05', status: 'active', desc: '商超直供批次使用' },
+  { id: 9, name: '会员专供版模板', product: '花牛苹果', modules: ['基地介绍','种植管理','施肥喷药'], boundBatches: [], createTime: '2026-09-06', status: 'inactive', desc: '会员专享批次模板' },
+  { id: 10, name: '预售尝鲜版模板', product: '金帅苹果', modules: ['基地介绍','种植管理'], boundBatches: [], createTime: '2026-09-07', status: 'active', desc: '预售产品专用' },
+  { id: 11, name: '社区团购版模板', product: '花牛苹果', modules: ['基地介绍','采摘入库'], boundBatches: [], createTime: '2026-09-08', status: 'inactive', desc: '社区团购产品模板' },
+  { id: 12, name: '直播带货版模板', product: '花牛苹果', modules: ['基地介绍','种植管理','套袋保护'], boundBatches: [], createTime: '2026-09-09', status: 'active', desc: '直播带货专用' },
+  { id: 13, name: '冷链直配版模板', product: '花牛苹果', modules: ['基地介绍','采摘入库','冷链配送'], boundBatches: [], createTime: '2026-09-10', status: 'active', desc: '强调冷链配送时效' },
+  { id: 14, name: '区域公用品牌模板', product: '花牛苹果', modules: ['基地介绍','种植管理','农残检测','企业认证'], boundBatches: [], createTime: '2026-09-11', status: 'active', desc: '区域公用品牌专用' },
+  { id: 15, name: '地标产品版模板', product: '花牛苹果', modules: ['基地介绍','种植管理','农残检测','企业认证'], boundBatches: [], createTime: '2026-09-12', status: 'inactive', desc: '地理标志产品模板' },
+  { id: 16, name: '认养农业版模板', product: '花牛苹果', modules: ['基地介绍','种植管理','采摘入库'], boundBatches: [], createTime: '2026-09-13', status: 'active', desc: '认养果树所产果实使用' },
+  { id: 17, name: '深加工产品版模板', product: '礼盒装苹果', modules: ['基地介绍','农残检测','企业认证'], boundBatches: [], createTime: '2026-09-14', status: 'active', desc: '深加工产品使用' },
+  { id: 18, name: '有机转换期模板', product: '花牛苹果', modules: ['基地介绍','种植管理','施肥喷药'], boundBatches: [], createTime: '2026-09-15', status: 'inactive', desc: '有机转换期果园使用' },
+  { id: 19, name: '秦冠专属版模板', product: '秦冠苹果', modules: ['基地介绍','种植管理','采摘入库'], boundBatches: ['PC-20260920-020'], createTime: '2026-09-18', status: 'active', desc: '秦冠品种专用' },
+  { id: 20, name: '金帅专属版模板', product: '金帅苹果', modules: ['基地介绍','种植管理','采摘入库'], boundBatches: ['PC-20260910-010'], createTime: '2026-09-08', status: 'active', desc: '金帅品种专用' },
+  { id: 21, name: '高端礼盒版模板', product: '礼盒装苹果', modules: ['基地介绍','套袋保护','采摘入库','冷链配送'], boundBatches: [], createTime: '2026-09-16', status: 'active', desc: '高端礼盒专用' },
+  { id: 22, name: '平价家庭装模板', product: '花牛苹果', modules: ['基地介绍','采摘入库'], boundBatches: [], createTime: '2026-09-17', status: 'inactive', desc: '家庭装产品使用' },
+  { id: 23, name: '果园直发版模板', product: '花牛苹果', modules: ['基地介绍','采摘入库','冷链配送'], boundBatches: [], createTime: '2026-09-19', status: 'active', desc: '果园直发批次使用' }
+];
+
 let currentEditId = null;
 
-document.addEventListener('DOMContentLoaded', function() {
-  renderTable();
-  renderPagination();
-});
+/* ---------- 分页组件（与农事计划、批次管理一致） ---------- */
+const Pagination = {
+  currentPage: 1, pageSize: 10, filteredData: [],
+  containerId: 'pagination-container', tbodyId: 'dataTableBody', renderRow: null,
+  init: function(options) {
+    this.currentPage = options.currentPage || 1;
+    this.pageSize = options.pageSize || 10;
+    this.filteredData = options.data || [];
+    this.containerId = options.containerId || 'pagination-container';
+    this.tbodyId = options.tbodyId || 'dataTableBody';
+    this.renderRow = options.renderRow || null;
+    this.render();
+  },
+  renderTable: function() {
+    const tbody = document.getElementById(this.tbodyId);
+    if (!tbody || !this.renderRow) return;
+    const start = (this.currentPage - 1) * this.pageSize;
+    const pageData = this.filteredData.slice(start, start + this.pageSize);
+    tbody.innerHTML = pageData.map((item, i) => this.renderRow(item, start + i + 1)).join('');
+  },
+  render: function() {
+    const container = document.getElementById(this.containerId);
+    if (!container) return;
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    let html = '<div class="pagination">';
+    html += `<button class="page-btn ${this.currentPage <= 1 ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage - 1})">‹</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= this.currentPage - 1 && i <= this.currentPage + 1)) {
+        html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" onclick="Pagination.goToPage(${i})">${i}</button>`;
+      } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
+        html += '<span class="page-ellipsis" style="padding:0 8px;color:#6b7b6b;">...</span>';
+      }
+    }
+    html += `<button class="page-btn ${this.currentPage >= totalPages ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage + 1})">›</button>`;
+    html += `<span style="margin-left:16px;font-size:13px;color:#6b7b6b;">第 ${this.currentPage} 页/共 ${totalPages} 页，共 ${this.filteredData.length} 条记录</span>`;
+    html += '</div>';
+    container.innerHTML = html;
+    this.renderTable();
+  },
+  goToPage: function(page) {
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    if (page < 1 || page > totalPages) return;
+    this.currentPage = page;
+    this.render();
+  },
+  updateData: function(data) {
+    this.filteredData = data;
+    this.currentPage = 1;
+    this.render();
+  }
+};
 
-function renderTable() {
-  const tbody = document.getElementById('dataTableBody');
-  const start = (currentPage - 1) * pageSize;
-  const end = start + pageSize;
-  const pageData = filteredData.slice(start, end);
-  
-  tbody.innerHTML = pageData.map(item => `
-    <tr>
+function renderTemplateRow(item, seq) {
+  return `
+    <tr data-id="${item.id}">
       <td><strong>${item.name}</strong></td>
-      <td>${item.company}</td>
+      <td>${item.product}</td>
       <td style="font-size:12px; color:var(--text-tertiary);">${item.modules.join('、')}</td>
+      <td style="font-size:12px; color:var(--text-tertiary);">${item.boundBatches.length ? item.boundBatches.join('、') : '未绑定'}</td>
       <td>${item.createTime}</td>
       <td><span class="status-tag ${item.status === 'active' ? 'active' : 'inactive'}">${item.status === 'active' ? '启用中' : '已禁用'}</span></td>
       <td>
@@ -239,62 +310,44 @@ function renderTable() {
         </div>
       </td>
     </tr>
-  `).join('');
-}
-
-function renderPagination() {
-  const container = document.getElementById('paginationContainer');
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  if (totalPages <= 1) { container.innerHTML = ''; return; }
-  
-  let html = `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="goToPage(${currentPage - 1})">‹</button>`;
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-      html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
-    } else if (i === currentPage - 2 || i === currentPage + 2) {
-      html += '<span class="page-ellipsis">...</span>';
-    }
-  }
-  html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="goToPage(${currentPage + 1})">›</button>`;
-  container.innerHTML = html;
-}
-
-function goToPage(page) {
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  if (page < 1 || page > totalPages) return;
-  currentPage = page;
-  renderTable();
-  renderPagination();
+  `;
 }
 
 function searchData() {
-  const name = document.getElementById('templateNameInput').value.toLowerCase();
+  const name = document.getElementById('templateNameInput').value.trim().toLowerCase();
   const status = document.getElementById('statusSelect').value;
-  
-  filteredData = mockData.filter(item => {
+
+  const filtered = mockData.filter(item => {
     if (name && !item.name.toLowerCase().includes(name)) return false;
     if (status && item.status !== status) return false;
     return true;
   });
-  
-  currentPage = 1;
-  renderTable();
-  renderPagination();
-  showToast(`找到 ${filteredData.length} 条记录`);
+
+  Pagination.updateData(filtered);
+  showToast(`找到 ${filtered.length} 条记录`);
+}
+
+function resetSearch() {
+  document.getElementById('templateNameInput').value = '';
+  document.getElementById('statusSelect').value = '';
+  Pagination.updateData(mockData);
+  showToast('已重置筛选条件');
 }
 
 function previewTemplate(id) {
   const item = mockData.find(d => d.id === id);
   if (!item) return;
-  
+
   document.getElementById('previewContent').innerHTML = `
     <div class="preview-content">
       <div class="preview-section">
         <div class="preview-section-title">基本信息</div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
           <div><span style="color:var(--text-tertiary);">模板名称：</span>${item.name}</div>
-          <div><span style="color:var(--text-tertiary);">企业名称：</span>${item.company}</div>
+          <div><span style="color:var(--text-tertiary);">适用产品：</span>${item.product}</div>
+          <div><span style="color:var(--text-tertiary);">企业名称：</span>${COMPANY_NAME}</div>
           <div><span style="color:var(--text-tertiary);">创建时间：</span>${item.createTime}</div>
+          <div><span style="color:var(--text-tertiary);">绑定批次：</span>${item.boundBatches.length ? item.boundBatches.join('、') : '未绑定'}</div>
           <div><span style="color:var(--text-tertiary);">状态：</span><span class="status-tag ${item.status === 'active' ? 'active' : 'inactive'}">${item.status === 'active' ? '启用中' : '已禁用'}</span></div>
         </div>
       </div>
@@ -306,64 +359,109 @@ function previewTemplate(id) {
         <div class="preview-section-title">展示模块（${item.modules.length}个）</div>
         <div class="preview-items">${item.modules.map(m => `<span class="preview-item">${m}</span>`).join('')}</div>
       </div>
+      <div class="preview-section">
+        <div class="preview-section-title">消费者页效果（H5）</div>
+        <div style="background:var(--bg-card); border:1px solid var(--border-default); border-radius:8px; padding:12px;">
+          <div style="font-size:13px; color:var(--text-primary); font-weight:500; margin-bottom:6px;">${item.product} · 苹果数字履历</div>
+          <div style="font-size:12px; color:var(--text-tertiary);">仅展示以下环节：${item.modules.join(' → ')}</div>
+        </div>
+      </div>
     </div>
   `;
   currentEditId = id;
   openModal('previewModal');
 }
 
+function syncModuleTags(modules) {
+  document.querySelectorAll('.module-tag input').forEach(cb => {
+    cb.checked = modules.includes(cb.value);
+  });
+  refreshModuleTagStyle();
+}
+
+function refreshModuleTagStyle() {
+  document.querySelectorAll('.module-tag').forEach(tag => {
+    const cb = tag.querySelector('input');
+    tag.classList.toggle('selected', cb.checked);
+  });
+}
+
 function editTemplate(id) {
   const item = mockData.find(d => d.id === id);
   if (!item) return;
-  
+
   document.getElementById('editModalTitle').textContent = '编辑模板';
   document.getElementById('editName').value = item.name;
-  document.getElementById('editCompany').value = item.company;
+  document.getElementById('editProduct').value = item.product;
+  document.getElementById('editBatch').value = item.boundBatches[0] || '';
   document.getElementById('editDesc').value = item.desc;
   document.getElementById('editStatus').value = item.status;
-  
-  document.querySelectorAll('.module-tag input').forEach(cb => {
-    const moduleName = cb.value === 'base' ? '基地介绍' : 
-                       cb.value === 'story' ? '品种故事' : 
-                       cb.value === 'farming' ? '农事记录' : 
-                       cb.value === 'quality' ? '质检报告' : 
-                       cb.value === 'process' ? '种植过程' : '企业认证';
-    cb.checked = item.modules.includes(moduleName);
-  });
-  
+  syncModuleTags(item.modules);
+
   currentEditId = id;
   openModal('editModal');
 }
 
 function editFromPreview() {
+  const id = currentEditId;
   closeModal('previewModal');
-  setTimeout(() => editTemplate(currentEditId), 200);
+  setTimeout(() => editTemplate(id), 200);
 }
 
 function openAddModal() {
   document.getElementById('editModalTitle').textContent = '新建模板';
   document.getElementById('editName').value = '';
-  document.getElementById('editCompany').value = '甘肃智慧果园农业科技';
+  document.getElementById('editProduct').selectedIndex = 0;
+  document.getElementById('editBatch').value = '';
   document.getElementById('editDesc').value = '';
   document.getElementById('editStatus').value = 'active';
-  document.querySelectorAll('.module-tag input').forEach(cb => cb.checked = false);
+  syncModuleTags(['基地介绍','种植管理','施肥喷药','农残检测','采摘入库']);
   currentEditId = null;
   openModal('editModal');
 }
 
 function saveEdit() {
   const name = document.getElementById('editName').value.trim();
-  if (!name) {
-    showToast('请输入模板名称', 'error');
-    return;
+  if (!name) { showToast('请输入模板名称', 'error'); return; }
+
+  const modules = Array.from(document.querySelectorAll('.module-tag input'))
+    .filter(cb => cb.checked).map(cb => cb.value);
+  if (!modules.length) { showToast('请至少选择一个展示模块', 'error'); return; }
+
+  const batch = document.getElementById('editBatch').value;
+  const payload = {
+    name: name,
+    product: document.getElementById('editProduct').value,
+    modules: modules,
+    boundBatches: batch ? [batch] : [],
+    desc: document.getElementById('editDesc').value.trim(),
+    status: document.getElementById('editStatus').value
+  };
+
+  if (currentEditId) {
+    const target = mockData.find(d => d.id === currentEditId);
+    Object.assign(target, payload);
+    showToast('模板已保存');
+  } else {
+    const pad = n => String(n).padStart(2, '0');
+    const now = new Date();
+    payload.id = mockData.length + 1;
+    payload.createTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    mockData.unshift(payload);
+    showToast('模板已创建');
   }
-  
   closeModal('editModal');
-  showToast(currentEditId ? '模板已保存' : '模板已创建');
+  Pagination.updateData(mockData);
 }
 
-function openModal(id) { document.getElementById(id).classList.add('active'); }
-function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+  document.body.style.overflow = '';
+}
 
 function showToast(message, type = 'success') {
   const toast = document.getElementById('toast');
@@ -372,11 +470,54 @@ function showToast(message, type = 'success') {
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), 3000);
 }
+
+// 页面初始化
+document.addEventListener('DOMContentLoaded', function() {
+  // 适用产品下拉
+  const productSelect = document.getElementById('editProduct');
+  PRODUCT_SOURCE.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    productSelect.appendChild(opt);
+  });
+
+  // 绑定批次下拉
+  const batchSelect = document.getElementById('editBatch');
+  batchSelect.innerHTML = '<option value="">暂不绑定</option>' +
+    BATCH_SOURCE.map(b => `<option value="${b}">${b}</option>`).join('');
+
+  // 模块标签点击态
+  document.querySelectorAll('.module-tag input').forEach(cb => {
+    cb.addEventListener('change', refreshModuleTagStyle);
+  });
+  refreshModuleTagStyle();
+
+  Pagination.init({
+    currentPage: 1,
+    pageSize: 10,
+    data: mockData,
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderTemplateRow
+  });
+});
+
+// 点击遮罩关闭弹窗
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeModal(overlay.id);
+  });
+});
+
+// ESC 关闭弹窗
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.active').forEach(o => closeModal(o.id));
+  }
+});
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-<script src="js/common-functions.js"></script>
-  <script src="js/search-helper.js"></script>
   <script src="js/typography.js"></script>
 </body>
 </html>

@@ -225,12 +225,6 @@
         <!-- ===== 搜索栏区 ===== -->
         <div class="page-section search-section">
           <div class="search-bar">
-            <select class="search-select" id="baseSelect">
-              <option value="">全部基地</option>
-              <option value="luochuan">麦积区基地</option>
-              <option value="yantai">天水基地</option>
-              <option value="pingdingshan">平顶山基地</option>
-            </select>
             <select class="search-select" id="typeSelect">
               <option value="">全部类型</option>
               <option value="fertilizer">肥料</option>
@@ -257,7 +251,7 @@
             </svg>
             新建农资
           </button>
-          <button class="jg-btn-outline">
+          <button class="jg-btn-outline" onclick="openExportModal()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
@@ -281,6 +275,7 @@
                   <th style="width:60px;">单位</th>
                   <th style="width:90px;text-align:right;">单价(元)</th>
                   <th style="width:80px;text-align:right;">安全库存</th>
+                  <th style="width:90px;text-align:right;">当前库存</th>
                   <th style="width:100px;">供应商</th>
                   <th style="width:120px;">操作</th>
                 </tr>
@@ -776,6 +771,16 @@
             <input type="text" id="materialSupplier" placeholder="请输入供应商">
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>用途</label>
+            <input type="text" id="materialPurpose" placeholder="请输入用途（如：基肥、病虫害防治）">
+          </div>
+          <div class="form-item">
+            <label>安全间隔期</label>
+            <input type="text" id="materialSafetyInterval" placeholder="如 14、21，安全间隔期为收获期的填“收获期”">
+          </div>
+        </div>
         <div class="form-item">
           <label>备注</label>
           <textarea id="materialRemark" placeholder="请输入备注信息"></textarea>
@@ -835,6 +840,14 @@
           <span class="detail-value" id="viewSupplier">-</span>
         </div>
         <div class="detail-row">
+          <span class="detail-label">用途</span>
+          <span class="detail-value" id="viewPurpose">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">安全间隔期</span>
+          <span class="detail-value" id="viewSafetyInterval">-</span>
+        </div>
+        <div class="detail-row">
           <span class="detail-label">备注</span>
           <span class="detail-value" id="viewRemark">-</span>
         </div>
@@ -846,8 +859,37 @@
   </div>
 </div>
 
+<!-- ===== 导出农资弹窗 ===== -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal-container" style="max-width:400px;">
+    <div class="modal-header">
+      <h3 class="modal-title">导出农资</h3>
+      <button class="modal-close" onclick="closeExportModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-secondary);margin-bottom:16px;">确定要导出当前农资数据吗？</p>
+      <div class="form-item">
+        <label>导出格式</label>
+        <select id="exportFormat">
+          <option value="excel">Excel (.xlsx)</option>
+          <option value="csv">CSV (.csv)</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn-outline" onclick="closeExportModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="doExport()">确认导出</button>
+    </div>
+  </div>
+</div>
+
 <!-- 引入交互脚本 -->
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->
+<script src="js/material-store.js"></script>
 <script>
 // 农资数据
 const materialData = [
@@ -898,6 +940,28 @@ const materialData = [
   {"code":"M-045","name":"园艺扎带","type":"tool","typeName":"工具","spec":"100m/卷","unit":"卷","price":"15.00","stock":"120","supplier":"温州五金厂","remark":""}
 ];
 
+// 补充档案字段（需求 F-051）：用途、安全间隔期
+const DEFAULT_PURPOSE = { fertilizer: '土壤施肥', pesticide: '病虫害防治', tool: '果园作业' };
+
+// 安全间隔期：按该农资对应的具体药剂，取苹果登记安全间隔期
+// 依据：《农药合理使用准则》GB/T 8321 及农药登记标签（中国农药信息网 icama.cn）
+const SAFETY_INTERVAL = {
+  'M-002': '14',   // 高效杀虫剂 → 高效氯氰菊酯，苹果 14 天
+  'M-005': '10',   // 杀菌剂 → 代森锰锌，苹果树 10 天
+  'M-007': '21',   // 除草剂 → 草甘膦，苹果园 21 天
+  'M-010': '14',   // 生物农药 → 阿维菌素，苹果树 14 天
+  'M-013': '14',   // 杀螨剂 → 哒螨灵，苹果 14 天
+  'M-019': '收获期', // 生长调节剂 → 芸苔素内酯类，苹果 安全间隔期为收获期
+  'M-026': '21',   // 杀虫剂乳油 → 氯氰菊酯，苹果 21 天
+  'M-029': '30',   // 除螨剂 → 炔螨特，苹果 30 天
+  'M-032': '14'    // 杀菌剂粉剂 → 甲基硫菌灵，苹果 14 天
+};
+
+materialData.forEach(function (m) {
+  if (m.purpose === undefined) m.purpose = DEFAULT_PURPOSE[m.type] || '-';
+  if (m.safetyInterval === undefined) m.safetyInterval = SAFETY_INTERVAL[m.code] || '-';
+});
+
 // 当前页面、每页条数、总条数、总页数
 let currentPage = 1;
 const pageSize = 10;
@@ -908,15 +972,15 @@ let filteredData = [...materialData];
 // DOM元素
 const editModal = document.getElementById('editModal');
 const viewModal = document.getElementById('viewModal');
+const exportModal = document.getElementById('exportModal');
 const modalTitle = document.getElementById('modalTitle');
 const tableBody = document.querySelector('.data-table tbody');
 const pagination = document.querySelector('.pagination');
 const searchBtn = document.querySelector('.search-bar .jg-btn');
 const searchInput = document.getElementById('searchInput');
-const baseSelect = document.getElementById('baseSelect');
 const typeSelect = document.getElementById('typeSelect');
 const statusSelect = document.getElementById('statusSelect');
-const addBtn = document.querySelector('.jg-btn-primary');
+const addBtn = document.querySelector('.action-bar .jg-btn-primary');
 
 // 初始化
 function init() {
@@ -931,7 +995,9 @@ function renderTable() {
   const end = start + pageSize;
   const pageData = filteredData.slice(start, end);
   
-  tableBody.innerHTML = pageData.map((item, __seq) => `
+  tableBody.innerHTML = pageData.map((item, __seq) => {
+    const curStock = MaterialStore.stockOf(item.code);
+    return `
     <tr>
       <td>${start + __seq + 1}</td>
       <td><strong>${item.code}</strong></td>
@@ -941,6 +1007,7 @@ function renderTable() {
       <td>${item.unit}</td>
       <td class="text-right">${item.price}</td>
       <td class="text-right">${item.stock}</td>
+      <td class="text-right">${curStock === null ? '-' : curStock}</td>
       <td>${item.supplier}</td>
       <td>
         <div class="action-btns">
@@ -950,7 +1017,8 @@ function renderTable() {
         </div>
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 // 渲染分页
@@ -1010,7 +1078,6 @@ function jumpToPage() {
 // 搜索
 function search() {
   const keyword = searchInput.value.toLowerCase().trim();
-  const base = baseSelect.value;
   const type = typeSelect.value;
   const status = statusSelect.value;
   
@@ -1023,11 +1090,17 @@ function search() {
     if (type) {
       match = match && item.type === type;
     }
-    // 状态过滤：正常=库存大于安全库存，库存不足=库存小于等于安全库存
-    if (status === 'normal') {
-      match = match && parseInt(item.stock) > 50;
-    } else if (status === 'low') {
-      match = match && parseInt(item.stock) <= 50;
+    // 状态过滤：以共享库存的当前库存与安全库存比较（未登记库存的农资不计入）
+    if (status) {
+      const curStock = MaterialStore.stockOf(item.code);
+      const safety = parseInt(item.stock) || 0;
+      if (curStock === null) {
+        match = false;
+      } else if (status === 'normal') {
+        match = match && curStock > safety;
+      } else if (status === 'low') {
+        match = match && curStock <= safety;
+      }
     }
     
     return match;
@@ -1052,6 +1125,8 @@ function openAddModal() {
   document.getElementById('materialPrice').value = '';
   document.getElementById('materialStock').value = '';
   document.getElementById('materialSupplier').value = '';
+  document.getElementById('materialPurpose').value = '';
+  document.getElementById('materialSafetyInterval').value = '';
   document.getElementById('materialRemark').value = '';
   editModal.classList.add('show');
 }
@@ -1069,6 +1144,8 @@ function editMaterial(code) {
     document.getElementById('materialPrice').value = item.price;
     document.getElementById('materialStock').value = item.stock;
     document.getElementById('materialSupplier').value = item.supplier;
+    document.getElementById('materialPurpose').value = item.purpose || '';
+    document.getElementById('materialSafetyInterval').value = item.safetyInterval || '';
     document.getElementById('materialRemark').value = item.remark || '';
     editModal.classList.add('show');
   }
@@ -1103,6 +1180,8 @@ function saveMaterial() {
       price: document.getElementById('materialPrice').value || '0.00',
       stock: document.getElementById('materialStock').value || '0',
       supplier: document.getElementById('materialSupplier').value,
+      purpose: document.getElementById('materialPurpose').value || '-',
+      safetyInterval: document.getElementById('materialSafetyInterval').value || '-',
       remark: document.getElementById('materialRemark').value
     };
     materialData.push(newItem);
@@ -1121,6 +1200,8 @@ function saveMaterial() {
         price: document.getElementById('materialPrice').value || '0.00',
         stock: document.getElementById('materialStock').value || '0',
         supplier: document.getElementById('materialSupplier').value,
+        purpose: document.getElementById('materialPurpose').value || '-',
+        safetyInterval: document.getElementById('materialSafetyInterval').value || '-',
         remark: document.getElementById('materialRemark').value
       };
       alert('编辑成功');
@@ -1143,6 +1224,8 @@ function viewMaterial(code) {
     document.getElementById('viewPrice').textContent = item.price;
     document.getElementById('viewStock').textContent = item.stock;
     document.getElementById('viewSupplier').textContent = item.supplier;
+    document.getElementById('viewPurpose').textContent = item.purpose || '-';
+    document.getElementById('viewSafetyInterval').textContent = item.safetyInterval || '-';
     document.getElementById('viewRemark').textContent = item.remark || '-';
     viewModal.classList.add('show');
   }
@@ -1151,6 +1234,23 @@ function viewMaterial(code) {
 // 关闭查看弹窗
 function closeViewModal() {
   viewModal.classList.remove('show');
+}
+
+// 打开导出弹窗
+function openExportModal() {
+  exportModal.classList.add('show');
+}
+
+// 关闭导出弹窗
+function closeExportModal() {
+  exportModal.classList.remove('show');
+}
+
+// 执行导出
+function doExport() {
+  const format = document.getElementById('exportFormat').value;
+  alert(`农资数据（共 ${filteredData.length} 条）将以${format === 'excel' ? 'Excel' : 'CSV'}格式导出`);
+  closeExportModal();
 }
 
 // 删除农资
@@ -1183,7 +1283,6 @@ function bindEvents() {
   });
   
   // 下拉框变化时搜索
-  baseSelect.addEventListener('change', search);
   typeSelect.addEventListener('change', search);
   statusSelect.addEventListener('change', search);
   
@@ -1197,6 +1296,12 @@ function bindEvents() {
   viewModal.addEventListener('click', function(e) {
     if (e.target === viewModal) {
       closeViewModal();
+    }
+  });
+  
+  exportModal.addEventListener('click', function(e) {
+    if (e.target === exportModal) {
+      closeExportModal();
     }
   });
 }

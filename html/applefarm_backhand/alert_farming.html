@@ -483,20 +483,11 @@
                   <th style="width:160px;">操作</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="dataTableBody">
               </tbody>
             </table>
           </div>
-          <div class="pagination-wrapper">
-            <div class="pagination-info">共 <span class="num">23</span> 条记录，第 <span class="num">1</span>/<span class="num">3</span> 页</div>
-            <div class="pagination">
-              <button class="page-btn disabled">‹</button>
-              <button class="page-btn active">1</button>
-              <button class="page-btn">2</button>
-              <button class="page-btn">3</button>
-              <button class="page-btn">›</button>
-            </div>
-          </div>
+          <div id="pagination-container"></div>
         </div>
       </div>
     </main>
@@ -687,16 +678,27 @@
     { id: 'FAR023', title: '土壤预警：地块D1盐分累积超标', type: 'soil', typeText: '土壤预警', level: 'warning', levelText: '重要', location: '龙口南山基地 - 地块D1', time: '2026-09-13 13:30', status: 'processing', statusText: '处理中', desc: '土壤盐分含量达到3.5g/kg，超过安全阈值，建议进行冲洗改良。', threshold: { current: '3.5g/kg', limit: '3.0g/kg', trend: '持续累积' } }
   ];
 
-  let currentPage = 1;
-  const pageSize = 10;
   let filteredData = [...mockData];
 
   document.addEventListener('DOMContentLoaded', function() {
-    renderTable();
-    renderPagination();
+    Pagination.init({
+      currentPage: 1,
+      pageSize: 10,
+      data: filteredData,
+      containerId: 'pagination-container',
+      tbodyId: 'dataTableBody',
+      renderRow: renderRow
+    });
 
-    const detailBtns = document.querySelectorAll('.action-btn.detail');
-    const executeBtns = document.querySelectorAll('.action-btn.execute');
+    document.addEventListener('click', function(e) {
+      const btn = e.target.closest('.action-btn');
+      if (!btn) return;
+      if (btn.classList.contains('detail') || btn.classList.contains('execute')) {
+        showDetailModal(btn.dataset.id);
+        document.getElementById('detailModal').classList.add('show');
+      }
+    });
+
     const detailModal = document.getElementById('detailModal');
     const batchModal = document.getElementById('batchModal');
     const exportModal = document.getElementById('exportModal');
@@ -720,9 +722,7 @@
         return matchKeyword && matchType && matchLevel && matchDate && matchBase;
       });
 
-      currentPage = 1;
-      renderTable();
-      renderPagination();
+      Pagination.updateData(filteredData);
       showToast('搜索完成，共找到 ' + filteredData.length + ' 条记录');
     });
 
@@ -731,9 +731,7 @@
         el.value = '';
       });
       filteredData = [...mockData];
-      currentPage = 1;
-      renderTable();
-      renderPagination();
+      Pagination.updateData(filteredData);
     });
 
     document.getElementById('btnBatch')?.addEventListener('click', function() {
@@ -849,15 +847,10 @@
     return map[action] || action;
   }
 
-  function renderTable() {
-    const tableBody = document.querySelector('.data-table tbody');
-    const start = (currentPage - 1) * pageSize;
-    const end = start + pageSize;
-    const pageData = filteredData.slice(start, end);
-
-    tableBody.innerHTML = pageData.map((item, __seq) => `
+  function renderRow(item, index) {
+    return `
       <tr>
-        <td>${__seq + 1}</td>
+        <td>${index + 1}</td>
         <td><strong>${item.title}</strong></td>
         <td><span class="status-tag ${getTypeClass(item.type)}">${item.typeText}</span></td>
         <td><span class="status-tag ${item.level}">${item.levelText}</span></td>
@@ -871,24 +864,7 @@
           </div>
         </td>
       </tr>
-    `).join('');
-
-    document.querySelectorAll('.action-btn.detail').forEach(btn => {
-      btn.addEventListener('click', function() {
-        showDetailModal(this.dataset.id);
-        document.getElementById('detailModal').classList.add('show');
-      });
-    });
-
-    document.querySelectorAll('.action-btn.execute').forEach(btn => {
-      btn.addEventListener('click', function() {
-        showDetailModal(this.dataset.id);
-        document.getElementById('detailModal').classList.add('show');
-      });
-    });
-
-    if (document.getElementById('selectAll')) document.getElementById('selectAll').checked = false;
-    updateSelectedCount();
+    `;
   }
 
   function getTypeClass(type) {
@@ -926,33 +902,6 @@
     document.getElementById('thresholdTrend').textContent = item.threshold.trend;
     document.getElementById('executeAction').value = '';
     document.getElementById('executeRemark').value = '';
-  }
-
-  function renderPagination() {
-    const total = filteredData.length;
-    const totalPages = Math.ceil(total / pageSize);
-    const pagination = document.querySelector('.pagination');
-    const info = document.querySelector('.pagination-info');
-
-    info.innerHTML = `共 <span class="num">${total}</span> 条记录，第 <span class="num">${currentPage}</span>/<span class="num">${totalPages}</span> 页`;
-
-    let html = `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="changePage(${currentPage - 1})">‹</button>`;
-
-    for (let i = 1; i <= totalPages; i++) {
-      html += `<button class="page-btn ${currentPage === i ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
-    }
-
-    html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="changePage(${currentPage + 1})">›</button>`;
-
-    pagination.innerHTML = html;
-  }
-
-  function changePage(page) {
-    const totalPages = Math.ceil(filteredData.length / pageSize);
-    if (page < 1 || page > totalPages) return;
-    currentPage = page;
-    renderTable();
-    renderPagination();
   }
 
   function updateSelectedCount() {

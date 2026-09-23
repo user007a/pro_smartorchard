@@ -172,6 +172,20 @@
     grid-template-columns:1fr 1fr;
     gap:16px;
   }
+  .qrcode-url {
+    margin-top:10px;
+    font-size:12px;
+    color:var(--text-tertiary);
+    word-break:break-all;
+    font-family:var(--font-mono, monospace);
+  }
+  .form-hint { font-size:12px; color:var(--text-tertiary); }
+  .chain-box { background:#f8faf8; border-radius:12px; padding:16px 20px; margin-bottom:16px; }
+  .chain-title { font-weight:600; color:var(--text-primary); font-size:14px; margin-bottom:10px; }
+  .chain-list { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .chain-node { background:var(--bg-card); border:1px solid var(--border-default); border-radius:8px; padding:6px 12px; font-size:13px; color:var(--text-secondary); }
+  .chain-node.hl { border-color:#1890ff; color:#1890ff; font-weight:500; }
+  .chain-arrow { color:var(--text-tertiary); font-size:13px; }
   .toast {
     position:fixed;
     top:20px;
@@ -231,23 +245,18 @@
 
         <div class="search-section">
           <div class="search-bar">
-            <select class="search-select" id="batchSelect">
+            <select class="search-select" id="batchSelect" style="width:240px;">
               <option value="">全部批次</option>
-              <option value="PC-20260515-01">PC-20260515-01</option>
-              <option value="PC-20260516-02">PC-20260516-02</option>
-              <option value="PC-20260517-03">PC-20260517-03</option>
-              <option value="PC-20260518-04">PC-20260518-04</option>
-              <option value="PC-20260520-05">PC-20260520-05</option>
             </select>
-            <input type="text" class="search-input" placeholder="输入产品名称搜索..." id="productNameInput">
+            <input type="text" class="search-input" placeholder="输入追溯码搜索..." id="codeInput" style="width:180px;">
             <select class="search-select" id="statusSelect">
               <option value="">全部状态</option>
-              <option value="used">已使用</option>
-              <option value="unused">未使用</option>
+              <option value="inactive">未激活</option>
+              <option value="active">已激活</option>
               <option value="expired">已过期</option>
             </select>
             
-          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
+          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="resetSearch()">重置</button></div>
           </div>
         </div>
 
@@ -266,8 +275,9 @@
               打印全部标签
             </button>
           </div>
-          <div class="action-right">
-            <span class="selected-info" id="recordCount">共 23 条记录</span>
+          <div class="action-right" style="display:flex;align-items:center;gap:12px;">
+            <select class="search-select" id="labelTypeSelect" style="width:250px;"></select>
+            <span class="selected-info" id="labelStockInfo" style="font-size:13px;color:var(--text-tertiary);"></span>
           </div>
         </div>
 
@@ -275,13 +285,13 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th class="checkbox-col" style="width:60px;">序号</th>
+                <th style="width:60px;">序号</th>
                 <th>追溯码</th>
                 <th>批次号</th>
                 <th>产品名称</th>
-                <th>规格</th>
+                <th>产地（基地/地块）</th>
                 <th>生成时间</th>
-                <th>使用状态</th>
+                <th>状态</th>
                 <th>关联订单</th>
                 <th>操作</th>
               </tr>
@@ -289,7 +299,7 @@
             <tbody id="dataTableBody">
             </tbody>
           </table>
-          <div class="pagination" id="paginationContainer">
+          <div id="pagination-container">
           </div>
         </div>
       </div>
@@ -313,6 +323,7 @@
     </div>
     <div class="modal-footer">
       <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
+      <button class="jg-btn" onclick="previewFromDetail()">预览消费者页</button>
       <button class="jg-btn jg-btn-primary" onclick="printSingleLabel()">打印标签</button>
     </div>
   </div>
@@ -332,19 +343,22 @@
     <div class="modal-body">
       <div class="qrcode-container">
         <div class="qrcode-box">
-          <div class="qrcode-placeholder">
+          <img id="qrcodeImg" alt="溯源二维码" style="width:100%;height:100%;display:none;">
+          <div class="qrcode-placeholder" id="qrcodePlaceholder">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:64px;height:64px;">
               <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
               <path d="M6.5 6.5h1v1h-1zM16.5 6.5h1v1h-1zM6.5 16.5h1v1h-1z"/>
             </svg>
           </div>
         </div>
-        <div class="qrcode-code" id="qrcodeValue">SNZG-2024-0001</div>
-        <div class="qrcode-hint">扫描二维码查看产品溯源信息</div>
+        <div class="qrcode-code" id="qrcodeValue">SNZG-20260901-0001</div>
+        <div class="qrcode-hint">扫描二维码打开消费者溯源页</div>
+        <div class="qrcode-url" id="qrcodeUrl"></div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="jg-btn" onclick="closeModal('qrcodeModal')">关闭</button>
+      <button class="jg-btn" onclick="openH5Page()">打开消费者页</button>
       <button class="jg-btn jg-btn-primary" onclick="downloadQRCode()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -369,25 +383,43 @@
     <div class="modal-body">
       <div class="generate-form">
         <div class="form-group">
-          <label>产品名称</label>
-          <select id="generateProduct">
-            <option value="">请选择产品</option>
-            <option value="天水花牛苹果">天水花牛苹果</option>
-            <option value="招远黄金苹果">招远黄金苹果</option>
-            <option value="麦积区苹果礼盒">麦积区苹果礼盒</option>
-            <option value="天水苹果汁">天水苹果汁</option>
-            <option value="龙口苹果干">龙口苹果干</option>
+          <label>采收批次 <span style="color:#ef4444;">*</span></label>
+          <select id="generateBatch">
+            <option value="">请选择采收批次</option>
           </select>
+          <span class="form-hint">批次来自「批次管理」，格式 PC-YYYYMMDD-NNN</span>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>产品名称</label>
+            <input type="text" id="generateProduct" readonly placeholder="选择批次后自动带出">
+          </div>
+          <div class="form-group">
+            <label>规格</label>
+            <input type="text" id="generateSpec" readonly placeholder="选择批次后自动带出">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>产地（基地 / 地块）</label>
+          <input type="text" id="generateOrigin" readonly placeholder="选择批次后自动带出">
         </div>
         <div class="form-row">
           <div class="form-group">
             <label>生成数量</label>
-            <input type="number" id="generateCount" value="100" min="1" max="10000">
+            <input type="number" id="generateCount" value="10" min="1" max="200">
           </div>
           <div class="form-group">
-            <label>批次号</label>
-            <input type="text" id="generateBatch" placeholder="自动生成">
+            <label>关联订单</label>
+            <select id="generateOrder">
+              <option value="">暂不关联</option>
+            </select>
           </div>
+        </div>
+        <div class="form-group">
+          <label>展示模板</label>
+          <select id="generateTemplate">
+            <option value="">使用默认模板</option>
+          </select>
         </div>
         <div class="form-group">
           <label>备注</label>
@@ -413,136 +445,197 @@
 </div>
 
 <script>
-// Mock数据 - 23条记录
-const mockData = [
-  { code: 'SNZG-2024-0001', batch: 'PC-20260515-01', product: '天水花牛苹果', spec: '5kg/箱', time: '2026-09-15 10:30:00', status: 'used', order: 'ORD-20240515001' },
-  { code: 'SNZG-2024-0002', batch: 'PC-20260516-02', product: '招远黄金苹果', spec: '3kg/箱', time: '2026-09-16 14:20:00', status: 'used', order: 'ORD-20240516002' },
-  { code: 'SNZG-2024-0003', batch: 'PC-20260517-03', product: '麦积区苹果礼盒', spec: '8kg/盒', time: '2026-09-17 09:15:00', status: 'unused', order: '—' },
-  { code: 'SNZG-2024-0004', batch: 'PC-20260518-04', product: '天水苹果汁', spec: '1L*6/箱', time: '2026-09-18 16:45:00', status: 'unused', order: '—' },
-  { code: 'SNZG-2024-0005', batch: 'PC-20260520-05', product: '龙口苹果干', spec: '200g/袋', time: '2026-09-20 11:00:00', status: 'expired', order: '—' },
-  { code: 'SNZG-2024-0006', batch: 'PC-20260521-06', product: '麦积区红将军苹果', spec: '5kg/箱', time: '2026-09-21 08:30:00', status: 'used', order: 'ORD-20240521001' },
-  { code: 'SNZG-2024-0007', batch: 'PC-20260522-07', product: '牟平富士苹果', spec: '4kg/箱', time: '2026-09-22 15:20:00', status: 'used', order: 'ORD-20240522002' },
-  { code: 'SNZG-2024-0008', batch: 'PC-20260523-08', product: '天水苹果醋', spec: '500ml*8/箱', time: '2026-09-23 10:45:00', status: 'unused', order: '—' },
-  { code: 'SNZG-2024-0009', batch: 'PC-20260524-09', product: '海阳水晶苹果', spec: '6kg/箱', time: '2026-09-24 13:00:00', status: 'used', order: 'ORD-20240524001' },
-  { code: 'SNZG-2024-0010', batch: 'PC-20260525-10', product: '福山苹果酱', spec: '300g/罐', time: '2026-09-25 09:30:00', status: 'unused', order: '—' },
-  { code: 'SNZG-2024-0011', batch: 'PC-20260526-11', product: '长岛苹果脆片', spec: '150g/袋', time: '2026-09-26 14:15:00', status: 'used', order: 'ORD-20240526001' },
-  { code: 'SNZG-2024-0012', batch: 'PC-20260527-12', product: '芝罘苹果饮料', spec: '330ml*12/箱', time: '2026-09-27 11:20:00', status: 'expired', order: '—' },
-  { code: 'SNZG-2024-0013', batch: 'PC-20260528-13', product: '开发苹果酒', spec: '750ml/瓶', time: '2026-09-28 16:30:00', status: 'used', order: 'ORD-20240528001' },
-  { code: 'SNZG-2024-0014', batch: 'PC-20260529-14', product: '麦积区黄金富士', spec: '5kg/箱', time: '2026-09-29 08:45:00', status: 'unused', order: '—' },
-  { code: 'SNZG-2024-0015', batch: 'PC-20260530-15', product: '招远有机苹果', spec: '4kg/箱', time: '2026-09-30 10:00:00', status: 'used', order: 'ORD-20240530001' },
-  { code: 'SNZG-2024-0016', batch: 'PC-20260601-16', product: '龙口精品苹果', spec: '6kg/箱', time: '2026-09-01 09:15:00', status: 'unused', order: '—' },
-  { code: 'SNZG-2024-0017', batch: 'PC-20260602-17', product: '天水苹果干礼盒', spec: '500g/盒', time: '2026-09-02 14:30:00', status: 'used', order: 'ORD-20240602001' },
-  { code: 'SNZG-2024-0018', batch: 'PC-20260603-18', product: '天水生态苹果', spec: '5kg/箱', time: '2026-09-03 11:45:00', status: 'unused', order: '—' },
-  { code: 'SNZG-2024-0019', batch: 'PC-20260604-19', product: '麦积区冰糖心苹果', spec: '4kg/箱', time: '2026-09-04 15:20:00', status: 'used', order: 'ORD-20240604001' },
-  { code: 'SNZG-2024-0020', batch: 'PC-20260605-20', product: '莱山苹果脯', spec: '250g/袋', time: '2026-09-05 10:30:00', status: 'unused', order: '—' },
-  { code: 'SNZG-2024-0021', batch: 'PC-20260606-21', product: '牟平花牛苹果', spec: '5kg/箱', time: '2026-09-06 13:15:00', status: 'used', order: 'ORD-20240606001' },
-  { code: 'SNZG-2024-0022', batch: 'PC-20260607-22', product: '海阳苹果派', spec: '300g/个', time: '2026-09-07 08:00:00', status: 'unused', order: '—' },
-  { code: 'SNZG-2024-0023', batch: 'PC-20260608-23', product: '福山苹果酵素', spec: '500ml/瓶', time: '2026-09-08 16:45:00', status: 'expired', order: '—' }
+/* ============================================================
+ * 溯源编码 —— 追溯码生成与管理
+ * 批次来自「批次管理」主数据，产品来自证书签发源
+ * 生成时强制选择采收批次；二维码指向 H5 溯源端 trace_h5.html?code=xxx
+ * ============================================================ */
+
+// 批次主数据（与 trace_batch.html 保持一致）
+const BATCH_SOURCE = [
+  {batchNo:'PC-20260901-001',plotCode:'D-001',plotName:'东区1号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-01'},
+  {batchNo:'PC-20260902-002',plotCode:'D-002',plotName:'东区2号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-02'},
+  {batchNo:'PC-20260903-003',plotCode:'D-003',plotName:'西区1号地',base:'天水麦积区基地',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-03'},
+  {batchNo:'PC-20260904-004',plotCode:'D-004',plotName:'北区1号地',base:'天水荣成基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-04'},
+  {batchNo:'PC-20260905-005',plotCode:'D-005',plotName:'南区1号地',base:'天水荣成基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-05'},
+  {batchNo:'PC-20260906-006',plotCode:'D-006',plotName:'中区1号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-06'},
+  {batchNo:'PC-20260907-007',plotCode:'D-007',plotName:'南区2号地',base:'甘肃麦积区苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-07'},
+  {batchNo:'PC-20260908-008',plotCode:'D-008',plotName:'西区2号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-08'},
+  {batchNo:'PC-20260909-009',plotCode:'D-009',plotName:'北区2号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-09'},
+  {batchNo:'PC-20260910-010',plotCode:'D-010',plotName:'东区3号地',base:'天水麦积区苹果基地',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-10'},
+  {batchNo:'PC-20260911-011',plotCode:'D-011',plotName:'南区3号地',base:'甘肃麦积区苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-11'},
+  {batchNo:'PC-20260912-012',plotCode:'D-012',plotName:'西区3号地',base:'天水麦积区苹果基地',product:'秦冠苹果',spec:'6kg/箱',harvestDate:'2026-09-12'},
+  {batchNo:'PC-20260913-013',plotCode:'D-013',plotName:'北区3号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-13'},
+  {batchNo:'PC-20260914-014',plotCode:'D-014',plotName:'中区2号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-14'},
+  {batchNo:'PC-20260915-015',plotCode:'D-015',plotName:'东区4号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-15'},
+  {batchNo:'PC-20260916-016',plotCode:'D-016',plotName:'南区4号地',base:'甘肃麦积区苹果园',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-16'},
+  {batchNo:'PC-20260917-017',plotCode:'D-017',plotName:'西区4号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-17'},
+  {batchNo:'PC-20260918-018',plotCode:'D-018',plotName:'北区4号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-18'},
+  {batchNo:'PC-20260919-019',plotCode:'D-019',plotName:'中区3号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-19'},
+  {batchNo:'PC-20260920-020',plotCode:'D-020',plotName:'东区5号地',base:'天水麦积区苹果基地',product:'秦冠苹果',spec:'6kg/箱',harvestDate:'2026-09-20'}
 ];
 
-let currentPage = 1;
-const pageSize = 10;
-let filteredData = [...mockData];
+// 关联订单（取自销售订单 sales_order.html）
+const ORDER_SOURCE = ['SN20260614102','SN20260611105','SN20260608108','SN20260602114','SN20260530117','SN20260527120','SN20260526121'];
+
+// 展示模板（取自溯源配置 trace_config.html）
+const TEMPLATE_SOURCE = ['标准版履历模板','精简版履历模板','品牌故事版模板','有机认证版模板'];
+
+const STATUS_TEXT = { inactive:'未激活', active:'已激活', expired:'已过期' };
+
+// H5 溯源端地址
+const H5_BASE = window.location.href.split('?')[0].replace(/[^/]*$/, '').replace(/applefarm_backhand\/$/, 'applefarm_h5/');
+const H5_TRACE_PAGE = H5_BASE + 'trace_h5.html';
+function buildH5Url(code) { return H5_TRACE_PAGE + '?code=' + encodeURIComponent(code); }
+
+// 追溯码数据（23 条，全部挂接批次主数据）
+const mockData = [
+  { code: 'SNZG-20260901-0001', batch: 'PC-20260901-001', time: '2026-09-01 16:20:00', status: 'active',   order: 'SN20260614102', template: '标准版履历模板', queries: 156 },
+  { code: 'SNZG-20260901-0002', batch: 'PC-20260901-001', time: '2026-09-01 16:35:00', status: 'active',   order: 'SN20260611105', template: '标准版履历模板', queries: 98 },
+  { code: 'SNZG-20260902-0003', batch: 'PC-20260902-002', time: '2026-09-02 15:10:00', status: 'active',   order: 'SN20260608108', template: '有机认证版模板', queries: 134 },
+  { code: 'SNZG-20260902-0004', batch: 'PC-20260902-002', time: '2026-09-02 15:25:00', status: 'active',   order: 'SN20260602114', template: '有机认证版模板', queries: 87 },
+  { code: 'SNZG-20260903-0005', batch: 'PC-20260903-003', time: '2026-09-03 17:00:00', status: 'inactive', order: '', template: '精简版履历模板', queries: 0 },
+  { code: 'SNZG-20260903-0006', batch: 'PC-20260903-003', time: '2026-09-03 17:12:00', status: 'inactive', order: '', template: '精简版履历模板', queries: 0 },
+  { code: 'SNZG-20260904-0007', batch: 'PC-20260904-004', time: '2026-09-04 16:40:00', status: 'inactive', order: '', template: '标准版履历模板', queries: 0 },
+  { code: 'SNZG-20260905-0008', batch: 'PC-20260905-005', time: '2026-09-05 16:05:00', status: 'active',   order: 'SN20260530117', template: '标准版履历模板', queries: 112 },
+  { code: 'SNZG-20260906-0009', batch: 'PC-20260906-006', time: '2026-09-06 15:48:00', status: 'inactive', order: '', template: '精简版履历模板', queries: 0 },
+  { code: 'SNZG-20260907-0010', batch: 'PC-20260907-007', time: '2026-09-07 17:20:00', status: 'inactive', order: '', template: '标准版履历模板', queries: 0 },
+  { code: 'SNZG-20260908-0011', batch: 'PC-20260908-008', time: '2026-09-08 16:30:00', status: 'inactive', order: '', template: '标准版履历模板', queries: 0 },
+  { code: 'SNZG-20260909-0012', batch: 'PC-20260909-009', time: '2026-09-09 15:55:00', status: 'inactive', order: '', template: '精简版履历模板', queries: 0 },
+  { code: 'SNZG-20260910-0013', batch: 'PC-20260910-010', time: '2026-09-10 16:15:00', status: 'inactive', order: '', template: '精简版履历模板', queries: 0 },
+  { code: 'SNZG-20260911-0014', batch: 'PC-20260911-011', time: '2026-09-11 17:05:00', status: 'inactive', order: '', template: '标准版履历模板', queries: 0 },
+  { code: 'SNZG-20260912-0015', batch: 'PC-20260912-012', time: '2026-09-12 16:50:00', status: 'active',   order: 'SN20260527120', template: '品牌故事版模板', queries: 76 },
+  { code: 'SNZG-20260913-0016', batch: 'PC-20260913-013', time: '2026-09-13 15:35:00', status: 'inactive', order: '', template: '标准版履历模板', queries: 0 },
+  { code: 'SNZG-20260914-0017', batch: 'PC-20260914-014', time: '2026-09-14 16:45:00', status: 'inactive', order: '', template: '标准版履历模板', queries: 0 },
+  { code: 'SNZG-20260915-0018', batch: 'PC-20260915-015', time: '2026-09-15 17:15:00', status: 'inactive', order: '', template: '精简版履历模板', queries: 0 },
+  { code: 'SNZG-20260916-0019', batch: 'PC-20260916-016', time: '2026-09-16 15:20:00', status: 'inactive', order: '', template: '精简版履历模板', queries: 0 },
+  { code: 'SNZG-20260917-0020', batch: 'PC-20260917-017', time: '2026-09-17 16:25:00', status: 'active',   order: 'SN20260526121', template: '标准版履历模板', queries: 64 },
+  { code: 'SNZG-20260918-0021', batch: 'PC-20260918-018', time: '2026-09-18 17:30:00', status: 'expired',  order: '', template: '标准版履历模板', queries: 42 },
+  { code: 'SNZG-20260919-0022', batch: 'PC-20260919-019', time: '2026-09-19 16:10:00', status: 'expired',  order: '', template: '精简版履历模板', queries: 29 },
+  { code: 'SNZG-20260920-0023', batch: 'PC-20260920-020', time: '2026-09-20 15:40:00', status: 'inactive', order: '', template: '标准版履历模板', queries: 0 }
+];
+
 let currentDetailCode = '';
 
-// 页面初始化
-document.addEventListener('DOMContentLoaded', function() {
-  renderTable();
-  renderPagination();
-});
+// 按批次号取批次信息
+function getBatchInfo(batchNo) {
+  return BATCH_SOURCE.find(b => b.batchNo === batchNo) || { batchNo: batchNo, plotCode: '-', plotName: '-', base: '-', product: '-', spec: '-' };
+}
+function enrichCode(item) {
+  const b = getBatchInfo(item.batch);
+  return Object.assign({}, item, {
+    product: b.product,
+    spec: b.spec,
+    base: b.base,
+    plotCode: b.plotCode,
+    plotName: b.plotName,
+    statusText: STATUS_TEXT[item.status] || item.status
+  });
+}
 
-// 渲染表格
-function renderTable() {
-  const tbody = document.getElementById('dataTableBody');
-  const start = (currentPage - 1) * pageSize;
-  const end = start + pageSize;
-  const pageData = filteredData.slice(start, end);
-  
-  tbody.innerHTML = pageData.map((item, __seq) => `
-    <tr>
-      <td class="checkbox-col">${__seq + 1}</td>
-      <td><strong>${item.code}</strong></td>
-      <td>${item.batch}</td>
-      <td>${item.product}</td>
-      <td>${item.spec}</td>
-      <td>${item.time}</td>
-      <td><span class="status-tag ${item.status === 'used' ? 'active' : item.status === 'expired' ? 'error' : 'inactive'}">${item.status === 'used' ? '已使用' : item.status === 'expired' ? '已过期' : '未使用'}</span></td>
-      <td>${item.order}</td>
+/* ---------- 分页组件（与农事计划、批次管理一致） ---------- */
+const Pagination = {
+  currentPage: 1, pageSize: 10, filteredData: [],
+  containerId: 'pagination-container', tbodyId: 'dataTableBody', renderRow: null,
+  init: function(options) {
+    this.currentPage = options.currentPage || 1;
+    this.pageSize = options.pageSize || 10;
+    this.filteredData = options.data || [];
+    this.containerId = options.containerId || 'pagination-container';
+    this.tbodyId = options.tbodyId || 'dataTableBody';
+    this.renderRow = options.renderRow || null;
+    this.render();
+  },
+  renderTable: function() {
+    const tbody = document.getElementById(this.tbodyId);
+    if (!tbody || !this.renderRow) return;
+    const start = (this.currentPage - 1) * this.pageSize;
+    const pageData = this.filteredData.slice(start, start + this.pageSize);
+    tbody.innerHTML = pageData.map((item, i) => this.renderRow(item, start + i + 1)).join('');
+  },
+  render: function() {
+    const container = document.getElementById(this.containerId);
+    if (!container) return;
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    let html = '<div class="pagination">';
+    html += `<button class="page-btn ${this.currentPage <= 1 ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage - 1})">‹</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= this.currentPage - 1 && i <= this.currentPage + 1)) {
+        html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" onclick="Pagination.goToPage(${i})">${i}</button>`;
+      } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
+        html += '<span class="page-ellipsis" style="padding:0 8px;color:#6b7b6b;">...</span>';
+      }
+    }
+    html += `<button class="page-btn ${this.currentPage >= totalPages ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage + 1})">›</button>`;
+    html += `<span style="margin-left:16px;font-size:13px;color:#6b7b6b;">第 ${this.currentPage} 页/共 ${totalPages} 页，共 ${this.filteredData.length} 条记录</span>`;
+    html += '</div>';
+    container.innerHTML = html;
+    this.renderTable();
+  },
+  goToPage: function(page) {
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    if (page < 1 || page > totalPages) return;
+    this.currentPage = page;
+    this.render();
+  },
+  updateData: function(data) {
+    this.filteredData = data;
+    this.currentPage = 1;
+    this.render();
+  }
+};
+
+// 渲染表格行
+function renderCodeRow(item, seq) {
+  const c = enrichCode(item);
+  return `
+    <tr data-id="${c.code}">
+      <td>${seq}</td>
+      <td><strong>${c.code}</strong></td>
+      <td>${c.batch}</td>
+      <td>${c.product}</td>
+      <td>${c.base} / ${c.plotCode} ${c.plotName}</td>
+      <td>${c.time}</td>
+      <td><span class="status-tag ${c.status === 'active' ? 'active' : c.status === 'expired' ? 'error' : 'inactive'}">${c.statusText}</span></td>
+      <td>${c.order || '—'}</td>
       <td>
         <div class="action-btns">
-          <button class="action-btn detail" onclick="viewDetail('${item.code}')">详情</button>
-          <button class="action-btn qrcode" onclick="showQRCode('${item.code}')">二维码</button>
+          <button class="action-btn detail" onclick="viewDetail('${c.code}')">详情</button>
+          <button class="action-btn qrcode" onclick="showQRCode('${c.code}')">二维码</button>
         </div>
       </td>
     </tr>
-  `).join('');
-  
-  document.getElementById('recordCount').textContent = `共 ${filteredData.length} 条记录`;
-}
-
-// 渲染分页
-function renderPagination() {
-  const container = document.getElementById('paginationContainer');
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  
-  if (totalPages <= 1) {
-    container.innerHTML = '';
-    return;
-  }
-  
-  let html = '';
-  html += `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="goToPage(${currentPage - 1})">‹</button>`;
-  
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-      html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
-    } else if (i === currentPage - 2 || i === currentPage + 2) {
-      html += '<span class="page-ellipsis">...</span>';
-    }
-  }
-  
-  html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="goToPage(${currentPage + 1})">›</button>`;
-  
-  container.innerHTML = html;
-}
-
-// 跳转页面
-function goToPage(page) {
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  if (page < 1 || page > totalPages) return;
-  currentPage = page;
-  renderTable();
-  renderPagination();
+  `;
 }
 
 // 搜索
 function searchData() {
   const batch = document.getElementById('batchSelect').value;
-  const product = document.getElementById('productNameInput').value.toLowerCase();
+  const code = document.getElementById('codeInput').value.trim().toLowerCase();
   const status = document.getElementById('statusSelect').value;
-  
-  filteredData = mockData.filter(item => {
+
+  const filtered = mockData.filter(item => {
     if (batch && item.batch !== batch) return false;
-    if (product && !item.product.toLowerCase().includes(product)) return false;
+    if (code && !item.code.toLowerCase().includes(code)) return false;
     if (status && item.status !== status) return false;
     return true;
   });
-  
-  currentPage = 1;
-  renderTable();
-  renderPagination();
-  showToast(`找到 ${filteredData.length} 条记录`);
+
+  Pagination.updateData(filtered);
+  showToast(`找到 ${filtered.length} 条记录`);
 }
 
-// 全选/取消全选
-function toggleSelectAll() {
-  const checked = !!document.getElementById('selectAll') && document.getElementById('selectAll').checked;
-  document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = checked);
+function resetSearch() {
+  document.getElementById('batchSelect').value = '';
+  document.getElementById('codeInput').value = '';
+  document.getElementById('statusSelect').value = '';
+  Pagination.updateData(mockData);
+  showToast('已重置筛选条件');
 }
 
-function updateSelectAll() {
-  const allChecked = document.querySelectorAll('.row-checkbox').length === document.querySelectorAll('.row-checkbox:checked').length;
-  if (document.getElementById('selectAll')) document.getElementById('selectAll').checked = allChecked;
+// 状态标签样式
+function statusTagClass(status) {
+  return status === 'active' ? 'active' : status === 'expired' ? 'error' : 'inactive';
 }
 
 // 查看详情
@@ -550,107 +643,213 @@ function viewDetail(code) {
   currentDetailCode = code;
   const item = mockData.find(d => d.code === code);
   if (!item) return;
-  
+  const c = enrichCode(item);
+
   document.getElementById('detailContent').innerHTML = `
-    <div class="detail-grid">
-      <span class="detail-label">追溯码</span>
-      <span class="detail-value">${item.code}</span>
+    <div class="chain-box">
+      <div class="chain-title">溯源链路</div>
+      <div class="chain-list">
+        <span class="chain-node">${c.batch} 采收批次</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-node hl">${c.code}</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-node">${c.template || '默认模板'}</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-node">${c.order || '未关联订单'}</span>
+      </div>
     </div>
-    <div class="detail-grid">
-      <span class="detail-label">批次号</span>
-      <span class="detail-value">${item.batch}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">产品名称</span>
-      <span class="detail-value">${item.product}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">产品规格</span>
-      <span class="detail-value">${item.spec}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">生成时间</span>
-      <span class="detail-value">${item.time}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">使用状态</span>
-      <span class="detail-value"><span class="status-tag ${item.status === 'used' ? 'active' : item.status === 'expired' ? 'error' : 'inactive'}">${item.status === 'used' ? '已使用' : item.status === 'expired' ? '已过期' : '未使用'}</span></span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">关联订单</span>
-      <span class="detail-value">${item.order}</span>
-    </div>
+    <div class="detail-grid"><span class="detail-label">追溯码</span><span class="detail-value">${c.code}</span></div>
+    <div class="detail-grid"><span class="detail-label">批次号</span><span class="detail-value">${c.batch}</span></div>
+    <div class="detail-grid"><span class="detail-label">产品名称</span><span class="detail-value">${c.product}</span></div>
+    <div class="detail-grid"><span class="detail-label">产品规格</span><span class="detail-value">${c.spec}</span></div>
+    <div class="detail-grid"><span class="detail-label">所属基地</span><span class="detail-value">${c.base}</span></div>
+    <div class="detail-grid"><span class="detail-label">地块</span><span class="detail-value">${c.plotCode} · ${c.plotName}</span></div>
+    <div class="detail-grid"><span class="detail-label">生成时间</span><span class="detail-value">${c.time}</span></div>
+    <div class="detail-grid"><span class="detail-label">状态</span><span class="detail-value"><span class="status-tag ${statusTagClass(c.status)}">${c.statusText}</span></span></div>
+    <div class="detail-grid"><span class="detail-label">查询次数</span><span class="detail-value">${c.queries} 次</span></div>
+    <div class="detail-grid"><span class="detail-label">展示模板</span><span class="detail-value">${c.template || '默认模板'}</span></div>
+    <div class="detail-grid"><span class="detail-label">关联订单</span><span class="detail-value">${c.order || '—'}</span></div>
+    <div class="detail-grid"><span class="detail-label">二维码链接</span><span class="detail-value" style="word-break:break-all;font-size:12px;">${buildH5Url(c.code)}</span></div>
   `;
-  
+
   openModal('detailModal');
 }
 
 // 显示二维码
 function showQRCode(code) {
   currentDetailCode = code;
+  const url = buildH5Url(code);
   document.getElementById('qrcodeValue').textContent = code;
+  document.getElementById('qrcodeUrl').textContent = url;
+
+  const img = document.getElementById('qrcodeImg');
+  const ph = document.getElementById('qrcodePlaceholder');
+  img.style.display = 'none';
+  ph.style.display = 'flex';
+  img.onload = function() { img.style.display = 'block'; ph.style.display = 'none'; };
+  img.onerror = function() { img.style.display = 'none'; ph.style.display = 'flex'; };
+  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=' + encodeURIComponent(url);
+
   openModal('qrcodeModal');
 }
 
+function openH5Page() {
+  if (!currentDetailCode) return;
+  window.open(buildH5Url(currentDetailCode), '_blank');
+}
+
+function previewFromDetail() {
+  const code = currentDetailCode;
+  closeModal('detailModal');
+  setTimeout(() => showQRCode(code), 200);
+}
+
 // 生成追溯码弹窗
-function openGenerateModal() {
-  document.getElementById('generateBatch').value = 'PC-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + String(Math.floor(Math.random() * 100)).padStart(2, '0');
+function openGenerateModal(presetBatch) {
+  const batchSelect = document.getElementById('generateBatch');
+  batchSelect.innerHTML = '<option value="">请选择采收批次</option>' +
+    BATCH_SOURCE.map(b => `<option value="${b.batchNo}">${b.batchNo} · ${b.product} · ${b.plotCode} ${b.plotName}</option>`).join('');
+
+  document.getElementById('generateOrder').innerHTML = '<option value="">暂不关联</option>' +
+    ORDER_SOURCE.map(o => `<option value="${o}">${o}</option>`).join('');
+
+  document.getElementById('generateTemplate').innerHTML = '<option value="">使用默认模板</option>' +
+    TEMPLATE_SOURCE.map(t => `<option value="${t}">${t}</option>`).join('');
+
+  batchSelect.value = presetBatch || '';
+  document.getElementById('generateCount').value = '10';
+  document.getElementById('generateRemark').value = '';
+  syncBatchFields();
   openModal('generateModal');
 }
 
-// 确认生成
+// 选择批次后带出产品 / 规格 / 产地
+function syncBatchFields() {
+  const batchNo = document.getElementById('generateBatch').value;
+  const b = batchNo ? BATCH_SOURCE.find(x => x.batchNo === batchNo) : null;
+  document.getElementById('generateProduct').value = b ? b.product : '';
+  document.getElementById('generateSpec').value = b ? b.spec : '';
+  document.getElementById('generateOrigin').value = b ? `${b.base} / ${b.plotCode} ${b.plotName}` : '';
+}
+
+// 确认生成（强制选择采收批次，生成后落库）
 function confirmGenerate() {
-  const product = document.getElementById('generateProduct').value;
-  const count = document.getElementById('generateCount').value;
-  const batch = document.getElementById('generateBatch').value;
-  
-  if (!product) {
-    showToast('请选择产品', 'error');
-    return;
+  const batchNo = document.getElementById('generateBatch').value;
+  const count = Number(document.getElementById('generateCount').value);
+
+  if (!batchNo) { showToast('请选择采收批次', 'error'); return; }
+  if (!count || count < 1 || count > 200) { showToast('生成数量需在 1-200 之间', 'error'); return; }
+
+  const b = BATCH_SOURCE.find(x => x.batchNo === batchNo);
+  const order = document.getElementById('generateOrder').value;
+  const template = document.getElementById('generateTemplate').value || '标准版履历模板';
+
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  const dateCode = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+
+  let seq = mockData.length;
+  for (let i = 0; i < count; i++) {
+    seq += 1;
+    mockData.unshift({
+      code: `SNZG-${dateCode}-${String(seq).padStart(4, '0')}`,
+      batch: batchNo,
+      time: stamp,
+      status: 'inactive',
+      order: order,
+      template: template,
+      queries: 0
+    });
   }
-  
+
   closeModal('generateModal');
-  showToast(`已成功生成 ${count} 个追溯码，批次号：${batch}`);
-  
-  // 重置表单
-  document.getElementById('generateProduct').value = '';
-  document.getElementById('generateCount').value = '100';
-  document.getElementById('generateBatch').value = '';
-  document.getElementById('generateRemark').value = '';
+  Pagination.updateData(mockData);
+  showToast(`已生成 ${count} 个追溯码，批次：${batchNo}（${b ? b.product : ''}）`);
 }
 
-// 批量导出
-function batchExport() {
-  const checked = document.querySelectorAll('.row-checkbox:checked');
-  if (checked.length === 0) {
-    showToast('请先选择要导出的记录', 'error');
+// 标签库存（与移动端「标签领用」共用同一份本地存储）
+const LABEL_STOCK_KEY = 'smartorchard_label_stock';
+const LABEL_TYPES = [
+  { name: '花牛苹果专用标签（双层纸袋型）', stock: 12500 },
+  { name: '花牛苹果专用标签（透气膜袋型）', stock: 8200 },
+  { name: '秦冠专用标签', stock: 6800 }
+];
+
+function readLabelStock() {
+  try {
+    const raw = localStorage.getItem(LABEL_STOCK_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* 忽略 */ }
+  const init = {};
+  LABEL_TYPES.forEach(t => { init[t.name] = t.stock; });
+  return init;
+}
+
+function writeLabelStock(stock) {
+  try { localStorage.setItem(LABEL_STOCK_KEY, JSON.stringify(stock)); } catch (e) { /* 忽略 */ }
+}
+
+function currentLabelType() {
+  const sel = document.getElementById('labelTypeSelect');
+  return sel && sel.value ? sel.value : LABEL_TYPES[0].name;
+}
+
+function refreshLabelStock() {
+  const stock = readLabelStock();
+  const name = currentLabelType();
+  const left = stock[name] != null ? stock[name] : 0;
+  document.getElementById('labelStockInfo').textContent = `标签库存：${left} 张`;
+}
+
+// 打印全部标签（按库存校验并扣减）
+function printLabels() {
+  const count = Pagination.filteredData.length;
+  const name = currentLabelType();
+  const stock = readLabelStock();
+  const left = stock[name] != null ? stock[name] : 0;
+
+  if (left < count) {
+    showToast(`标签库存不足：需 ${count} 张，仅剩 ${left} 张，请先在移动端领用`, 'error');
     return;
   }
-  showToast(`已导出 ${checked.length} 条记录`);
-}
-
-// 打印标签
-function printLabels() {
-  showToast(`正在准备打印全部 ${filteredData.length} 个标签...`);
+  stock[name] = left - count;
+  writeLabelStock(stock);
+  refreshLabelStock();
+  showToast(`已打印 ${count} 个标签，${name} 剩余 ${stock[name]} 张`);
 }
 
 function printSingleLabel() {
-  showToast(`正在打印标签：${currentDetailCode}`);
+  const name = currentLabelType();
+  const stock = readLabelStock();
+  const left = stock[name] != null ? stock[name] : 0;
+
+  if (left < 1) {
+    showToast(`标签库存不足，请先在移动端领用`, 'error');
+    return;
+  }
+  stock[name] = left - 1;
+  writeLabelStock(stock);
+  refreshLabelStock();
+  showToast(`已打印标签：${currentDetailCode}，剩余 ${stock[name]} 张`);
   closeModal('detailModal');
 }
 
 // 下载二维码
 function downloadQRCode() {
-  showToast(`下载二维码：${currentDetailCode}`);
+  if (!currentDetailCode) return;
+  showToast(`已导出二维码：${currentDetailCode}`);
 }
 
 // 弹窗操作
 function openModal(id) {
   document.getElementById(id).classList.add('active');
+  document.body.style.overflow = 'hidden';
 }
 
 function closeModal(id) {
   document.getElementById(id).classList.remove('active');
+  document.body.style.overflow = '';
 }
 
 // Toast提示
@@ -661,11 +860,57 @@ function showToast(message, type = 'success') {
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), 3000);
 }
+
+// 页面初始化
+document.addEventListener('DOMContentLoaded', function() {
+  // 搜索栏批次下拉
+  const batchSelect = document.getElementById('batchSelect');
+  BATCH_SOURCE.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.batchNo;
+    opt.textContent = `${b.batchNo} · ${b.product} · ${b.plotCode} ${b.plotName}`;
+    batchSelect.appendChild(opt);
+  });
+
+  // 批次选择联动带出产品/规格/产地
+  document.getElementById('generateBatch').addEventListener('change', syncBatchFields);
+
+  // 标签类型下拉 + 库存显示
+  const labelSelect = document.getElementById('labelTypeSelect');
+  labelSelect.innerHTML = LABEL_TYPES.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+  labelSelect.addEventListener('change', refreshLabelStock);
+  refreshLabelStock();
+
+  Pagination.init({
+    currentPage: 1,
+    pageSize: 10,
+    data: mockData,
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderCodeRow
+  });
+
+  // 由批次管理跳转过来时预选批次并打开生成弹窗
+  const preset = new URLSearchParams(window.location.search).get('batch');
+  if (preset) openGenerateModal(preset);
+});
+
+// 点击遮罩关闭弹窗
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) closeModal(overlay.id);
+  });
+});
+
+// ESC 关闭弹窗
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.active').forEach(o => closeModal(o.id));
+  }
+});
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-<script src="js/common-functions.js"></script>
-  <script src="js/search-helper.js"></script>
   <script src="js/typography.js"></script>
 </body>
 </html>

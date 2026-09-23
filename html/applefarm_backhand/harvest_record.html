@@ -16,6 +16,8 @@
     transform:translateY(-2px);
     box-shadow:var(--shadow-md);
   }
+  /* 分页栏样式（与农事计划一致） */
+  #pagination-container { padding:12px 16px; }
   .main-wrapper {
     margin-left:0 !important;
     padding-left:0 !important;
@@ -40,25 +42,41 @@
 <div class="main-wrapper" style="padding:0;">
   <main class="main-content">
       <div class="content-wrapper">
-        <!-- 统计卡条已按统一规范移除 (原class=patrol-stats) -->
 
-        <div class="page-section search-section">
+        <!-- 采收统计分析 -->
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px;">
+          <div class="chart-section" style="margin-bottom:0;">
+            <h2 class="section-title">品种采收量占比</h2>
+            <div id="chart-variety" class="chart-container" style="height:260px;"></div>
+          </div>
+          <div class="chart-section" style="margin-bottom:0;">
+            <h2 class="section-title">基地采收量(kg)</h2>
+            <div id="chart-base" class="chart-container" style="height:260px;"></div>
+          </div>
+          <div class="chart-section" style="margin-bottom:0;">
+            <h2 class="section-title">采收量趋势(kg)</h2>
+            <div id="chart-trend" class="chart-container" style="height:260px;"></div>
+          </div>
+        </div>
+
+        <div class="page-section search-section" style="margin-top:16px;">
           <div class="search-bar">
             <select class="search-select" id="baseSelect">
-              <option value="">选择基地</option>
-              <option value="ytqx">天水麦积区基地</option>
-              <option value="whrc">天水荣成基地</option>
-              <option value="qdlx">青岛莱西基地</option>
-              <option value="zy">招远基地</option>
-              <option value="pl">麦积区阁基地</option>
+              <option value="">全部基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水荣成基地">天水荣成基地</option>
+              <option value="甘肃吉县苹果园">甘肃吉县苹果园</option>
+              <option value="甘肃麦积区苹果园">甘肃麦积区苹果园</option>
+              <option value="天水麦积区苹果基地">天水麦积区苹果基地</option>
+              <option value="甘肃麦积区苹果基地">甘肃麦积区苹果基地</option>
             </select>
-            <select class="search-select" style="min-width:120px;">
+            <select class="search-select" id="statusSelect" style="min-width:120px;">
               <option value="">全部状态</option>
               <option value="pending">待处理</option>
               <option value="processing">处理中</option>
               <option value="completed">已完成</option>
             </select>
-            <select class="search-select" style="min-width:100px;">
+            <select class="search-select" id="levelSelect" style="min-width:100px;">
               <option value="">全部等级</option>
               <option value="level1">一级</option>
               <option value="level2">二级</option>
@@ -68,13 +86,12 @@
             <span class="date-separator">至</span>
             <input type="date" class="search-input" id="endDate" placeholder="结束日期">
             <input type="text" class="search-input" placeholder="搜索记录编号..." id="searchInput">
-            
           <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="handleSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
           </div>
         </div>
 
         <div class="page-section action-bar">
-          <button class="jg-btn jg-btn-primary" onclick="Modal.show('modal-add-record')">
+          <button class="jg-btn jg-btn-primary" onclick="showAdd()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
               <path d="M12 5v14"/>
               <path d="M5 12h14"/>
@@ -98,13 +115,16 @@
                 <tr>
                   <th style="width:60px;">序号</th>
                   <th style="width:120px;">记录编号</th>
+                  <th style="width:120px;">关联计划</th>
+                  <th style="width:140px;">批次号</th>
                   <th style="width:140px;">所属基地</th>
-                  <th style="width:100px;">地块</th>
-                  <th style="width:90px;">采收量(kg)</th>
+                  <th style="width:150px;">地块</th>
+                  <th style="width:100px;">品种</th>
+                  <th style="width:100px;">采收量(kg)</th>
                   <th style="width:80px;">等级</th>
                   <th style="width:80px;">状态</th>
                   <th style="width:100px;">采收日期</th>
-                  <th style="width:80px;">操作</th>
+                  <th style="width:210px;">操作</th>
                 </tr>
               </thead>
               <tbody id="dataTableBody">
@@ -131,27 +151,45 @@
       <div class="modal-body">
         <form id="form-add-record" class="modal-form">
           <div class="form-group">
-            <label>所属基地</label>
-            <select class="form-control">
-              <option value="">请选择基地</option>
-              <option value="ytqx">天水麦积区基地</option>
-              <option value="whrc">天水荣成基地</option>
-              <option value="qdlx">青岛莱西基地</option>
-              <option value="zy">招远基地</option>
-              <option value="pl">麦积区阁基地</option>
-            </select>
+            <label>关联计划</label>
+            <select class="form-control" id="add-plan"></select>
           </div>
           <div class="form-group">
             <label>地块编号</label>
-            <input type="text" class="form-control" placeholder="请输入地块编号">
+            <select class="form-control" id="add-plot"></select>
+          </div>
+          <div class="form-group">
+            <label>所属基地</label>
+            <select class="form-control" id="add-base">
+              <option value="">请选择基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水荣成基地">天水荣成基地</option>
+              <option value="甘肃吉县苹果园">甘肃吉县苹果园</option>
+              <option value="甘肃麦积区苹果园">甘肃麦积区苹果园</option>
+              <option value="天水麦积区苹果基地">天水麦积区苹果基地</option>
+              <option value="甘肃麦积区苹果基地">甘肃麦积区苹果基地</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>品种</label>
+            <select class="form-control" id="add-variety">
+              <option value="">请选择品种</option>
+              <option value="花牛苹果">花牛苹果</option>
+              <option value="红富士">红富士</option>
+              <option value="金帅">金帅</option>
+              <option value="秦冠">秦冠</option>
+              <option value="嘎啦">嘎啦</option>
+              <option value="红星">红星</option>
+              <option value="国光">国光</option>
+            </select>
           </div>
           <div class="form-group">
             <label>采收量(kg)</label>
-            <input type="number" class="form-control" placeholder="请输入采收量">
+            <input type="number" class="form-control" id="add-quantity" placeholder="请输入采收量">
           </div>
           <div class="form-group">
             <label>苹果等级</label>
-            <select class="form-control">
+            <select class="form-control" id="add-level">
               <option value="">请选择等级</option>
               <option value="level1">一级</option>
               <option value="level2">二级</option>
@@ -159,12 +197,20 @@
             </select>
           </div>
           <div class="form-group">
-            <label>采收日期</label>
-            <input type="date" class="form-control">
+            <label>采收人</label>
+            <input type="text" class="form-control" id="add-harvesters" placeholder="请输入采收人，多人用顿号分隔">
+          </div>
+          <div class="form-group">
+            <label>采收开始时间</label>
+            <input type="datetime-local" class="form-control" id="add-start">
+          </div>
+          <div class="form-group">
+            <label>采收结束时间</label>
+            <input type="datetime-local" class="form-control" id="add-end">
           </div>
           <div class="form-group">
             <label>备注</label>
-            <textarea class="form-control" rows="3" placeholder="请输入备注信息"></textarea>
+            <textarea class="form-control" rows="3" id="add-remark" placeholder="请输入备注信息"></textarea>
           </div>
         </form>
       </div>
@@ -186,26 +232,29 @@
         </button>
       </div>
       <div class="modal-body">
-        <div class="export-options">
-          <div class="export-option">
-            <input type="radio" name="exportType" value="all" checked>
-            <label>导出全部记录</label>
-          </div>
-          <div class="export-option">
-            <input type="radio" name="exportType" value="selected">
-            <label>导出选中记录</label>
-          </div>
-          <div class="export-option">
-            <input type="radio" name="exportType" value="filtered">
-            <label>导出筛选结果</label>
+        <div class="form-row">
+          <div class="form-item">
+            <label>选择导出格式</label>
+            <select class="form-select" id="exportFormat">
+              <option value="excel">Excel (.xlsx)</option>
+              <option value="csv">CSV (.csv)</option>
+            </select>
           </div>
         </div>
-        <div class="export-format">
-          <label>导出格式</label>
-          <select class="form-control">
-            <option value="excel">Excel (.xlsx)</option>
-            <option value="csv">CSV (.csv)</option>
-          </select>
+        <div class="form-row">
+          <div class="form-item">
+            <label>导出范围</label>
+            <div style="display:flex;gap:16px;">
+              <label class="checkbox-label">
+                <input type="radio" name="exportType" value="all" checked>
+                <span>导出全部记录</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="radio" name="exportType" value="filtered">
+                <span>导出筛选结果</span>
+              </label>
+            </div>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -216,7 +265,7 @@
   </div>
 
   <div id="modal-detail" class="modal-overlay">
-    <div class="modal-box" style="max-width:600px;">
+    <div class="modal-box" style="max-width:640px;">
       <div class="modal-header">
         <h3 class="modal-title">采收记录详情</h3>
         <button class="modal-close">
@@ -226,43 +275,64 @@
         </button>
       </div>
       <div class="modal-body">
-        <div class="detail-info">
-          <div class="detail-row">
+        <div class="detail-grid">
+          <div class="detail-item">
             <span class="detail-label">记录编号</span>
             <span class="detail-value" id="detail-id"></span>
           </div>
-          <div class="detail-row">
-            <span class="detail-label">所属基地</span>
-            <span class="detail-value" id="detail-base"></span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">地块编号</span>
-            <span class="detail-value" id="detail-plot"></span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">采收量</span>
-            <span class="detail-value" id="detail-quantity"></span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">苹果等级</span>
-            <span class="detail-value" id="detail-level"></span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">采收日期</span>
-            <span class="detail-value" id="detail-date"></span>
-          </div>
-          <div class="detail-row">
+          <div class="detail-item">
             <span class="detail-label">状态</span>
             <span class="detail-value" id="detail-status"></span>
           </div>
-          <div class="detail-row">
-            <span class="detail-label">备注</span>
-            <span class="detail-value" id="detail-remark"></span>
+          <div class="detail-item">
+            <span class="detail-label">关联计划</span>
+            <span class="detail-value" id="detail-plan"></span>
           </div>
+          <div class="detail-item">
+            <span class="detail-label">所属基地</span>
+            <span class="detail-value" id="detail-base"></span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">地块</span>
+            <span class="detail-value" id="detail-plot"></span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">品种</span>
+            <span class="detail-value" id="detail-variety"></span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">采收量</span>
+            <span class="detail-value" id="detail-quantity"></span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">苹果等级</span>
+            <span class="detail-value" id="detail-level"></span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">采收开始时间</span>
+            <span class="detail-value" id="detail-start"></span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">采收结束时间</span>
+            <span class="detail-value" id="detail-end"></span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">采收人</span>
+            <span class="detail-value" id="detail-harvesters"></span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">追溯码</span>
+            <span class="detail-value" id="detail-trace"></span>
+          </div>
+        </div>
+        <div style="margin-top:16px; padding:12px; background:var(--gray-50); border-radius:8px;">
+          <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">备注</div>
+          <div style="font-weight:500;" id="detail-remark">-</div>
         </div>
       </div>
       <div class="modal-footer">
-        <button class="jg-btn" onclick="Modal.hide('modal-detail')">关闭</button>
+        <button class="jg-btn" id="btn-trace" onclick="generateTraceCode()">生成追溯码</button>
+        <button class="jg-btn jg-btn-primary" onclick="Modal.hide('modal-detail')">关闭</button>
       </div>
     </div>
   </div>
@@ -279,21 +349,36 @@
       </div>
       <div class="modal-body">
         <form id="form-edit-record" class="modal-form">
-          <input type="hidden" id="edit-id">
           <div class="form-group">
-            <label>所属基地</label>
-            <select class="form-control" id="edit-base">
-              <option value="">请选择基地</option>
-              <option value="ytqx">天水麦积区基地</option>
-              <option value="whrc">天水荣成基地</option>
-              <option value="qdlx">青岛莱西基地</option>
-              <option value="zy">招远基地</option>
-              <option value="pl">麦积区阁基地</option>
-            </select>
+            <label>关联计划</label>
+            <select class="form-control" id="edit-plan"></select>
           </div>
           <div class="form-group">
             <label>地块编号</label>
-            <input type="text" class="form-control" id="edit-plot" placeholder="请输入地块编号">
+            <select class="form-control" id="edit-plot"></select>
+          </div>
+          <div class="form-group">
+            <label>所属基地</label>
+            <select class="form-control" id="add-base">
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水荣成基地">天水荣成基地</option>
+              <option value="甘肃吉县苹果园">甘肃吉县苹果园</option>
+              <option value="甘肃麦积区苹果园">甘肃麦积区苹果园</option>
+              <option value="天水麦积区苹果基地">天水麦积区苹果基地</option>
+              <option value="甘肃麦积区苹果基地">甘肃麦积区苹果基地</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>品种</label>
+            <select class="form-control" id="edit-variety">
+              <option value="花牛苹果">花牛苹果</option>
+              <option value="红富士">红富士</option>
+              <option value="金帅">金帅</option>
+              <option value="秦冠">秦冠</option>
+              <option value="嘎啦">嘎啦</option>
+              <option value="红星">红星</option>
+              <option value="国光">国光</option>
+            </select>
           </div>
           <div class="form-group">
             <label>采收量(kg)</label>
@@ -302,15 +387,22 @@
           <div class="form-group">
             <label>苹果等级</label>
             <select class="form-control" id="edit-level">
-              <option value="">请选择等级</option>
               <option value="level1">一级</option>
               <option value="level2">二级</option>
               <option value="level3">三级</option>
             </select>
           </div>
           <div class="form-group">
-            <label>采收日期</label>
-            <input type="date" class="form-control" id="edit-date">
+            <label>采收人</label>
+            <input type="text" class="form-control" id="edit-harvesters" placeholder="请输入采收人">
+          </div>
+          <div class="form-group">
+            <label>采收开始时间</label>
+            <input type="datetime-local" class="form-control" id="edit-start">
+          </div>
+          <div class="form-group">
+            <label>采收结束时间</label>
+            <input type="datetime-local" class="form-control" id="edit-end">
           </div>
           <div class="form-group">
             <label>备注</label>
@@ -346,138 +438,313 @@
   </div>
 
   <script src="js/common-functions.js"></script>
+  <script src="js/components/chart.js"></script>
+  <script src="js/export-helper.js"></script>
   <script>
-    const harvestRecords = [
-      { id: 'HSR-2024-001', base: '天水麦积区基地', plot: 'A-001', quantity: 1250, level: 'level1', levelName: '一级', date: '2026-09-20', status: 'completed', remark: '第一批采收' },
-      { id: 'HSR-2024-002', base: '天水荣成基地', plot: 'B-002', quantity: 890, level: 'level1', levelName: '一级', date: '2026-09-21', status: 'completed', remark: '' },
-      { id: 'HSR-2024-003', base: '青岛莱西基地', plot: 'C-003', quantity: 1560, level: 'level2', levelName: '二级', date: '2026-09-22', status: 'processing', remark: '部分已装箱' },
-      { id: 'HSR-2024-004', base: '招远基地', plot: 'D-004', quantity: 780, level: 'level1', levelName: '一级', date: '2026-09-23', status: 'pending', remark: '' },
-      { id: 'HSR-2024-005', base: '麦积区阁基地', plot: 'E-005', quantity: 1100, level: 'level2', levelName: '二级', date: '2026-09-24', status: 'completed', remark: '' },
-      { id: 'HSR-2024-006', base: '天水麦积区基地', plot: 'A-006', quantity: 920, level: 'level3', levelName: '三级', date: '2026-09-25', status: 'pending', remark: '待分级' },
-      { id: 'HSR-2024-007', base: '天水荣成基地', plot: 'B-007', quantity: 1340, level: 'level1', levelName: '一级', date: '2026-09-26', status: 'completed', remark: '' },
-      { id: 'HSR-2024-008', base: '青岛莱西基地', plot: 'C-008', quantity: 650, level: 'level2', levelName: '二级', date: '2026-09-27', status: 'processing', remark: '' },
-      { id: 'HSR-2024-009', base: '招远基地', plot: 'D-009', quantity: 1420, level: 'level1', levelName: '一级', date: '2026-09-28', status: 'completed', remark: '优质果' },
-      { id: 'HSR-2024-010', base: '麦积区阁基地', plot: 'E-010', quantity: 870, level: 'level2', levelName: '二级', date: '2026-09-29', status: 'pending', remark: '' },
-      { id: 'HSR-2024-011', base: '天水麦积区基地', plot: 'A-011', quantity: 1680, level: 'level1', levelName: '一级', date: '2026-09-30', status: 'completed', remark: '' },
-      { id: 'HSR-2024-012', base: '天水荣成基地', plot: 'B-012', quantity: 720, level: 'level3', levelName: '三级', date: '2026-09-30', status: 'processing', remark: '' },
-      { id: 'HSR-2024-013', base: '青岛莱西基地', plot: 'C-013', quantity: 1200, level: 'level1', levelName: '一级', date: '2026-09-01', status: 'completed', remark: '' },
-      { id: 'HSR-2024-014', base: '招远基地', plot: 'D-014', quantity: 980, level: 'level2', levelName: '二级', date: '2026-09-02', status: 'pending', remark: '' },
-      { id: 'HSR-2024-015', base: '麦积区阁基地', plot: 'E-015', quantity: 1550, level: 'level1', levelName: '一级', date: '2026-09-03', status: 'completed', remark: '高产' },
-      { id: 'HSR-2024-016', base: '天水麦积区基地', plot: 'A-016', quantity: 830, level: 'level2', levelName: '二级', date: '2026-09-04', status: 'completed', remark: '' },
-      { id: 'HSR-2024-017', base: '天水荣成基地', plot: 'B-017', quantity: 1120, level: 'level1', levelName: '一级', date: '2026-09-05', status: 'processing', remark: '' },
-      { id: 'HSR-2024-018', base: '青岛莱西基地', plot: 'C-018', quantity: 690, level: 'level3', levelName: '三级', date: '2026-09-06', status: 'pending', remark: '' },
-      { id: 'HSR-2024-019', base: '招远基地', plot: 'D-019', quantity: 1380, level: 'level1', levelName: '一级', date: '2026-09-07', status: 'completed', remark: '' },
-      { id: 'HSR-2024-020', base: '麦积区阁基地', plot: 'E-020', quantity: 950, level: 'level2', levelName: '二级', date: '2026-09-08', status: 'completed', remark: '' },
-      { id: 'HSR-2024-021', base: '天水麦积区基地', plot: 'A-021', quantity: 1450, level: 'level1', levelName: '一级', date: '2026-09-09', status: 'pending', remark: '' },
-      { id: 'HSR-2024-022', base: '天水荣成基地', plot: 'B-022', quantity: 770, level: 'level2', levelName: '二级', date: '2026-09-10', status: 'completed', remark: '' },
-      { id: 'HSR-2024-023', base: '青岛莱西基地', plot: 'C-023', quantity: 1080, level: 'level1', levelName: '一级', date: '2026-09-11', status: 'processing', remark: '正在装箱' }
+    // 地块主数据（与企业管理 - 地块管理的 mockPlotData 保持一致）
+    const PLOT_MASTER = [
+      { code: 'D-001', name: '东区1号地', base: '天水麦积区基地', variety: '花牛苹果' },
+      { code: 'D-002', name: '东区2号地', base: '天水麦积区基地', variety: '花牛苹果' },
+      { code: 'D-003', name: '西区1号地', base: '天水麦积区基地', variety: '金帅' },
+      { code: 'D-004', name: '北区1号地', base: '天水荣成基地', variety: '花牛苹果' },
+      { code: 'D-005', name: '南区1号地', base: '天水荣成基地', variety: '花牛苹果' },
+      { code: 'D-006', name: '中区1号地', base: '甘肃吉县苹果园', variety: '花牛苹果' },
+      { code: 'D-007', name: '南区2号地', base: '甘肃麦积区苹果园', variety: '花牛苹果' },
+      { code: 'D-008', name: '西区2号地', base: '天水麦积区苹果基地', variety: '花牛苹果' },
+      { code: 'D-009', name: '北区2号地', base: '甘肃麦积区苹果基地', variety: '花牛苹果' },
+      { code: 'D-010', name: '东区3号地', base: '天水麦积区苹果基地', variety: '金帅' },
+      { code: 'D-011', name: '南区3号地', base: '甘肃麦积区苹果园', variety: '花牛苹果' },
+      { code: 'D-012', name: '西区3号地', base: '天水麦积区苹果基地', variety: '秦冠' },
+      { code: 'D-013', name: '北区3号地', base: '甘肃麦积区苹果基地', variety: '花牛苹果' },
+      { code: 'D-014', name: '中区2号地', base: '甘肃吉县苹果园', variety: '花牛苹果' },
+      { code: 'D-015', name: '东区4号地', base: '天水麦积区苹果基地', variety: '花牛苹果' },
+      { code: 'D-016', name: '南区4号地', base: '甘肃麦积区苹果园', variety: '金帅' },
+      { code: 'D-017', name: '西区4号地', base: '天水麦积区苹果基地', variety: '花牛苹果' },
+      { code: 'D-018', name: '北区4号地', base: '甘肃麦积区苹果基地', variety: '花牛苹果' },
+      { code: 'D-019', name: '中区3号地', base: '甘肃吉县苹果园', variety: '花牛苹果' },
+      { code: 'D-020', name: '东区5号地', base: '天水麦积区苹果基地', variety: '秦冠' },
+      { code: 'D-021', name: '南区5号地', base: '甘肃麦积区苹果园', variety: '花牛苹果' },
+      { code: 'D-022', name: '西区5号地', base: '天水麦积区苹果基地', variety: '花牛苹果' },
+      { code: 'D-023', name: '北区5号地', base: '甘肃麦积区苹果基地', variety: '金帅' }
     ];
+
+    // 关联计划（与采收计划页数据一致）
+    const PLAN_OPTIONS = [];
+    for (let i = 1; i <= 20; i++) {
+      PLAN_OPTIONS.push('HS-2026-' + String(i).padStart(3, '0'));
+    }
+
+    function plotLabel(code) {
+      const p = PLOT_MASTER.find(x => x.code === code);
+      return p ? p.code + ' · ' + p.name : code;
+    }
+
+    // Mock数据 - 20条采收记录（与采收计划 HS-2026-001~020、批次 PC-YYYYMMDD-NNN 一一对应）
+    const harvestRecords = [
+      { id: 'HSR-2026-001', plan: 'HS-2026-001', batchNo: 'PC-20260901-001', base: '天水麦积区基地', plot: 'D-001', variety: '花牛苹果', quantity: 1250, level: 'level1', levelName: '一级', harvesters: '张三、李四', startTime: '2026-09-01 08:00', endTime: '2026-09-01 11:30', status: 'completed', traceCode: 'SNZG-20260901-0001', remark: '第一批采收' },
+      { id: 'HSR-2026-002', plan: 'HS-2026-002', batchNo: 'PC-20260902-002', base: '天水麦积区基地', plot: 'D-002', variety: '花牛苹果', quantity: 890, level: 'level1', levelName: '一级', harvesters: '王五', startTime: '2026-09-02 08:00', endTime: '2026-09-02 11:00', status: 'completed', traceCode: 'SNZG-20260902-0003', remark: '' },
+      { id: 'HSR-2026-003', plan: 'HS-2026-003', batchNo: 'PC-20260903-003', base: '天水麦积区基地', plot: 'D-003', variety: '金帅', quantity: 1560, level: 'level2', levelName: '二级', harvesters: '赵六、孙七', startTime: '2026-09-03 07:30', endTime: '2026-09-03 12:00', status: 'completed', traceCode: 'SNZG-20260903-0005', remark: '部分已装箱' },
+      { id: 'HSR-2026-004', plan: 'HS-2026-004', batchNo: 'PC-20260904-004', base: '天水荣成基地', plot: 'D-004', variety: '花牛苹果', quantity: 780, level: 'level1', levelName: '一级', harvesters: '周八', startTime: '2026-09-04 08:00', endTime: '2026-09-04 10:30', status: 'completed', traceCode: 'SNZG-20260904-0007', remark: '' },
+      { id: 'HSR-2026-005', plan: 'HS-2026-005', batchNo: 'PC-20260905-005', base: '天水荣成基地', plot: 'D-005', variety: '花牛苹果', quantity: 1100, level: 'level2', levelName: '二级', harvesters: '吴九、郑十', startTime: '2026-09-05 08:00', endTime: '2026-09-05 12:30', status: 'completed', traceCode: 'SNZG-20260905-0008', remark: '' },
+      { id: 'HSR-2026-006', plan: 'HS-2026-006', batchNo: 'PC-20260906-006', base: '甘肃吉县苹果园', plot: 'D-006', variety: '花牛苹果', quantity: 920, level: 'level3', levelName: '三级', harvesters: '张三', startTime: '2026-09-06 08:00', endTime: '2026-09-06 11:00', status: 'completed', traceCode: 'SNZG-20260906-0009', remark: '待分级' },
+      { id: 'HSR-2026-007', plan: 'HS-2026-007', batchNo: 'PC-20260907-007', base: '甘肃麦积区苹果园', plot: 'D-007', variety: '花牛苹果', quantity: 1340, level: 'level1', levelName: '一级', harvesters: '李四、王五', startTime: '2026-09-07 07:30', endTime: '2026-09-07 12:00', status: 'completed', traceCode: 'SNZG-20260907-0010', remark: '' },
+      { id: 'HSR-2026-008', plan: 'HS-2026-008', batchNo: 'PC-20260908-008', base: '天水麦积区苹果基地', plot: 'D-008', variety: '花牛苹果', quantity: 650, level: 'level2', levelName: '二级', harvesters: '赵六', startTime: '2026-09-08 08:00', endTime: '2026-09-08 10:30', status: 'completed', traceCode: 'SNZG-20260908-0011', remark: '' },
+      { id: 'HSR-2026-009', plan: 'HS-2026-009', batchNo: 'PC-20260909-009', base: '甘肃麦积区苹果基地', plot: 'D-009', variety: '花牛苹果', quantity: 1420, level: 'level1', levelName: '一级', harvesters: '孙七、周八', startTime: '2026-09-09 08:00', endTime: '2026-09-09 12:30', status: 'completed', traceCode: 'SNZG-20260909-0012', remark: '优质果' },
+      { id: 'HSR-2026-010', plan: 'HS-2026-010', batchNo: 'PC-20260910-010', base: '天水麦积区苹果基地', plot: 'D-010', variety: '金帅', quantity: 870, level: 'level2', levelName: '二级', harvesters: '吴九', startTime: '2026-09-10 08:00', endTime: '2026-09-10 11:30', status: 'completed', traceCode: 'SNZG-20260910-0013', remark: '' },
+      { id: 'HSR-2026-011', plan: 'HS-2026-011', batchNo: 'PC-20260911-011', base: '甘肃麦积区苹果园', plot: 'D-011', variety: '花牛苹果', quantity: 1680, level: 'level1', levelName: '一级', harvesters: '郑十、张三', startTime: '2026-09-11 07:30', endTime: '2026-09-11 12:00', status: 'completed', traceCode: 'SNZG-20260911-0014', remark: '' },
+      { id: 'HSR-2026-012', plan: 'HS-2026-012', batchNo: 'PC-20260912-012', base: '天水麦积区苹果基地', plot: 'D-012', variety: '秦冠', quantity: 720, level: 'level3', levelName: '三级', harvesters: '李四', startTime: '2026-09-12 08:00', endTime: '2026-09-12 10:30', status: 'completed', traceCode: 'SNZG-20260912-0015', remark: '' },
+      { id: 'HSR-2026-013', plan: 'HS-2026-013', batchNo: 'PC-20260913-013', base: '甘肃麦积区苹果基地', plot: 'D-013', variety: '花牛苹果', quantity: 1200, level: 'level1', levelName: '一级', harvesters: '王五、赵六', startTime: '2026-09-13 08:00', endTime: '2026-09-13 11:30', status: 'completed', traceCode: 'SNZG-20260913-0016', remark: '' },
+      { id: 'HSR-2026-014', plan: 'HS-2026-014', batchNo: 'PC-20260914-014', base: '甘肃吉县苹果园', plot: 'D-014', variety: '花牛苹果', quantity: 980, level: 'level2', levelName: '二级', harvesters: '孙七', startTime: '2026-09-14 08:00', endTime: '2026-09-14 11:00', status: 'completed', traceCode: 'SNZG-20260914-0017', remark: '' },
+      { id: 'HSR-2026-015', plan: 'HS-2026-015', batchNo: 'PC-20260915-015', base: '天水麦积区苹果基地', plot: 'D-015', variety: '花牛苹果', quantity: 1550, level: 'level1', levelName: '一级', harvesters: '周八、吴九', startTime: '2026-09-15 07:30', endTime: '2026-09-15 12:00', status: 'completed', traceCode: 'SNZG-20260915-0018', remark: '高产' },
+      { id: 'HSR-2026-016', plan: 'HS-2026-016', batchNo: 'PC-20260916-016', base: '甘肃麦积区苹果园', plot: 'D-016', variety: '金帅', quantity: 830, level: 'level2', levelName: '二级', harvesters: '郑十', startTime: '2026-09-16 08:00', endTime: '2026-09-16 11:00', status: 'processing', traceCode: 'SNZG-20260916-0019', remark: '正在装箱' },
+      { id: 'HSR-2026-017', plan: 'HS-2026-017', batchNo: 'PC-20260917-017', base: '天水麦积区苹果基地', plot: 'D-017', variety: '花牛苹果', quantity: 1120, level: 'level1', levelName: '一级', harvesters: '张三、李四', startTime: '2026-09-17 08:00', endTime: '2026-09-17 12:00', status: 'processing', traceCode: 'SNZG-20260917-0020', remark: '' },
+      { id: 'HSR-2026-018', plan: 'HS-2026-018', batchNo: 'PC-20260918-018', base: '甘肃麦积区苹果基地', plot: 'D-018', variety: '花牛苹果', quantity: 690, level: 'level3', levelName: '三级', harvesters: '王五', startTime: '2026-09-18 08:00', endTime: '2026-09-18 10:30', status: 'processing', traceCode: 'SNZG-20260918-0021', remark: '' },
+      { id: 'HSR-2026-019', plan: 'HS-2026-019', batchNo: 'PC-20260919-019', base: '甘肃吉县苹果园', plot: 'D-019', variety: '花牛苹果', quantity: 1380, level: 'level1', levelName: '一级', harvesters: '赵六、孙七', startTime: '2026-09-19 07:30', endTime: '2026-09-19 12:00', status: 'processing', traceCode: 'SNZG-20260919-0022', remark: '' },
+      { id: 'HSR-2026-020', plan: 'HS-2026-020', batchNo: 'PC-20260920-020', base: '天水麦积区苹果基地', plot: 'D-020', variety: '秦冠', quantity: 950, level: 'level2', levelName: '二级', harvesters: '周八', startTime: '2026-09-20 08:00', endTime: '2026-09-20 11:30', status: 'processing', traceCode: 'SNZG-20260920-0023', remark: '' }
+    ];
+
+    let currentRecordId = '';
+    let editingId = null;
+    let deletingId = null;
 
     function getStatusTag(status) {
       const statusMap = {
         'completed': '<span class="status-tag normal">已完成</span>',
-        'processing': '<span class="status-tag" style="background:var(--info-bg);color:var(--primary-600);border-color:var(--info-border);">处理中</span>',
-        'pending': '<span class="status-tag warning">待处理</span>'
+        'processing': '<span class="status-tag processing">处理中</span>',
+        'pending': '<span class="status-tag pending">待处理</span>'
       };
       return statusMap[status] || statusMap['pending'];
     }
 
+    const STATUS_NAME = { 'pending': '待处理', 'processing': '处理中', 'completed': '已完成' };
+
+    function findRecord(id) {
+      return harvestRecords.find(r => r.id === id);
+    }
+
     function renderRow(item, index) {
+      let actions = `<button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>`
+        + `<button class="action-btn edit" onclick="showEdit('${item.id}')">编辑</button>`;
+
+      if (item.status === 'pending') {
+        actions += `<button class="action-btn edit" onclick="advanceStatus('${item.id}')">开始处理</button>`;
+      } else if (item.status === 'processing') {
+        actions += `<button class="action-btn edit" onclick="advanceStatus('${item.id}')">完成</button>`;
+      }
+      actions += `<button class="action-btn delete" onclick="showDeleteConfirm('${item.id}')">删除</button>`;
+
       return `
         <tr>
           <td>${index + 1}</td>
           <td><strong>${item.id}</strong></td>
+          <td>${item.plan}</td>
+          <td><strong>${item.batchNo}</strong></td>
           <td>${item.base}</td>
-          <td>${item.plot}</td>
+          <td>${plotLabel(item.plot)}</td>
+          <td>${item.variety}</td>
           <td class="text-right">${item.quantity.toLocaleString()}</td>
           <td>${item.levelName}</td>
           <td>${getStatusTag(item.status)}</td>
-          <td>${item.date}</td>
-          <td>
-            <div class="action-btns">
-              <button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>
-              <button class="action-btn edit" onclick="showEdit('${item.id}')">编辑</button>
-              <button class="action-btn delete" onclick="showDeleteConfirm('${item.id}')">删除</button>
-            </div>
-          </td>
+          <td>${item.startTime.slice(0, 10)}</td>
+          <td><div class="action-btns">${actions}</div></td>
         </tr>
       `;
     }
 
+    // 搜索：基地 + 状态 + 等级 + 日期范围 + 关键词
     function handleSearch() {
       const base = document.getElementById('baseSelect').value;
-      const status = document.querySelector('.search-select:nth-child(2)').value;
-      const level = document.querySelector('.search-select:nth-child(3)').value;
+      const status = document.getElementById('statusSelect').value;
+      const level = document.getElementById('levelSelect').value;
       const startDate = document.getElementById('startDate').value;
       const endDate = document.getElementById('endDate').value;
-      const keyword = document.getElementById('searchInput').value.toLowerCase();
+      const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
 
       const filteredData = harvestRecords.filter(item => {
-        if (base && !item.base.includes(base === 'ytqx' ? '天水麦积区' : base === 'whrc' ? '天水荣成' : base === 'qdlx' ? '青岛莱西' : base === 'zy' ? '招远' : base === 'pl' ? '麦积区阁' : '')) return false;
+        if (base && item.base !== base) return false;
         if (status && item.status !== status) return false;
         if (level && item.level !== level) return false;
-        if (startDate && item.date < startDate) return false;
-        if (endDate && item.date > endDate) return false;
+        const recordDate = item.startTime.slice(0, 10);
+        if (startDate && recordDate < startDate) return false;
+        if (endDate && recordDate > endDate) return false;
         if (keyword && !item.id.toLowerCase().includes(keyword)) return false;
         return true;
       });
-      
+
       Pagination.updateData(filteredData);
+      renderCharts(filteredData);
       Toast.info('找到 ' + filteredData.length + ' 条记录');
     }
 
+    // 统计分析图表（F-109：品种 / 基地 / 时间 三个维度）
+    function renderCharts(data) {
+      const varietyMap = {};
+      const baseMap = {};
+      const dateMap = {};
+      data.forEach(item => {
+        varietyMap[item.variety] = (varietyMap[item.variety] || 0) + item.quantity;
+        baseMap[item.base] = (baseMap[item.base] || 0) + item.quantity;
+        const d = item.startTime.slice(0, 10);
+        dateMap[d] = (dateMap[d] || 0) + item.quantity;
+      });
+
+      const dates = Object.keys(dateMap).sort();
+
+      Chart.donut('#chart-variety', {
+        series: Object.keys(varietyMap).map(name => ({ name: name, value: varietyMap[name] }))
+      });
+      Chart.bar('#chart-base', {
+        categories: Object.keys(baseMap),
+        series: [{ name: '采收量', data: Object.keys(baseMap).map(k => baseMap[k]) }]
+      });
+      Chart.line('#chart-trend', {
+        categories: dates,
+        series: [{ name: '采收量', data: dates.map(d => dateMap[d]) }]
+      });
+    }
+
     function showDetail(id) {
-      const item = harvestRecords.find(r => r.id === id);
-      if (item) {
-        document.getElementById('detail-id').textContent = item.id;
-        document.getElementById('detail-base').textContent = item.base;
-        document.getElementById('detail-plot').textContent = item.plot;
-        document.getElementById('detail-quantity').textContent = item.quantity + ' kg';
-        document.getElementById('detail-level').textContent = item.levelName;
-        document.getElementById('detail-date').textContent = item.date;
-        document.getElementById('detail-status').innerHTML = getStatusTag(item.status);
-        document.getElementById('detail-remark').textContent = item.remark || '-';
-        Modal.show('modal-detail');
+      const item = findRecord(id);
+      if (!item) return;
+      currentRecordId = id;
+      document.getElementById('detail-id').textContent = item.id;
+      document.getElementById('detail-status').innerHTML = getStatusTag(item.status);
+      document.getElementById('detail-plan').textContent = item.plan;
+      document.getElementById('detail-base').textContent = item.base;
+      document.getElementById('detail-plot').textContent = plotLabel(item.plot);
+      document.getElementById('detail-variety').textContent = item.variety;
+      document.getElementById('detail-quantity').textContent = item.quantity.toLocaleString() + ' kg';
+      document.getElementById('detail-level').textContent = item.levelName;
+      document.getElementById('detail-start').textContent = item.startTime;
+      document.getElementById('detail-end').textContent = item.endTime;
+      document.getElementById('detail-harvesters').textContent = item.harvesters || '-';
+      document.getElementById('detail-trace').textContent = item.traceCode || '未生成';
+      document.getElementById('detail-remark').textContent = item.remark || '-';
+      updateTraceButton(item);
+      Modal.show('modal-detail');
+    }
+
+    function updateTraceButton(item) {
+      const btn = document.getElementById('btn-trace');
+      if (item.traceCode) {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+        btn.textContent = '追溯码已生成';
+      } else {
+        btn.disabled = false;
+        btn.style.opacity = '';
+        btn.style.cursor = '';
+        btn.textContent = '生成追溯码';
       }
     }
 
-    let editingId = null;
+    // 生成追溯码（F-110：采收记录自动关联追溯模块）
+    function generateTraceCode() {
+      const item = findRecord(currentRecordId);
+      if (!item || item.traceCode) return;
+      const seq = harvestRecords.filter(r => r.traceCode).length + 1;
+      item.traceCode = 'TRC-2026-' + String(seq).padStart(4, '0');
+      document.getElementById('detail-trace').textContent = item.traceCode;
+      updateTraceButton(item);
+      Toast.success('追溯码已生成：' + item.traceCode);
+    }
+
+    // 状态流转（F-108 后续：待处理 → 处理中 → 已完成）
+    function advanceStatus(id) {
+      const item = findRecord(id);
+      if (!item) return;
+      if (item.status === 'pending') {
+        item.status = 'processing';
+        Toast.success(item.id + ' 已进入处理中');
+      } else if (item.status === 'processing') {
+        item.status = 'completed';
+        Toast.success(item.id + ' 已完成采收处理');
+      }
+      handleSearch();
+    }
+
+    function showAdd() {
+      document.getElementById('form-add-record').reset();
+      fillPlots(document.getElementById('add-plot'), '');
+      Modal.show('modal-add-record');
+    }
+
+    function submitAddRecord() {
+      const plot = document.getElementById('add-plot').value;
+      const base = document.getElementById('add-base').value;
+      const variety = document.getElementById('add-variety').value;
+      const quantity = document.getElementById('add-quantity').value;
+      const level = document.getElementById('add-level').value;
+      const startTime = document.getElementById('add-start').value;
+      if (!plot || !base || !variety || !quantity || !level) {
+        Toast.warning('请填写地块、基地、品种、采收量和等级');
+        return;
+      }
+      if (!startTime) {
+        Toast.warning('请填写采收开始时间');
+        return;
+      }
+      const levelName = level === 'level1' ? '一级' : level === 'level2' ? '二级' : '三级';
+      const newRecord = {
+        id: 'HSR-2026-' + String(harvestRecords.length + 1).padStart(3, '0'),
+        plan: document.getElementById('add-plan').value,
+        base: base,
+        plot: plot,
+        variety: variety,
+        quantity: parseInt(quantity, 10),
+        level: level,
+        levelName: levelName,
+        harvesters: document.getElementById('add-harvesters').value.trim(),
+        startTime: (document.getElementById('add-start').value || '').replace('T', ' '),
+        endTime: (document.getElementById('add-end').value || '').replace('T', ' '),
+        status: 'pending',
+        traceCode: '',
+        remark: document.getElementById('add-remark').value.trim()
+      };
+      harvestRecords.unshift(newRecord);
+      Modal.hide('modal-add-record');
+      handleSearch();
+      Toast.success('创建成功');
+    }
 
     function showEdit(id) {
+      const item = findRecord(id);
+      if (!item) return;
       editingId = id;
-      const item = harvestRecords.find(r => r.id === id);
-      if (item) {
-        document.getElementById('edit-id').value = item.id;
-        document.getElementById('edit-base').value = item.base.includes('天水麦积区') ? 'ytqx' : item.base.includes('天水荣成') ? 'whrc' : item.base.includes('青岛莱西') ? 'qdlx' : item.base.includes('招远') ? 'zy' : 'pl';
-        document.getElementById('edit-plot').value = item.plot;
-        document.getElementById('edit-quantity').value = item.quantity;
-        document.getElementById('edit-level').value = item.level;
-        document.getElementById('edit-date').value = item.date;
-        document.getElementById('edit-remark').value = item.remark;
-        Modal.show('modal-edit');
-      }
+      fillPlots(document.getElementById('edit-plot'), item.plot);
+      document.getElementById('edit-plan').value = item.plan;
+      document.getElementById('edit-base').value = item.base;
+      document.getElementById('edit-variety').value = item.variety;
+      document.getElementById('edit-quantity').value = item.quantity;
+      document.getElementById('edit-level').value = item.level;
+      document.getElementById('edit-harvesters').value = item.harvesters || '';
+      document.getElementById('edit-start').value = item.startTime.replace(' ', 'T');
+      document.getElementById('edit-end').value = item.endTime.replace(' ', 'T');
+      document.getElementById('edit-remark').value = item.remark || '';
+      Modal.show('modal-edit');
     }
 
     function submitEditRecord() {
-      const index = harvestRecords.findIndex(r => r.id === editingId);
-      if (index !== -1) {
-        harvestRecords[index] = {
-          ...harvestRecords[index],
-          base: document.getElementById('edit-base').value === 'ytqx' ? '天水麦积区基地' : document.getElementById('edit-base').value === 'whrc' ? '天水荣成基地' : document.getElementById('edit-base').value === 'qdlx' ? '青岛莱西基地' : document.getElementById('edit-base').value === 'zy' ? '招远基地' : '麦积区阁基地',
-          plot: document.getElementById('edit-plot').value,
-          quantity: parseInt(document.getElementById('edit-quantity').value),
-          level: document.getElementById('edit-level').value,
-          levelName: document.getElementById('edit-level').value === 'level1' ? '一级' : document.getElementById('edit-level').value === 'level2' ? '二级' : '三级',
-          date: document.getElementById('edit-date').value,
-          remark: document.getElementById('edit-remark').value
-        };
+      const item = findRecord(editingId);
+      if (item) {
+        const level = document.getElementById('edit-level').value;
+        item.plan = document.getElementById('edit-plan').value;
+        item.plot = document.getElementById('edit-plot').value;
+        item.base = document.getElementById('edit-base').value;
+        item.variety = document.getElementById('edit-variety').value;
+        item.quantity = parseInt(document.getElementById('edit-quantity').value, 10);
+        item.level = level;
+        item.levelName = level === 'level1' ? '一级' : level === 'level2' ? '二级' : '三级';
+        item.harvesters = document.getElementById('edit-harvesters').value.trim();
+        item.startTime = document.getElementById('edit-start').value.replace('T', ' ');
+        item.endTime = document.getElementById('edit-end').value.replace('T', ' ');
+        item.remark = document.getElementById('edit-remark').value.trim();
       }
       Modal.hide('modal-edit');
       handleSearch();
       Toast.success('修改成功');
     }
-
-    let deletingId = null;
 
     function showDeleteConfirm(id) {
       deletingId = id;
@@ -494,30 +761,52 @@
       Toast.success('删除成功');
     }
 
-    function submitAddRecord() {
-      const newRecord = {
-        id: 'HSR-2024-' + String(harvestRecords.length + 1).padStart(3, '0'),
-        base: document.querySelector('#form-add-record select:nth-child(1)').value === 'ytqx' ? '天水麦积区基地' : document.querySelector('#form-add-record select:nth-child(1)').value === 'whrc' ? '天水荣成基地' : document.querySelector('#form-add-record select:nth-child(1)').value === 'qdlx' ? '青岛莱西基地' : document.querySelector('#form-add-record select:nth-child(1)').value === 'zy' ? '招远基地' : '麦积区阁基地',
-        plot: document.querySelector('#form-add-record input:nth-child(1)').value,
-        quantity: parseInt(document.querySelector('#form-add-record input:nth-child(2)').value),
-        level: document.querySelector('#form-add-record select:nth-child(2)').value,
-        levelName: document.querySelector('#form-add-record select:nth-child(2)').value === 'level1' ? '一级' : document.querySelector('#form-add-record select:nth-child(2)').value === 'level2' ? '二级' : '三级',
-        date: document.querySelector('#form-add-record input:nth-child(3)').value,
-        status: 'pending',
-        remark: document.querySelector('#form-add-record textarea').value
-      };
-      harvestRecords.unshift(newRecord);
-      Modal.hide('modal-add-record');
-      handleSearch();
-      Toast.success('创建成功');
+    // 真实导出（Excel / CSV）
+    async function handleExport() {
+      const scope = document.querySelector('input[name="exportType"]:checked').value;
+      const rows = (scope === 'filtered' ? Pagination.filteredData : harvestRecords);
+      const result = await ExportHelper.exportData({
+        filename: '采收记录_' + ExportHelper.stamp(),
+        format: document.getElementById('exportFormat').value,
+        headers: ['记录编号', '关联计划', '所属基地', '地块', '品种', '采收量(kg)', '等级', '状态', '采收开始时间', '采收结束时间', '采收人', '追溯码'],
+        rows: rows.map(r => [r.id, r.plan, r.base, plotLabel(r.plot), r.variety, r.quantity, r.levelName, STATUS_NAME[r.status], r.startTime, r.endTime, r.harvesters, r.traceCode || ''])
+      });
+      Modal.hide('modal-export');
+      Toast.success(result === 'csv-fallback' ? 'Excel 组件加载失败，已导出为 CSV' : '导出成功，文件已下载');
     }
 
-    function handleExport() {
-      Modal.hide('modal-export');
-      Toast.success('导出成功');
+    // 下拉数据填充
+    function fillPlots(select, selected) {
+      select.innerHTML = '<option value="">请选择地块</option>' + PLOT_MASTER.map(p =>
+        `<option value="${p.code}"${p.code === selected ? ' selected' : ''}>${p.code} · ${p.name}</option>`
+      ).join('');
+    }
+
+    function fillPlans(select, selected) {
+      select.innerHTML = '<option value="">请选择关联计划</option>' + PLAN_OPTIONS.map(p =>
+        `<option value="${p}"${p === selected ? ' selected' : ''}>${p}</option>`
+      ).join('');
+    }
+
+    // 选择地块后自动带出所属基地与品种（与地块主数据保持一致）
+    function bindPlotAutoFill(plotId, baseId, varietyId) {
+      document.getElementById(plotId).addEventListener('change', function () {
+        const plot = PLOT_MASTER.find(p => p.code === this.value);
+        if (plot) {
+          document.getElementById(baseId).value = plot.base;
+          document.getElementById(varietyId).value = plot.variety;
+        }
+      });
     }
 
     document.addEventListener('DOMContentLoaded', function() {
+      fillPlans(document.getElementById('add-plan'), '');
+      fillPlans(document.getElementById('edit-plan'), '');
+      fillPlots(document.getElementById('add-plot'), '');
+      fillPlots(document.getElementById('edit-plot'), '');
+      bindPlotAutoFill('add-plot', 'add-base', 'add-variety');
+      bindPlotAutoFill('edit-plot', 'edit-base', 'edit-variety');
+
       Pagination.init({
         currentPage: 1,
         pageSize: 10,
@@ -526,6 +815,8 @@
         tbodyId: 'dataTableBody',
         renderRow: renderRow
       });
+
+      renderCharts(harvestRecords);
     });
   </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>

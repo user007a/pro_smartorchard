@@ -228,7 +228,7 @@
             <select class="search-select" style="min-width:120px;">
               <option value="">全部状态</option>
               <option value="normal">正常</option>
-              <option value="low">库存不足</option>
+              <option value="danger">库存不足</option>
               <option value="high">库存充足</option>
             </select>
             <input type="text" class="search-input" placeholder="搜索农资名称..." id="searchInput">
@@ -381,6 +381,18 @@
               <option value="warehouse1">一号仓库</option>
               <option value="warehouse2">二号仓库</option>
             </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>农资名称</label>
+            <select id="countMaterial">
+              <option value="">请选择农资</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>实盘数量</label>
+            <input type="number" id="countQty" placeholder="请输入实盘数量" min="0">
           </div>
         </div>
         <div class="form-row">
@@ -549,40 +561,34 @@
 
 <!-- 引入交互脚本 -->
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->
+<script src="js/material-store.js"></script>
 <script>
-// 库存数据
-const inventoryData = [
-  {"id":"1","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-001","name":"NPK复合肥","spec":"40kg/袋","unit":"袋","stock":"150","minStock":"100","status":"normal"},
-  {"id":"2","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-002","name":"高效杀虫剂","spec":"500ml/瓶","unit":"瓶","stock":"25","minStock":"50","status":"danger"},
-  {"id":"3","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-003","name":"有机肥料","spec":"25kg/袋","unit":"袋","stock":"80","minStock":"50","status":"normal"},
-  {"id":"4","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-004","name":"疏花疏果剪","spec":"SK-5材质","unit":"把","stock":"200","minStock":"30","status":"high"},
-  {"id":"5","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-005","name":"杀菌剂","spec":"1L/瓶","unit":"瓶","stock":"15","minStock":"30","status":"danger"},
-  {"id":"6","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-006","name":"磷酸二铵","spec":"50kg/袋","unit":"袋","stock":"200","minStock":"120","status":"high"},
-  {"id":"7","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-007","name":"除草剂","spec":"200ml/瓶","unit":"瓶","stock":"95","minStock":"80","status":"normal"},
-  {"id":"8","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-008","name":"修枝剪","spec":"铝合金手柄","unit":"把","stock":"150","minStock":"40","status":"high"},
-  {"id":"9","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-009","name":"叶面肥","spec":"500ml/瓶","unit":"瓶","stock":"180","minStock":"150","status":"normal"},
-  {"id":"10","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-010","name":"生物农药","spec":"1L/瓶","unit":"瓶","stock":"25","minStock":"40","status":"danger"},
-  {"id":"11","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-011","name":"授粉器","spec":"电动型","unit":"个","stock":"18","minStock":"20","status":"normal"},
-  {"id":"12","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-012","name":"钾肥","spec":"50kg/袋","unit":"袋","stock":"150","minStock":"90","status":"high"},
-  {"id":"13","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-013","name":"杀螨剂","spec":"300ml/瓶","unit":"瓶","stock":"30","minStock":"70","status":"danger"},
-  {"id":"14","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-014","name":"嫁接刀","spec":"不锈钢","unit":"把","stock":"200","minStock":"100","status":"high"},
-  {"id":"15","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-015","name":"尿素","spec":"50kg/袋","unit":"袋","stock":"250","minStock":"200","status":"normal"},
-  {"id":"16","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-016","name":"保鲜剂","spec":"500ml/瓶","unit":"瓶","stock":"45","minStock":"35","status":"normal"},
-  {"id":"17","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-017","name":"喷雾器","spec":"手动型 16L","unit":"个","stock":"20","minStock":"25","status":"normal"},
-  {"id":"18","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-018","name":"微量元素肥","spec":"1kg/袋","unit":"袋","stock":"80","minStock":"60","status":"normal"},
-  {"id":"19","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-019","name":"生长调节剂","spec":"100ml/瓶","unit":"瓶","stock":"55","minStock":"45","status":"normal"},
-  {"id":"20","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-020","name":"绑枝机","spec":"手动绑枝机","unit":"个","stock":"25","minStock":"30","status":"normal"},
-  {"id":"21","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-021","name":"钙肥","spec":"25kg/袋","unit":"袋","stock":"20","minStock":"50","status":"danger"},
-  {"id":"22","warehouse":"一号仓库","warehouseCode":"warehouse1","code":"M-022","name":"杀虫灯","spec":"太阳能型","unit":"盏","stock":"12","minStock":"15","status":"normal"},
-  {"id":"23","warehouse":"二号仓库","warehouseCode":"warehouse2","code":"M-023","name":"土壤改良剂","spec":"20kg/袋","unit":"袋","stock":"35","minStock":"40","status":"normal"}
-];
+// 库存数据来自共享仓库 MaterialStore，与出入库/退货/使用页面实时联动
+let inventoryData = [];
+
+function loadInventoryData() {
+  inventoryData = MaterialStore.all().map(function (m) {
+    return {
+      id: m.code,
+      warehouse: m.warehouse,
+      warehouseCode: m.warehouseCode,
+      code: m.code,
+      name: m.name,
+      spec: m.spec,
+      unit: m.unit,
+      stock: String(m.stock),
+      minStock: String(m.safety),
+      status: MaterialStore.statusOf(m.code)
+    };
+  });
+}
 
 // 当前页面、每页条数、总条数、总页数
 let currentPage = 1;
 const pageSize = 10;
-let totalItems = inventoryData.length;
-let totalPages = Math.ceil(totalItems / pageSize);
-let filteredData = [...inventoryData];
+let totalItems = 0;
+let totalPages = 1;
+let filteredData = [];
 
 // DOM元素
 const tableBody = document.querySelector('.data-table tbody');
@@ -604,6 +610,10 @@ const exportModal = document.getElementById('exportModal');
 
 // 初始化
 function init() {
+  loadInventoryData();
+  filteredData = inventoryData.slice();
+  totalItems = filteredData.length;
+  totalPages = Math.ceil(totalItems / pageSize) || 1;
   renderTable();
   renderPagination();
   bindEvents();
@@ -771,12 +781,16 @@ function bindEvents() {
 
 // 填充农资选择框
 function populateMaterialSelect() {
-  const select = document.getElementById('inboundMaterial');
-  inventoryData.forEach(item => {
-    const option = document.createElement('option');
-    option.value = item.id;
-    option.textContent = `${item.code} - ${item.name}`;
-    select.appendChild(option);
+  ['inboundMaterial', 'countMaterial'].forEach(function (id) {
+    const select = document.getElementById(id);
+    if (!select) return;
+    select.innerHTML = '<option value="">请选择农资</option>';
+    inventoryData.forEach(item => {
+      const option = document.createElement('option');
+      option.value = item.id;
+      option.textContent = `${item.code} - ${item.name}`;
+      select.appendChild(option);
+    });
   });
 }
 
@@ -801,7 +815,7 @@ function closeInboundModal() {
 function saveInbound() {
   const materialId = document.getElementById('inboundMaterial').value;
   const qty = document.getElementById('inboundQty').value;
-  
+
   if (!materialId) {
     alert('请选择农资');
     return;
@@ -810,20 +824,16 @@ function saveInbound() {
     alert('请输入有效数量');
     return;
   }
-  
-  const item = inventoryData.find(i => i.id === materialId);
-  if (item) {
-    item.stock = String(parseInt(item.stock) + parseInt(qty));
-    // 更新状态
-    item.status = parseInt(item.stock) > parseInt(item.minStock) ? 'normal' : 
-                  parseInt(item.stock) <= parseInt(item.minStock) ? 'danger' : 'normal';
-    if (parseInt(item.stock) > parseInt(item.minStock) * 1.5) {
-      item.status = 'high';
-    }
+
+  const result = MaterialStore.applyDelta(materialId, parseInt(qty));
+  if (!result.ok) {
+    alert(result.message);
+    return;
   }
-  
+
   alert('入库成功');
   closeInboundModal();
+  loadInventoryData();
   search();
 }
 
@@ -831,6 +841,8 @@ function saveInbound() {
 function openCountModal() {
   document.getElementById('countCode').value = 'PD-' + Date.now().toString(36).toUpperCase();
   document.getElementById('countWarehouse').value = '';
+  document.getElementById('countMaterial').value = '';
+  document.getElementById('countQty').value = '';
   document.getElementById('countDate').value = new Date().toISOString().split('T')[0];
   document.getElementById('countOperator').value = '';
   document.getElementById('countRemark').value = '';
@@ -842,15 +854,35 @@ function closeCountModal() {
   countModal.classList.remove('show');
 }
 
-// 保存盘点
+// 保存盘点：将库存更新为实盘数量
 function saveCount() {
+  const materialId = document.getElementById('countMaterial').value;
+  const qty = document.getElementById('countQty').value;
   const operator = document.getElementById('countOperator').value;
+
+  if (!materialId) {
+    alert('请选择盘点农资');
+    return;
+  }
+  if (qty === '' || isNaN(parseInt(qty)) || parseInt(qty) < 0) {
+    alert('请输入有效实盘数量');
+    return;
+  }
   if (!operator.trim()) {
     alert('请输入盘点人');
     return;
   }
-  alert('盘点任务已创建，请开始盘点');
+
+  const result = MaterialStore.setStock(materialId, parseInt(qty));
+  if (!result.ok) {
+    alert(result.message);
+    return;
+  }
+
+  alert('盘点完成，库存已按实盘数量更新');
   closeCountModal();
+  loadInventoryData();
+  search();
 }
 
 // 查看库存详情
@@ -900,35 +932,22 @@ function saveAdjust() {
   const id = document.getElementById('adjustId').value;
   const type = document.getElementById('adjustType').value;
   const qty = document.getElementById('adjustQty').value;
-  
+
   if (!qty || parseInt(qty) <= 0) {
     alert('请输入有效数量');
     return;
   }
-  
-  const item = inventoryData.find(i => i.id === id);
-  if (item) {
-    if (type === 'increase') {
-      item.stock = String(parseInt(item.stock) + parseInt(qty));
-    } else {
-      const newStock = parseInt(item.stock) - parseInt(qty);
-      if (newStock < 0) {
-        alert('库存不足，无法减少');
-        return;
-      }
-      item.stock = String(newStock);
-    }
-    
-    // 更新状态
-    item.status = parseInt(item.stock) > parseInt(item.minStock) ? 'normal' : 
-                  parseInt(item.stock) <= parseInt(item.minStock) ? 'danger' : 'normal';
-    if (parseInt(item.stock) > parseInt(item.minStock) * 1.5) {
-      item.status = 'high';
-    }
+
+  const delta = type === 'increase' ? parseInt(qty) : -parseInt(qty);
+  const result = MaterialStore.applyDelta(id, delta);
+  if (!result.ok) {
+    alert(result.message);
+    return;
   }
-  
+
   alert('调整成功');
   closeAdjustModal();
+  loadInventoryData();
   search();
 }
 

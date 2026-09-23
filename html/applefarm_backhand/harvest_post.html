@@ -7,7 +7,7 @@
 <!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
 <link rel="stylesheet" href="css/design-system.css">
 <link rel="stylesheet" href="css/sidebar-layout.css">
-  <link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/page-content.css">
 <style>
   /* 模块卡片 hover 效果 */
   .module-card {
@@ -18,6 +18,8 @@
     transform:translateY(-2px);
     box-shadow:var(--shadow-md);
   }
+  /* 分页栏样式（与农事计划一致） */
+  #pagination-container { padding:12px 16px; }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -30,15 +32,11 @@
 <!-- ===== 整体布局容器 ===== -->
 <div class="app-layout">
 
-  <!-- ===== 侧边栏 ===== -->
-  <!-- 移动端遮罩层 -->
   <!-- ===== 主内容区 ===== -->
   <div class="main-wrapper">
 
-    <!-- 顶栏 -->
     <!-- Tab 标签栏 -->
     <div class="tab-bar">
-      <!-- Tab 标签由 JS 动态渲染 -->
       <div class="tab-bar-actions">
         <button class="tab-close-all" title="关闭全部标签">
           <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -50,10 +48,6 @@
 
     <!-- 主内容区 -->
     <main class="main-content">
-      <!-- 统计卡片区 -->
-      <!-- 统计卡条已按统一规范移除 (原class=patrol-stats) -->
-
-      <!-- 内容包裹层 -->
       <div class="content-wrapper">
 
         <!-- 搜索栏区 -->
@@ -61,56 +55,293 @@
           <div class="search-bar">
             <select class="search-select" id="statusSelect">
               <option value="">全部状态</option>
-              <option value="grading">分级中</option>
-              <option value="packaging">包装中</option>
-              <option value="stored">已入库</option>
-              <option value="exported">已出库</option>
+              <option value="pending">待发货</option>
+              <option value="shipped">已发货</option>
+              <option value="transit">运输中</option>
+              <option value="signed">已签收</option>
               <option value="abnormal">异常</option>
             </select>
-            <input type="text" class="search-input" placeholder="搜索批次编号或地块..." id="searchInput">
-            
+            <input type="date" class="search-input date-input" id="startDate" placeholder="开始日期">
+            <span class="date-separator">至</span>
+            <input type="date" class="search-input date-input" id="endDate" placeholder="结束日期">
+            <input type="text" class="search-input" placeholder="搜索发货单号或客户..." id="searchInput">
           <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="handleSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
           </div>
         </div>
 
         <!-- 操作按钮区 -->
         <div class="page-section action-bar">
-          <button class="jg-btn" onclick="Modal.show('modal-export')">导出记录</button>
+          <button class="jg-btn jg-btn-primary" onclick="showAdd()">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+              <path d="M8 3V13M3 8H13"/>
+            </svg>
+            新建发货
+          </button>
+          <button class="jg-btn" onclick="Modal.show('modal-export')">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+              <path d="M3 10L8 15L13 10"/><path d="M8 15V3"/>
+            </svg>
+            导出发货单
+          </button>
         </div>
 
         <!-- 数据列表区 -->
         <div class="page-section data-section">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th class="checkbox-col" style="width:60px;">序号</th>
-                <th>批次编号</th>
-                <th>地块</th>
-                <th>等级</th>
-                <th>数量(kg)</th>
-                <th>状态</th>
-                <th>操作时间</th>
-                <th>操作人</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody id="dataTableBody">
-            </tbody>
-          </table>
-        </div>
-        <div id="pagination-container">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:60px;">序号</th>
+                  <th style="width:120px;">发货单号</th>
+                  <th style="width:120px;">来源批次</th>
+                  <th style="width:140px;">关联批次</th>
+                  <th style="width:170px;">客户/收货方</th>
+                  <th style="width:200px;">收货地址</th>
+                  <th style="width:110px;">发货数量(kg)</th>
+                  <th style="width:140px;">物流单号</th>
+                  <th style="width:110px;">发货日期</th>
+                  <th style="width:90px;">状态</th>
+                  <th style="width:160px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody">
+              </tbody>
+            </table>
+          </div>
+          <div id="pagination-container">
+          </div>
         </div>
       </div>
-
-    </div>
-  </main>
+    </main>
+  </div>
 </div>
 
-<!-- 导出记录模态框 -->
+<!-- 新建发货模态框 -->
+<div id="modal-add-ship" class="modal-overlay">
+  <div class="modal-box" style="max-width:600px;">
+    <div class="modal-header">
+      <h3 class="modal-title">新建发货</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="form-add-ship" class="modal-form">
+        <div class="form-group">
+          <label>客户/收货方</label>
+          <input type="text" class="form-control" id="add-customer" placeholder="请输入客户或收货方名称">
+        </div>
+        <div class="form-group">
+          <label>联系电话</label>
+          <input type="text" class="form-control" id="add-phone" placeholder="请输入联系电话">
+        </div>
+        <div class="form-group">
+          <label>收货地址</label>
+          <input type="text" class="form-control" id="add-address" placeholder="请输入收货地址">
+        </div>
+        <div class="form-group">
+          <label>来源批次</label>
+          <select class="form-control" id="add-source"></select>
+        </div>
+        <div class="form-group">
+          <label>关联订单</label>
+          <select class="form-control" id="add-order"></select>
+        </div>
+        <div class="form-group">
+          <label>发货数量(kg)</label>
+          <input type="number" class="form-control" id="add-quantity" placeholder="请输入发货数量">
+        </div>
+        <div class="form-group">
+          <label>发货日期</label>
+          <input type="date" class="form-control" id="add-date">
+        </div>
+        <div class="form-group">
+          <label>备注</label>
+          <textarea class="form-control" rows="3" id="add-remark" placeholder="请输入备注信息"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="Modal.hide('modal-add-ship')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitAdd()">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 发货详情模态框 -->
+<div id="modal-detail" class="modal-overlay">
+  <div class="modal-box" style="max-width:640px;">
+    <div class="modal-header">
+      <h3 class="modal-title">发货详情</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid">
+        <div class="detail-item">
+          <span class="detail-label">发货单号</span>
+          <span class="detail-value" id="detail-id"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">状态</span>
+          <span class="detail-value" id="detail-status"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">来源批次</span>
+          <span class="detail-value" id="detail-source"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">关联订单</span>
+          <span class="detail-value" id="detail-order"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">客户</span>
+          <span class="detail-value" id="detail-customer"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">联系电话</span>
+          <span class="detail-value" id="detail-phone"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">收货地址</span>
+          <span class="detail-value" id="detail-address"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">发货数量</span>
+          <span class="detail-value" id="detail-quantity"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">发货日期</span>
+          <span class="detail-value" id="detail-date"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">物流公司</span>
+          <span class="detail-value" id="detail-logistics"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">物流单号</span>
+          <span class="detail-value" id="detail-tracking"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">操作人</span>
+          <span class="detail-value" id="detail-operator"></span>
+        </div>
+      </div>
+      <div style="margin-top:16px; padding:12px; background:var(--gray-50); border-radius:8px;">
+        <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">备注</div>
+        <div style="font-weight:500;" id="detail-remark">-</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn jg-btn-primary" onclick="Modal.hide('modal-detail')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 确认发货模态框 -->
+<div id="modal-confirm" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">确认发货</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-item">
+          <label>发货单号</label>
+          <input type="text" class="form-input" id="confirm-id" readonly>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>物流公司</label>
+          <select class="form-select" id="confirm-logistics">
+            <option value="顺丰速运">顺丰速运</option>
+            <option value="京东物流">京东物流</option>
+            <option value="中通快递">中通快递</option>
+            <option value="德邦物流">德邦物流</option>
+            <option value="自有冷链车队">自有冷链车队</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>物流单号</label>
+          <input type="text" class="form-input" id="confirm-tracking" placeholder="请输入物流单号">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>发货时间</label>
+          <input type="datetime-local" class="form-input" id="confirm-time">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="Modal.hide('modal-confirm')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitConfirm()">确认发货</button>
+    </div>
+  </div>
+</div>
+
+<!-- 签收模态框 -->
+<div id="modal-sign" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">签收确认</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-item">
+          <label>发货单号</label>
+          <input type="text" class="form-input" id="sign-id" readonly>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>签收人</label>
+          <input type="text" class="form-input" id="sign-person" placeholder="请输入签收人">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>签收时间</label>
+          <input type="datetime-local" class="form-input" id="sign-time">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>备注</label>
+          <textarea class="form-textarea" id="sign-remark" placeholder="请输入备注信息"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="Modal.hide('modal-sign')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitSign()">确认签收</button>
+    </div>
+  </div>
+</div>
+
+<!-- 导出发货单模态框 -->
 <div id="modal-export" class="modal-overlay">
   <div class="modal-box" style="max-width:420px;">
     <div class="modal-header">
-      <h3 class="modal-title">导出采后处理记录</h3>
+      <h3 class="modal-title">导出发货单</h3>
       <button class="modal-close">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 4L12 12M12 4L4 12"/>
@@ -121,7 +352,7 @@
       <div class="form-row">
         <div class="form-item">
           <label>选择导出格式</label>
-          <select class="form-select">
+          <select class="form-select" id="exportFormat">
             <option value="excel">Excel (.xlsx)</option>
             <option value="csv">CSV (.csv)</option>
           </select>
@@ -137,7 +368,7 @@
             </label>
             <label class="checkbox-label">
               <input type="radio" name="exportScope" value="selected">
-              <span>选中数据</span>
+              <span>当前筛选结果</span>
             </label>
           </div>
         </div>
@@ -150,272 +381,107 @@
   </div>
 </div>
 
-<!-- 详情模态框 -->
-<div id="modal-detail" class="modal-overlay">
-  <div class="modal-box" style="max-width:500px;">
-    <div class="modal-header">
-      <h3 class="modal-title">采后处理详情</h3>
-      <button class="modal-close">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 4L12 12M12 4L4 12"/>
-        </svg>
-      </button>
-    </div>
-    <div class="modal-body">
-      <div class="detail-grid">
-        <div class="detail-item">
-          <span class="detail-label">批次编号</span>
-          <span class="detail-value">PH-2024-001</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">地块</span>
-          <span class="detail-value">东地块A区</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">等级</span>
-          <span class="detail-value">特级</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">数量</span>
-          <span class="detail-value">850 kg</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">状态</span>
-          <span class="detail-value"><span class="status-tag stored">已入库</span></span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">操作时间</span>
-          <span class="detail-value">2026-09-20 14:30</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">操作人</span>
-          <span class="detail-value">张三</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">备注</span>
-          <span class="detail-value">品质优良，已完成分级包装</span>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="jg-btn jg-btn-primary" onclick="Modal.hide('modal-detail')">关闭</button>
-    </div>
-  </div>
-</div>
-
-<!-- 出库模态框 -->
-<div id="modal-outbound" class="modal-overlay">
-  <div class="modal-box" style="max-width:420px;">
-    <div class="modal-header">
-      <h3 class="modal-title">出库确认</h3>
-      <button class="modal-close">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 4L12 12M12 4L4 12"/>
-        </svg>
-      </button>
-    </div>
-    <div class="modal-body">
-      <div class="form-row">
-        <div class="form-item">
-          <label>批次编号</label>
-          <input type="text" class="form-input" value="PH-2024-001" readonly>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>出库数量(kg)</label>
-          <input type="number" class="form-input" value="850">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>出库时间</label>
-          <input type="datetime-local" class="form-input">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>备注</label>
-          <textarea class="form-textarea" placeholder="请输入出库备注"></textarea>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="jg-btn" onclick="Modal.hide('modal-outbound')">取消</button>
-      <button class="jg-btn jg-btn-primary" onclick="handleOutbound()">确认出库</button>
-    </div>
-  </div>
-</div>
-
-<!-- 入库模态框 -->
-<div id="modal-inbound" class="modal-overlay">
-  <div class="modal-box" style="max-width:420px;">
-    <div class="modal-header">
-      <h3 class="modal-title">入库确认</h3>
-      <button class="modal-close">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 4L12 12M12 4L4 12"/>
-        </svg>
-      </button>
-    </div>
-    <div class="modal-body">
-      <div class="form-row">
-        <div class="form-item">
-          <label>批次编号</label>
-          <input type="text" class="form-input" value="PH-2024-002" readonly>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>入库数量(kg)</label>
-          <input type="number" class="form-input" value="620">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>入库时间</label>
-          <input type="datetime-local" class="form-input">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>库位</label>
-          <select class="form-select">
-            <option value="">请选择库位</option>
-            <option value="A-001">A区-001</option>
-            <option value="A-002">A区-002</option>
-            <option value="B-001">B区-001</option>
-          </select>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="jg-btn" onclick="Modal.hide('modal-inbound')">取消</button>
-      <button class="jg-btn jg-btn-primary" onclick="handleInbound()">确认入库</button>
-    </div>
-  </div>
-</div>
-
-<!-- 标准处理模态框 -->
-<div id="modal-standard" class="modal-overlay">
-  <div class="modal-box" style="max-width:420px;">
-    <div class="modal-header">
-      <h3 class="modal-title">标准处理</h3>
-      <button class="modal-close">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 4L12 12M12 4L4 12"/>
-        </svg>
-      </button>
-    </div>
-    <div class="modal-body">
-      <div class="form-row">
-        <div class="form-item">
-          <label>批次编号</label>
-          <input type="text" class="form-input" value="PH-2024-004" readonly>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>处理类型</label>
-          <select class="form-select">
-            <option value="">请选择处理类型</option>
-            <option value="grading">分级处理</option>
-            <option value="packaging">包装处理</option>
-            <option value="cleaning">清洗处理</option>
-            <option value="storage">冷藏处理</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>处理结果</label>
-          <select class="form-select">
-            <option value="">请选择处理结果</option>
-            <option value="pass">合格</option>
-            <option value="rework">返工</option>
-            <option value="discard">报废</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>处理备注</label>
-          <textarea class="form-textarea" placeholder="请输入处理备注"></textarea>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="jg-btn" onclick="Modal.hide('modal-standard')">取消</button>
-      <button class="jg-btn jg-btn-primary" onclick="handleStandard()">确认处理</button>
-    </div>
-  </div>
-</div>
-
 <!-- 引入交互脚本 -->
 <script src="js/common-functions.js"></script>
+<script src="js/export-helper.js"></script>
 <script>
-// Mock数据 - 23条发货记录
-const mockData = [
-  { id: 'PH-2024-001', plot: '东地块A区', grade: '特级', amount: 850, status: 'stored', statusName: '已入库', time: '2026-09-20 14:30', operator: '张三' },
-  { id: 'PH-2024-002', plot: '西地块B区', grade: '一级', amount: 620, status: 'stored', statusName: '已入库', time: '2026-09-20 15:00', operator: '李四' },
-  { id: 'PH-2024-003', plot: '南地块C区', grade: '特级', amount: 980, status: 'outbound', statusName: '已出库', time: '2026-09-21 09:00', operator: '王五' },
-  { id: 'PH-2024-004', plot: '北地块D区', grade: '二级', amount: 450, status: 'stored', statusName: '已入库', time: '2026-09-21 10:30', operator: '赵六' },
-  { id: 'PH-2024-005', plot: '东地块B区', grade: '一级', amount: 720, status: 'stored', statusName: '已入库', time: '2026-09-22 08:00', operator: '孙七' },
-  { id: 'PH-2024-006', plot: '西地块A区', grade: '特级', amount: 1100, status: 'outbound', statusName: '已出库', time: '2026-09-22 14:00', operator: '周八' },
-  { id: 'PH-2024-007', plot: '南地块A区', grade: '一级', amount: 580, status: 'stored', statusName: '已入库', time: '2026-09-23 09:30', operator: '吴九' },
-  { id: 'PH-2024-008', plot: '北地块B区', grade: '特级', amount: 1250, status: 'stored', statusName: '已入库', time: '2026-09-23 11:00', operator: '郑十' },
-  { id: 'PH-2024-009', plot: '东地块C区', grade: '二级', amount: 380, status: 'outbound', statusName: '已出库', time: '2026-09-24 08:30', operator: '张三' },
-  { id: 'PH-2024-010', plot: '西地块D区', grade: '一级', amount: 890, status: 'stored', statusName: '已入库', time: '2026-09-24 14:30', operator: '李四' },
-  { id: 'PH-2024-011', plot: '南地块B区', grade: '特级', amount: 1050, status: 'stored', statusName: '已入库', time: '2026-09-25 09:00', operator: '王五' },
-  { id: 'PH-2024-012', plot: '北地块A区', grade: '一级', amount: 680, status: 'outbound', statusName: '已出库', time: '2026-09-25 11:30', operator: '赵六' },
-  { id: 'PH-2024-013', plot: '东地块D区', grade: '特级', amount: 920, status: 'stored', statusName: '已入库', time: '2026-09-26 08:00', operator: '孙七' },
-  { id: 'PH-2024-014', plot: '西地块C区', grade: '二级', amount: 520, status: 'stored', statusName: '已入库', time: '2026-09-26 14:00', operator: '周八' },
-  { id: 'PH-2024-015', plot: '南地块D区', grade: '特级', amount: 1180, status: 'outbound', statusName: '已出库', time: '2026-09-27 09:30', operator: '吴九' },
-  { id: 'PH-2024-016', plot: '北地块C区', grade: '一级', amount: 760, status: 'stored', statusName: '已入库', time: '2026-09-27 11:00', operator: '郑十' },
-  { id: 'PH-2024-017', plot: '东地块A区', grade: '特级', amount: 1320, status: 'stored', statusName: '已入库', time: '2026-09-28 08:30', operator: '张三' },
-  { id: 'PH-2024-018', plot: '西地块B区', grade: '一级', amount: 840, status: 'outbound', statusName: '已出库', time: '2026-09-28 14:30', operator: '李四' },
-  { id: 'PH-2024-019', plot: '南地块C区', grade: '特级', amount: 980, status: 'stored', statusName: '已入库', time: '2026-09-29 09:00', operator: '王五' },
-  { id: 'PH-2024-020', plot: '北地块D区', grade: '二级', amount: 480, status: 'stored', statusName: '已入库', time: '2026-09-29 11:30', operator: '赵六' },
-  { id: 'PH-2024-021', plot: '东地块B区', grade: '特级', amount: 1150, status: 'outbound', statusName: '已出库', time: '2026-09-30 08:00', operator: '孙七' },
-  { id: 'PH-2024-022', plot: '西地块A区', grade: '一级', amount: 720, status: 'stored', statusName: '已入库', time: '2026-09-30 14:00', operator: '周八' },
-  { id: 'PH-2024-023', plot: '南地块A区', grade: '特级', amount: 1080, status: 'stored', statusName: '已入库', time: '2026-09-30 09:30', operator: '吴九' }
+// Mock数据 - 18条发货单
+const shipments = [
+  { id: 'FH-2026-001', source: 'PP-2026-001', batchNo: 'PC-20260901-001', customer: '天水市秦州区华联超市', phone: '0938-8211234', address: '甘肃省天水市秦州区民主东路128号', order: 'XS-2026-001', quantity: 800,  date: '2026-09-02', logistics: '顺丰速运',   tracking: 'SF1023456789', status: 'signed',   operator: '张三', remark: '已签收，客户反馈良好' },
+  { id: 'FH-2026-002', source: 'PP-2026-002', batchNo: 'PC-20260902-002', customer: '兰州高原夏菜批发市场', phone: '0931-8642770', address: '甘肃省兰州市城关区东岗西路60号', order: 'XS-2026-002', quantity: 620,  date: '2026-09-03', logistics: '中通快递',   tracking: 'ZT2034567890', status: 'signed',   operator: '李四', remark: '' },
+  { id: 'FH-2026-003', source: 'PP-2026-003', batchNo: 'PC-20260903-003', customer: '西安雨润农产品批发市场', phone: '029-86321100', address: '陕西省西安市未央区凤城八路18号', order: 'XS-2026-003', quantity: 1500, date: '2026-09-04', logistics: '德邦物流',   tracking: 'DB3045678901', status: 'signed',   operator: '王五', remark: '' },
+  { id: 'FH-2026-004', source: 'PP-2026-005', batchNo: 'PC-20260905-005', customer: '京东生鲜西北仓', phone: '029-68882110', address: '陕西省西安市国际港务区港务大道88号', order: 'XS-2026-004', quantity: 700,  date: '2026-09-05', logistics: '京东物流',   tracking: 'JD4056789012', status: 'signed',   operator: '赵六', remark: '' },
+  { id: 'FH-2026-005', source: 'PP-2026-006', batchNo: 'PC-20260906-006', customer: '天水花牛苹果直营店', phone: '0938-2788566', address: '甘肃省天水市麦积区羲皇大道中段55号', order: 'XS-2026-005', quantity: 900,  date: '2026-09-06', logistics: '自有冷链车队', tracking: 'ZC5067890123', status: 'signed',   operator: '孙七', remark: '' },
+  { id: 'FH-2026-006', source: 'PP-2026-007', batchNo: 'PC-20260907-007', customer: '甘肃果品进出口有限公司', phone: '0938-2611099', address: '甘肃省天水市麦积区甘泉镇工业园区', order: 'XS-2026-006', quantity: 500,  date: '2026-09-08', logistics: '顺丰速运',   tracking: 'SF6078901234', status: 'signed',   operator: '周八', remark: '出口批次，已加贴追溯码' },
+  { id: 'FH-2026-007', source: 'PP-2026-008', batchNo: 'PC-20260908-008', customer: '麦积区电商服务中心', phone: '0938-2726888', address: '甘肃省天水市麦积区桥南街道电商产业园', order: 'XS-2026-007', quantity: 600,  date: '2026-09-09', logistics: '中通快递',   tracking: 'ZT7089012345', status: 'signed',   operator: '吴九', remark: '' },
+  { id: 'FH-2026-008', source: 'PP-2026-010', batchNo: 'PC-20260910-010', customer: '拼多多西北仓', phone: '029-88663300', address: '陕西省咸阳市秦都区西兰路5号', order: 'XS-2026-008', quantity: 850,  date: '2026-09-11', logistics: '德邦物流',   tracking: 'DB8090123456', status: 'signed',   operator: '郑十', remark: '' },
+  { id: 'FH-2026-009', source: 'PP-2026-012', batchNo: 'PC-20260912-012', customer: '成都濛阳农副产品市场', phone: '028-83366001', address: '四川省成都市彭州市濛阳街道濛三路', order: 'XS-2026-009', quantity: 650,  date: '2026-09-13', logistics: '顺丰速运',   tracking: 'SF9101234567', status: 'transit',  operator: '张三', remark: '预计2日内送达' },
+  { id: 'FH-2026-010', source: 'PP-2026-013', batchNo: 'PC-20260913-013', customer: '郑州万邦国际农产品市场', phone: '0371-66018866', address: '河南省郑州市中牟县万洪路12号', order: 'XS-2026-010', quantity: 900,  date: '2026-09-14', logistics: '中通快递',   tracking: 'ZT0112345678', status: 'transit',  operator: '李四', remark: '' },
+  { id: 'FH-2026-011', source: 'PP-2026-015', batchNo: 'PC-20260915-015', customer: '天水市秦州区华联超市', phone: '0938-8211234', address: '甘肃省天水市秦州区民主东路128号', order: 'XS-2026-011', quantity: 1150, date: '2026-09-16', logistics: '自有冷链车队', tracking: 'ZC1123456789', status: 'transit',  operator: '王五', remark: '' },
+  { id: 'FH-2026-012', source: 'PP-2026-016', batchNo: 'PC-20260916-016', customer: '兰州高原夏菜批发市场', phone: '0931-8642770', address: '甘肃省兰州市城关区东岗西路60号', order: 'XS-2026-012', quantity: 750,  date: '2026-09-17', logistics: '京东物流',   tracking: 'JD1234567890', status: 'shipped',  operator: '赵六', remark: '冷链运输' },
+  { id: 'FH-2026-013', source: 'PP-2026-017', batchNo: 'PC-20260917-017', customer: '西安雨润农产品批发市场', phone: '029-86321100', address: '陕西省西安市未央区凤城八路18号', order: 'XS-2026-013', quantity: 1100, date: '2026-09-18', logistics: '德邦物流',   tracking: 'DB1345678901', status: 'shipped',  operator: '孙七', remark: '' },
+  { id: 'FH-2026-014', source: 'PP-2026-019', batchNo: 'PC-20260919-019', customer: '麦积区电商服务中心', phone: '0938-2726888', address: '甘肃省天水市麦积区桥南街道电商产业园', order: 'RY-2026-001', quantity: 300,  date: '2026-09-19', logistics: '中通快递',   tracking: 'ZT1456789012', status: 'shipped',  operator: '周八', remark: '认养订单配送' },
+  { id: 'FH-2026-015', source: 'PP-2026-011', batchNo: 'PC-20260911-011', customer: '天水花牛苹果直营店', phone: '0938-2788566', address: '甘肃省天水市麦积区羲皇大道中段55号', order: 'XS-2026-014', quantity: 1050, date: '2026-09-20', logistics: '自有冷链车队', tracking: '',             status: 'pending',  operator: '吴九', remark: '等待安排车辆' },
+  { id: 'FH-2026-016', source: 'PP-2026-014', batchNo: 'PC-20260914-014', customer: '甘肃果品进出口有限公司', phone: '0938-2611099', address: '甘肃省天水市麦积区甘泉镇工业园区', order: 'XS-2026-015', quantity: 950,  date: '2026-09-21', logistics: '顺丰速运',   tracking: '',             status: 'pending',  operator: '郑十', remark: '' },
+  { id: 'FH-2026-017', source: 'PP-2026-009', batchNo: 'PC-20260909-009', customer: '拼多多西北仓', phone: '029-88663300', address: '陕西省咸阳市秦都区西兰路5号', order: 'XS-2026-016', quantity: 360,  date: '2026-09-22', logistics: '中通快递',   tracking: '',             status: 'pending',  operator: '张三', remark: '' },
+  { id: 'FH-2026-018', source: 'PP-2026-004', batchNo: 'PC-20260904-004', customer: '郑州万邦国际农产品市场', phone: '0371-66018866', address: '河南省郑州市中牟县万洪路12号', order: 'XS-2026-017', quantity: 450,  date: '2026-09-23', logistics: '德邦物流',   tracking: 'DB1789012345', status: 'abnormal', operator: '李四', remark: '运输途中部分箱体破损，待协商处理' }
 ];
 
-// 获取状态标签
+// 来源批次下拉数据（与采后处理页一致）
+const BATCH_OPTIONS = [
+  'PP-2026-001','PP-2026-002','PP-2026-003','PP-2026-004','PP-2026-005','PP-2026-006',
+  'PP-2026-007','PP-2026-008','PP-2026-009','PP-2026-010','PP-2026-011','PP-2026-012',
+  'PP-2026-013','PP-2026-014','PP-2026-015','PP-2026-016','PP-2026-017','PP-2026-018',
+  'PP-2026-019','PP-2026-020'
+];
+
+// 关联订单下拉数据
+const ORDER_OPTIONS = [
+  { value: 'XS-2026-001', label: 'XS-2026-001 · 销售订单' },
+  { value: 'XS-2026-002', label: 'XS-2026-002 · 销售订单' },
+  { value: 'XS-2026-003', label: 'XS-2026-003 · 销售订单' },
+  { value: 'XS-2026-004', label: 'XS-2026-004 · 销售订单' },
+  { value: 'XS-2026-005', label: 'XS-2026-005 · 销售订单' },
+  { value: 'RY-2026-001', label: 'RY-2026-001 · 认养订单' },
+  { value: 'RY-2026-002', label: 'RY-2026-002 · 认养订单' }
+];
+
+// 当前操作单号
+let currentShipId = '';
+
+// 状态标签
 function getStatusTag(status) {
   const statusMap = {
-    'stored': '<span class="status-tag stored">已入库</span>',
-    'outbound': '<span class="status-tag outbound">已出库</span>'
+    'pending':  '<span class="status-tag pending">待发货</span>',
+    'shipped':  '<span class="status-tag processing">已发货</span>',
+    'transit':  '<span class="status-tag exported">运输中</span>',
+    'signed':   '<span class="status-tag normal">已签收</span>',
+    'abnormal': '<span class="status-tag abnormal">异常</span>'
   };
-  return statusMap[status] || statusMap['stored'];
+  return statusMap[status] || statusMap['pending'];
 }
+
+const STATUS_NAME = {
+  'pending': '待发货', 'shipped': '已发货', 'transit': '运输中', 'signed': '已签收', 'abnormal': '异常'
+};
 
 // 渲染表格行
 function renderRow(item, index) {
+  let actions = `<button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>`;
+  if (item.status === 'pending') {
+    actions += `<button class="action-btn edit" onclick="showConfirm('${item.id}')">确认发货</button>`;
+  }
+  if (item.status === 'shipped' || item.status === 'transit') {
+    actions += `<button class="action-btn edit" onclick="showSign('${item.id}')">签收</button>`;
+  }
+
   return `<tr>
-    <td class="checkbox-col">${index + 1}</td>
+    <td>${index + 1}</td>
     <td><strong>${item.id}</strong></td>
-    <td>${item.plot}</td>
-    <td>${item.grade}</td>
-    <td class="text-right">${item.amount.toLocaleString()}</td>
+    <td>${item.source}</td>
+    <td>${item.batchNo}</td>
+    <td>${item.customer}</td>
+    <td title="${item.address}">${item.address}</td>
+    <td class="text-right">${item.quantity.toLocaleString()}</td>
+    <td>${item.tracking || '-'}</td>
+    <td>${item.date}</td>
     <td>${getStatusTag(item.status)}</td>
-    <td>${item.time}</td>
-    <td>${item.operator}</td>
-    <td>
-      <div class="action-btns">
-        <button class="action-btn detail" onclick="Modal.show('modal-detail')">详情</button>
-        <button class="action-btn export" onclick="Modal.show('modal-outbound')">出库</button>
-      </div>
-    </td>
+    <td><div class="action-btns">${actions}</div></td>
   </tr>`;
 }
 
-// 搜索功能
+// 搜索：状态 + 发货日期范围 + 关键词
 function handleSearch() {
-  const keyword = document.getElementById('searchInput').value;
+  var status = document.getElementById('statusSelect').value;
+  var startDate = document.getElementById('startDate').value;
+  var endDate = document.getElementById('endDate').value;
+  var keyword = document.getElementById('searchInput').value.trim().toLowerCase();
 
-  var filteredData = mockData.filter(item => {
-    if (keyword && !item.id.includes(keyword) && !item.plot.includes(keyword)) return false;
+  var filteredData = shipments.filter(item => {
+    if (status && item.status !== status) return false;
+    if (startDate && item.date < startDate) return false;
+    if (endDate && item.date > endDate) return false;
+    if (keyword && !item.id.toLowerCase().includes(keyword) && !item.customer.toLowerCase().includes(keyword)) return false;
     return true;
   });
 
@@ -423,46 +489,173 @@ function handleSearch() {
   Toast.info('找到 ' + filteredData.length + ' 条记录');
 }
 
-// 导出记录
-function handleExport() {
+function findShipment(id) {
+  return shipments.find(s => s.id === id);
+}
+
+// 详情（按行回填）
+function showDetail(id) {
+  const item = findShipment(id);
+  if (!item) return;
+  document.getElementById('detail-id').textContent = item.id;
+  document.getElementById('detail-status').innerHTML = getStatusTag(item.status);
+  document.getElementById('detail-source').textContent = item.source;
+  document.getElementById('detail-order').textContent = item.order;
+  document.getElementById('detail-customer').textContent = item.customer;
+  document.getElementById('detail-phone').textContent = item.phone;
+  document.getElementById('detail-address').textContent = item.address;
+  document.getElementById('detail-quantity').textContent = item.quantity.toLocaleString() + ' kg';
+  document.getElementById('detail-date').textContent = item.date;
+  document.getElementById('detail-logistics').textContent = item.logistics || '-';
+  document.getElementById('detail-tracking').textContent = item.tracking || '-';
+  document.getElementById('detail-operator').textContent = item.operator;
+  document.getElementById('detail-remark').textContent = item.remark || '-';
+  Modal.show('modal-detail');
+}
+
+// 新建发货
+function showAdd() {
+  document.getElementById('form-add-ship').reset();
+  document.getElementById('add-date').value = todayStr();
+  Modal.show('modal-add-ship');
+}
+
+function submitAdd() {
+  const customer = document.getElementById('add-customer').value.trim();
+  const address = document.getElementById('add-address').value.trim();
+  const quantity = parseInt(document.getElementById('add-quantity').value);
+  if (!customer || !address || !quantity) {
+    Toast.warning('请填写客户、收货地址和发货数量');
+    return;
+  }
+  const newShip = {
+    id: 'FH-2026-' + String(shipments.length + 1).padStart(3, '0'),
+    source: document.getElementById('add-source').value,
+    customer: customer,
+    phone: document.getElementById('add-phone').value.trim(),
+    address: address,
+    order: document.getElementById('add-order').value,
+    quantity: quantity,
+    date: document.getElementById('add-date').value,
+    logistics: '',
+    tracking: '',
+    status: 'pending',
+    operator: '当前用户',
+    remark: document.getElementById('add-remark').value.trim()
+  };
+  shipments.unshift(newShip);
+  Modal.hide('modal-add-ship');
+  handleSearch();
+  Toast.success('发货单创建成功');
+}
+
+// 确认发货
+function showConfirm(id) {
+  const item = findShipment(id);
+  if (!item) return;
+  currentShipId = id;
+  document.getElementById('confirm-id').value = item.id;
+  document.getElementById('confirm-logistics').value = '顺丰速运';
+  document.getElementById('confirm-tracking').value = '';
+  document.getElementById('confirm-time').value = toLocalInput(new Date());
+  Modal.show('modal-confirm');
+}
+
+function submitConfirm() {
+  const item = findShipment(currentShipId);
+  if (item) {
+    const tracking = document.getElementById('confirm-tracking').value.trim();
+    if (!tracking) {
+      Toast.warning('请输入物流单号');
+      return;
+    }
+    item.logistics = document.getElementById('confirm-logistics').value;
+    item.tracking = tracking;
+    item.status = 'shipped';
+  }
+  Modal.hide('modal-confirm');
+  handleSearch();
+  Toast.success('确认发货成功');
+}
+
+// 签收
+function showSign(id) {
+  const item = findShipment(id);
+  if (!item) return;
+  currentShipId = id;
+  document.getElementById('sign-id').value = item.id;
+  document.getElementById('sign-person').value = '';
+  document.getElementById('sign-time').value = toLocalInput(new Date());
+  document.getElementById('sign-remark').value = '';
+  Modal.show('modal-sign');
+}
+
+function submitSign() {
+  const item = findShipment(currentShipId);
+  if (item) {
+    const person = document.getElementById('sign-person').value.trim();
+    if (!person) {
+      Toast.warning('请输入签收人');
+      return;
+    }
+    item.status = 'signed';
+    const remark = document.getElementById('sign-remark').value.trim();
+    if (remark) item.remark = remark;
+  }
+  Modal.hide('modal-sign');
+  handleSearch();
+  Toast.success('签收成功');
+}
+
+// 真实导出（Excel / CSV）
+async function handleExport() {
+  const scope = document.querySelector('input[name="exportScope"]:checked').value;
+  const rows = (scope === 'selected' ? Pagination.filteredData : shipments);
+  const result = await ExportHelper.exportData({
+    filename: '采收发货单_' + ExportHelper.stamp(),
+    format: document.getElementById('exportFormat').value,
+    headers: ['发货单号', '来源批次', '客户/收货方', '联系电话', '收货地址', '关联订单', '发货数量(kg)', '发货日期', '物流公司', '物流单号', '状态', '操作人', '备注'],
+    rows: rows.map(s => [s.id, s.source, s.customer, s.phone, s.address, s.order, s.quantity, s.date, s.logistics, s.tracking, STATUS_NAME[s.status], s.operator, s.remark || ''])
+  });
   Modal.hide('modal-export');
-  Toast.success('导出成功，文件已下载');
+  Toast.success(result === 'csv-fallback' ? 'Excel 组件加载失败，已导出为 CSV' : '导出成功，文件已下载');
 }
 
-// 出库操作
-function handleOutbound() {
-  Modal.hide('modal-outbound');
-  Toast.success('出库成功');
+// 工具
+function todayStr() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-// 入库操作
-function handleInbound() {
-  Modal.hide('modal-inbound');
-  Toast.success('入库成功');
+function toLocalInput(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-// 标准处理
-function handleStandard() {
-  Modal.hide('modal-standard');
-  Toast.success('处理完成');
-}
-
-// 初始化分页
+// 初始化
 document.addEventListener('DOMContentLoaded', function() {
+  // 填充来源批次下拉
+  const sourceSelect = document.getElementById('add-source');
+  sourceSelect.innerHTML = BATCH_OPTIONS.map(b => `<option value="${b}">${b}</option>`).join('');
+
+  // 填充关联订单下拉
+  const orderSelect = document.getElementById('add-order');
+  orderSelect.innerHTML = ORDER_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
-    data: mockData,
+    data: shipments,
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderRow
   });
 });
 </script>
-<!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-  <script src="js/search-helper.js"></script>
-  <script src="js/typography.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
 </body>
 </html>

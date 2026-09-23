@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 批次管理</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .modal-overlay {
+    position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.5);
+    display:flex; align-items:center; justify-content:center;
+    z-index:1000; opacity:0; visibility:hidden; transition:all 0.3s ease;
+  }
+  .modal-overlay.active { opacity:1; visibility:visible; }
+  .modal { background:var(--bg-card); border-radius:16px; width:640px; max-width:90vw; max-height:90vh; overflow:hidden; transform:scale(0.9); transition:all 0.3s ease; }
+  .modal-overlay.active .modal { transform:scale(1); }
+  .modal-header {
+    padding:20px 24px; border-bottom:1px solid var(--border-default);
+    display:flex; align-items:center; justify-content:space-between;
+    background:linear-gradient(135deg, #1890ff 0%, #1a8a3a 100%); color:var(--text-inverse);
+  }
+  .modal-header h3 { font-size:18px; font-weight:600; margin:0; }
+  .modal-close { width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.2); border:none; color:var(--text-inverse); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; }
+  .modal-close:hover { background:rgba(255,255,255,0.3); }
+  .modal-body { padding:24px; max-height:60vh; overflow-y:auto; }
+  .modal-footer { padding:16px 24px; border-top:1px solid var(--border-default); display:flex; justify-content:flex-end; gap:12px; }
+  .detail-grid {
+    display:grid; grid-template-columns:120px 1fr;
+    gap:12px; padding:10px 0; border-bottom:1px solid var(--border-light);
+  }
+  .detail-grid:last-child { border-bottom:none; }
+  .detail-label { color:var(--text-tertiary); font-size:14px; }
+  .detail-value { color:var(--text-primary); font-size:14px; font-weight:500; }
+  .edit-form { display:grid; gap:16px; }
+  .form-group { display:flex; flex-direction:column; gap:6px; }
+  .form-group label { font-size:14px; font-weight:500; color:var(--text-primary); }
+  .form-group input, .form-group select, .form-group textarea { padding:10px 14px; border:1px solid var(--border-default); border-radius:8px; font-size:14px; transition:all 0.2s; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline:none; border-color:var(--border-primary); box-shadow:0 0 0 3px rgba(24,144,255,0.1); }
+  .form-group input[readonly] { background:var(--gray-50); color:var(--text-secondary); }
+  .form-group textarea { resize:vertical; min-height:70px; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .chain-box { background:#f8faf8; border-radius:12px; padding:16px 20px; margin-bottom:16px; }
+  .chain-title { font-weight:600; color:var(--text-primary); font-size:14px; margin-bottom:10px; }
+  .chain-list { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .chain-node { background:var(--bg-card); border:1px solid var(--border-default); border-radius:8px; padding:6px 12px; font-size:13px; color:var(--text-secondary); }
+  .chain-node.hl { border-color:#1890ff; color:#1890ff; font-weight:500; }
+  .chain-arrow { color:var(--text-tertiary); font-size:13px; }
+  .toast { position:fixed; top:20px; right:20px; padding:14px 20px; background:var(--bg-card); border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.15); display:flex; align-items:center; gap:12px; z-index:2000; transform:translateX(120%); transition:all 0.3s ease; }
+  .toast.show { transform:translateX(0); }
+  .toast.success { border-left:4px solid var(--border-primary); }
+  .toast.error { border-left:4px solid #ef4444; }
+  .toast-icon { width:24px; height:24px; border-radius:50%; background:var(--gray-100); display:flex; align-items:center; justify-content:center; color:var(--primary-500); }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="trace" data-active-submenu="trace-batch">
+
+<div class="app-layout">
+
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+
+        <div class="search-section">
+          <div class="search-bar">
+            <select class="search-select" id="baseSelect" style="width:170px;">
+              <option value="">全部基地</option>
+            </select>
+            <select class="search-select" id="productSelect" style="width:150px;">
+              <option value="">全部产品</option>
+            </select>
+            <select class="search-select" id="statusSelect" style="width:140px;">
+              <option value="">全部状态</option>
+              <option value="pending">待包装</option>
+              <option value="stored">已入库</option>
+              <option value="packed">已包装</option>
+              <option value="shipped">已发货</option>
+            </select>
+            <input type="text" class="search-input" placeholder="搜索批次号 / 地块..." id="searchInput" style="width:200px;">
+
+          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="resetSearch()">重置</button></div>
+          </div>
+        </div>
+
+        <div class="action-bar">
+          <div class="action-left">
+            <button class="jg-btn jg-btn-primary" onclick="openCreateModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+                <path d="M12 4v16m8-8H4"/>
+              </svg>
+              新建批次
+            </button>
+            <button class="jg-btn" onclick="exportBatches()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              导出批次
+            </button>
+          </div>
+        </div>
+
+        <div class="data-section">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:60px;">序号</th>
+                <th>批次号</th>
+                <th>产品名称</th>
+                <th>所属基地</th>
+                <th>地块</th>
+                <th>采收计划</th>
+                <th>采收日期</th>
+                <th>追溯码</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="dataTableBody"></tbody>
+          </table>
+          <div id="pagination-container"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>批次详情</h3>
+      <button class="modal-close" onclick="closeModal('detailModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="detailContent"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
+      <button class="jg-btn jg-btn-primary" onclick="gotoTraceCode()">生成追溯码</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新建 / 编辑弹窗 -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="editModalTitle">新建批次</h3>
+      <button class="modal-close" onclick="closeModal('editModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="edit-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>批次号</label>
+            <input type="text" id="editBatchNo" placeholder="如：PC-20260921-021">
+          </div>
+          <div class="form-group">
+            <label>采收计划</label>
+            <select id="editPlanNo"></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>所属基地</label>
+            <select id="editBase"></select>
+          </div>
+          <div class="form-group">
+            <label>地块</label>
+            <select id="editPlot"></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>产品名称</label>
+            <select id="editProduct"></select>
+          </div>
+          <div class="form-group">
+            <label>规格</label>
+            <input type="text" id="editSpec" placeholder="如：5kg/箱">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>采收日期</label>
+            <input type="date" id="editHarvestDate">
+          </div>
+          <div class="form-group">
+            <label>等级</label>
+            <select id="editGrade">
+              <option value="特级">特级</option>
+              <option value="一级">一级</option>
+              <option value="二级">二级</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>采收数量(kg)</label>
+            <input type="number" id="editQuantity" min="1" placeholder="如：5000">
+          </div>
+          <div class="form-group">
+            <label>采后处理单号</label>
+            <input type="text" id="editProcessNo" placeholder="如：PP-2026-021">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>状态</label>
+          <select id="editStatus">
+            <option value="pending">待包装</option>
+            <option value="stored">已入库</option>
+            <option value="packed">已包装</option>
+            <option value="shipped">已发货</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>备注</label>
+          <textarea id="editRemark" placeholder="选填"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('editModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="saveBatch()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast提示 -->
+<div class="toast" id="toast">
+  <div class="toast-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+  </div>
+  <span id="toastMessage">操作成功</span>
+</div>
+
+<script>
+/* ============================================================
+ * 批次管理 —— 溯源链路的主数据页
+ * 批次号规则：PC-YYYYMMDD-NNN（统一原 PP-/PC- 两套编号）
+ * 关联：采收计划 HS-2026-NNN → 批次 PC-YYYYMMDD-NNN → 采后处理 PP-2026-NNN → 追溯码
+ * 产品集（证书签发源）：花牛苹果 / 金帅苹果 / 秦冠苹果 / 礼盒装苹果
+ * ============================================================ */
+
+// 产品集（与证书签发保持一致）
+const PRODUCT_SOURCE = ['花牛苹果', '金帅苹果', '秦冠苹果', '礼盒装苹果'];
+
+// 基地（取自基地管理 enterprise_base.html）
+const BASE_SOURCE = ['天水麦积区基地', '天水荣成基地', '青岛莱西基地', '龙口南山基地', '麦积区阁基地'];
+
+// 地块（取自地块管理 enterprise_plot.html 的 mockPlotData）
+const PLOT_SOURCE = [
+  {code:'D-001',name:'东区1号地',base:'天水麦积区基地',variety:'花牛苹果'},
+  {code:'D-002',name:'东区2号地',base:'天水麦积区基地',variety:'花牛苹果'},
+  {code:'D-003',name:'西区1号地',base:'天水麦积区基地',variety:'金帅'},
+  {code:'D-004',name:'北区1号地',base:'天水荣成基地',variety:'花牛苹果'},
+  {code:'D-005',name:'南区1号地',base:'天水荣成基地',variety:'花牛苹果'},
+  {code:'D-006',name:'中区1号地',base:'甘肃吉县苹果园',variety:'花牛苹果'},
+  {code:'D-007',name:'南区2号地',base:'甘肃麦积区苹果园',variety:'花牛苹果'},
+  {code:'D-008',name:'西区2号地',base:'天水麦积区苹果基地',variety:'花牛苹果'},
+  {code:'D-009',name:'北区2号地',base:'甘肃麦积区苹果基地',variety:'花牛苹果'},
+  {code:'D-010',name:'东区3号地',base:'天水麦积区苹果基地',variety:'金帅'},
+  {code:'D-011',name:'南区3号地',base:'甘肃麦积区苹果园',variety:'花牛苹果'},
+  {code:'D-012',name:'西区3号地',base:'天水麦积区苹果基地',variety:'秦冠'},
+  {code:'D-013',name:'北区3号地',base:'甘肃麦积区苹果基地',variety:'花牛苹果'},
+  {code:'D-014',name:'中区2号地',base:'甘肃吉县苹果园',variety:'花牛苹果'},
+  {code:'D-015',name:'东区4号地',base:'天水麦积区苹果基地',variety:'花牛苹果'},
+  {code:'D-016',name:'南区4号地',base:'甘肃麦积区苹果园',variety:'金帅'},
+  {code:'D-017',name:'西区4号地',base:'天水麦积区苹果基地',variety:'花牛苹果'},
+  {code:'D-018',name:'北区4号地',base:'甘肃麦积区苹果基地',variety:'花牛苹果'},
+  {code:'D-019',name:'中区3号地',base:'甘肃吉县苹果园',variety:'花牛苹果'},
+  {code:'D-020',name:'东区5号地',base:'天水麦积区苹果基地',variety:'秦冠'}
+];
+
+// 采收计划（取自采收计划 harvest_plan.html）
+const PLAN_SOURCE = Array.from({length:20}, (_, i) => 'HS-2026-' + String(i + 1).padStart(3, '0'));
+
+// 品种 → 产品（证书签发源）映射
+const VARIETY_PRODUCT = { '花牛苹果':'花牛苹果', '金帅':'金帅苹果', '秦冠':'秦冠苹果' };
+
+// 批次主数据（2026 年 9 月采收季）
+const mockBatchData = [
+  {id:'BAT001',batchNo:'PC-20260901-001',plotCode:'D-001',planNo:'HS-2026-001',processNo:'PP-2026-001',harvestDate:'2026-09-01',grade:'一级',quantity:1250,spec:'5kg/箱',traceCount:2,status:'shipped',remark:'首批采摘，果面光洁'},
+  {id:'BAT002',batchNo:'PC-20260902-002',plotCode:'D-002',planNo:'HS-2026-002',processNo:'PP-2026-002',harvestDate:'2026-09-02',grade:'一级',quantity:890,spec:'5kg/箱',traceCount:2,status:'shipped',remark:'甜度达标，优先发货'},
+  {id:'BAT003',batchNo:'PC-20260903-003',plotCode:'D-003',planNo:'HS-2026-003',processNo:'PP-2026-003',harvestDate:'2026-09-03',grade:'二级',quantity:1560,spec:'4kg/箱',traceCount:2,status:'packed',remark:'金帅早熟品种'},
+  {id:'BAT004',batchNo:'PC-20260904-004',plotCode:'D-004',planNo:'HS-2026-004',processNo:'PP-2026-004',harvestDate:'2026-09-04',grade:'一级',quantity:780,spec:'5kg/箱',traceCount:1,status:'packed',remark:''},
+  {id:'BAT005',batchNo:'PC-20260905-005',plotCode:'D-005',planNo:'HS-2026-005',processNo:'PP-2026-005',harvestDate:'2026-09-05',grade:'二级',quantity:1100,spec:'5kg/箱',traceCount:1,status:'packed',remark:'本批次曾发生病虫害，已复检合格'},
+  {id:'BAT006',batchNo:'PC-20260906-006',plotCode:'D-006',planNo:'HS-2026-006',processNo:'PP-2026-006',harvestDate:'2026-09-06',grade:'三级',quantity:920,spec:'4kg/箱',traceCount:1,status:'packed',remark:''},
+  {id:'BAT007',batchNo:'PC-20260907-007',plotCode:'D-007',planNo:'HS-2026-007',processNo:'PP-2026-007',harvestDate:'2026-09-07',grade:'一级',quantity:1340,spec:'5kg/箱',traceCount:1,status:'packed',remark:''},
+  {id:'BAT008',batchNo:'PC-20260908-008',plotCode:'D-008',planNo:'HS-2026-008',processNo:'PP-2026-008',harvestDate:'2026-09-08',grade:'二级',quantity:650,spec:'5kg/箱',traceCount:1,status:'packed',remark:''},
+  {id:'BAT009',batchNo:'PC-20260909-009',plotCode:'D-009',planNo:'HS-2026-009',processNo:'PP-2026-009',harvestDate:'2026-09-09',grade:'一级',quantity:1420,spec:'4kg/箱',traceCount:1,status:'stored',remark:'优质果'},
+  {id:'BAT010',batchNo:'PC-20260910-010',plotCode:'D-010',planNo:'HS-2026-010',processNo:'PP-2026-010',harvestDate:'2026-09-10',grade:'二级',quantity:870,spec:'4kg/箱',traceCount:1,status:'stored',remark:'金帅品种'},
+  {id:'BAT011',batchNo:'PC-20260911-011',plotCode:'D-011',planNo:'HS-2026-011',processNo:'PP-2026-011',harvestDate:'2026-09-11',grade:'一级',quantity:1680,spec:'5kg/箱',traceCount:1,status:'stored',remark:''},
+  {id:'BAT012',batchNo:'PC-20260912-012',plotCode:'D-012',planNo:'HS-2026-012',processNo:'PP-2026-012',harvestDate:'2026-09-12',grade:'三级',quantity:720,spec:'6kg/箱',traceCount:1,status:'stored',remark:'秦冠品种，果形端正'},
+  {id:'BAT013',batchNo:'PC-20260913-013',plotCode:'D-013',planNo:'HS-2026-013',processNo:'PP-2026-013',harvestDate:'2026-09-13',grade:'一级',quantity:1200,spec:'5kg/箱',traceCount:1,status:'stored',remark:''},
+  {id:'BAT014',batchNo:'PC-20260914-014',plotCode:'D-014',planNo:'HS-2026-014',processNo:'PP-2026-014',harvestDate:'2026-09-14',grade:'二级',quantity:980,spec:'5kg/箱',traceCount:1,status:'stored',remark:''},
+  {id:'BAT015',batchNo:'PC-20260915-015',plotCode:'D-015',planNo:'HS-2026-015',processNo:'PP-2026-015',harvestDate:'2026-09-15',grade:'一级',quantity:1550,spec:'4kg/箱',traceCount:1,status:'stored',remark:'高产'},
+  {id:'BAT016',batchNo:'PC-20260916-016',plotCode:'D-016',planNo:'HS-2026-016',processNo:'PP-2026-016',harvestDate:'2026-09-16',grade:'二级',quantity:830,spec:'4kg/箱',traceCount:1,status:'pending',remark:'金帅品种，正在装箱'},
+  {id:'BAT017',batchNo:'PC-20260917-017',plotCode:'D-017',planNo:'HS-2026-017',processNo:'PP-2026-017',harvestDate:'2026-09-17',grade:'一级',quantity:1120,spec:'5kg/箱',traceCount:1,status:'pending',remark:'高产批次'},
+  {id:'BAT018',batchNo:'PC-20260918-018',plotCode:'D-018',planNo:'HS-2026-018',processNo:'PP-2026-018',harvestDate:'2026-09-18',grade:'三级',quantity:690,spec:'5kg/箱',traceCount:1,status:'pending',remark:''},
+  {id:'BAT019',batchNo:'PC-20260919-019',plotCode:'D-019',planNo:'HS-2026-019',processNo:'PP-2026-019',harvestDate:'2026-09-19',grade:'一级',quantity:1380,spec:'4kg/箱',traceCount:1,status:'pending',remark:''},
+  {id:'BAT020',batchNo:'PC-20260920-020',plotCode:'D-020',planNo:'HS-2026-020',processNo:'PP-2026-020',harvestDate:'2026-09-20',grade:'二级',quantity:950,spec:'6kg/箱',traceCount:1,status:'pending',remark:'秦冠品种，待包装'}
+];
+
+const STATUS_TEXT = { pending:'待包装', stored:'已入库', packed:'已包装', shipped:'已发货' };
+
+let currentDetailId = null;
+let currentEditId = null;
+
+/* ---------- 分页组件（与农事计划、地块管理一致） ---------- */
+const Pagination = {
+  currentPage: 1, pageSize: 10, filteredData: [],
+  containerId: 'pagination-container', tbodyId: 'dataTableBody', renderRow: null,
+  init: function(options) {
+    this.currentPage = options.currentPage || 1;
+    this.pageSize = options.pageSize || 10;
+    this.filteredData = options.data || [];
+    this.containerId = options.containerId || 'pagination-container';
+    this.tbodyId = options.tbodyId || 'dataTableBody';
+    this.renderRow = options.renderRow || null;
+    this.render();
+  },
+  renderTable: function() {
+    const tbody = document.getElementById(this.tbodyId);
+    if (!tbody || !this.renderRow) return;
+    const start = (this.currentPage - 1) * this.pageSize;
+    const pageData = this.filteredData.slice(start, start + this.pageSize);
+    tbody.innerHTML = pageData.map((item, i) => this.renderRow(item, start + i + 1)).join('');
+  },
+  render: function() {
+    const container = document.getElementById(this.containerId);
+    if (!container) return;
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    let html = '<div class="pagination">';
+    html += `<button class="page-btn ${this.currentPage <= 1 ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage - 1})">‹</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= this.currentPage - 1 && i <= this.currentPage + 1)) {
+        html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" onclick="Pagination.goToPage(${i})">${i}</button>`;
+      } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
+        html += '<span class="page-ellipsis" style="padding:0 8px;color:#6b7b6b;">...</span>';
+      }
+    }
+    html += `<button class="page-btn ${this.currentPage >= totalPages ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage + 1})">›</button>`;
+    html += `<span style="margin-left:16px;font-size:13px;color:#6b7b6b;">第 ${this.currentPage} 页/共 ${totalPages} 页，共 ${this.filteredData.length} 条记录</span>`;
+    html += '</div>';
+    container.innerHTML = html;
+    this.renderTable();
+  },
+  goToPage: function(page) {
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    if (page < 1 || page > totalPages) return;
+    this.currentPage = page;
+    this.render();
+  },
+  updateData: function(data) {
+    this.filteredData = data;
+    this.currentPage = 1;
+    this.render();
+  }
+};
+
+/* ---------- 工具 ---------- */
+function getPlot(code) { return PLOT_SOURCE.find(p => p.code === code) || {code:code, name:'-', base:'-', variety:'-'}; }
+function getProduct(batch) { return VARIETY_PRODUCT[getPlot(batch.plotCode).variety] || '花牛苹果'; }
+function enrich(batch) {
+  const plot = getPlot(batch.plotCode);
+  return Object.assign({}, batch, {
+    plotName: plot.name,
+    base: plot.base,
+    variety: plot.variety,
+    product: getProduct(batch),
+    statusText: STATUS_TEXT[batch.status] || batch.status
+  });
+}
+
+/* ---------- 渲染 ---------- */
+function renderBatchRow(batch, seq) {
+  const item = enrich(batch);
+  return `
+    <tr data-id="${item.id}">
+      <td>${seq}</td>
+      <td><strong>${item.batchNo}</strong></td>
+      <td>${item.product}</td>
+      <td>${item.base}</td>
+      <td>${item.plotCode} · ${item.plotName}</td>
+      <td>${item.planNo}</td>
+      <td>${item.harvestDate}</td>
+      <td>${item.traceCount} 个</td>
+      <td><span class="status-tag ${item.status === 'shipped' ? 'active' : item.status === 'pending' ? 'inactive' : 'warning'}">${item.statusText}</span></td>
+      <td>
+        <div class="action-btns">
+          <button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>
+          <button class="action-btn edit" onclick="showEdit('${item.id}')">编辑</button>
+          <button class="action-btn qrcode" onclick="gotoTraceCode('${item.batchNo}')">追溯码</button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+/* ---------- 搜索 ---------- */
+function searchData() {
+  const base = document.getElementById('baseSelect').value;
+  const product = document.getElementById('productSelect').value;
+  const status = document.getElementById('statusSelect').value;
+  const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  const filtered = mockBatchData.filter(b => {
+    const item = enrich(b);
+    if (base && item.base !== base) return false;
+    if (product && item.product !== product) return false;
+    if (status && item.status !== status) return false;
+    if (keyword && !item.batchNo.toLowerCase().includes(keyword)
+      && !item.plotCode.toLowerCase().includes(keyword)
+      && !item.plotName.toLowerCase().includes(keyword)) return false;
+    return true;
+  });
+  Pagination.updateData(filtered);
+  showToast(`找到 ${filtered.length} 条记录`);
+}
+
+function resetSearch() {
+  document.getElementById('baseSelect').value = '';
+  document.getElementById('productSelect').value = '';
+  document.getElementById('statusSelect').value = '';
+  document.getElementById('searchInput').value = '';
+  Pagination.updateData(mockBatchData);
+  showToast('已重置筛选条件');
+}
+
+function exportBatches() {
+  showToast(`已导出 ${Pagination.filteredData.length} 条批次记录`);
+}
+
+/* ---------- 详情 ---------- */
+function showDetail(id) {
+  const batch = mockBatchData.find(b => b.id === id);
+  if (!batch) return;
+  currentDetailId = id;
+  const item = enrich(batch);
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="chain-box">
+      <div class="chain-title">溯源链路</div>
+      <div class="chain-list">
+        <span class="chain-node">${item.planNo} 采收计划</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-node">${item.plotCode} · ${item.plotName}</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-node hl">${item.batchNo}</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-node">${item.processNo} 采后处理</span>
+        <span class="chain-arrow">→</span>
+        <span class="chain-node">${item.traceCount} 个追溯码</span>
+      </div>
+    </div>
+    <div class="detail-grid"><span class="detail-label">批次号</span><span class="detail-value">${item.batchNo}</span></div>
+    <div class="detail-grid"><span class="detail-label">产品名称</span><span class="detail-value">${item.product}</span></div>
+    <div class="detail-grid"><span class="detail-label">品种</span><span class="detail-value">${item.variety}</span></div>
+    <div class="detail-grid"><span class="detail-label">规格</span><span class="detail-value">${item.spec}</span></div>
+    <div class="detail-grid"><span class="detail-label">所属基地</span><span class="detail-value">${item.base}</span></div>
+    <div class="detail-grid"><span class="detail-label">地块</span><span class="detail-value">${item.plotCode} · ${item.plotName}</span></div>
+    <div class="detail-grid"><span class="detail-label">采收计划</span><span class="detail-value">${item.planNo}</span></div>
+    <div class="detail-grid"><span class="detail-label">采后处理单</span><span class="detail-value">${item.processNo}</span></div>
+    <div class="detail-grid"><span class="detail-label">采收日期</span><span class="detail-value">${item.harvestDate}</span></div>
+    <div class="detail-grid"><span class="detail-label">等级</span><span class="detail-value">${item.grade}</span></div>
+    <div class="detail-grid"><span class="detail-label">采收数量</span><span class="detail-value">${item.quantity} kg</span></div>
+    <div class="detail-grid"><span class="detail-label">已生成追溯码</span><span class="detail-value">${item.traceCount} 个</span></div>
+    <div class="detail-grid"><span class="detail-label">状态</span><span class="detail-value"><span class="status-tag ${item.status === 'shipped' ? 'active' : item.status === 'pending' ? 'inactive' : 'warning'}">${item.statusText}</span></span></div>
+    <div class="detail-grid"><span class="detail-label">备注</span><span class="detail-value">${item.remark || '—'}</span></div>
+  `;
+  openModal('detailModal');
+}
+
+function gotoTraceCode(batchNo) {
+  const seq = batchNo || (currentDetailId ? enrich(mockBatchData.find(b => b.id === currentDetailId)).batchNo : '');
+  closeModal('detailModal');
+  showToast(`已跳转溯源编码，批次：${seq}`);
+  const url = 'trace_code.html?batch=' + encodeURIComponent(seq);
+  setTimeout(() => {
+    try {
+      if (window.parent && window.parent !== window && typeof window.parent.openPage === 'function') {
+        window.parent.openPage(url, '溯源编码');
+        return;
+      }
+    } catch (e) { /* 跨域时回退为当前窗口跳转 */ }
+    window.location.href = url;
+  }, 400);
+}
+
+/* ---------- 新建 / 编辑 ---------- */
+function fillSelect(el, list, valueKey, textFn) {
+  el.innerHTML = list.map(v => `<option value="${valueKey ? v[valueKey] : v}">${textFn ? textFn(v) : v}</option>`).join('');
+}
+
+function initFormOptions() {
+  fillSelect(document.getElementById('editPlanNo'), PLAN_SOURCE);
+  fillSelect(document.getElementById('editBase'), BASE_SOURCE);
+  fillSelect(document.getElementById('editProduct'), PRODUCT_SOURCE);
+  refreshPlotOptions();
+  document.getElementById('editBase').addEventListener('change', refreshPlotOptions);
+}
+
+function refreshPlotOptions() {
+  const base = document.getElementById('editBase').value;
+  const list = PLOT_SOURCE.filter(p => p.base === base);
+  const plotSelect = document.getElementById('editPlot');
+  const source = list.length ? list : PLOT_SOURCE;
+  fillSelect(plotSelect, source, 'code', p => `${p.code} · ${p.name}`);
+}
+
+function openCreateModal() {
+  currentEditId = null;
+  document.getElementById('editModalTitle').textContent = '新建批次';
+  document.getElementById('editBatchNo').value = '';
+  document.getElementById('editSpec').value = '';
+  document.getElementById('editHarvestDate').value = '2026-09-21';
+  document.getElementById('editQuantity').value = '';
+  document.getElementById('editProcessNo').value = '';
+  document.getElementById('editRemark').value = '';
+  document.getElementById('editGrade').value = '一级';
+  document.getElementById('editStatus').value = 'pending';
+  document.getElementById('editPlanNo').selectedIndex = 0;
+  document.getElementById('editBase').selectedIndex = 0;
+  refreshPlotOptions();
+  document.getElementById('editProduct').selectedIndex = 0;
+  openModal('editModal');
+}
+
+function showEdit(id) {
+  const batch = mockBatchData.find(b => b.id === id);
+  if (!batch) return;
+  currentEditId = id;
+  const item = enrich(batch);
+  document.getElementById('editModalTitle').textContent = '编辑批次';
+  document.getElementById('editBatchNo').value = item.batchNo;
+  document.getElementById('editPlanNo').value = item.planNo;
+  document.getElementById('editBase').value = BASE_SOURCE.indexOf(item.base) >= 0 ? item.base : BASE_SOURCE[0];
+  refreshPlotOptions();
+  document.getElementById('editPlot').value = item.plotCode;
+  document.getElementById('editProduct').value = item.product;
+  document.getElementById('editSpec').value = item.spec;
+  document.getElementById('editHarvestDate').value = item.harvestDate;
+  document.getElementById('editGrade').value = item.grade;
+  document.getElementById('editQuantity').value = item.quantity;
+  document.getElementById('editProcessNo').value = item.processNo;
+  document.getElementById('editStatus').value = item.status;
+  document.getElementById('editRemark').value = item.remark || '';
+  openModal('editModal');
+}
+
+function saveBatch() {
+  const batchNo = document.getElementById('editBatchNo').value.trim();
+  const quantity = document.getElementById('editQuantity').value;
+  if (!batchNo) { showToast('请输入批次号', 'error'); return; }
+  if (!/^PC-\d{8}-\d{3}$/.test(batchNo)) { showToast('批次号格式应为 PC-YYYYMMDD-NNN', 'error'); return; }
+  if (!quantity || Number(quantity) <= 0) { showToast('请输入采收数量', 'error'); return; }
+
+  const duplicated = mockBatchData.some(b => b.batchNo === batchNo && b.id !== currentEditId);
+  if (duplicated) { showToast('批次号已存在', 'error'); return; }
+
+  const payload = {
+    batchNo: batchNo,
+    plotCode: document.getElementById('editPlot').value,
+    planNo: document.getElementById('editPlanNo').value,
+    processNo: document.getElementById('editProcessNo').value.trim(),
+    harvestDate: document.getElementById('editHarvestDate').value,
+    grade: document.getElementById('editGrade').value,
+    quantity: Number(quantity),
+    spec: document.getElementById('editSpec').value.trim(),
+    status: document.getElementById('editStatus').value,
+    remark: document.getElementById('editRemark').value.trim()
+  };
+
+  if (currentEditId) {
+    const target = mockBatchData.find(b => b.id === currentEditId);
+    Object.assign(target, payload);
+    showToast('批次已保存');
+  } else {
+    payload.id = 'BAT' + String(mockBatchData.length + 1).padStart(3, '0');
+    payload.traceCount = 0;
+    mockBatchData.unshift(payload);
+    showToast('批次已创建');
+  }
+  closeModal('editModal');
+  Pagination.updateData(mockBatchData);
+}
+
+/* ---------- 弹窗 / 提示 ---------- */
+function openModal(id) {
+  document.getElementById(id).classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  document.getElementById('toastMessage').textContent = message;
+  toast.className = `toast ${type}`;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+/* ---------- 初始化 ---------- */
+document.addEventListener('DOMContentLoaded', function() {
+  const baseSelect = document.getElementById('baseSelect');
+  [...new Set(PLOT_SOURCE.map(p => p.base))].forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b; opt.textContent = b;
+    baseSelect.appendChild(opt);
+  });
+
+  const productSelect = document.getElementById('productSelect');
+  PRODUCT_SOURCE.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    productSelect.appendChild(opt);
+  });
+
+  initFormOptions();
+
+  Pagination.init({
+    currentPage: 1,
+    pageSize: 10,
+    data: mockBatchData,
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderBatchRow
+  });
+
+  // 点击遮罩关闭
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeModal(overlay.id);
+    });
+  });
+  // ESC 关闭
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.active').forEach(o => closeModal(o.id));
+    }
+  });
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

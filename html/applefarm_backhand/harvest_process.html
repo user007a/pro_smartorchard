@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 采后处理</title>
+<!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 模块卡片 hover 效果 */
+  .module-card {
+    transition:all 0.2s ease;
+  }
+  .module-card:hover {
+    background:var(--bg-hover);
+    transform:translateY(-2px);
+    box-shadow:var(--shadow-md);
+  }
+  /* 分页栏样式（与农事计划一致） */
+  #pagination-container { padding:12px 16px; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="harvest" data-active-submenu="harvest-process">
+
+<!-- ===== 整体布局容器 ===== -->
+<div class="app-layout">
+
+  <!-- ===== 主内容区 ===== -->
+  <div class="main-wrapper">
+
+    <!-- Tab 标签栏 -->
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <div class="content-wrapper">
+
+        <!-- 搜索栏区 -->
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="statusSelect">
+              <option value="">全部状态</option>
+              <option value="grading">分级中</option>
+              <option value="packaging">包装中</option>
+              <option value="stored">已入库</option>
+              <option value="exported">已出库</option>
+              <option value="abnormal">异常</option>
+            </select>
+            <input type="text" class="search-input" placeholder="搜索批次编号或地块..." id="searchInput">
+          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="handleSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
+          </div>
+        </div>
+
+        <!-- 操作按钮区 -->
+        <div class="page-section action-bar">
+          <button class="jg-btn" onclick="Modal.show('modal-export')">导出记录</button>
+        </div>
+
+        <!-- 数据列表区 -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:60px;">序号</th>
+                  <th style="width:120px;">批次编号</th>
+                  <th style="width:140px;">关联批次</th>
+                  <th style="width:150px;">地块</th>
+                  <th style="width:80px;">等级</th>
+                  <th style="width:100px;">数量(kg)</th>
+                  <th style="width:90px;">状态</th>
+                  <th style="width:140px;">操作时间</th>
+                  <th style="width:90px;">操作人</th>
+                  <th style="width:190px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody">
+              </tbody>
+            </table>
+          </div>
+          <div id="pagination-container">
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 导出记录模态框 -->
+<div id="modal-export" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">导出采后处理记录</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-item">
+          <label>选择导出格式</label>
+          <select class="form-select" id="exportFormat">
+            <option value="excel">Excel (.xlsx)</option>
+            <option value="csv">CSV (.csv)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>导出范围</label>
+          <div style="display:flex;gap:16px;">
+            <label class="checkbox-label">
+              <input type="radio" name="exportScope" value="all" checked>
+              <span>全部数据</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="radio" name="exportScope" value="selected">
+              <span>当前筛选结果</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="Modal.hide('modal-export')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="handleExport()">导出</button>
+    </div>
+  </div>
+</div>
+
+<!-- 详情模态框 -->
+<div id="modal-detail" class="modal-overlay">
+  <div class="modal-box" style="max-width:600px;">
+    <div class="modal-header">
+      <h3 class="modal-title">采后处理详情</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid">
+        <div class="detail-item">
+          <span class="detail-label">批次编号</span>
+          <span class="detail-value" id="detail-id"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">来源记录</span>
+          <span class="detail-value" id="detail-record"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">地块</span>
+          <span class="detail-value" id="detail-plot"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">等级</span>
+          <span class="detail-value" id="detail-grade"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">数量</span>
+          <span class="detail-value" id="detail-quantity"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">状态</span>
+          <span class="detail-value" id="detail-status"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">库位</span>
+          <span class="detail-value" id="detail-location"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">操作时间</span>
+          <span class="detail-value" id="detail-time"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">操作人</span>
+          <span class="detail-value" id="detail-operator"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">备注</span>
+          <span class="detail-value" id="detail-remark"></span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn jg-btn-primary" onclick="Modal.hide('modal-detail')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 标准处理模态框 -->
+<div id="modal-standard" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">标准处理</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-item">
+          <label>批次编号</label>
+          <input type="text" class="form-input" id="std-id" readonly>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>处理类型</label>
+          <select class="form-select" id="std-type">
+            <option value="grading">分级处理</option>
+            <option value="packaging">包装处理</option>
+            <option value="cleaning">清洗处理</option>
+            <option value="storage">冷藏处理</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>处理结果</label>
+          <select class="form-select" id="std-result">
+            <option value="pass">合格</option>
+            <option value="rework">返工</option>
+            <option value="discard">报废</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>处理备注</label>
+          <textarea class="form-textarea" id="std-remark" placeholder="请输入处理备注"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="Modal.hide('modal-standard')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitStandard()">确认处理</button>
+    </div>
+  </div>
+</div>
+
+<!-- 入库模态框 -->
+<div id="modal-inbound" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">入库确认</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-item">
+          <label>批次编号</label>
+          <input type="text" class="form-input" id="in-id" readonly>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>入库数量(kg)</label>
+          <input type="number" class="form-input" id="in-quantity">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>入库时间</label>
+          <input type="datetime-local" class="form-input" id="in-time">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>库位</label>
+          <select class="form-select" id="in-location">
+            <option value="">请选择库位</option>
+            <option value="A-001">A区-001</option>
+            <option value="A-002">A区-002</option>
+            <option value="B-001">B区-001</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="Modal.hide('modal-inbound')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitInbound()">确认入库</button>
+    </div>
+  </div>
+</div>
+
+<!-- 出库模态框 -->
+<div id="modal-outbound" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">出库确认</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-item">
+          <label>批次编号</label>
+          <input type="text" class="form-input" id="out-id" readonly>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>出库数量(kg)</label>
+          <input type="number" class="form-input" id="out-quantity">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>出库时间</label>
+          <input type="datetime-local" class="form-input" id="out-time">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>备注</label>
+          <textarea class="form-textarea" id="out-remark" placeholder="请输入出库备注"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="Modal.hide('modal-outbound')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitOutbound()">确认出库</button>
+    </div>
+  </div>
+</div>
+
+<!-- 引入交互脚本 -->
+<script src="js/common-functions.js"></script>
+<script src="js/export-helper.js"></script>
+<script>
+// Mock数据 - 20条采后处理批次（record 关联采收记录 HSR-2026-xxx，batchNo 关联批次主数据 PC-YYYYMMDD-NNN）
+const processBatches = [
+  { id: 'PP-2026-001', record: 'HSR-2026-001', batchNo: 'PC-20260901-001', plot: 'D-001 · 东区1号地', grade: '一级', quantity: 1250, status: 'exported',  location: '',         time: '2026-09-01 14:30', operator: '张三', remark: '品质优良，已完成分级包装' },
+  { id: 'PP-2026-002', record: 'HSR-2026-002', batchNo: 'PC-20260902-002', plot: 'D-002 · 东区2号地', grade: '一级', quantity: 890,  status: 'exported',  location: '',         time: '2026-09-02 15:00', operator: '李四', remark: '' },
+  { id: 'PP-2026-003', record: 'HSR-2026-003', batchNo: 'PC-20260903-003', plot: 'D-003 · 西区1号地', grade: '二级', quantity: 1560, status: 'stored',    location: 'A区-003', time: '2026-09-03 09:00', operator: '王五', remark: '金帅品种，已入库待发' },
+  { id: 'PP-2026-004', record: 'HSR-2026-004', batchNo: 'PC-20260904-004', plot: 'D-004 · 北区1号地', grade: '一级', quantity: 780,  status: 'packaging', location: '',         time: '2026-09-03 10:30', operator: '赵六', remark: '正在装箱' },
+  { id: 'PP-2026-005', record: 'HSR-2026-005', batchNo: 'PC-20260905-005', plot: 'D-005 · 南区1号地', grade: '二级', quantity: 1100, status: 'stored',    location: 'A区-002', time: '2026-09-04 08:00', operator: '孙七', remark: '' },
+  { id: 'PP-2026-006', record: 'HSR-2026-006', batchNo: 'PC-20260906-006', plot: 'D-006 · 中区1号地', grade: '三级', quantity: 920,  status: 'stored',    location: 'A区-005', time: '2026-09-05 14:00', operator: '周八', remark: '三级果用于果汁加工' },
+  { id: 'PP-2026-007', record: 'HSR-2026-007', batchNo: 'PC-20260907-007', plot: 'D-007 · 南区2号地', grade: '一级', quantity: 1340, status: 'stored',    location: 'B区-001', time: '2026-09-06 09:30', operator: '吴九', remark: '' },
+  { id: 'PP-2026-008', record: 'HSR-2026-008', batchNo: 'PC-20260908-008', plot: 'D-008 · 西区2号地', grade: '二级', quantity: 650,  status: 'stored',    location: 'B区-001', time: '2026-09-07 11:00', operator: '郑十', remark: '' },
+  { id: 'PP-2026-009', record: 'HSR-2026-009', batchNo: 'PC-20260909-009', plot: 'D-009 · 北区2号地', grade: '一级', quantity: 1420, status: 'stored',    location: 'B区-002', time: '2026-09-08 08:30', operator: '张三', remark: '' },
+  { id: 'PP-2026-010', record: 'HSR-2026-010', batchNo: 'PC-20260910-010', plot: 'D-010 · 东区3号地', grade: '二级', quantity: 870,  status: 'stored',    location: 'A区-001', time: '2026-09-09 14:30', operator: '李四', remark: '' },
+  { id: 'PP-2026-011', record: 'HSR-2026-011', batchNo: 'PC-20260911-011', plot: 'D-011 · 南区3号地', grade: '一级', quantity: 1680, status: 'stored',    location: 'A区-004', time: '2026-09-10 09:00', operator: '王五', remark: '' },
+  { id: 'PP-2026-012', record: 'HSR-2026-012', batchNo: 'PC-20260912-012', plot: 'D-012 · 西区3号地', grade: '三级', quantity: 720,  status: 'stored',    location: 'A区-002', time: '2026-09-11 11:30', operator: '赵六', remark: '' },
+  { id: 'PP-2026-013', record: 'HSR-2026-013', batchNo: 'PC-20260913-013', plot: 'D-013 · 北区3号地', grade: '一级', quantity: 1200, status: 'stored',    location: 'B区-001', time: '2026-09-12 08:00', operator: '孙七', remark: '' },
+  { id: 'PP-2026-014', record: 'HSR-2026-014', batchNo: 'PC-20260914-014', plot: 'D-014 · 中区2号地', grade: '二级', quantity: 980,  status: 'stored',    location: 'B区-002', time: '2026-09-13 14:00', operator: '周八', remark: '' },
+  { id: 'PP-2026-015', record: 'HSR-2026-015', batchNo: 'PC-20260915-015', plot: 'D-015 · 东区4号地', grade: '一级', quantity: 1550, status: 'stored',    location: 'B区-001', time: '2026-09-14 09:30', operator: '吴九', remark: '' },
+  { id: 'PP-2026-016', record: 'HSR-2026-016', batchNo: 'PC-20260916-016', plot: 'D-016 · 南区4号地', grade: '二级', quantity: 830,  status: 'grading',   location: '',         time: '2026-09-15 11:00', operator: '郑十', remark: '待分级' },
+  { id: 'PP-2026-017', record: 'HSR-2026-017', batchNo: 'PC-20260917-017', plot: 'D-017 · 西区4号地', grade: '一级', quantity: 1120, status: 'packaging', location: '',         time: '2026-09-16 08:30', operator: '张三', remark: '高产批次，正在装箱' },
+  { id: 'PP-2026-018', record: 'HSR-2026-018', batchNo: 'PC-20260918-018', plot: 'D-018 · 北区4号地', grade: '三级', quantity: 690,  status: 'grading',   location: '',         time: '2026-09-17 14:30', operator: '李四', remark: '待分级' },
+  { id: 'PP-2026-019', record: 'HSR-2026-019', batchNo: 'PC-20260919-019', plot: 'D-019 · 中区3号地', grade: '一级', quantity: 1380, status: 'packaging', location: '',         time: '2026-09-18 09:00', operator: '王五', remark: '正在装箱' },
+  { id: 'PP-2026-020', record: 'HSR-2026-020', batchNo: 'PC-20260920-020', plot: 'D-020 · 东区5号地', grade: '二级', quantity: 950,  status: 'grading',   location: '',         time: '2026-09-19 11:30', operator: '赵六', remark: '待分级' }
+];
+
+// 当前操作批次
+let currentBatchId = '';
+
+// 状态标签
+function getStatusTag(status) {
+  const statusMap = {
+    'grading':   '<span class="status-tag processing">分级中</span>',
+    'packaging': '<span class="status-tag processing">包装中</span>',
+    'stored':    '<span class="status-tag stored">已入库</span>',
+    'exported':  '<span class="status-tag exported">已出库</span>',
+    'abnormal':  '<span class="status-tag abnormal">异常</span>'
+  };
+  return statusMap[status] || statusMap['stored'];
+}
+
+const STATUS_NAME = {
+  'grading': '分级中', 'packaging': '包装中', 'stored': '已入库', 'exported': '已出库', 'abnormal': '异常'
+};
+
+// 渲染表格行（操作按钮按状态流转显示）
+function renderRow(item, index) {
+  let actions = `<button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>`;
+  if (['grading', 'packaging', 'abnormal'].includes(item.status)) {
+    actions += `<button class="action-btn edit" onclick="showStandard('${item.id}')">标准处理</button>`;
+  }
+  if (['grading', 'packaging'].includes(item.status)) {
+    actions += `<button class="action-btn edit" onclick="showInbound('${item.id}')">入库</button>`;
+  }
+  if (item.status === 'stored') {
+    actions += `<button class="action-btn edit" onclick="showOutbound('${item.id}')">出库</button>`;
+  }
+
+  return `<tr>
+    <td>${index + 1}</td>
+    <td><strong>${item.id}</strong></td>
+    <td>${item.batchNo}</td>
+    <td>${item.plot}</td>
+    <td>${item.grade}</td>
+    <td class="text-right">${item.quantity.toLocaleString()}</td>
+    <td>${getStatusTag(item.status)}</td>
+    <td>${item.time}</td>
+    <td>${item.operator}</td>
+    <td><div class="action-btns">${actions}</div></td>
+  </tr>`;
+}
+
+// 搜索：状态 + 关键词
+function handleSearch() {
+  var status = document.getElementById('statusSelect').value;
+  var keyword = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  var filteredData = processBatches.filter(item => {
+    if (status && item.status !== status) return false;
+    if (keyword && !item.id.toLowerCase().includes(keyword) && !item.plot.toLowerCase().includes(keyword)) return false;
+    return true;
+  });
+
+  Pagination.updateData(filteredData);
+  Toast.info('找到 ' + filteredData.length + ' 条记录');
+}
+
+function findBatch(id) {
+  return processBatches.find(b => b.id === id);
+}
+
+// 详情（按行回填）
+function showDetail(id) {
+  const item = findBatch(id);
+  if (!item) return;
+  document.getElementById('detail-id').textContent = item.id;
+  document.getElementById('detail-record').textContent = item.record || '-';
+  document.getElementById('detail-plot').textContent = item.plot;
+  document.getElementById('detail-grade').textContent = item.grade;
+  document.getElementById('detail-quantity').textContent = item.quantity.toLocaleString() + ' kg';
+  document.getElementById('detail-status').innerHTML = getStatusTag(item.status);
+  document.getElementById('detail-location').textContent = item.location || '-';
+  document.getElementById('detail-time').textContent = item.time;
+  document.getElementById('detail-operator').textContent = item.operator;
+  document.getElementById('detail-remark').textContent = item.remark || '-';
+  Modal.show('modal-detail');
+}
+
+// 标准处理
+function showStandard(id) {
+  const item = findBatch(id);
+  if (!item) return;
+  currentBatchId = id;
+  document.getElementById('std-id').value = item.id;
+  document.getElementById('std-type').value = 'grading';
+  document.getElementById('std-result').value = 'pass';
+  document.getElementById('std-remark').value = '';
+  Modal.show('modal-standard');
+}
+
+function submitStandard() {
+  const item = findBatch(currentBatchId);
+  if (item) {
+    const result = document.getElementById('std-result').value;
+    const type = document.getElementById('std-type').value;
+    if (result === 'discard') {
+      item.status = 'abnormal';
+    } else if (result === 'pass') {
+      if (type === 'grading') item.status = 'grading';
+      else if (type === 'packaging' || type === 'cleaning') item.status = 'packaging';
+      else if (type === 'storage') item.status = 'stored';
+    }
+    item.time = formatNow();
+    item.remark = document.getElementById('std-remark').value || item.remark;
+  }
+  Modal.hide('modal-standard');
+  handleSearch();
+  Toast.success('处理完成');
+}
+
+// 入库
+function showInbound(id) {
+  const item = findBatch(id);
+  if (!item) return;
+  currentBatchId = id;
+  document.getElementById('in-id').value = item.id;
+  document.getElementById('in-quantity').value = item.quantity;
+  document.getElementById('in-time').value = toLocalInput(new Date());
+  document.getElementById('in-location').value = '';
+  Modal.show('modal-inbound');
+}
+
+function submitInbound() {
+  const item = findBatch(currentBatchId);
+  if (item) {
+    item.status = 'stored';
+    item.time = formatNow();
+    item.location = document.getElementById('in-location').value || item.location;
+  }
+  Modal.hide('modal-inbound');
+  handleSearch();
+  Toast.success('入库成功');
+}
+
+// 出库
+function showOutbound(id) {
+  const item = findBatch(id);
+  if (!item) return;
+  currentBatchId = id;
+  document.getElementById('out-id').value = item.id;
+  document.getElementById('out-quantity').value = item.quantity;
+  document.getElementById('out-time').value = toLocalInput(new Date());
+  document.getElementById('out-remark').value = '';
+  Modal.show('modal-outbound');
+}
+
+function submitOutbound() {
+  const item = findBatch(currentBatchId);
+  if (item) {
+    item.status = 'exported';
+    item.time = formatNow();
+    const remark = document.getElementById('out-remark').value;
+    if (remark) item.remark = remark;
+  }
+  Modal.hide('modal-outbound');
+  handleSearch();
+  Toast.success('出库成功');
+}
+
+// 真实导出（Excel / CSV）
+async function handleExport() {
+  const scope = document.querySelector('input[name="exportScope"]:checked').value;
+  const rows = (scope === 'selected' ? Pagination.filteredData : processBatches);
+  const result = await ExportHelper.exportData({
+    filename: '采后处理记录_' + ExportHelper.stamp(),
+    format: document.getElementById('exportFormat').value,
+    headers: ['批次编号', '来源记录', '地块', '等级', '数量(kg)', '状态', '库位', '操作时间', '操作人', '备注'],
+    rows: rows.map(b => [b.id, b.record || '', b.plot, b.grade, b.quantity, STATUS_NAME[b.status], b.location || '', b.time, b.operator, b.remark || ''])
+  });
+  Modal.hide('modal-export');
+  Toast.success(result === 'csv-fallback' ? 'Excel 组件加载失败，已导出为 CSV' : '导出成功，文件已下载');
+}
+
+// 工具：当前时间
+function formatNow() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function toLocalInput(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// 初始化分页
+document.addEventListener('DOMContentLoaded', function() {
+  Pagination.init({
+    currentPage: 1,
+    pageSize: 10,
+    data: processBatches,
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow
+  });
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

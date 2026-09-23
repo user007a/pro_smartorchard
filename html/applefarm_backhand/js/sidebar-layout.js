@@ -772,10 +772,15 @@ const MENU_CONFIG = [
     { id: 'farming-record', label: '农事记录', path: 'farming_record.html' },
     { id: 'farming-patrol', label: '巡园管理', path: 'farming_patrol.html' },
     { id: 'drone-patrol', label: '无人机巡检', path: 'drone_patrol.html' },
+    { id: 'guide-standard', label: '农事标准', path: 'guide_standard.html' },
+  ]},
+
+  { id: 'harvest', icon: 'shopping-bag', label: '采收管理', children: [
     { id: 'harvest-plan', label: '采收计划', path: 'harvest_plan.html' },
     { id: 'harvest-record', label: '采收记录', path: 'harvest_record.html' },
+    { id: 'harvest-process', label: '采后处理', path: 'harvest_process.html' },
     { id: 'harvest-post', label: '采收发货', path: 'harvest_post.html' },
-    { id: 'guide-standard', label: '农事标准', path: 'guide_standard.html' },
+    { id: 'harvest-storage', label: '储藏管理', path: 'harvest_storage.html' },
   ]},
 
   { id: 'material', icon: 'package', label: '物资管理', children: [
@@ -788,7 +793,6 @@ const MENU_CONFIG = [
   ]},
 
   { id: 'device', icon: 'cpu', label: '设备管理', children: [
-    { id: 'device-monitor', label: '设备监控', path: 'device_monitor.html' },
     { id: 'device-info', label: '设备信息', path: 'device_info.html' },
     { id: 'device-log', label: '设备日志', path: 'device_log.html' },
     { id: 'device-maintain', label: '设备维护', path: 'device_maintain.html' },
@@ -801,12 +805,12 @@ const MENU_CONFIG = [
     { id: 'alert-settings', label: '预警设置', path: 'alert_settings.html' },
   ]},
 
-  { id: 'trace', icon: 'shield', label: '产品溯源', children: [
+  { id: 'trace', icon: 'shield', label: '溯源管理', children: [
+    { id: 'trace-batch', label: '批次管理', path: 'trace_batch.html' },
     { id: 'trace-code', label: '溯源编码', path: 'trace_code.html' },
     { id: 'trace-query', label: '溯源查询', path: 'trace_query.html' },
     { id: 'trace-blockchain', label: '溯源区块链', path: 'trace_blockchain.html' },
     { id: 'trace-config', label: '溯源配置', path: 'trace_config.html' },
-    { id: 'vr-panorama', label: 'VR全景', path: 'vr_panorama.html' },
   ]},
 
   { id: 'sales', icon: 'trending-up', label: '销售运营', children: [
@@ -841,9 +845,9 @@ const MENU_CONFIG = [
   { id: 'enterprise', icon: 'building', label: '企业管理', children: [
     { id: 'enterprise-base', label: '企业基本信息', path: 'enterprise_base.html' },
     { id: 'enterprise-plot', label: '地块管理', path: 'enterprise_plot.html' },
+    { id: 'vr-panorama', label: 'VR全景', path: 'vr_panorama.html' },
     { id: 'cert-manage', label: '证书管理', path: 'cert_manage.html' },
-    { id: 'cert-query', label: '证书查询', path: 'cert_query.html' },
-    { id: 'cert-issue', label: '证书签发', path: 'cert_issue.html' },
+    { id: 'cert-issue', label: '农产品合格证', path: 'cert_issue.html' },
   ]},
 
   { id: 'system', icon: 'settings', label: '系统运维', children: [

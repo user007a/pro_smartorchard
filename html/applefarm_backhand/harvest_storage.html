@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 储藏管理</title>
+<!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .module-card {
+    transition:all 0.2s ease;
+  }
+  .module-card:hover {
+    background:var(--bg-hover);
+    transform:translateY(-2px);
+    box-shadow:var(--shadow-md);
+  }
+  /* 分页栏样式（与农事计划一致） */
+  #pagination-container { padding:12px 16px; }
+  /* 温湿度记录表 */
+  .reading-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .reading-table th,
+  .reading-table td { padding:8px 10px; border-bottom:1px solid #f0f2f1; text-align:left; }
+  .reading-table th { color:var(--text-tertiary); font-weight:600; font-size:12px; background:#f7f9f7; }
+  .reading-table td.text-right { text-align:right; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="harvest" data-active-submenu="harvest-storage">
+
+<!-- ===== 整体布局容器 ===== -->
+<div class="app-layout">
+
+  <!-- ===== 主内容区 ===== -->
+  <div class="main-wrapper">
+
+    <!-- Tab 标签栏 -->
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <div class="content-wrapper">
+
+        <!-- 搜索栏区 -->
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="baseSelect">
+              <option value="">全部基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水荣成基地">天水荣成基地</option>
+              <option value="麦积区阁基地">麦积区阁基地</option>
+              <option value="龙口南山基地">龙口南山基地</option>
+            </select>
+            <select class="search-select" id="statusSelect">
+              <option value="">全部状态</option>
+              <option value="normal">在库正常</option>
+              <option value="warning">温度预警</option>
+              <option value="exported">已出库</option>
+            </select>
+            <input type="text" class="search-input" placeholder="搜索库位编号或批次..." id="searchInput">
+          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="handleSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
+          </div>
+        </div>
+
+        <!-- 操作按钮区 -->
+        <div class="page-section action-bar">
+          <button class="jg-btn" onclick="Modal.show('modal-export')">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+              <path d="M3 10L8 15L13 10"/><path d="M8 15V3"/>
+            </svg>
+            导出记录
+          </button>
+        </div>
+
+        <!-- 数据列表区 -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:60px;">序号</th>
+                  <th style="width:110px;">库位编号</th>
+                  <th style="width:140px;">所属基地</th>
+                  <th style="width:120px;">当前批次</th>
+                  <th style="width:110px;">在库数量(kg)</th>
+                  <th style="width:100px;">温度(℃)</th>
+                  <th style="width:100px;">湿度(%)</th>
+                  <th style="width:140px;">入库时间</th>
+                  <th style="width:100px;">状态</th>
+                  <th style="width:200px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody">
+              </tbody>
+            </table>
+          </div>
+          <div id="pagination-container">
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 导出模态框 -->
+<div id="modal-export" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">导出储藏记录</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-item">
+          <label>选择导出格式</label>
+          <select class="form-select" id="exportFormat">
+            <option value="excel">Excel (.xlsx)</option>
+            <option value="csv">CSV (.csv)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>导出范围</label>
+          <div style="display:flex;gap:16px;">
+            <label class="checkbox-label">
+              <input type="radio" name="exportScope" value="all" checked>
+              <span>全部数据</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="radio" name="exportScope" value="selected">
+              <span>当前筛选结果</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="Modal.hide('modal-export')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="handleExport()">导出</button>
+    </div>
+  </div>
+</div>
+
+<!-- 详情模态框 -->
+<div id="modal-detail" class="modal-overlay">
+  <div class="modal-box" style="max-width:640px;">
+    <div class="modal-header">
+      <h3 class="modal-title">储藏详情</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid">
+        <div class="detail-item">
+          <span class="detail-label">库位编号</span>
+          <span class="detail-value" id="detail-id"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">状态</span>
+          <span class="detail-value" id="detail-status"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">所属基地</span>
+          <span class="detail-value" id="detail-base"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">当前批次</span>
+          <span class="detail-value" id="detail-batch"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">品种</span>
+          <span class="detail-value" id="detail-variety"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">等级</span>
+          <span class="detail-value" id="detail-grade"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">在库数量</span>
+          <span class="detail-value" id="detail-quantity"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">温度 / 湿度</span>
+          <span class="detail-value" id="detail-env"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">入库时间</span>
+          <span class="detail-value" id="detail-intime"></span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">保质期至</span>
+          <span class="detail-value" id="detail-expire"></span>
+        </div>
+      </div>
+      <div style="margin-top:16px; padding:12px; background:var(--gray-50); border-radius:8px;">
+        <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">备注</div>
+        <div style="font-weight:500;" id="detail-remark">-</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn jg-btn-primary" onclick="Modal.hide('modal-detail')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 温湿度记录模态框 -->
+<div id="modal-readings" class="modal-overlay">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-header">
+      <h3 class="modal-title">温湿度记录</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-secondary); margin-bottom:12px;">
+        库位：<strong id="readings-id"></strong>（适温 0~4℃，适湿 85%~95%）
+      </p>
+      <table class="reading-table">
+        <thead>
+          <tr>
+            <th>采集时间</th>
+            <th class="text-right">温度(℃)</th>
+            <th class="text-right">湿度(%)</th>
+            <th>判定</th>
+          </tr>
+        </thead>
+        <tbody id="readingsBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn jg-btn-primary" onclick="Modal.hide('modal-readings')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 出库模态框 -->
+<div id="modal-outbound" class="modal-overlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-header">
+      <h3 class="modal-title">出库确认</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-item">
+          <label>库位编号</label>
+          <input type="text" class="form-input" id="out-id" readonly>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>出库数量(kg)</label>
+          <input type="number" class="form-input" id="out-quantity">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>出库时间</label>
+          <input type="datetime-local" class="form-input" id="out-time">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-item">
+          <label>备注</label>
+          <textarea class="form-textarea" id="out-remark" placeholder="请输入出库备注"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="Modal.hide('modal-outbound')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitOutbound()">确认出库</button>
+    </div>
+  </div>
+</div>
+
+<!-- 引入交互脚本 -->
+<script src="js/common-functions.js"></script>
+<script src="js/export-helper.js"></script>
+<script>
+// 库位适温适湿区间
+const TEMP_MIN = 0, TEMP_MAX = 4;
+const HUMI_MIN = 85, HUMI_MAX = 95;
+
+// Mock数据 - 12个冷库库位
+const storages = [
+  { id: 'A区-001', base: '天水麦积区基地', batch: 'PP-2026-001', variety: '花牛苹果', grade: '一级', quantity: 1250, temp: 2.5, humidity: 88, inTime: '2026-09-01 15:00', expire: '2026-12-20', status: 'normal', remark: '' },
+  { id: 'A区-002', base: '天水麦积区基地', batch: 'PP-2026-002', variety: '花牛苹果', grade: '一级', quantity: 890,  temp: 3.0, humidity: 87, inTime: '2026-09-02 15:30', expire: '2026-12-21', status: 'normal', remark: '' },
+  { id: 'A区-003', base: '天水荣成基地', batch: 'PP-2026-005', variety: '花牛苹果', grade: '一级', quantity: 720,  temp: 3.8, humidity: 89, inTime: '2026-09-04 08:40', expire: '2026-12-23', status: 'normal', remark: '' },
+  { id: 'B区-001', base: '招远基地',     batch: 'PP-2026-007', variety: '花牛苹果', grade: '一级', quantity: 580,  temp: 5.6, humidity: 90, inTime: '2026-09-06 10:00', expire: '2026-12-25', status: 'warning', remark: '温度高于适温上限，已通知设备维护' },
+  { id: 'B区-002', base: '招远基地',     batch: 'PP-2026-008', variety: '花牛苹果', grade: '二级', quantity: 1250, temp: 2.2, humidity: 86, inTime: '2026-09-07 11:30', expire: '2026-12-26', status: 'normal', remark: '' },
+  { id: 'B区-003', base: '麦积区阁基地', batch: 'PP-2026-010', variety: '花牛苹果', grade: '一级', quantity: 890,  temp: 1.8, humidity: 84, inTime: '2026-09-09 15:00', expire: '2026-12-28', status: 'warning', remark: '湿度低于适湿下限，需加湿处理' },
+  { id: 'C区-001', base: '麦积区阁基地', batch: 'PP-2026-012', variety: '花牛苹果', grade: '一级', quantity: 680,  temp: 2.8, humidity: 88, inTime: '2026-09-11 12:00', expire: '2026-12-30', status: 'normal', remark: '' },
+  { id: 'C区-002', base: '龙口南山基地', batch: 'PP-2026-015', variety: '花牛苹果', grade: '一级', quantity: 1180, temp: 3.2, humidity: 91, inTime: '2026-09-14 10:00', expire: '2027-01-02', status: 'normal', remark: '' },
+  { id: 'C区-003', base: '龙口南山基地', batch: 'PP-2026-016', variety: '花牛苹果', grade: '一级', quantity: 760,  temp: 2.6, humidity: 89, inTime: '2026-09-15 11:30', expire: '2027-01-03', status: 'normal', remark: '' },
+  { id: 'D区-001', base: '天水荣成基地', batch: 'PP-2026-017', variety: '花牛苹果', grade: '二级', quantity: 1320, temp: 3.5, humidity: 87, inTime: '2026-09-16 09:00', expire: '2027-01-04', status: 'normal', remark: '高产批次' },
+  { id: 'D区-002', base: '天水麦积区基地', batch: 'PP-2026-019', variety: '花牛苹果', grade: '三级', quantity: 980,  temp: 2.9, humidity: 88, inTime: '2026-09-18 09:30', expire: '2027-01-06', status: 'normal', remark: '' },
+  { id: 'D区-003', base: '招远基地',     batch: 'PP-2026-023', variety: '花牛苹果', grade: '一级', quantity: 1080, temp: 2.4, humidity: 90, inTime: '2026-09-22 10:00', expire: '2027-01-10', status: 'normal', remark: '' }
+];
+
+let currentStorageId = '';
+
+function getStatusTag(status) {
+  const statusMap = {
+    'normal':   '<span class="status-tag normal">在库正常</span>',
+    'warning':  '<span class="status-tag warning">温度预警</span>',
+    'exported': '<span class="status-tag exported">已出库</span>'
+  };
+  return statusMap[status] || statusMap['normal'];
+}
+
+const STATUS_NAME = { 'normal': '在库正常', 'warning': '温度预警', 'exported': '已出库' };
+
+function findStorage(id) {
+  return storages.find(s => s.id === id);
+}
+
+function renderRow(item, index) {
+  let actions = `<button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>`
+    + `<button class="action-btn edit" onclick="showReadings('${item.id}')">温湿度记录</button>`;
+  if (item.status !== 'exported') {
+    actions += `<button class="action-btn edit" onclick="showOutbound('${item.id}')">出库</button>`;
+  }
+
+  return `<tr>
+    <td>${index + 1}</td>
+    <td><strong>${item.id}</strong></td>
+    <td>${item.base}</td>
+    <td>${item.batch}</td>
+    <td class="text-right">${item.quantity.toLocaleString()}</td>
+    <td class="text-right">${item.temp.toFixed(1)}</td>
+    <td class="text-right">${item.humidity}</td>
+    <td>${item.inTime}</td>
+    <td>${getStatusTag(item.status)}</td>
+    <td><div class="action-btns">${actions}</div></td>
+  </tr>`;
+}
+
+// 搜索：基地 + 状态 + 关键词
+function handleSearch() {
+  var base = document.getElementById('baseSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var keyword = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  var filteredData = storages.filter(item => {
+    if (base && item.base !== base) return false;
+    if (status && item.status !== status) return false;
+    if (keyword && !item.id.toLowerCase().includes(keyword) && !item.batch.toLowerCase().includes(keyword)) return false;
+    return true;
+  });
+
+  Pagination.updateData(filteredData);
+  Toast.info('找到 ' + filteredData.length + ' 条记录');
+}
+
+// 详情
+function showDetail(id) {
+  const item = findStorage(id);
+  if (!item) return;
+  document.getElementById('detail-id').textContent = item.id;
+  document.getElementById('detail-status').innerHTML = getStatusTag(item.status);
+  document.getElementById('detail-base').textContent = item.base;
+  document.getElementById('detail-batch').textContent = item.batch;
+  document.getElementById('detail-variety').textContent = item.variety;
+  document.getElementById('detail-grade').textContent = item.grade;
+  document.getElementById('detail-quantity').textContent = item.quantity.toLocaleString() + ' kg';
+  document.getElementById('detail-env').textContent = item.temp.toFixed(1) + '℃ / ' + item.humidity + '%';
+  document.getElementById('detail-intime').textContent = item.inTime;
+  document.getElementById('detail-expire').textContent = item.expire;
+  document.getElementById('detail-remark').textContent = item.remark || '-';
+  Modal.show('modal-detail');
+}
+
+// 温湿度记录（按当前库位生成近 6 次采集记录）
+function showReadings(id) {
+  const item = findStorage(id);
+  if (!item) return;
+  currentStorageId = id;
+  document.getElementById('readings-id').textContent = item.id;
+
+  const rows = [];
+  const baseTime = new Date(item.inTime.replace(' ', 'T'));
+  for (let i = 5; i >= 0; i--) {
+    const t = new Date(baseTime.getTime() + i * 30 * 60 * 1000);
+    const p = n => String(n).padStart(2, '0');
+    const timeStr = `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())} ${p(t.getHours())}:${p(t.getMinutes())}`;
+    // 末次为当前实测值，其余在实测值上下小幅波动
+    const temp = i === 0 ? item.temp : Number((item.temp + (i % 2 === 0 ? -0.3 : 0.4) * (i / 2)).toFixed(1));
+    const humi = i === 0 ? item.humidity : item.humidity + (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2);
+    const ok = temp >= TEMP_MIN && temp <= TEMP_MAX && humi >= HUMI_MIN && humi <= HUMI_MAX;
+    rows.push(`<tr>
+      <td>${timeStr}</td>
+      <td class="text-right">${temp.toFixed(1)}</td>
+      <td class="text-right">${humi}</td>
+      <td><span class="status-tag ${ok ? 'normal' : 'warning'}">${ok ? '正常' : '超限'}</span></td>
+    </tr>`);
+  }
+  document.getElementById('readingsBody').innerHTML = rows.join('');
+  Modal.show('modal-readings');
+}
+
+// 出库
+function showOutbound(id) {
+  const item = findStorage(id);
+  if (!item) return;
+  currentStorageId = id;
+  document.getElementById('out-id').value = item.id;
+  document.getElementById('out-quantity').value = item.quantity;
+  document.getElementById('out-time').value = toLocalInput(new Date());
+  document.getElementById('out-remark').value = '';
+  Modal.show('modal-outbound');
+}
+
+function submitOutbound() {
+  const item = findStorage(currentStorageId);
+  if (item) {
+    item.status = 'exported';
+    item.quantity = 0;
+    const remark = document.getElementById('out-remark').value.trim();
+    if (remark) item.remark = remark;
+  }
+  Modal.hide('modal-outbound');
+  handleSearch();
+  Toast.success('出库成功');
+}
+
+// 真实导出（Excel / CSV）
+async function handleExport() {
+  const scope = document.querySelector('input[name="exportScope"]:checked').value;
+  const rows = (scope === 'selected' ? Pagination.filteredData : storages);
+  const result = await ExportHelper.exportData({
+    filename: '储藏记录_' + ExportHelper.stamp(),
+    format: document.getElementById('exportFormat').value,
+    headers: ['库位编号', '所属基地', '当前批次', '品种', '等级', '在库数量(kg)', '温度(℃)', '湿度(%)', '入库时间', '保质期至', '状态', '备注'],
+    rows: rows.map(s => [s.id, s.base, s.batch, s.variety, s.grade, s.quantity, s.temp, s.humidity, s.inTime, s.expire, STATUS_NAME[s.status], s.remark || ''])
+  });
+  Modal.hide('modal-export');
+  Toast.success(result === 'csv-fallback' ? 'Excel 组件加载失败，已导出为 CSV' : '导出成功，文件已下载');
+}
+
+function toLocalInput(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  Pagination.init({
+    currentPage: 1,
+    pageSize: 10,
+    data: storages,
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow
+  });
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>
