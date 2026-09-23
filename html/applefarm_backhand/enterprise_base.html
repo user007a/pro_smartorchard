@@ -240,7 +240,7 @@
   .pagination {
     display:flex;
     align-items:center;
-    justify-content:center;
+    justify-content:flex-end;
     gap:var(--space-sm);
     padding:var(--space-xl);
   }
@@ -308,9 +308,6 @@
               导出基地
             </button>
           </div>
-          <div class="action-right">
-            <span class="selected-info" id="recordCount">共 22 条记录</span>
-          </div>
         </div>
 
         <div class="data-section">
@@ -331,7 +328,7 @@
             <tbody id="dataTableBody">
             </tbody>
           </table>
-          <div class="pagination" id="paginationContainer">
+          <div id="pagination-container">
           </div>
         </div>
       </div>
@@ -343,6 +340,58 @@
 <script src="js/components/confirm.js"></script>
 <script src="js/page-actions.js"></script>
 <script>
+// 分页组件（与农事计划一致）
+const Pagination = {
+  currentPage: 1, pageSize: 10, filteredData: [],
+  containerId: 'pagination-container', tbodyId: 'dataTableBody', renderRow: null,
+  init: function(options) {
+    this.currentPage = options.currentPage || 1;
+    this.pageSize = options.pageSize || 10;
+    this.filteredData = options.data || [];
+    this.containerId = options.containerId || 'pagination-container';
+    this.tbodyId = options.tbodyId || 'dataTableBody';
+    this.renderRow = options.renderRow || null;
+    this.render();
+  },
+  renderTable: function() {
+    const tbody = document.getElementById(this.tbodyId);
+    if (!tbody || !this.renderRow) return;
+    const start = (this.currentPage - 1) * this.pageSize;
+    const pageData = this.filteredData.slice(start, start + this.pageSize);
+    tbody.innerHTML = pageData.map((item, i) => this.renderRow(item, start + i + 1)).join('');
+  },
+  render: function() {
+    const container = document.getElementById(this.containerId);
+    if (!container) return;
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    let html = '<div class="pagination">';
+    html += `<button class="page-btn ${this.currentPage <= 1 ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage - 1})">‹</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= this.currentPage - 1 && i <= this.currentPage + 1)) {
+        html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" onclick="Pagination.goToPage(${i})">${i}</button>`;
+      } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
+        html += '<span class="page-ellipsis" style="padding:0 8px;color:#6b7b6b;">...</span>';
+      }
+    }
+    html += `<button class="page-btn ${this.currentPage >= totalPages ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage + 1})">›</button>`;
+    html += `<span style="margin-left:16px;font-size:13px;color:#6b7b6b;">第 ${this.currentPage} 页/共 ${totalPages} 页，共 ${this.filteredData.length} 条记录</span>`;
+    html += '</div>';
+    container.innerHTML = html;
+    this.renderTable();
+  },
+  goToPage: function(page) {
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    if (page < 1 || page > totalPages) return;
+    this.currentPage = page;
+    this.render();
+  },
+  updateData: function(data) {
+    this.filteredData = data;
+    this.currentPage = 1;
+    this.render();
+  }
+};
+
 // Mock数据 - 企业基地信息
 const mockData = [
   { id: 'ENT001', code: 'JD-001', name: '天水麦积区基地', address: '甘肃省天水市麦积区市', area: 2800, manager: '张经理', phone: '138-0000-1001', status: 'active' },
@@ -369,17 +418,6 @@ const mockData = [
   { id: 'ENT022', code: 'JD-022', name: '德州乐陵基地', address: '甘肃省德州市乐陵市', area: 2000, manager: '宋经理', phone: '138-0000-1022', status: 'active' }
 ];
 
-let currentPage = 1;
-const pageSize = 10;
-let filteredData = [...mockData];
-
-// 页面初始化
-document.addEventListener('DOMContentLoaded', function() {
-  PageActions.init('enterprise');
-  renderTable();
-  renderPagination();
-});
-
 // 获取规模类型
 function getScaleType(area) {
   if (area > 1000) return 'large';
@@ -397,73 +435,42 @@ function getStatusTag(status) {
   return statusMap[status] || statusMap.active;
 }
 
-// 渲染表格
-function renderTable() {
-  const tbody = document.getElementById('dataTableBody');
-  const start = (currentPage - 1) * pageSize;
-  const end = start + pageSize;
-  const pageData = filteredData.slice(start, end);
-  
-  tbody.innerHTML = pageData.map((item, __seq) => {
-    const status = getStatusTag(item.status);
-    return `
-      <tr data-id="${item.id}">
-        <td class="checkbox-col">${__seq + 1}</td>
-        <td><strong>${item.code}</strong></td>
-        <td><strong>${item.name}</strong></td>
-        <td>${item.address}</td>
-        <td style="text-align:right">${item.area.toLocaleString()} 亩</td>
-        <td>${item.manager}</td>
-        <td>${item.phone}</td>
-        <td><span class="status-tag ${status.class}">${status.text}</span></td>
-        <td>
-          <div class="action-btns">
-            <button class="action-btn" onclick="PageActions.showDetail('${item.id}')">详情</button>
-            <button class="action-btn" onclick="PageActions.showEdit('${item.id}')">编辑</button>
-            <button class="action-btn delete" onclick="PageActions.deleteItem('${item.id}')">删除</button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
-  
-  document.getElementById('recordCount').textContent = `共 ${filteredData.length} 条记录`;
+// 渲染行
+function renderRow(item, seq) {
+  const status = getStatusTag(item.status);
+  return `
+    <tr data-id="${item.id}">
+      <td class="checkbox-col">${seq}</td>
+      <td><strong>${item.code}</strong></td>
+      <td><strong>${item.name}</strong></td>
+      <td>${item.address}</td>
+      <td style="text-align:right">${item.area.toLocaleString()} 亩</td>
+      <td>${item.manager}</td>
+      <td>${item.phone}</td>
+      <td><span class="status-tag ${status.class}">${status.text}</span></td>
+      <td>
+        <div class="action-btns">
+          <button class="action-btn" onclick="PageActions.showDetail('${item.id}')">详情</button>
+          <button class="action-btn" onclick="PageActions.showEdit('${item.id}')">编辑</button>
+          <button class="action-btn delete" onclick="PageActions.deleteItem('${item.id}')">删除</button>
+        </div>
+      </td>
+    </tr>
+  `;
 }
 
-// 渲染分页
-function renderPagination() {
-  const container = document.getElementById('paginationContainer');
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  
-  if (totalPages <= 1) {
-    container.innerHTML = '';
-    return;
-  }
-  
-  let html = '';
-  html += `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="goToPage(${currentPage - 1})">‹</button>`;
-  
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-      html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
-    } else if (i === currentPage - 2 || i === currentPage + 2) {
-      html += '<span class="page-ellipsis">...</span>';
-    }
-  }
-  
-  html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="goToPage(${currentPage + 1})">›</button>`;
-  
-  container.innerHTML = html;
-}
-
-// 跳转页面
-function goToPage(page) {
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  if (page < 1 || page > totalPages) return;
-  currentPage = page;
-  renderTable();
-  renderPagination();
-}
+// 页面初始化
+document.addEventListener('DOMContentLoaded', function() {
+  PageActions.init('enterprise');
+  Pagination.init({
+    currentPage: 1,
+    pageSize: 10,
+    data: mockData,
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow
+  });
+});
 
 // 搜索
 function searchData() {
@@ -471,16 +478,14 @@ function searchData() {
   const scale = document.getElementById('scaleSelect').value;
   const keyword = document.getElementById('searchInput').value.toLowerCase();
   
-  filteredData = mockData.filter(item => {
+  const filtered = mockData.filter(item => {
     if (status && item.status !== status) return false;
     if (scale && getScaleType(item.area) !== scale) return false;
     if (keyword && !item.name.toLowerCase().includes(keyword)) return false;
     return true;
   });
   
-  currentPage = 1;
-  renderTable();
-  renderPagination();
+  Pagination.updateData(filtered);
 }
 
 // 全选/取消全选

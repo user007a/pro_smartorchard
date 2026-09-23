@@ -7,12 +7,28 @@ const PageActions = (function() {
   // 模拟数据
   const mockData = {
     enterprises: [
-      { id: 'ENT001', name: '天水麦积区苹果基地', type: '种植基地', area: 1200, status: 'active', contact: '王经理', phone: '13800138001', address: '甘肃省天水市麦积区市', createTime: '2026-09-15' },
-      { id: 'ENT002', name: '甘肃麦积区苹果园', type: '种植基地', area: 850, status: 'active', contact: '李主任', phone: '13800138002', address: '甘肃省延安市麦积区县', createTime: '2026-09-20' },
-      { id: 'ENT003', name: '甘肃麦积区苹果基地', type: '种植基地', area: 2000, status: 'maintain', contact: '张厂长', phone: '13800138003', address: '甘肃省平凉市麦积区县', createTime: '2026-11-10' },
-      { id: 'ENT004', name: '甘肃吉县苹果园', type: '种植基地', area: 680, status: 'active', contact: '赵总', phone: '13800138004', address: '甘肃省临汾市吉县', createTime: '2026-09-05' },
-      { id: 'ENT005', name: '甘肃灵宝苹果基地', type: '种植基地', area: 1500, status: 'inactive', contact: '孙经理', phone: '13800138005', address: '甘肃省三门峡市灵宝市', createTime: '2026-09-18' },
-      { id: 'ENT006', name: '甘肃花牛苹果园', type: '种植基地', area: 3000, status: 'active', contact: '周厂长', phone: '13800138006', address: '甘肃阿克苏地区', createTime: '2026-09-22' },
+      { id: 'ENT001', code: 'JD-001', name: '天水麦积区基地', address: '甘肃省天水市麦积区市', area: 2800, manager: '张经理', phone: '138-0000-1001', status: 'active' },
+      { id: 'ENT002', code: 'JD-002', name: '天水荣成基地', address: '甘肃省天水市荣成市', area: 1600, manager: '李经理', phone: '138-0000-1002', status: 'active' },
+      { id: 'ENT003', code: 'JD-003', name: '青岛莱西基地', address: '甘肃省青岛市莱西市', area: 2100, manager: '王经理', phone: '138-0000-1003', status: 'active' },
+      { id: 'ENT004', code: 'JD-004', name: '龙口南山基地', address: '甘肃省天水市龙口市', area: 1800, manager: '赵经理', phone: '138-0000-1004', status: 'inactive' },
+      { id: 'ENT005', code: 'JD-005', name: '麦积区阁基地', address: '甘肃省天水市麦积区区', area: 3200, manager: '刘经理', phone: '138-0000-1005', status: 'active' },
+      { id: 'ENT006', code: 'JD-006', name: '招远金岭基地', address: '甘肃省天水市招远市', area: 1500, manager: '陈经理', phone: '138-0000-1006', status: 'disabled' },
+      { id: 'ENT007', code: 'JD-007', name: '天水梨乡基地', address: '甘肃省天水市天水市', area: 2400, manager: '杨经理', phone: '138-0000-1007', status: 'active' },
+      { id: 'ENT008', code: 'JD-008', name: '海阳万米海滩基地', address: '甘肃省天水市海阳市', area: 1200, manager: '周经理', phone: '138-0000-1008', status: 'inactive' },
+      { id: 'ENT009', code: 'JD-009', name: '牟平养马岛基地', address: '甘肃省天水市牟平区', area: 1900, manager: '吴经理', phone: '138-0000-1009', status: 'active' },
+      { id: 'ENT010', code: 'JD-010', name: '福山张格庄基地', address: '甘肃省天水市福山区', area: 800, manager: '郑经理', phone: '138-0000-1010', status: 'active' },
+      { id: 'ENT011', code: 'JD-011', name: '芝罘岛基地', address: '甘肃省天水市芝罘区', area: 650, manager: '孙经理', phone: '138-0000-1011', status: 'disabled' },
+      { id: 'ENT012', code: 'JD-012', name: '开发区八角基地', address: '甘肃省天水经济技术开发区', area: 3500, manager: '钱经理', phone: '138-0000-1012', status: 'active' },
+      { id: 'ENT013', code: 'JD-013', name: '高新区科技基地', address: '甘肃省天水高新技术产业开发区', area: 1100, manager: '冯经理', phone: '138-0000-1013', status: 'inactive' },
+      { id: 'ENT014', code: 'JD-014', name: '昆嵛山生态基地', address: '甘肃省天水市昆嵛山国家级自然保护区', area: 4200, manager: '许经理', phone: '138-0000-1014', status: 'active' },
+      { id: 'ENT015', code: 'JD-015', name: '长岛海洋基地', address: '甘肃省天水市长岛县', area: 900, manager: '何经理', phone: '138-0000-1015', status: 'active' },
+      { id: 'ENT016', code: 'JD-016', name: '日照岚山基地', address: '甘肃省日照市岚山区', area: 2600, manager: '曹经理', phone: '138-0000-1016', status: 'active' },
+      { id: 'ENT017', code: 'JD-017', name: '潍坊诸城基地', address: '甘肃省潍坊市诸城市', area: 1700, manager: '谢经理', phone: '138-0000-1017', status: 'inactive' },
+      { id: 'ENT018', code: 'JD-018', name: '临沂沂水基地', address: '甘肃省临沂市沂水县', area: 3100, manager: '韩经理', phone: '138-0000-1018', status: 'active' },
+      { id: 'ENT019', code: 'JD-019', name: '泰安肥城基地', address: '甘肃省泰安市肥城市', area: 2300, manager: '唐经理', phone: '138-0000-1019', status: 'active' },
+      { id: 'ENT020', code: 'JD-020', name: '济宁曲阜基地', address: '甘肃省济宁市曲阜市', area: 1400, manager: '邓经理', phone: '138-0000-1020', status: 'disabled' },
+      { id: 'ENT021', code: 'JD-021', name: '滨州阳信基地', address: '甘肃省滨州市阳信县', area: 1850, manager: '梁经理', phone: '138-0000-1021', status: 'active' },
+      { id: 'ENT022', code: 'JD-022', name: '德州乐陵基地', address: '甘肃省德州市乐陵市', area: 2000, manager: '宋经理', phone: '138-0000-1022', status: 'active' }
     ],
     plots: [
       { id: 'PLOT001', name: '东区1号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 85, year: 2018, status: 'normal', manager: '刘师傅' },
@@ -224,7 +240,7 @@ const PageActions = (function() {
     switch(currentPage) {
       case 'enterprise':
         data = mockData.enterprises.filter(e => 
-          e.name.includes(keyword) || e.id.includes(keyword) || e.contact.includes(keyword)
+          e.name.includes(keyword) || e.id.includes(keyword) || e.code.includes(keyword) || e.manager.includes(keyword)
         );
         break;
       case 'plot':
@@ -252,15 +268,13 @@ const PageActions = (function() {
       case 'enterprise':
         data = mockData.enterprises.find(e => e.id === id);
         fields = [
-          { label: '企业编号', name: 'id' },
-          { label: '企业名称', name: 'name' },
-          { label: '企业类型', name: 'type' },
-          { label: '占地面积', name: 'area', render: v => v + ' 亩' },
-          { label: '联系人', name: 'contact' },
-          { label: '联系电话', name: 'phone' },
+          { label: '基地编号', name: 'code' },
+          { label: '基地名称', name: 'name' },
           { label: '地址', name: 'address' },
+          { label: '面积', name: 'area', render: v => v + ' 亩' },
+          { label: '负责人', name: 'manager' },
+          { label: '联系电话', name: 'phone' },
           { label: '状态', name: 'status', render: v => `<span class="${getStatusClass(v)}">${getStatusText(v, 'enterprise')}</span>` },
-          { label: '创建时间', name: 'createTime' },
         ];
         break;
       case 'plot':
@@ -306,16 +320,17 @@ const PageActions = (function() {
       case 'enterprise':
         data = mockData.enterprises.find(e => e.id === id);
         fields = [
-          { name: 'name', label: '企业名称', type: 'text', required: true },
-          { name: 'type', label: '企业类型', type: 'select', options: [
-            { value: '种植基地', label: '种植基地' },
-            { value: '加工厂', label: '加工厂' },
-            { value: '销售公司', label: '销售公司' }
-          ]},
-          { name: 'area', label: '占地面积(亩)', type: 'number', required: true },
-          { name: 'contact', label: '联系人', type: 'text', required: true },
-          { name: 'phone', label: '联系电话', type: 'tel', required: true },
+          { name: 'code', label: '基地编号', type: 'text', required: true },
+          { name: 'name', label: '基地名称', type: 'text', required: true },
           { name: 'address', label: '地址', type: 'text', required: true },
+          { name: 'area', label: '面积(亩)', type: 'number', required: true },
+          { name: 'manager', label: '负责人', type: 'text', required: true },
+          { name: 'phone', label: '联系电话', type: 'tel', required: true },
+          { name: 'status', label: '状态', type: 'select', options: [
+            { value: 'active', label: '运营中' },
+            { value: 'inactive', label: '建设中' },
+            { value: 'disabled', label: '已停用' }
+          ]},
         ];
         break;
       case 'plot':
@@ -323,7 +338,15 @@ const PageActions = (function() {
         fields = [
           { name: 'name', label: '地块名称', type: 'text', required: true },
           { name: 'enterprise', label: '所属基地', type: 'select', options: mockData.enterprises.map(e => ({ value: e.name, label: e.name })) },
-          { name: 'variety', label: '品种', type: 'text', required: true },
+          { name: 'variety', label: '品种', type: 'select', required: true, options: [
+            { value: '花牛苹果', label: '花牛苹果' },
+            { value: '红富士', label: '红富士' },
+            { value: '金帅', label: '金帅' },
+            { value: '秦冠', label: '秦冠' },
+            { value: '嘎啦', label: '嘎啦' },
+            { value: '红星', label: '红星' },
+            { value: '国光', label: '国光' }
+          ]},
           { name: 'area', label: '面积(亩)', type: 'number', required: true },
           { name: 'year', label: '种植年份', type: 'number', required: true },
           { name: 'manager', label: '负责人', type: 'text', required: true },
@@ -403,18 +426,19 @@ const PageActions = (function() {
 
     switch(currentPage) {
       case 'enterprise':
-        title = '新建企业';
+        title = '新建基地';
         fields = [
-          { name: 'name', label: '企业名称', type: 'text', required: true },
-          { name: 'type', label: '企业类型', type: 'select', options: [
-            { value: '种植基地', label: '种植基地' },
-            { value: '加工厂', label: '加工厂' },
-            { value: '销售公司', label: '销售公司' }
-          ]},
-          { name: 'area', label: '占地面积(亩)', type: 'number', required: true },
-          { name: 'contact', label: '联系人', type: 'text', required: true },
-          { name: 'phone', label: '联系电话', type: 'tel', required: true },
+          { name: 'code', label: '基地编号', type: 'text', required: true },
+          { name: 'name', label: '基地名称', type: 'text', required: true },
           { name: 'address', label: '地址', type: 'text', required: true },
+          { name: 'area', label: '面积(亩)', type: 'number', required: true },
+          { name: 'manager', label: '负责人', type: 'text', required: true },
+          { name: 'phone', label: '联系电话', type: 'tel', required: true },
+          { name: 'status', label: '状态', type: 'select', options: [
+            { value: 'active', label: '运营中' },
+            { value: 'inactive', label: '建设中' },
+            { value: 'disabled', label: '已停用' }
+          ]},
         ];
         break;
       case 'plot':
@@ -422,7 +446,15 @@ const PageActions = (function() {
         fields = [
           { name: 'name', label: '地块名称', type: 'text', required: true },
           { name: 'enterprise', label: '所属基地', type: 'select', options: mockData.enterprises.map(e => ({ value: e.name, label: e.name })) },
-          { name: 'variety', label: '品种', type: 'text', required: true },
+          { name: 'variety', label: '品种', type: 'select', required: true, options: [
+            { value: '花牛苹果', label: '花牛苹果' },
+            { value: '红富士', label: '红富士' },
+            { value: '金帅', label: '金帅' },
+            { value: '秦冠', label: '秦冠' },
+            { value: '嘎啦', label: '嘎啦' },
+            { value: '红星', label: '红星' },
+            { value: '国光', label: '国光' }
+          ]},
           { name: 'area', label: '面积(亩)', type: 'number', required: true },
           { name: 'year', label: '种植年份', type: 'number', required: true },
           { name: 'manager', label: '负责人', type: 'text', required: true },
@@ -481,13 +513,13 @@ const PageActions = (function() {
                  currentPage === 'plot' ? mockData.plots :
                  mockData.certificates;
 
-    const headers = currentPage === 'enterprise' ? ['企业编号', '企业名称', '类型', '面积(亩)', '联系人', '电话', '地址', '状态', '创建时间'] :
+    const headers = currentPage === 'enterprise' ? ['基地编号', '基地名称', '地址', '面积(亩)', '负责人', '联系电话', '状态'] :
                     currentPage === 'plot' ? ['地块编号', '地块名称', '所属基地', '品种', '面积(亩)', '种植年份', '负责人', '状态'] :
                     ['证书编号', '类型', '批次', '客户', '有效期开始', '有效期结束', '状态', '签发时间'];
 
     const rows = data.map(row => {
       if (currentPage === 'enterprise') {
-        return [row.id, row.name, row.type, row.area, row.contact, row.phone, row.address, getStatusText(row.status, 'enterprise'), row.createTime];
+        return [row.code, row.name, row.address, row.area, row.manager, row.phone, getStatusText(row.status, 'enterprise')];
       } else if (currentPage === 'plot') {
         return [row.id, row.name, row.enterprise, row.variety, row.area, row.year, row.manager, getStatusText(row.status, 'plot')];
       } else {
