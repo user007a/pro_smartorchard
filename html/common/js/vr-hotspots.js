@@ -3,8 +3,8 @@ var vrHotspotsData = {
         {
             id: "scene_main",
             name: "园区主入口",
-            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
-            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
+            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
+            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
             yaw: 180,
             pitch: 0,
             hfov: 100,
@@ -15,7 +15,7 @@ var vrHotspotsData = {
                     pitch: -5,
                     yaw: 45,
                     title: "A1地块",
-                    content: "<div style='padding:8px;'><h4 style='margin:0 0 8px 0;color:#2b6e3c;font-size:14px;'>A1地块</h4><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>品种：红富士</p><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>树龄：8年</p><p style='margin:0;font-size:12px;color:#64748b;'>面积：25亩</p><div style='margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;'><span style='font-size:11px;color:#22c55e;'>当前状态：正常</span></div></div>",
+                    content: "<div style='padding:8px;'><h4 style='margin:0 0 8px 0;color:#2b6e3c;font-size:14px;'>A1地块</h4><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>品种：花牛苹果</p><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>树龄：8年</p><p style='margin:0;font-size:12px;color:#64748b;'>面积：25亩</p><div style='margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;'><span style='font-size:11px;color:#22c55e;'>当前状态：正常</span></div></div>",
                     targetId: "plot_a1",
                     status: "normal"
                 },
@@ -64,8 +64,8 @@ var vrHotspotsData = {
         {
             id: "scene_b",
             name: "B区全景",
-            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
-            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
+            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
+            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
             yaw: 0,
             pitch: 0,
             hfov: 100,
@@ -76,7 +76,7 @@ var vrHotspotsData = {
                     pitch: -8,
                     yaw: 30,
                     title: "B1地块",
-                    content: "<div style='padding:8px;'><h4 style='margin:0 0 8px 0;color:#2b6e3c;font-size:14px;'>B1地块</h4><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>品种：嘎啦</p><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>树龄：6年</p><p style='margin:0;font-size:12px;color:#64748b;'>面积：20亩</p><div style='margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;'><span style='font-size:11px;color:#f59e0b;'>需关注：病虫害风险中等</span></div></div>",
+                    content: "<div style='padding:8px;'><h4 style='margin:0 0 8px 0;color:#2b6e3c;font-size:14px;'>B1地块</h4><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>品种：花牛苹果</p><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>树龄：6年</p><p style='margin:0;font-size:12px;color:#64748b;'>面积：20亩</p><div style='margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;'><span style='font-size:11px;color:#f59e0b;'>需关注：病虫害风险中等</span></div></div>",
                     targetId: "plot_b1",
                     status: "warning"
                 },
@@ -115,8 +115,8 @@ var vrHotspotsData = {
         {
             id: "scene_c",
             name: "C区全景",
-            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
-            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
+            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
+            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
             yaw: 0,
             pitch: 0,
             hfov: 100,
@@ -127,7 +127,7 @@ var vrHotspotsData = {
                     pitch: -5,
                     yaw: 45,
                     title: "C1地块",
-                    content: "<div style='padding:8px;'><h4 style='margin:0 0 8px 0;color:#2b6e3c;font-size:14px;'>C1地块</h4><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>品种：红富士</p><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>树龄：10年</p><p style='margin:0;font-size:12px;color:#64748b;'>面积：30亩</p><div style='margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;'><span style='font-size:11px;color:#22c55e;'>当前状态：正常</span></div></div>",
+                    content: "<div style='padding:8px;'><h4 style='margin:0 0 8px 0;color:#2b6e3c;font-size:14px;'>C1地块</h4><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>品种：花牛苹果</p><p style='margin:0 0 4px 0;font-size:12px;color:#64748b;'>树龄：10年</p><p style='margin:0;font-size:12px;color:#64748b;'>面积：30亩</p><div style='margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;'><span style='font-size:11px;color:#22c55e;'>当前状态：正常</span></div></div>",
                     targetId: "plot_c1",
                     status: "normal"
                 },
