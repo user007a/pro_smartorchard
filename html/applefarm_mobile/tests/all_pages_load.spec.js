@@ -36,7 +36,6 @@ const pages = [
   'mb_pest_risk.html',
   'mb_label.html',
   'mb_material.html',
-  'mb_model.html',
   'mb_expert.html',
   'mb_drone_patrol.html',
   'vr_panorama.html',
