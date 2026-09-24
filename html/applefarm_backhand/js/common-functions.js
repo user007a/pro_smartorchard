@@ -3,6 +3,38 @@
  * 包含模态框、分页、搜索等通用功能
  */
 
+// 人员下拉选项（系统设置中的用户列表）
+const USER_OPTIONS = [
+  '惠加宁', '黄忠坚', '徐水应', '朱泉龙', '陈小忠',
+  '廖春亮', '李建明', '李根', '张才孙', '刘全国',
+  '毛定卫', '叶三东', '周才贵', '程名高', '邓小华',
+  '周成友', '危红卫', '方超', '曹红英', '崔新根',
+  '超级用户'
+];
+window.USER_OPTIONS = USER_OPTIONS;
+
+// 生成人员下拉框 HTML（包含请选择占位项）
+function buildUserOptionsHtml(selectedValue) {
+  const placeholder = '<option value="">请选择负责人</option>';
+  const options = USER_OPTIONS.map(function(name) {
+    const selected = name === selectedValue ? ' selected' : '';
+    return '<option value="' + name + '"' + selected + '>' + name + '</option>';
+  }).join('');
+  return placeholder + options;
+}
+// 生成人员下拉框 HTML（多选版本）
+function buildUserOptionsHtmlMulti(selectedValues) {
+  const selectedArr = Array.isArray(selectedValues) ? selectedValues : (selectedValues ? String(selectedValues).split(/[,，、]/) : []);
+  const placeholder = '<option value="">请选择人员（可多选）</option>';
+  const options = USER_OPTIONS.map(function(name) {
+    const selected = selectedArr.indexOf(name) !== -1 ? ' selected' : '';
+    return '<option value="' + name + '"' + selected + '>' + name + '</option>';
+  }).join('');
+  return placeholder + options;
+}
+window.buildUserOptionsHtml = buildUserOptionsHtml;
+window.buildUserOptionsHtmlMulti = buildUserOptionsHtmlMulti;
+
 // 模态框操作
 const Modal = {
   // 显示模态框

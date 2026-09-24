@@ -358,14 +358,14 @@ body{display:flex;align-items:center;justify-content:center}
       <div class="lab">综合健康指数 · 多因子加权</div>
     </div>
     <div class="hstat phase">
-      <div class="ph">幼果期</div>
-      <div class="sub">自 09-20 始 · 预计 28 天</div>
+      <div class="ph">膨大期/着色期</div>
+      <div class="sub">自 06-15 始 · 预计采收 10-15</div>
     </div>
     <div class="hstat dim"><div class="t"><span>长势</span><b class="sk">90</b></div><div class="bar"><i style="width:90%"></i></div></div>
     <div class="hstat dim"><div class="t"><span>水分</span><b class="sk">72</b></div><div class="bar"><i style="width:72%"></i></div></div>
     <div class="hstat dim"><div class="t"><span>养分</span><b class="sk">84</b></div><div class="bar"><i style="width:84%"></i></div></div>
     <div class="hstat dim"><div class="t"><span>病虫</span><b class="sk">74</b></div><div class="bar"><i style="width:74%"></i></div></div>
-    <div class="hstat kpi risk"><div class="n sk">8</div><div class="l">待处理告警</div></div>
+    <div class="hstat kpi risk"><div class="n sk" id="heroAlertPending">8</div><div class="l">待处理告警</div></div>
     <div class="hstat kpi"><div class="n sk">75<small>%</small></div><div class="l">农事达成率</div></div>
     <div class="hstat kpi"><div class="n sk">93<small>%</small></div><div class="l">设备在线率</div></div>
     <div class="hstat kpi warn"><div class="n sk">79<small>%</small></div><div class="l">农资保障率</div></div>
@@ -465,14 +465,14 @@ body{display:flex;align-items:center;justify-content:center}
       <div class="card" id="R2">
         <div class="card-h">
           <h3 class="t"><i></i>生长影响研判</h3>
-          <div class="meta">幼果期<span class="stamp" data-stamp>更新 --:--</span></div>
+          <div class="meta">膨大期/着色期<span class="stamp" data-stamp>更新 --:--</span></div>
         </div>
         <div class="chain">
-          <div class="ch"><div class="node">①</div><div class="ct"><div class="k">当前物候期</div><div class="v">幼果期（09-20 始）</div></div></div>
-          <div class="ch"><div class="node">②</div><div class="ct"><div class="k">本阶段主风险</div><div class="v">锈病 · 蚜虫 · 幼果日灼</div></div></div>
+          <div class="ch"><div class="node">①</div><div class="ct"><div class="k">当前物候期</div><div class="v">膨大期/着色期（自 06-15）</div></div></div>
+          <div class="ch"><div class="node">②</div><div class="ct"><div class="k">本阶段主风险</div><div class="v">轮纹病 · 炭疽病 · 早期落叶病</div></div></div>
           <div class="ch"><div class="node">③</div><div class="ct"><div class="k">当前风险指数</div><div class="v">62 / 100（中）</div></div></div>
-          <div class="ch"><div class="node">④</div><div class="ct"><div class="k">未来天气触发</div><div class="v">明日小雨+降温 <em>利于锈病侵染</em></div></div></div>
-          <div class="ch r"><div class="node">⑤</div><div class="ct"><div class="k">模型建议</div><div class="v">今日北1/北4 保护性喷药；东2 明早滴灌</div></div></div>
+          <div class="ch"><div class="node">④</div><div class="ct"><div class="k">未来天气触发</div><div class="v">周内小雨+昼夜温差 <em>利于轮纹病侵染</em></div></div></div>
+          <div class="ch r"><div class="node">⑤</div><div class="ct"><div class="k">模型建议</div><div class="v">今日轮纹病高风险地块喷施保护剂；高风险地块控制灌水</div></div></div>
         </div>
       </div>
 
@@ -709,25 +709,57 @@ function select(i){
 }
 detail.classList.add('hide'); /* 默认收起，点击地块再打开 */
 
-/* ---------- 今日预警：数据驱动渲染（空数组时走空态） ---------- */
+/* ---------- 今日预警：从共享数据源 AlertStore 读取 ---------- */
 (function(){
-  var ALERTS=[
-    {sev:'c',label:'紧急',tx:'西3 水肥一体机离线，影响滴灌执行',tm:'09:12'},
-    {sev:'w',label:'警告',tx:'明日锈病风险 65%，北1/北4 需防护',tm:'预测'},
-    {sev:'w',label:'警告',tx:'东2 土壤墒情 58% 低于阈值，建议滴灌',tm:'08:40'}
-  ];
-  var box=document.getElementById('alertList');
-  if(!ALERTS.length){
-    box.innerHTML='<div class="empty">'+
-      '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8AA0BE" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></svg>'+
-      '<div>今日无预警 · 全园区指标正常</div></div>';
-    return;
+  function sevClass(level){
+    if (level === 'urgent') return 'c';
+    if (level === 'important') return 'w';
+    return 'r';
   }
-  box.innerHTML=ALERTS.map(function(a){
-    return '<div class="al '+a.sev+'"><span class="sev">'+a.label+'</span>'+
-           '<span class="tx">'+a.tx+'</span><span class="tm">'+a.tm+'</span></div>';
-  }).join('');
+  function sevLabel(level){
+    return ({ urgent:'紧急', important:'重要', reminder:'提醒', notice:'通知' })[level] || '预警';
+  }
+  function fmtTm(t){
+    if (!t) return '';
+    var m = String(t).match(/(\d{2})-(\d{2})[ T](\d{2}:\d{2})/);
+    return m ? (m[1]+'-'+m[2]+' '+m[3]) : t;
+  }
+  function render(){
+    var list = (window.AlertStore ? AlertStore.topN(5, 'pending') : []);
+    var box = document.getElementById('alertList');
+    var meta = box.parentNode.querySelector('.meta');
+    if (!list.length){
+      box.innerHTML='<div class="empty">'+
+        '<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8AA0BE" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></svg>'+
+        '<div>今日无预警 · 全园区指标正常</div></div>';
+      if (meta) meta.innerHTML = '待处理 <b>0</b> · 已闭环 <b>0</b><span class="stamp" data-stamp>更新 --:--</span>';
+      return;
+    }
+    box.innerHTML = list.map(function(a){
+      return '<div class="al '+sevClass(a.level)+'"><span class="sev">'+sevLabel(a.level)+'</span>'+
+             '<span class="tx">'+a.title+'</span><span class="tm">'+fmtTm(a.time)+'</span></div>';
+    }).join('');
+    if (meta && window.AlertStore) {
+      var s = AlertStore.stats();
+      meta.innerHTML = '待处理 <b>'+s.pending+'</b> · 已闭环 <b>'+s.completed+'</b><span class="stamp" data-stamp>实时</span>';
+    }
+  }
+  render();
+  if (window.AlertStore) AlertStore.subscribe(render);
+})();
+
+/* ---------- KPI：待处理告警数从共享源读取 ---------- */
+(function(){
+  function refresh(){
+    if (!window.AlertStore) return;
+    var s = AlertStore.stats();
+    var el = document.getElementById('heroAlertPending');
+    if (el) el.textContent = s.pending;
+  }
+  refresh();
+  if (window.AlertStore) AlertStore.subscribe(refresh);
 })();
 </script>
+<script src="../applefarm_backhand/js/shared/alert-data.js"></script>
 </body>
 </html>

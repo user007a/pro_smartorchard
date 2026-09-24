@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>智慧果园 - 预警中心</title>
+  <link rel="stylesheet" href="css/mobile-design-system.css">
+  <script src="../applefarm_backhand/icons/icons.js"></script>
+  <style>
+    /* 预警中心主题色：橙红（覆盖设计系统默认绿色 Header） */
+    .page-header {
+      background: linear-gradient(135deg, #f56c4d, #e84a3a);
+    }
+    .header-stats {
+      display: flex;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .header-stat {
+      flex: 1;
+      background: rgba(255,255,255,0.16);
+      border-radius: 10px;
+      padding: 10px 12px;
+      backdrop-filter: blur(4px);
+    }
+    .header-stat .num { font-size: var(--font-2xl); font-weight: 700; line-height: 1; }
+    .header-stat .lbl { font-size: var(--font-xs); opacity: 0.85; margin-top: 4px; }
+
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      padding: 14px 16px 4px;
+      background: var(--bg-white, #fff);
+      overflow-x: auto;
+    }
+    .filter-chip {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border-radius: 16px;
+      font-size: var(--font-sm);
+      background: var(--bg-white, #f5f5f7);
+      color: var(--text-secondary, #555);
+      cursor: pointer;
+    }
+    .filter-chip.active {
+      background: linear-gradient(135deg, #f56c4d, #e84a3a);
+      color: #fff;
+      font-weight: 500;
+    }
+
+    .alert-list { padding: 12px 16px; }
+    .alert-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+      border-left: 4px solid #909399;
+    }
+    .alert-card.urgent { border-left-color: #e84a3a; }
+    .alert-card.important { border-left-color: #f5a623; }
+    .alert-card.reminder { border-left-color: var(--info); }
+    .alert-card.notice { border-left-color: #7d8085; }
+
+    .alert-row1 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .alert-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: var(--font-2xs);
+      font-weight: 500;
+    }
+    .alert-tag.urgent { background: rgba(232,74,58,0.12); color: #e84a3a; }
+    .alert-tag.important { background: rgba(245,166,35,0.14); color: #c47800; }
+    .alert-tag.reminder { background: rgba(9,109,217,0.12); color: var(--info); }
+    .alert-tag.notice { background: rgba(125,128,133,0.14); color: #5b6066; }
+    .alert-type { font-size: var(--font-xs); color: #909399; }
+    .alert-time { font-size: var(--font-2xs); color: #b0b3b8; }
+    .alert-title { font-size: var(--font-base); font-weight: 600; color: #1f2e1f; line-height: 1.4; margin-bottom: 6px; }
+    .alert-desc { font-size: var(--font-sm); color: #606266; line-height: 1.5; margin-bottom: 10px; }
+    .alert-actions { display: flex; gap: 8px; }
+    .alert-btn {
+      flex: 1;
+      padding: 8px 0;
+      border-radius: 8px;
+      font-size: var(--font-sm);
+      text-align: center;
+      cursor: pointer;
+      border: 1px solid #e8e8e8;
+      background: #fafafa;
+      color: #555;
+    }
+    .alert-btn.primary {
+      background: linear-gradient(135deg, #f56c4d, #e84a3a);
+      color: #fff;
+      border: none;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #b0b3b8;
+    }
+    .empty-state svg { width: 50px; height: 50px; opacity: 0.5; }
+    .empty-state p { margin-top: 12px; font-size: var(--font-sm); }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <div class="header-back" onclick="navigateBack()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </div>
+    <div class="header-content">
+      <div class="header-title">预警中心</div>
+      <div class="header-sub">设备与农事预警统一查看</div>
+      <div class="header-stats">
+        <div class="header-stat"><div class="num" id="statUrgent">0</div><div class="lbl">待处理</div></div>
+        <div class="header-stat"><div class="num" id="statTotal">0</div><div class="lbl">总预警</div></div>
+        <div class="header-stat"><div class="num" id="statRate">--</div><div class="lbl">处理率</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="filter-chip active" data-filter="all" onclick="setFilter('all')">全部</div>
+    <div class="filter-chip" data-filter="urgent" onclick="setFilter('urgent')">紧急</div>
+    <div class="filter-chip" data-filter="important" onclick="setFilter('important')">重要</div>
+    <div class="filter-chip" data-filter="reminder" onclick="setFilter('reminder')">提醒</div>
+    <div class="filter-chip" data-filter="notice" onclick="setFilter('notice')">通知</div>
+    <div class="filter-chip" data-filter="device" onclick="setFilter('device')">设备</div>
+    <div class="filter-chip" data-filter="farming" onclick="setFilter('farming')">农事</div>
+  </div>
+
+  <div class="alert-list" id="alertList"></div>
+
+  <script>
+    // 数据来源：共享数据源 AlertStore（详见 applefarm_backhand/js/shared/alert-data.js）
+    var currentFilter = 'all';
+
+    function levelClass(l){ return ({urgent:'urgent', important:'important', reminder:'reminder', notice:'notice'})[l] || 'notice'; }
+    function typeText(type){ return type === 'device' ? '设备预警' : '农事预警'; }
+    function fmtTm(t){
+      if (!t) return '';
+      var m = String(t).match(/(\d{2})-(\d{2})[ T](\d{2}:\d{2})/);
+      return m ? (m[1]+'-'+m[2]+' '+m[3]) : t;
+    }
+    function setFilter(f){
+      currentFilter = f;
+      document.querySelectorAll('.filter-chip').forEach(function(c){ c.classList.toggle('active', c.dataset.filter===f); });
+      render();
+    }
+    function render(){
+      var list = (window.AlertStore ? AlertStore.all() : []).filter(function(a){
+        if (currentFilter === 'all') return true;
+        if (currentFilter === 'device' || currentFilter === 'farming') return a.type === currentFilter;
+        return a.level === currentFilter;
+      });
+      // 排序：pending 在前 + 紧急优先
+      list.sort(function(a,b){
+        var lvOrder = { urgent:0, important:1, reminder:2, notice:3 };
+        var la = lvOrder[a.level]!==undefined ? lvOrder[a.level] : 9;
+        var lb = lvOrder[b.level]!==undefined ? lvOrder[b.level] : 9;
+        if (a.status === 'pending' && b.status !== 'pending') return -1;
+        if (a.status !== 'pending' && b.status === 'pending') return 1;
+        if (la !== lb) return la - lb;
+        return (b.time||'').localeCompare(a.time||'');
+      });
+      var box = document.getElementById('alertList');
+      if (!list.length){
+        box.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 12.5l2.6 2.6L16 9.5"/></svg><p>暂无预警 · 园区指标正常</p></div>';
+        return;
+      }
+      box.innerHTML = list.map(function(a){
+        var actionBtn = a.status === 'pending'
+          ? '<div class="alert-btn primary" onclick="handleAlert(\''+a.id+'\',event)">立即处理</div>'
+          : '<div class="alert-btn" onclick="viewAlert(\''+a.id+'\',event)">查看详情</div>';
+        return '<div class="alert-card '+levelClass(a.level)+'" onclick="viewAlert(\''+a.id+'\',event)">'+
+          '<div class="alert-row1">'+
+            '<div><span class="alert-tag '+levelClass(a.level)+'">'+a.levelText+'</span><span class="alert-type" style="margin-left:6px;">'+typeText(a.type)+'</span></div>'+
+            '<div class="alert-time">'+fmtTm(a.time)+'</div>'+
+          '</div>'+
+          '<div class="alert-title">'+a.title+'</div>'+
+          '<div class="alert-desc">'+a.desc+'</div>'+
+          '<div class="alert-type" style="margin-bottom:10px;">�� '+a.location+'</div>'+
+          '<div class="alert-actions">'+
+            '<div class="alert-btn" onclick="viewAlert(\''+a.id+'\',event)">详情</div>'+
+            actionBtn+
+          '</div>'+
+        '</div>';
+      }).join('');
+    }
+    function updateStats(){
+      if (!window.AlertStore) return;
+      var s = AlertStore.stats();
+      document.getElementById('statUrgent').textContent = s.pending;
+      document.getElementById('statTotal').textContent = s.total;
+      document.getElementById('statRate').textContent = s.rate + '%';
+    }
+    function navigateBack(){ if(window.history.length>1){ window.history.back(); } else { window.location.href='mb_home.html'; } }
+    function viewAlert(id, e){
+      if (e) e.stopPropagation();
+      var a = window.AlertStore ? AlertStore.byId(id) : null;
+      if (!a) return;
+      showModal(a.title, '【'+typeText(a.type)+' · '+a.levelText+'】\n\n'+a.desc+'\n\n�� '+a.location+'\n⏰ '+fmtTm(a.time));
+    }
+    function handleAlert(id, e){
+      if (e) e.stopPropagation();
+      var a = window.AlertStore ? AlertStore.byId(id) : null;
+      if (!a) return;
+      var now = new Date();
+      var pad = function(n){return n<10?'0'+n:n;};
+      var timeStr = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes());
+      AlertStore.updateStatus(id, 'completed', '已处理', timeStr+' 现场确认处理');
+      showModal('处理成功', '【'+a.title+'】\n\n处理方式：现场确认\n处理人：当前用户\n状态已更新为已处理。');
+    }
+    function showModal(title, content){
+      var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="this.remove()">'+
+        '<div style="background:#fff;border-radius:14px;max-width:340px;width:100%;padding:20px;" onclick="event.stopPropagation()">'+
+          '<div style="font-size:16px;font-weight:600;margin-bottom:12px;color:#1f2e1f;">'+title+'</div>'+
+          '<div style="font-size:14px;color:#606266;line-height:1.7;white-space:pre-wrap;margin-bottom:16px;">'+content+'</div>'+
+          '<div style="text-align:right;"><div class="alert-btn" style="display:inline-block;padding:8px 20px;" onclick="this.closest(\'div[style*=&quot;position:fixed&quot;]\').remove()">关闭</div></div>'+
+        '</div>'+
+      '</div>';
+      document.body.insertAdjacentHTML('beforeend', html);
+    }
+
+    function refresh(){ updateStats(); render(); }
+    refresh();
+    if (window.AlertStore) AlertStore.subscribe(refresh);
+  </script>
+  <script src="../applefarm_backhand/js/shared/alert-data.js"></script>
+</body>
+</html>

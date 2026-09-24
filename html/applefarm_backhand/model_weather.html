@@ -4,714 +4,207 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>智慧果园 - 气象模型</title>
-<!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
 <link rel="stylesheet" href="css/design-system.css">
 <link rel="stylesheet" href="css/sidebar-layout.css">
-  <link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/page-content.css">
 <style>
-  /* 模块卡片 hover 效果 */
-  .module-card {
-    transition:all 0.2s ease;
-  }
-  .module-card:hover {
-    background:var(--bg-hover);
-    transform:translateY(-2px);
-    box-shadow:var(--shadow-md);
-  }
-  
-  /* 气象模型页面专属样式 */
-  /* 紧凑型统计卡片 - 参考巡园管理 */
-  .patrol-stat-card {
-    background:var(--bg-card);
-    border-radius:12px;
-    padding:16px 20px;
-    text-align:center;
-    box-shadow:0 1px 3px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.02);
-    border:1px solid rgba(0,0,0,0.06);
-    transition:all 0.25s ease;
-  }
-  
-  .patrol-stat-card:hover {
-    transform:translateY(-2px);
-    box-shadow:0 4px 12px rgba(0,0,0,0.08);
-  }
-  
-  .patrol-stat-card .stat-value {
-    font-size:28px;
-    font-weight:700;
-    color:var(--text-primary);
-    margin-bottom:6px;
-  }
-  
-  .patrol-stat-card .stat-label {
-    font-size:13px;
-    color:var(--text-secondary);
-  }
-  
-  .patrol-stat-card.green .stat-value { color:var(--primary-500); }
-  .patrol-stat-card.blue .stat-value { color:var(--primary-600); }
-  .patrol-stat-card.red .stat-value { color:var(--error); }
-  .patrol-stat-card.orange .stat-value { color:var(--warning); }
-  .patrol-stat-card.purple .stat-value { color:#722ed1; }
-  
-  /* 气象数据行 */
-  .weather-stats {
-    display:grid;
-    grid-template-columns:repeat(4, 1fr);
-    gap:16px;
-    margin-bottom:20px;
-  }
-  .weather-current {
-    background:linear-gradient(135deg, #4a90d9 0%, #357abd 100%);
-    border-radius:20px;
-    padding:28px;
-    color:var(--text-inverse);
-    margin-bottom:20px;
-    display:flex;
-    gap:40px;
-    position:relative;
-    overflow:hidden;
-  }
-  
-  .weather-current::before {
-    content:'';
-    position:absolute;
-    top:-50%;
-    right:-20%;
-    width:80%;
-    height:200%;
-    background:radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 50%);
-    pointer-events:none;
-  }
-  
-  .weather-main {
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    min-width:180px;
-  }
-  
-  .weather-main-icon {
-    font-size:64px;
-    line-height:1;
-    margin-bottom:12px;
-  }
-  
-  .weather-main-temp {
-    font-size:56px;
-    font-weight:300;
-    line-height:1;
-    margin-bottom:8px;
-  }
-  
-  .weather-main-temp span {
-    font-size:28px;
-    font-weight:400;
-    vertical-align:super;
-  }
-  
-  .weather-main-desc {
-    font-size:18px;
-    opacity:0.9;
-    margin-bottom:12px;
-  }
-  
-  .weather-main-location {
-    display:flex;
-    align-items:center;
-    gap:6px;
-    font-size:14px;
-    opacity:0.8;
-  }
-  
-  .weather-details {
-    flex:1;
-    display:grid;
-    grid-template-columns:repeat(4, 1fr);
-    gap:16px;
-  }
-  
-  .weather-detail-card {
-    background:rgba(255,255,255,0.12);
-    border-radius:14px;
-    padding:16px;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    text-align:center;
-    backdrop-filter:blur(10px);
-    transition:all 0.2s ease;
-  }
-  
-  .weather-detail-card:hover {
-    background:rgba(255,255,255,0.18);
-    transform:translateY(-2px);
-  }
-  
-  .weather-detail-icon {
-    font-size:28px;
-    margin-bottom:8px;
-  }
-  
-  .weather-detail-value {
-    font-size:22px;
-    font-weight:600;
-    margin-bottom:4px;
-  }
-  
-  .weather-detail-label {
-    font-size:12px;
-    opacity:0.8;
-    margin-bottom:6px;
-  }
-  
-  .weather-detail-trend {
-    font-size:11px;
-    opacity:0.7;
-  }
-  
-  .weather-detail-trend.up { color:#a8e6cf; }
-  .weather-detail-trend.down { color:#ffb7b2; }
-  
-  .main-grid {
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:20px;
-    align-items:stretch;
-  }
-  
-  /* 天气预报行 */
-  .forecast-row {
-    display:grid;
-    grid-template-columns:repeat(7, 1fr);
-    gap:8px;
-  }
-  
-  .forecast-item {
-    background:var(--gray-50);
-    border-radius:12px;
-    padding:16px 8px;
-    text-align:center;
-    transition:all 0.2s ease;
-    border:1px solid transparent;
-  }
-  
-  .forecast-item:hover,
-  .forecast-item.active {
-    background:var(--success-bg);
-    border-color:rgba(24, 144, 255, 0.2);
-  }
-  
-  .forecast-item.active {
-    background:var(--primary-500);
-    color:var(--text-inverse);
-  }
-  
-  .forecast-date {
-    font-size:12px;
-    color:var(--text-tertiary);
-    margin-bottom:8px;
-  }
-  
-  .forecast-item.active .forecast-date {
-    color:rgba(255,255,255,0.8);
-  }
-  
-  .forecast-icon {
-    font-size:28px;
-    margin-bottom:8px;
-  }
-  
-  .forecast-temp {
-    font-size:14px;
-    font-weight:600;
-    color:var(--text-primary);
-  }
-  
-  .forecast-item.active .forecast-temp {
-    color:var(--text-inverse);
-  }
-  
-  .forecast-temp span {
-    font-weight:400;
-    color:var(--text-tertiary);
-  }
-  
-  .forecast-item.active .forecast-temp span {
-    color:rgba(255,255,255,0.7);
-  }
-  
-  /* 图表容器 */
-  .chart-container {
-    min-height:180px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    background:linear-gradient(180deg, #f8fbf9 0%, #f0f4f3 100%);
-    border-radius:10px;
-    padding:16px;
-  }
-  
-  .chart-svg {
-    width:100%;
-    height:auto;
-  }
-  
-  /* 对比图表 */
-  .compare-chart {
-    display:flex;
-    flex-direction:column;
-    gap:12px;
-  }
-  
-  .compare-row {
-    display:flex;
-    align-items:center;
-    gap:12px;
-  }
-  
-  .compare-label {
-    width:60px;
-    font-size:12px;
-    color:var(--text-secondary);
-    flex-shrink:0;
-  }
-  
-  .compare-bar {
-    flex:1;
-    height:20px;
-    background:var(--gray-100);
-    border-radius:4px;
-    overflow:hidden;
-  }
-  
-  .compare-bar-segment {
-    height:100%;
-    border-radius:4px;
-    transition:width 0.5s ease;
-  }
-  
-  .compare-bar-segment.blue { background:linear-gradient(90deg, #1890ff, #40a9ff); }
-  .compare-bar-segment.green { background:linear-gradient(90deg, #52c41a, #73d13d); }
-  .compare-bar-segment.orange { background:linear-gradient(90deg, #fa8c16, #ffc53d); }
-  
-  .compare-value {
-    width:50px;
-    font-size:13px;
-    font-weight:600;
-    color:var(--text-primary);
-    text-align:right;
-    flex-shrink:0;
-  }
-  
-  /* 预警倒计时卡片 */
-  .alert-countdown {
-    display:grid;
-    grid-template-columns:repeat(3, 1fr);
-    gap:12px;
-  }
-  
-  .countdown-card {
-    background:var(--gray-50);
-    border-radius:12px;
-    padding:20px 12px;
-    text-align:center;
-    border:1px solid rgba(0,0,0,0.06);
-    transition:all 0.25s ease;
-  }
-  
-  .countdown-card:hover {
-    transform:translateY(-2px);
-    box-shadow:0 4px 12px rgba(0,0,0,0.06);
-  }
-  
-  .countdown-card.danger {
-    background:linear-gradient(135deg, #fff1f0, #fff5f5);
-    border-color:#ffd1d1;
-  }
-  
-  .countdown-icon {
-    font-size:28px;
-    margin-bottom:10px;
-  }
-  
-  .countdown-name {
-    font-size:13px;
-    font-weight:500;
-    color:var(--text-primary);
-    margin-bottom:8px;
-  }
-  
-  .countdown-time {
-    font-size:28px;
-    font-weight:700;
-    color:var(--primary-600);
-    line-height:1;
-    margin-bottom:4px;
-  }
-  
-  .countdown-unit {
-    font-size:11px;
-    color:var(--text-tertiary);
-  }
-  
-  /* 风险仪表 */
-  .risk-gauge {
-    display:grid;
-    grid-template-columns:repeat(2, 1fr);
-    gap:12px;
-  }
-  
-  .gauge-card {
-    background:var(--gray-50);
-    border-radius:10px;
-    padding:14px;
-    border:1px solid rgba(0,0,0,0.04);
-  }
-  
-  .gauge-title {
-    font-size:12px;
-    color:var(--text-tertiary);
-    margin-bottom:8px;
-  }
-  
-  .gauge-value {
-    font-size:22px;
-    font-weight:700;
-    margin-bottom:10px;
-  }
-  
+  /* 紧凑7天预报 */
+  .forecast-row { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; padding:8px 0; }
+  .forecast-item { background:#fff; border-radius:10px; padding:12px 6px; text-align:center; cursor:pointer; transition:all 0.2s; border:1px solid rgba(0,0,0,0.06); }
+  .forecast-item:hover { border-color:rgba(24,144,255,0.25); box-shadow:0 2px 8px rgba(0,0,0,0.05); }
+  .forecast-item.active { background:linear-gradient(135deg,#1890ff,#096dd9); border-color:#1890ff; box-shadow:0 4px 12px rgba(24,144,255,0.25); }
+  .forecast-item.active .forecast-date,
+  .forecast-item.active .forecast-temp,
+  .forecast-item.active .forecast-temp span,
+  .forecast-item.active .forecast-icon { color:#fff !important; }
+  .forecast-date { font-size:12px; color:var(--text-tertiary); margin-bottom:4px; }
+  .forecast-icon { font-size:22px; margin-bottom:6px; }
+  .forecast-temp { font-size:14px; font-weight:600; color:var(--text-primary); }
+  .forecast-temp span { font-weight:400; color:var(--text-tertiary); }
+  /* 风险概率紧凑 */
+  .gauge-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  .gauge-item { padding:10px 12px; background:#fff; border-radius:8px; border:1px solid rgba(0,0,0,0.06); }
+  .gauge-title { font-size:12px; color:var(--text-tertiary); margin-bottom:4px; }
+  .gauge-value { font-size:18px; font-weight:700; margin-bottom:6px; }
   .gauge-value.low { color:var(--success); }
   .gauge-value.medium { color:var(--warning); }
   .gauge-value.high { color:var(--error); }
-  
-  .gauge-bar {
-    height:6px;
-    background:var(--gray-200);
-    border-radius:3px;
-    overflow:hidden;
-  }
-  
-  .gauge-bar-fill {
-    height:100%;
-    border-radius:3px;
-    transition:width 0.5s ease;
-  }
-  
-  .gauge-bar-fill.low { background:linear-gradient(90deg, #52c41a, #73d13d); }
-  .gauge-bar-fill.medium { background:linear-gradient(90deg, #fa8c16, #ffc53d); }
-  .gauge-bar-fill.high { background:linear-gradient(90deg, #ff4d4f, #ff7875); }
-  
-  /* 苹果专属指数 */
-  .apple-index {
-    display:grid;
-    grid-template-columns:repeat(3, 1fr);
-    gap:12px;
-  }
-  
-  .index-card {
-    background:linear-gradient(135deg, #e6f4ff, #d4f4dd);
-    border-radius:12px;
-    padding:16px;
-    text-align:center;
-    border:1px solid #b7eb8f;
-  }
-  
-  .index-card.warning {
-    background:linear-gradient(135deg, #fff9e6, #fff3c4);
-    border-color:#ffe58f;
-  }
-  
-  .index-name {
-    font-size:12px;
-    color:var(--text-secondary);
-    margin-bottom:8px;
-  }
-  
-  .index-value {
-    font-size:18px;
-    font-weight:700;
-    color:#3a8618;
-  }
-  
-  .index-card.warning .index-value {
-    color:#b37c00;
-  }
+  .gauge-bar { height:5px; background:#f0f0f0; border-radius:3px; overflow:hidden; }
+  .gauge-bar-fill { height:100%; border-radius:3px; }
+  .gauge-bar-fill.low { background:linear-gradient(90deg,#52c41a,#73d13d); }
+  .gauge-bar-fill.medium { background:linear-gradient(90deg,#fa8c16,#ffc53d); }
+  .gauge-bar-fill.high { background:linear-gradient(90deg,#ff4d4f,#ff7875); }
+  /* 倒计时卡 */
+  .countdown-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .countdown-card { background:#fff; border-radius:10px; padding:14px 10px; text-align:center; border:1px solid rgba(0,0,0,0.06); cursor:pointer; transition:all 0.2s ease; }
+  .countdown-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.06); }
+  .countdown-card.danger { background:#fff1f0; border-color:#ffd1d1; }
+  .countdown-icon { font-size:22px; margin-bottom:6px; }
+  .countdown-name { font-size:12.5px; font-weight:500; color:var(--text-primary); margin-bottom:4px; }
+  .countdown-time { font-size:22px; font-weight:700; color:var(--primary-600); line-height:1; margin-bottom:2px; }
+  .countdown-unit { font-size:10.5px; color:var(--text-tertiary); }
+  /* 历史对比 */
+  .compare-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid #f4f6f4; font-size:13px; }
+  .compare-row:last-child { border-bottom:none; }
+  .compare-label { width:60px; font-size:12.5px; color:var(--text-secondary); flex-shrink:0; }
+  .compare-bar { flex:1; height:12px; background:#f0f0f0; border-radius:3px; overflow:hidden; }
+  .compare-bar-fill { height:100%; border-radius:3px; }
+  .compare-bar-fill.blue { background:linear-gradient(90deg,#1890ff,#40a9ff); }
+  .compare-bar-fill.green { background:linear-gradient(90deg,#52c41a,#73d13d); }
+  .compare-bar-fill.orange { background:linear-gradient(90deg,#fa8c16,#ffc53d); }
+  .compare-value { width:50px; font-size:12.5px; font-weight:600; color:var(--text-primary); text-align:right; flex-shrink:0; }
+  /* 苹果指数 */
+  .index-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .index-item { background:linear-gradient(135deg,#e6f4ff,#d4f4dd); border-radius:8px; padding:12px; text-align:center; border:1px solid #b7eb8f; }
+  .index-item.warning { background:linear-gradient(135deg,#fff9e6,#fff3c4); border-color:#ffe58f; }
+  .index-name { font-size:11.5px; color:var(--text-secondary); margin-bottom:4px; }
+  .index-value { font-size:15px; font-weight:700; color:#3a8618; }
+  .index-item.warning .index-value { color:#b37c00; }
 </style>
-<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
-  .main-wrapper{margin-left:0!important;width:100%!important;}
-</style>
+<style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
 <link rel="stylesheet" href="css/unified-theme.css">
 <link rel="stylesheet" href="css/typography.css">
 </head>
 <body data-active-menu="model" data-active-submenu="model-weather">
-
-<!-- ===== 整体布局容器 ===== -->
 <div class="app-layout">
-
-  <!-- ===== 侧边栏 ===== -->
-  <!-- 移动端遮罩层 -->
-  <!-- ===== 主内容区 ===== -->
   <div class="main-wrapper">
-
-    <!-- 顶栏 -->
-    <!-- Tab 标签栏 -->
     <div class="tab-bar">
-      <!-- Tab 标签由 JS 动态渲染 -->
       <div class="tab-bar-actions">
         <button class="tab-close-all" title="关闭全部标签">
-          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 3L11 11M11 3L3 11"/>
-          </svg>
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3L11 11M11 3L3 11"/></svg>
         </button>
       </div>
     </div>
 
-    <!-- 主内容区 -->
     <main class="main-content">
-<div class="weather-stats">
-    <div class="patrol-stat-card blue">
-      <div class="stat-value">26°C</div>
-      <div class="stat-label">当前温度</div>
-    </div>
-    <div class="patrol-stat-card green">
-      <div class="stat-value">68%</div>
-      <div class="stat-label">相对湿度</div>
-    </div>
-    <div class="patrol-stat-card orange">
-      <div class="stat-value">3.2m/s</div>
-      <div class="stat-label">风速(东南风)</div>
-    </div>
-    <div class="patrol-stat-card purple">
-      <div class="stat-value">0mm</div>
-      <div class="stat-label">今日降雨</div>
+<div class="page-container">
+  <!-- 顶部4指标 -->
+  <div class="patrol-stats">
+    <div class="patrol-stat-card blue"><div class="stat-value">26<small style="font-size:16px;font-weight:400;">°C</small></div><div class="stat-label">当前温度</div><div class="stat-trend" style="font-size:12px;color:var(--success);">↑ 2° 较昨日</div></div>
+    <div class="patrol-stat-card green"><div class="stat-value">68<small style="font-size:16px;font-weight:400;">%</small></div><div class="stat-label">相对湿度</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">适宜</div></div>
+    <div class="patrol-stat-card orange"><div class="stat-value">3.2<small style="font-size:16px;font-weight:400;">m/s</small></div><div class="stat-label">风速·东南风</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">3级</div></div>
+    <div class="patrol-stat-card purple"><div class="stat-value">0<small style="font-size:16px;font-weight:400;">mm</small></div><div class="stat-label">今日降雨</div><div class="stat-trend" style="font-size:12px;color:var(--success);">晴朗</div></div>
+  </div>
+
+  <!-- 7天预报 -->
+  <div class="chart-section" style="margin-bottom:20px;">
+    <h2 class="section-title">7天天气预报</h2>
+    <div class="forecast-row" id="forecastRow">
+      <div class="forecast-item active" onclick="selectDay(this)"><div class="forecast-date">今天</div><div class="forecast-icon">☀️</div><div class="forecast-temp">26° <span>18°</span></div></div>
+      <div class="forecast-item" onclick="selectDay(this)"><div class="forecast-date">明天</div><div class="forecast-icon">⛅</div><div class="forecast-temp">28° <span>19°</span></div></div>
+      <div class="forecast-item" onclick="selectDay(this)"><div class="forecast-date">周四</div><div class="forecast-icon">☁</div><div class="forecast-temp">25° <span>17°</span></div></div>
+      <div class="forecast-item" onclick="selectDay(this)"><div class="forecast-date">周五</div><div class="forecast-icon">🌧</div><div class="forecast-temp">22° <span>16°</span></div></div>
+      <div class="forecast-item" onclick="selectDay(this)"><div class="forecast-date">周六</div><div class="forecast-icon">🌧</div><div class="forecast-temp">20° <span>15°</span></div></div>
+      <div class="forecast-item" onclick="selectDay(this)"><div class="forecast-date">周日</div><div class="forecast-icon">⛅</div><div class="forecast-temp">24° <span>16°</span></div></div>
+      <div class="forecast-item" onclick="selectDay(this)"><div class="forecast-date">周一</div><div class="forecast-icon">☀️</div><div class="forecast-temp">27° <span>18°</span></div></div>
     </div>
   </div>
 
-  <div class="snzg-panel" style="margin-bottom:16px;">
-    <div class="snzg-panel-header">
-      <div class="snzg-panel-title"><span class="pt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg></span> 7天天气预报</div>
-      <a class="snzg-panel-link" href="#">查看更多 →</a>
+  <!-- 温度趋势 + 风险概率（左右） -->
+  <div style="display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:20px;">
+    <div class="chart-section">
+      <h2 class="section-title">温度趋势预测</h2>
+      <div id="chart-temp" class="chart-container" style="height:280px;"></div>
     </div>
-    <div class="snzg-panel-body">
-      <div class="forecast-row">
-        <div class="forecast-item active">
-          <div class="forecast-date">今天</div>
-          <div class="forecast-icon">☀️</div>
-          <div class="forecast-temp">26° <span>18°</span></div>
-        </div>
-        <div class="forecast-item">
-          <div class="forecast-date">明天</div>
-          <div class="forecast-icon">⛅</div>
-          <div class="forecast-temp">28° <span>19°</span></div>
-        </div>
-        <div class="forecast-item">
-          <div class="forecast-date">周四</div>
-          <div class="forecast-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg></div>
-          <div class="forecast-temp">25° <span>17°</span></div>
-        </div>
-        <div class="forecast-item">
-          <div class="forecast-date">周五</div>
-          <div class="forecast-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/></svg></div>
-          <div class="forecast-temp">22° <span>16°</span></div>
-        </div>
-        <div class="forecast-item">
-          <div class="forecast-date">周六</div>
-          <div class="forecast-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/></svg></div>
-          <div class="forecast-temp">20° <span>15°</span></div>
-        </div>
-        <div class="forecast-item">
-          <div class="forecast-date">周日</div>
-          <div class="forecast-icon">⛅</div>
-          <div class="forecast-temp">24° <span>16°</span></div>
-        </div>
-        <div class="forecast-item">
-          <div class="forecast-date">周一</div>
-          <div class="forecast-icon">☀️</div>
-          <div class="forecast-temp">27° <span>18°</span></div>
-        </div>
+    <div class="chart-section">
+      <h2 class="section-title">气象风险概率</h2>
+      <div class="gauge-grid" style="padding:8px 0;">
+        <div class="gauge-item"><div class="gauge-title">高温热害</div><div class="gauge-value low">12%</div><div class="gauge-bar"><div class="gauge-bar-fill low" style="width:12%"></div></div></div>
+        <div class="gauge-item"><div class="gauge-title">低温冻害</div><div class="gauge-value low">5%</div><div class="gauge-bar"><div class="gauge-bar-fill low" style="width:5%"></div></div></div>
+        <div class="gauge-item"><div class="gauge-title">干旱风险</div><div class="gauge-value medium">35%</div><div class="gauge-bar"><div class="gauge-bar-fill medium" style="width:35%"></div></div></div>
+        <div class="gauge-item"><div class="gauge-title">洪涝风险</div><div class="gauge-value low">8%</div><div class="gauge-bar"><div class="gauge-bar-fill low" style="width:8%"></div></div></div>
       </div>
     </div>
   </div>
 
-  <div class="main-grid">
+  <!-- 苹果指数 + 历史对比 + 极端天气预警（紧凑布局） -->
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
     <div>
-      <div class="snzg-panel" style="margin-bottom:16px;">
-        <div class="snzg-panel-header">
-          <div class="snzg-panel-title"><span class="pt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></span> 温度趋势预测</div>
-        </div>
-        <div class="chart-container">
-          <svg class="chart-svg" viewBox="0 0 600 180" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="tempGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#fa8c16" stop-opacity="0.2"/>
-                <stop offset="100%" stop-color="#fa8c16" stop-opacity="0.02"/>
-              </linearGradient>
-            </defs>
-            <line x1="40" y1="20" x2="580" y2="20" stroke="#f0f0f0"/>
-            <line x1="40" y1="55" x2="580" y2="55" stroke="#f0f0f0"/>
-            <line x1="40" y1="90" x2="580" y2="90" stroke="#f0f0f0"/>
-            <line x1="40" y1="125" x2="580" y2="125" stroke="#f0f0f0"/>
-            <line x1="40" y1="160" x2="580" y2="160" stroke="#e8e8e8"/>
-            <text x="35" y="24" font-size="9" fill="#999" text-anchor="end">35°</text>
-            <text x="35" y="59" font-size="9" fill="#999" text-anchor="end">28°</text>
-            <text x="35" y="94" font-size="9" fill="#999" text-anchor="end">21°</text>
-            <text x="35" y="129" font-size="9" fill="#999" text-anchor="end">14°</text>
-            <text x="35" y="164" font-size="9" fill="#999" text-anchor="end">7°</text>
-            <text x="80" y="175" font-size="8" fill="#999" text-anchor="middle">今天</text>
-            <text x="160" y="175" font-size="8" fill="#999" text-anchor="middle">明天</text>
-            <text x="240" y="175" font-size="8" fill="#999" text-anchor="middle">周四</text>
-            <text x="320" y="175" font-size="8" fill="#999" text-anchor="middle">周五</text>
-            <text x="400" y="175" font-size="8" fill="#999" text-anchor="middle">周六</text>
-            <text x="480" y="175" font-size="8" fill="#999" text-anchor="middle">周日</text>
-            <text x="560" y="175" font-size="8" fill="#999" text-anchor="middle">周一</text>
-            <path d="M80,55 L160,45 L240,60 L320,80 L400,95 L480,70 L560,50" fill="none" stroke="#fa8c16" stroke-width="2.5"/>
-            <path d="M80,110 L160,105 L240,115 L320,125 L400,130 L480,120 L560,108" fill="none" stroke="#1890ff" stroke-width="2" stroke-dasharray="4,2"/>
-            <circle cx="80" cy="55" r="3" fill="#fff" stroke="#fa8c16" stroke-width="2"/>
-            <circle cx="160" cy="45" r="3" fill="#fff" stroke="#fa8c16" stroke-width="2"/>
-            <circle cx="240" cy="60" r="3" fill="#fff" stroke="#fa8c16" stroke-width="2"/>
-            <circle cx="320" cy="80" r="3" fill="#fff" stroke="#fa8c16" stroke-width="2"/>
-            <circle cx="400" cy="95" r="3" fill="#fff" stroke="#fa8c16" stroke-width="2"/>
-            <circle cx="480" cy="70" r="3" fill="#fff" stroke="#fa8c16" stroke-width="2"/>
-            <circle cx="560" cy="50" r="3" fill="#fff" stroke="#fa8c16" stroke-width="2"/>
-            <line x1="460" y1="15" x2="480" y2="15" stroke="#fa8c16" stroke-width="2"/>
-            <text x="485" y="18" font-size="9" fill="#555">最高温</text>
-            <line x1="460" y1="28" x2="480" y2="28" stroke="#1890ff" stroke-width="2" stroke-dasharray="4,2"/>
-            <text x="485" y="31" font-size="9" fill="#555">最低温</text>
-          </svg>
+      <div class="chart-section" style="margin-bottom:16px;">
+        <h2 class="section-title">苹果专属气象指数</h2>
+        <div class="index-grid" style="padding:8px 0;">
+          <div class="index-item"><div class="index-name">开花冻害</div><div class="index-value">低</div></div>
+          <div class="index-item warning"><div class="index-name">果实日烧</div><div class="index-value">中</div></div>
+          <div class="index-item"><div class="index-name">着色适宜</div><div class="index-value">高</div></div>
         </div>
       </div>
-
-      <div class="snzg-panel" style="min-height:220px;">
-        <div class="snzg-panel-header">
-          <div class="snzg-panel-title"><span class="pt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></span> 历史同期对比</div>
-        </div>
-        <div class="compare-chart">
-          <div class="compare-row">
-            <span class="compare-label">2026年</span>
-            <div class="compare-bar"><div class="compare-bar-segment blue" style="width:75%"></div></div>
-            <span class="compare-value">22.5°</span>
-          </div>
-          <div class="compare-row">
-            <span class="compare-label">2026年</span>
-            <div class="compare-bar"><div class="compare-bar-segment green" style="width:70%"></div></div>
-            <span class="compare-value">21.0°</span>
-          </div>
-          <div class="compare-row">
-            <span class="compare-label">2026年</span>
-            <div class="compare-bar"><div class="compare-bar-segment orange" style="width:68%"></div></div>
-            <span class="compare-value">20.4°</span>
-          </div>
-          <div class="compare-row">
-            <span class="compare-label">2023年</span>
-            <div class="compare-bar"><div class="compare-bar-segment green" style="width:72%"></div></div>
-            <span class="compare-value">21.6°</span>
-          </div>
-          <div class="compare-row">
-            <span class="compare-label">2022年</span>
-            <div class="compare-bar"><div class="compare-bar-segment blue" style="width:65%"></div></div>
-            <span class="compare-value">19.5°</span>
-          </div>
+      <div class="chart-section">
+        <h2 class="section-title">历史同期对比</h2>
+        <div style="padding:4px 0;">
+          <div class="compare-row"><span class="compare-label">2025年</span><div class="compare-bar"><div class="compare-bar-fill blue" style="width:75%"></div></div><span class="compare-value">22.5°</span></div>
+          <div class="compare-row"><span class="compare-label">2024年</span><div class="compare-bar"><div class="compare-bar-fill green" style="width:70%"></div></div><span class="compare-value">21.0°</span></div>
+          <div class="compare-row"><span class="compare-label">2023年</span><div class="compare-bar"><div class="compare-bar-fill orange" style="width:68%"></div></div><span class="compare-value">20.4°</span></div>
+          <div class="compare-row"><span class="compare-label">2022年</span><div class="compare-bar"><div class="compare-bar-fill blue" style="width:65%"></div></div><span class="compare-value">19.5°</span></div>
+          <div class="compare-row"><span class="compare-label">2021年</span><div class="compare-bar"><div class="compare-bar-fill green" style="width:72%"></div></div><span class="compare-value">21.6°</span></div>
         </div>
       </div>
     </div>
 
-    <div>
-      <div class="snzg-panel" style="margin-bottom:16px;">
-        <div class="snzg-panel-header">
-          <div class="snzg-panel-title"><span class="pt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span> 极端天气预警</div>
+    <div class="chart-section">
+      <h2 class="section-title">极端天气预警</h2>
+      <div class="countdown-grid">
+        <div class="countdown-card" onclick="createPrecaution('霜冻')">
+          <div class="countdown-icon">❄️</div>
+          <div class="countdown-name">霜冻风险</div>
+          <div class="countdown-time">--</div>
+          <div class="countdown-unit">暂无风险</div>
         </div>
-        <div class="snzg-panel-body">
-          <div class="alert-countdown">
-            <div class="countdown-card danger">
-              <div class="countdown-icon">❄️</div>
-              <div class="countdown-name">霜冻风险</div>
-              <div class="countdown-time">--</div>
-              <div class="countdown-unit">暂无风险</div>
-            </div>
-            <div class="countdown-card">
-              <div class="countdown-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M21 4a8 8 0 0 1-8 8"/><path d="M21 12a8 8 0 0 1-8 8"/><path d="M3 12a8 8 0 0 1 8-8"/><path d="M3 4a8 8 0 0 0 8 8"/><path d="M3 20a8 8 0 0 0 8-8"/></svg></div>
-              <div class="countdown-name">大风预警</div>
-              <div class="countdown-time">72</div>
-              <div class="countdown-unit">小时后</div>
-            </div>
-            <div class="countdown-card">
-              <div class="countdown-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/></svg></div>
-              <div class="countdown-name">暴雨预警</div>
-              <div class="countdown-time">96</div>
-              <div class="countdown-unit">小时后</div>
-            </div>
-          </div>
+        <div class="countdown-card" onclick="createPrecaution('大风')">
+          <div class="countdown-icon">💨</div>
+          <div class="countdown-name">大风预警</div>
+          <div class="countdown-time">72</div>
+          <div class="countdown-unit">小时后</div>
         </div>
-      </div>
-
-      <div class="snzg-panel">
-        <div class="snzg-panel-header">
-          <div class="snzg-panel-title"><span class="pt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span> 气象风险概率</div>
-        </div>
-        <div class="snzg-panel-body">
-          <div class="risk-gauge">
-            <div class="gauge-card">
-              <div class="gauge-title">高温热害</div>
-              <div class="gauge-value low">12%</div>
-              <div class="gauge-bar"><div class="gauge-bar-fill low" style="width:12%"></div></div>
-            </div>
-            <div class="gauge-card">
-              <div class="gauge-title">低温冻害</div>
-              <div class="gauge-value low">5%</div>
-              <div class="gauge-bar"><div class="gauge-bar-fill low" style="width:5%"></div></div>
-            </div>
-            <div class="gauge-card">
-              <div class="gauge-title">干旱风险</div>
-              <div class="gauge-value medium">35%</div>
-              <div class="gauge-bar"><div class="gauge-bar-fill medium" style="width:35%"></div></div>
-            </div>
-            <div class="gauge-card">
-              <div class="gauge-title">洪涝风险</div>
-              <div class="gauge-value low">8%</div>
-              <div class="gauge-bar"><div class="gauge-bar-fill low" style="width:8%"></div></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="snzg-panel" style="margin-top:16px;">
-        <div class="snzg-panel-header">
-          <div class="snzg-panel-title"><span class="pt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;"><path d="M12 3c-1.5-1.5-5-1-5 3 0 4 3 8 5 10 2-2 5-6 5-10 0-4-3.5-4.5-5-3z"/><path d="M12 3V1"/></svg></span> 苹果专属气象指数</div>
-        </div>
-        <div class="snzg-panel-body">
-          <div class="apple-index">
-            <div class="index-card">
-              <div class="index-name">开花冻害指数</div>
-              <div class="index-value">低</div>
-            </div>
-            <div class="index-card warning">
-              <div class="index-name">果实日烧指数</div>
-              <div class="index-value">中</div>
-            </div>
-            <div class="index-card">
-              <div class="index-name">着色适宜指数</div>
-              <div class="index-value">高</div>
-            </div>
-          </div>
+        <div class="countdown-card" onclick="createPrecaution('暴雨')">
+          <div class="countdown-icon">🌧</div>
+          <div class="countdown-name">暴雨预警</div>
+          <div class="countdown-time">96</div>
+          <div class="countdown-unit">小时后</div>
         </div>
       </div>
     </div>
   </div>
 </div>
-
-<!-- [旧导航脚本已移除] -->
     </main>
   </div>
-
 </div>
 
-<!-- 引入交互脚本 -->
-<!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->
+<script src="js/components/modal.js"></script>
+<script src="js/components/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // 温度趋势 ECharts
+  Chart.line('#chart-temp', {
+    categories: ['今天','明天','周四','周五','周六','周日'],
+    series: [
+      { name: '最高温', data: [26, 28, 25, 22, 20, 24], color: '#fa8c16', smooth: true },
+      { name: '最低温', data: [18, 19, 17, 16, 15, 16], color: '#1890ff', smooth: true }
+    ]
+  });
+});
+
+function selectDay(el) {
+  document.querySelectorAll('.forecast-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  Toast.show('已切换至' + el.querySelector('.forecast-date').textContent + '天气', 'info');
+}
+
+function createPrecaution(name) {
+  try {
+    const prefills = JSON.parse(localStorage.getItem('orchard_farming_prefill') || '[]');
+    prefills.push({ title: name + '应对任务（来自气象模型）', taskType: name + '应对', plotRange: '全部地块', priority: '高' });
+    localStorage.setItem('orchard_farming_prefill', JSON.stringify(prefills));
+    Toast.show('已生成' + name + '预案任务', 'success');
+    setTimeout(() => {
+      const f = window.parent.document.querySelector('iframe[name="mainFrame"]');
+      if (f) f.src = 'farming_plan.html?from=model_weather';
+      else location.href = 'farming_plan.html?from=model_weather';
+    }, 700);
+  } catch (e) {}
+}
+</script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-<script src="js/common-functions.js"></script>
-  <script src="js/typography.js"></script>
+<script src="js/typography.js"></script>
 </body>
 </html>

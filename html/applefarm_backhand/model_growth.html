@@ -4,622 +4,221 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>智慧果园 - 生长模型</title>
-<!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
 <link rel="stylesheet" href="css/design-system.css">
 <link rel="stylesheet" href="css/sidebar-layout.css">
 <link rel="stylesheet" href="css/page-content.css">
 <style>
-  /* 生长模型页专属样式 */
-  .metrics-row {
-    display:grid;
-    grid-template-columns:repeat(4, 1fr);
-    gap:16px;
-    margin-bottom:20px;
-  }
-  
-  /* 紧凑型统计卡片 - 参考巡园管理 */
-  .patrol-stat-card {
-    background:var(--bg-card);
-    border-radius:12px;
-    padding:16px 20px;
-    text-align:center;
-    box-shadow:0 1px 3px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.02);
-    border:1px solid rgba(0,0,0,0.06);
-    transition:all 0.25s ease;
-  }
-  
-  .patrol-stat-card:hover {
-    transform:translateY(-2px);
-    box-shadow:0 4px 12px rgba(0,0,0,0.08);
-  }
-  
-  .patrol-stat-card .stat-value {
-    font-size:28px;
-    font-weight:700;
-    color:var(--text-primary);
-    margin-bottom:6px;
-  }
-  
-  .patrol-stat-card .stat-label {
-    font-size:13px;
-    color:var(--text-secondary);
-  }
-  
-  .patrol-stat-card.green .stat-value { color:var(--primary-500); }
-  .patrol-stat-card.blue .stat-value { color:var(--primary-600); }
-  .patrol-stat-card.red .stat-value { color:var(--error); }
-  .patrol-stat-card.orange .stat-value { color:var(--warning); }
-  .patrol-stat-card.purple .stat-value { color:#722ed1; }
-  
-  .gantt-container {
-    overflow-x:auto;
-  }
-  
-  .gantt-table {
-    width:100%;
-    border-collapse:separate;
-    border-spacing:0;
-    font-size:13.5px;
-  }
-  
-  .gantt-table th {
-    background:linear-gradient(135deg, #f7f9f7 0%, #f0f5f2 100%);
-    color:var(--text-tertiary);
-    font-weight:600;
-    font-size:12px;
-    text-transform:uppercase;
-    letter-spacing:0.5px;
-    padding:12px 16px;
-    text-align:left;
-    border-bottom:2px solid var(--border-default);
-  }
-  
-  .gantt-table th:first-child { border-radius:10px 0 0 0; }
-  .gantt-table th:last-child { border-radius:0 10px 0 0; }
-  
-  .gantt-table td {
-    padding:14px 16px;
-    border-bottom:1px solid #f4f6f4;
-    color:var(--text-secondary);
-  }
-  
-  .gantt-table tbody tr:hover {
-    background:var(--gray-50);
-  }
-  
-  .gantt-stage {
-    display:inline-flex;
-    padding:4px 10px;
-    border-radius:20px;
-    font-size:11.5px;
-    font-weight:500;
-  }
-  
-  .gantt-stage.dormancy { background:var(--gray-200); color:var(--text-secondary); }
-  .gantt-stage.sprouting { background:#d4f4dd; color:var(--primary-600); }
-  .gantt-stage.flowering { background:#ffe6f0; color:#c44d7d; }
-  .gantt-stage.fruiting { background:var(--warning-bg); color:#d48806; }
-  .gantt-stage.enlarging { background:var(--primary-50); color:var(--primary-600); }
-  .gantt-stage.coloring { background:#f5f0ff; color:#722ed1; }
-  .gantt-stage.harvesting { background:var(--error-bg); color:#cf1322; }
-  
-  .gantt-progress {
-    height:8px;
-    background:#eef1ef;
-    border-radius:4px;
-    overflow:hidden;
-  }
-  
-  .gantt-progress-bar {
-    height:100%;
-    border-radius:4px;
-    transition:width 0.5s ease;
-  }
-  
-  .gantt-progress-bar.green { background:linear-gradient(90deg, #52c41a, #73d13d); }
-  .gantt-progress-bar.blue { background:linear-gradient(90deg, #1890ff, #40a9ff); }
-  .gantt-progress-bar.orange { background:linear-gradient(90deg, #fa8c16, #ffc53d); }
-  
-  .gantt-status {
-    display:inline-flex;
-    padding:4px 10px;
-    border-radius:20px;
-    font-size:11.5px;
-    font-weight:500;
-  }
-  
-  .gantt-status.normal { background:#d9f7be; color:#3a8618; }
-  .gantt-status.warning { background:#fff1b8; color:#8c6d10; }
-  
-  .alert-list {
-    display:flex;
-    flex-direction:column;
-    gap:12px;
-  }
-  
-  .alert-item {
-    display:flex;
-    align-items:flex-start;
-    gap:12px;
-    padding:14px 16px;
-    background:var(--gray-50);
-    border-radius:10px;
-    border:1px solid rgba(0, 0, 0, 0.04);
-    transition:all 0.2s ease;
-  }
-  
-  .alert-item:hover {
-    background:var(--gray-50);
-    border-color:rgba(24, 144, 255, 0.08);
-    transform:translateX(4px);
-  }
-  
-  .alert-dot {
-    width:10px;
-    height:10px;
-    border-radius:50%;
-    flex-shrink:0;
-    margin-top:4px;
-  }
-  
-  .alert-dot.red { background:var(--error); box-shadow:0 0 8px rgba(255, 77, 79, 0.4); }
-  .alert-dot.orange { background:var(--warning); box-shadow:0 0 8px rgba(250, 140, 22, 0.4); }
-  
-  .alert-title {
-    font-size:13.5px;
-    font-weight:500;
-    color:var(--text-primary);
-    margin-bottom:4px;
-  }
-  
-  .alert-meta {
-    display:flex;
-    gap:12px;
-    font-size:12px;
-    color:var(--text-tertiary);
-  }
-  
-  .advice-list {
-    display:flex;
-    flex-direction:column;
-    gap:16px;
-  }
-  
-  .advice-item {
-    display:flex;
-    align-items:flex-start;
-    gap:16px;
-    padding:16px;
-    background:linear-gradient(135deg, #fafcfc 0%, #f5f9f5 100%);
-    border-radius:12px;
-    border:1px solid rgba(0, 0, 0, 0.04);
-    transition:all 0.25s ease;
-  }
-  
-  .advice-item:hover {
-    background:linear-gradient(135deg, var(--primary-50) 0%, var(--bg-card) 100%);
-    border-color:rgba(24, 144, 255, 0.1);
-    transform:translateY(-2px);
-    box-shadow:0 4px 12px rgba(24, 144, 255, 0.08);
-  }
-  
-  .advice-icon {
-    width:48px;
-    height:48px;
-    border-radius:12px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    flex-shrink:0;
-  }
-  
-  .advice-icon.water { background:linear-gradient(135deg, #bae0ff, #91d5ff); color:var(--primary-600); }
-  .advice-icon.fertilizer { background:linear-gradient(135deg, #d4f4dd, #91d5ff); color:var(--primary-600); }
-  .advice-icon.pest { background:linear-gradient(135deg, #ffd1d1, #ffccc7); color:#cf1322; }
-  .advice-icon.pruning { background:linear-gradient(135deg, #fff7e6, #ffd591); color:#d48806; }
-  
-  .advice-content {
-    flex:1;
-  }
-  
-  .advice-title {
-    font-size:14px;
-    font-weight:600;
-    color:var(--text-primary);
-    margin-bottom:6px;
-  }
-  
-  .advice-desc {
-    font-size:13px;
-    color:var(--text-secondary);
-    line-height:1.6;
-    margin-bottom:8px;
-  }
-  
-  .advice-meta {
-    display:flex;
-    gap:12px;
-    font-size:12px;
-    color:var(--text-tertiary);
-  }
-  
-  .advice-action {
-    padding:8px 16px;
-    background:var(--primary-500);
-    color:var(--text-inverse);
-    border:none;
-    border-radius:8px;
-    font-size:13px;
-    font-weight:500;
-    cursor:pointer;
-    transition:all 0.2s ease;
-    white-space:nowrap;
-    height:fit-content;
-  }
-  
-  .advice-action:hover {
-    background:var(--primary-600);
-    transform:translateY(-1px);
-    box-shadow:0 4px 12px rgba(24, 144, 255, 0.25);
-  }
-  
-  .gantt-legend {
-    display:flex;
-    flex-wrap:wrap;
-    gap:12px;
-    margin-bottom:16px;
-    padding:12px 16px;
-    background:var(--gray-50);
-    border-radius:10px;
-  }
-  
-  .gantt-legend-item {
-    display:flex;
-    align-items:center;
-    gap:6px;
-    font-size:12px;
-    color:var(--text-secondary);
-  }
-  
-  .gantt-legend-dot {
-    width:12px;
-    height:12px;
-    border-radius:3px;
-  }
-  
-  .main-grid {
-    display:grid;
-    grid-template-columns:1fr 380px;
-    gap:20px;
-  }
-  
-  .chart-container {
-    min-height:200px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    background:linear-gradient(180deg, #f8fbf9 0%, #f0f4f3 100%);
-    border-radius:10px;
-    padding:20px;
-  }
+  /* 紧凑列表（农事建议） */
+  .advice-list { display:flex; flex-direction:column; gap:10px; }
+  .advice-item { display:flex; align-items:center; gap:12px; padding:12px 14px; background:#fff; border-radius:10px; border:1px solid rgba(0,0,0,0.06); transition:all 0.2s ease; }
+  .advice-item:hover { border-color:rgba(24,144,255,0.25); box-shadow:0 2px 8px rgba(0,0,0,0.05); }
+  .advice-icon { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .advice-icon.water { background:linear-gradient(135deg,#bae0ff,#91d5ff); color:var(--primary-600); }
+  .advice-icon.fertilizer { background:linear-gradient(135deg,#d4f4dd,#91d5ff); color:var(--primary-600); }
+  .advice-icon.pest { background:linear-gradient(135deg,#ffd1d1,#ffccc7); color:#cf1322; }
+  .advice-icon.pruning { background:linear-gradient(135deg,#fff7e6,#ffd591); color:#d48806; }
+  .advice-content { flex:1; min-width:0; }
+  .advice-title { font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+  .advice-desc { font-size:12.5px; color:var(--text-secondary); line-height:1.5; }
+  .advice-meta { display:flex; gap:10px; font-size:11.5px; color:var(--text-tertiary); margin-top:4px; }
+  .advice-meta span { padding:1px 6px; background:#f5f9f5; border-radius:4px; }
+  .advice-action { padding:7px 16px; background:linear-gradient(135deg,#1890ff,#096dd9); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer; white-space:nowrap; transition:all 0.2s; }
+  .advice-action:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(24,144,255,0.25); }
+  /* 报警列表 */
+  .alert-list { display:flex; flex-direction:column; }
+  .alert-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #f4f6f4; font-size:13.5px; cursor:pointer; transition:background 0.15s; }
+  .alert-item:hover { background:#f8fbf9; }
+  .alert-item:last-child { border-bottom:none; }
+  .alert-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .alert-dot.red { background:var(--error); box-shadow:0 0 4px rgba(255,77,79,0.4); }
+  .alert-dot.orange { background:var(--warning); }
+  .alert-content { flex:1; min-width:0; }
+  .alert-title { font-weight:500; color:var(--text-primary); }
+  .alert-meta { font-size:11.5px; color:var(--text-tertiary); margin-top:2px; }
 </style>
-<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
-  .main-wrapper{margin-left:0!important;width:100%!important;}
-</style>
+<style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
 <link rel="stylesheet" href="css/unified-theme.css">
 <link rel="stylesheet" href="css/typography.css">
 </head>
 <body data-active-menu="model" data-active-submenu="model-growth">
-
-<!-- ===== 整体布局容器 ===== -->
 <div class="app-layout">
-
-  <!-- ===== 侧边栏 ===== -->
-  <!-- 移动端遮罩层 -->
-  <!-- ===== 主内容区 ===== -->
   <div class="main-wrapper">
-
-    <!-- 顶栏 -->
-    <!-- Tab 标签栏 -->
     <div class="tab-bar">
-      <!-- Tab 标签由 JS 动态渲染 -->
       <div class="tab-bar-actions">
         <button class="tab-close-all" title="关闭全部标签">
-          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 3L11 11M11 3L3 11"/>
-          </svg>
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3L11 11M11 3L3 11"/></svg>
         </button>
       </div>
     </div>
 
-    <!-- 主内容区 -->
     <main class="main-content">
-      <div class="metrics-row">
-        <div class="patrol-stat-card green">
-          <div class="stat-value">126</div>
-          <div class="stat-label">监测地块总数</div>
-        </div>
-        <div class="patrol-stat-card blue">
-          <div class="stat-value">98</div>
-          <div class="stat-label">膨大期地块</div>
-        </div>
-        <div class="patrol-stat-card red">
-          <div class="stat-value">5</div>
-          <div class="stat-label">生长异常地块</div>
-        </div>
-        <div class="patrol-stat-card orange">
-          <div class="stat-value">12</div>
-          <div class="stat-label">本周农事建议</div>
-        </div>
-      </div>
-
-      <div class="main-grid">
-        <div class="snzg-panel">
-          <div class="snzg-panel-header">
-            <div class="snzg-panel-title">
-              <span class="pt-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
-                  <path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>
-                </svg>
-              </span>
-              生长阶段甘特图
-            </div>
-            <a class="snzg-panel-link" href="enterprise_base.html">查看地块详情 →</a>
-          </div>
-          <div class="snzg-panel-body">
-            <div class="gantt-header">
-              <div class="gantt-legend">
-                <div class="gantt-legend-item"><span class="gantt-legend-dot" style="background:var(--gray-200)"></span> 休眠期</div>
-                <div class="gantt-legend-item"><span class="gantt-legend-dot" style="background:#d4f4dd"></span> 萌芽期</div>
-                <div class="gantt-legend-item"><span class="gantt-legend-dot" style="background:#ffe6f0"></span> 花期</div>
-                <div class="gantt-legend-item"><span class="gantt-legend-dot" style="background:var(--warning-bg)"></span> 幼果期</div>
-                <div class="gantt-legend-item"><span class="gantt-legend-dot" style="background:var(--primary-50)"></span> 膨大期</div>
-                <div class="gantt-legend-item"><span class="gantt-legend-dot" style="background:#f5f0ff"></span> 着色期</div>
-                <div class="gantt-legend-item"><span class="gantt-legend-dot" style="background:var(--error-bg)"></span> 采收期</div>
-              </div>
-            </div>
-            <table class="gantt-table">
-              <thead>
-                <tr>
-                  <th style="width:120px">地块名称</th>
-                  <th style="width:80px">品种</th>
-                  <th style="width:80px">当前阶段</th>
-                  <th>阶段进度</th>
-                  <th style="width:60px">状态</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>天水A区-1号</td>
-                  <td>花牛苹果</td>
-                  <td><span class="gantt-stage enlarging">膨大期</span></td>
-                  <td><div class="gantt-progress"><div class="gantt-progress-bar green" style="width:65%"></div></div></td>
-                  <td><span class="gantt-status normal">正常</span></td>
-                </tr>
-                <tr>
-                  <td>天水A区-2号</td>
-                  <td>花牛苹果</td>
-                  <td><span class="gantt-stage enlarging">膨大期</span></td>
-                  <td><div class="gantt-progress"><div class="gantt-progress-bar green" style="width:72%"></div></div></td>
-                  <td><span class="gantt-status normal">正常</span></td>
-                </tr>
-                <tr>
-                  <td>麦积区B区-1号</td>
-                  <td>花牛苹果</td>
-                  <td><span class="gantt-stage coloring">着色期</span></td>
-                  <td><div class="gantt-progress"><div class="gantt-progress-bar blue" style="width:45%"></div></div></td>
-                  <td><span class="gantt-status normal">正常</span></td>
-                </tr>
-                <tr>
-                  <td>麦积区C区-1号</td>
-                  <td>花牛苹果</td>
-                  <td><span class="gantt-stage enlarging">膨大期</span></td>
-                  <td><div class="gantt-progress"><div class="gantt-progress-bar orange" style="width:38%"></div></div></td>
-                  <td><span class="gantt-status warning">偏慢</span></td>
-                </tr>
-                <tr>
-                  <td>天水D区-1号</td>
-                  <td>花牛苹果</td>
-                  <td><span class="gantt-stage enlarging">膨大期</span></td>
-                  <td><div class="gantt-progress"><div class="gantt-progress-bar green" style="width:58%"></div></div></td>
-                  <td><span class="gantt-status normal">正常</span></td>
-                </tr>
-                <tr>
-                  <td>招远E区-1号</td>
-                  <td>花牛苹果</td>
-                  <td><span class="gantt-stage harvesting">采收期</span></td>
-                  <td><div class="gantt-progress"><div class="gantt-progress-bar green" style="width:20%"></div></div></td>
-                  <td><span class="gantt-status normal">正常</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div>
-          <div class="snzg-panel" style="margin-bottom:16px;">
-            <div class="snzg-panel-header">
-              <div class="snzg-panel-title">
-                <span class="pt-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
-                    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
-                  </svg>
-                </span>
-                生长异常报警 <span class="snzg-panel-badge red">5</span>
-              </div>
-              <a class="snzg-panel-link" href="alert_settings.html">查看全部 →</a>
-            </div>
-            <div class="snzg-panel-body">
-              <ul class="alert-list">
-                <li class="alert-item">
-                  <span class="alert-dot red"></span>
-                  <div class="alert-content">
-                    <div class="alert-title">麦积区C区-1号：生长迟缓，积温偏差-15%</div>
-                    <div class="alert-meta"><span>麦积区基地</span><span>30分钟前</span></div>
-                  </div>
-                </li>
-                <li class="alert-item">
-                  <span class="alert-dot red"></span>
-                  <div class="alert-content">
-                    <div class="alert-title">龙口F区-2号：土壤水分不足，影响膨大</div>
-                    <div class="alert-meta"><span>龙口基地</span><span>1小时前</span></div>
-                  </div>
-                </li>
-                <li class="alert-item">
-                  <span class="alert-dot orange"></span>
-                  <div class="alert-content">
-                    <div class="alert-title">青岛G区-1号：营养指标偏低，建议追肥</div>
-                    <div class="alert-meta"><span>青岛基地</span><span>2小时前</span></div>
-                  </div>
-                </li>
-                <li class="alert-item">
-                  <span class="alert-dot orange"></span>
-                  <div class="alert-content">
-                    <div class="alert-title">天水H区-1号：光照不足，建议修剪透光</div>
-                    <div class="alert-meta"><span>天水基地</span><span>3小时前</span></div>
-                  </div>
-                </li>
-                <li class="alert-item">
-                  <span class="alert-dot orange"></span>
-                  <div class="alert-content">
-                    <div class="alert-title">招远E区-3号：叶片发黄，疑似缺铁</div>
-                    <div class="alert-meta"><span>招远基地</span><span>昨天</span></div>
-                  </div>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="main-grid">
-        <div class="snzg-panel">
-          <div class="snzg-panel-header">
-            <div class="snzg-panel-title">
-              <span class="pt-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
-                  <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>
-                </svg>
-              </span>
-              农事建议看板
-            </div>
-            <a class="snzg-panel-link" href="farming_plan.html">创建计划 →</a>
-          </div>
-          <div class="snzg-panel-body">
-            <ul class="advice-list">
-              <li class="advice-item">
-                <div class="advice-icon water">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;">
-                    <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>
-                  </svg>
-                </div>
-                <div class="advice-content">
-                  <div class="advice-title">膨大期灌溉建议</div>
-                  <div class="advice-desc">当前98块地块处于膨大期，建议增加灌溉频率至每3天一次，单次灌水量30-40m³/亩，确保果实正常膨大。</div>
-                  <div class="advice-meta"><span>适用地块：98块</span><span>优先级：高</span><span>有效期：7天</span></div>
-                </div>
-                <button class="advice-action" onclick="adoptAdvice('灌溉任务')">采纳建议</button>
-              </li>
-              <li class="advice-item">
-                <div class="advice-icon fertilizer">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;">
-                    <path d="M7 20h10"/><path d="M10 20c5.5-3 6-9 6-12-2 0-5 1-7 4-2-3-5-4-7-4 0 3 .5 9 6 12z"/>
-                  </svg>
-                </div>
-                <div class="advice-content">
-                  <div class="advice-title">追施高钾肥建议</div>
-                  <div class="advice-desc">膨大期是果实增大的关键期，建议追施高钾复合肥，用量0.5-1kg/株，促进果实膨大和糖分积累。</div>
-                  <div class="advice-meta"><span>适用地块：98块</span><span>优先级：高</span><span>有效期：5天</span></div>
-                </div>
-                <button class="advice-action" onclick="adoptAdvice('追肥任务')">采纳建议</button>
-              </li>
-              <li class="advice-item">
-                <div class="advice-icon pest">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;">
-                    <path d="M6 4v16"/><path d="M18 4v16"/><path d="M6 12h12"/><path d="M3 8h3"/><path d="M18 8h3"/><path d="M3 16h3"/><path d="M18 16h3"/>
-                  </svg>
-                </div>
-                <div class="advice-content">
-                  <div class="advice-title">病虫害防治提醒</div>
-                  <div class="advice-desc">当前温湿度条件有利于苹果轮纹病发生，建议喷施代森锰锌或甲基硫菌灵进行预防，间隔10-15天。</div>
-                  <div class="advice-meta"><span>适用地块：全部</span><span>优先级：中</span><span>有效期：10天</span></div>
-                </div>
-                <button class="advice-action" onclick="adoptAdvice('防治任务')">采纳建议</button>
-              </li>
-              <li class="advice-item">
-                <div class="advice-icon pruning">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;">
-                    <circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 9v12"/><path d="M18 9v12"/><path d="M9 6h12"/><path d="M9 18h12"/>
-                  </svg>
-                </div>
-                <div class="advice-content">
-                  <div class="advice-title">夏季修剪建议</div>
-                  <div class="advice-desc">建议对徒长枝、背上枝进行疏除，改善树冠通风透光条件，促进果实着色和花芽分化。</div>
-                  <div class="advice-meta"><span>适用地块：65块</span><span>优先级：中</span><span>有效期：14天</span></div>
-                </div>
-                <button class="advice-action" onclick="adoptAdvice('修剪任务')">采纳建议</button>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div>
-          <div class="snzg-panel" style="margin-bottom:16px;">
-            <div class="snzg-panel-header">
-              <div class="snzg-panel-title">
-                <span class="pt-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
-                    <path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
-                  </svg>
-                </span>
-                积温曲线对比
-              </div>
-            </div>
-            <div class="chart-container">
-              <svg class="chart-svg" viewBox="0 0 400 180" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <linearGradient id="tempGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#1890ff" stop-opacity="0.2"/>
-                    <stop offset="100%" stop-color="#1890ff" stop-opacity="0.02"/>
-                  </linearGradient>
-                </defs>
-                <line x1="40" y1="20" x2="380" y2="20" stroke="#f0f0f0"/>
-                <line x1="40" y1="60" x2="380" y2="60" stroke="#f0f0f0"/>
-                <line x1="40" y1="100" x2="380" y2="100" stroke="#f0f0f0"/>
-                <line x1="40" y1="140" x2="380" y2="140" stroke="#e8e8e8"/>
-                <text x="35" y="24" font-size="9" fill="#999" text-anchor="end">400°C</text>
-                <text x="35" y="64" font-size="9" fill="#999" text-anchor="end">300°C</text>
-                <text x="35" y="104" font-size="9" fill="#999" text-anchor="end">200°C</text>
-                <text x="35" y="144" font-size="9" fill="#999" text-anchor="end">100°C</text>
-                <text x="80" y="160" font-size="8" fill="#999" text-anchor="middle">3月</text>
-                <text x="160" y="160" font-size="8" fill="#999" text-anchor="middle">4月</text>
-                <text x="240" y="160" font-size="8" fill="#999" text-anchor="middle">9月</text>
-                <text x="320" y="160" font-size="8" fill="#999" text-anchor="middle">6月</text>
-                <path d="M80,130 Q120,110 160,90 T240,50 T320,30" fill="none" stroke="#1890ff" stroke-width="2.5"/>
-                <circle cx="80" cy="130" r="3" fill="#fff" stroke="#1890ff" stroke-width="2"/>
-                <circle cx="160" cy="90" r="3" fill="#fff" stroke="#1890ff" stroke-width="2"/>
-                <circle cx="240" cy="50" r="3" fill="#fff" stroke="#1890ff" stroke-width="2"/>
-                <circle cx="320" cy="30" r="4" fill="#1890ff"/>
-                <text x="340" y="35" font-size="10" fill="#1890ff">当前</text>
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
+<div class="page-container">
+  <!-- 顶部4指标 -->
+  <div class="patrol-stats">
+    <div class="patrol-stat-card green"><div class="stat-value">126</div><div class="stat-label">监测地块总数</div><div class="stat-trend" style="font-size:12px;color:var(--success);">覆盖率 100%</div></div>
+    <div class="patrol-stat-card blue"><div class="stat-value">98</div><div class="stat-label">膨大期地块</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">占比 77.8%</div></div>
+    <div class="patrol-stat-card red"><div class="stat-value">5</div><div class="stat-label">生长异常地块</div><div class="stat-trend" style="font-size:12px;color:var(--error);">↑ 1 较上周</div></div>
+    <div class="patrol-stat-card orange"><div class="stat-value">12</div><div class="stat-label">本周农事建议</div><div class="stat-trend" style="font-size:12px;color:var(--success);">采纳率 88%</div></div>
   </div>
 
+  <!-- 积温曲线 + 生长阶段分布（左右） -->
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+    <div class="chart-section">
+      <h2 class="section-title">积温累计曲线</h2>
+      <div id="chart-temp" class="chart-container" style="height:260px;"></div>
+    </div>
+    <div class="chart-section">
+      <h2 class="section-title">生长阶段分布</h2>
+      <div id="chart-stage" class="chart-container" style="height:260px;"></div>
+    </div>
+  </div>
+
+  <!-- 生育期甘特图（横向堆叠条形图） -->
+  <div class="chart-section" style="margin-bottom:20px;">
+    <h2 class="section-title">生育期甘特图（按月分段）</h2>
+    <div id="chart-gantt" class="chart-container" style="height:300px;"></div>
+  </div>
+
+  <!-- 农事建议看板 + 异常报警（左右） -->
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+    <div class="chart-section">
+      <h2 class="section-title">农事建议看板</h2>
+      <div class="advice-list">
+        <div class="advice-item">
+          <div class="advice-content">
+            <div class="advice-title">膨大期灌溉</div>
+            <div class="advice-desc">每3天一次灌溉，单次30-40m³/亩，确保果实正常膨大</div>
+            <div class="advice-meta"><span>98块</span><span>高优</span><span>7天</span></div>
+          </div>
+          <button class="advice-action" onclick="adoptAdvice('膨大期灌溉','98块')">采纳</button>
+        </div>
+        <div class="advice-item">
+          <div class="advice-content">
+            <div class="advice-title">追施高钾肥</div>
+            <div class="advice-desc">追施高钾复合肥0.5-1kg/株，促进果实膨大与糖分积累</div>
+            <div class="advice-meta"><span>98块</span><span>高优</span><span>5天</span></div>
+          </div>
+          <button class="advice-action" onclick="adoptAdvice('追施高钾肥','98块')">采纳</button>
+        </div>
+        <div class="advice-item">
+          <div class="advice-content">
+            <div class="advice-title">轮纹病防治</div>
+            <div class="advice-desc">喷施代森锰锌或甲基硫菌灵，间隔10-15天，叶片正反面均匀周到</div>
+            <div class="advice-meta"><span>全部</span><span>中优</span><span>10天</span></div>
+          </div>
+          <button class="advice-action" onclick="adoptAdvice('轮纹病防治','全部')">采纳</button>
+        </div>
+        <div class="advice-item">
+          <div class="advice-content">
+            <div class="advice-title">夏季修剪</div>
+            <div class="advice-desc">疏除徒长枝、背上枝，改善树冠通风透光条件</div>
+            <div class="advice-meta"><span>65块</span><span>中优</span><span>14天</span></div>
+          </div>
+          <button class="advice-action" onclick="adoptAdvice('夏季修剪','65块')">采纳</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-section">
+      <h2 class="section-title">异常报警 <span style="background:var(--error);color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;font-weight:500;margin-left:4px;">5</span></h2>
+      <div class="alert-list" id="alertList">
+        <div class="alert-item" data-plot="麦积区C区-1号"><span class="alert-dot red"></span><div class="alert-content"><div class="alert-title">麦积区C区-1号</div><div class="alert-meta">积温偏差-15% · 30分钟前</div></div></div>
+        <div class="alert-item" data-plot="龙口F区-2号"><span class="alert-dot red"></span><div class="alert-content"><div class="alert-title">龙口F区-2号</div><div class="alert-meta">土壤水分不足 · 1小时前</div></div></div>
+        <div class="alert-item" data-plot="青岛G区-1号"><span class="alert-dot orange"></span><div class="alert-content"><div class="alert-title">青岛G区-1号</div><div class="alert-meta">营养指标偏低 · 2小时前</div></div></div>
+        <div class="alert-item" data-plot="天水H区-1号"><span class="alert-dot orange"></span><div class="alert-content"><div class="alert-title">天水H区-1号</div><div class="alert-meta">光照不足 · 3小时前</div></div></div>
+        <div class="alert-item" data-plot="招远E区-3号"><span class="alert-dot orange"></span><div class="alert-content"><div class="alert-title">招远E区-3号</div><div class="alert-meta">叶片发黄 · 昨天</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+    </main>
+  </div>
 </div>
 
-<!-- 引入交互脚本 -->
 <script src="js/components/modal.js"></script>
+<script src="js/components/chart.js"></script>
 <script>
-  function adoptAdvice(taskType) {
-    Toast.show('已生成' + taskType, 'success');
-  }
+document.addEventListener('DOMContentLoaded', function() {
+  // 1. 积温曲线
+  Chart.line('#chart-temp', {
+    categories: ['3月','4月','5月','6月','7月','8月','9月'],
+    series: [{
+      name: '积温 (°C·日)', data: [180, 420, 720, 1080, 1480, 1900, 2280],
+      color: '#1890ff', area: true
+    }]
+  });
+
+  // 2. 生长阶段分布（饼图）
+  Chart.donut('#chart-stage', {
+    series: [
+      { name: '休眠期', value: 8 },
+      { name: '萌芽期', value: 5 },
+      { name: '花期', value: 3 },
+      { name: '膨大期', value: 98 },
+      { name: '着色期', value: 8 },
+      { name: '采收期', value: 4 }
+    ]
+  });
+
+  // 3. 甘特图（横向条形图，按月分段）
+  const ganttData = {
+    categories: ['天水A区-1号','天水A区-2号','麦积区B区-1号','麦积区C区-1号','招远E区-1号'],
+    series: [
+      { name: '休眠期', data: [0, 0, 0, 0, 0], color: '#d5dbd5', stack: 'stage' },
+      { name: '萌芽期', data: [1, 1, 1, 1, 1], color: '#d4f4dd', stack: 'stage' },
+      { name: '花期', data: [1, 1, 1, 1, 1], color: '#ffe6f0', stack: 'stage' },
+      { name: '幼果期', data: [1.5, 1.5, 1.5, 1.5, 1], color: '#ffe7ba', stack: 'stage' },
+      { name: '膨大期', data: [3.5, 3.5, 2.5, 2.5, 1], color: '#91d5ff', stack: 'stage' },
+      { name: '着色期', data: [1.5, 1.5, 1.5, 1.5, 1], color: '#d3adf7', stack: 'stage' },
+      { name: '采收期', data: [1.5, 1.5, 2, 1.5, 1.5], color: '#ffa39e', stack: 'stage' }
+    ]
+  };
+  Chart.bar('#chart-gantt', ganttData, {
+    direction: 'horizontal',
+    legend: { show: true, top: 0, bottom: null, itemGap: 8 },
+    grid: { left: 110, right: 20, top: 40, bottom: 20 },
+    xAxis: { type: 'value', min: 0, max: 12, name: '月份', nameLocation: 'end', nameGap: 5, nameTextStyle: { color: '#8c8c8c' } },
+    yAxis: { type: 'category' },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } }
+  });
+
+  // 4. 报警点击
+  document.querySelectorAll('#alertList .alert-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const plot = item.dataset.plot;
+      const f = window.parent.document.querySelector('iframe[name="mainFrame"]');
+      if (f) f.src = 'enterprise_plot.html?plot=' + encodeURIComponent(plot);
+      else location.href = 'enterprise_plot.html?plot=' + encodeURIComponent(plot);
+    });
+  });
+
+  // 5. 顶部统计卡点击
+  document.querySelectorAll('.patrol-stat-card').forEach((card, i) => {
+    card.addEventListener('click', () => {
+      const targets = ['enterprise_plot.html', 'enterprise_plot.html?stage=enlarging', 'alert_farming.html', 'farming_plan.html'];
+      const f = window.parent.document.querySelector('iframe[name="mainFrame"]');
+      if (f) f.src = targets[i];
+      else location.href = targets[i];
+    });
+  });
+});
+
+function adoptAdvice(taskType, plotRange) {
+  try {
+    const prefills = JSON.parse(localStorage.getItem('orchard_farming_prefill') || '[]');
+    prefills.push({ title: taskType + '（来自生长模型）', taskType: taskType, plotRange: plotRange, priority: '高' });
+    localStorage.setItem('orchard_farming_prefill', JSON.stringify(prefills));
+    Toast.show('已生成' + taskType + '，跳转农事计划', 'success');
+    setTimeout(() => {
+      const f = window.parent.document.querySelector('iframe[name="mainFrame"]');
+      if (f) f.src = 'farming_plan.html?from=model_growth';
+      else location.href = 'farming_plan.html?from=model_growth';
+    }, 700);
+  } catch (e) { Toast.show('采纳失败：' + e.message, 'error'); }
+}
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-  <script src="js/typography.js"></script>
+<script src="js/typography.js"></script>
 </body>
 </html>

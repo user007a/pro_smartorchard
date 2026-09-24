@@ -799,6 +799,7 @@ const MENU_CONFIG = [
   ]},
 
   { id: 'alert', icon: 'alert-triangle', label: '预警管理', children: [
+    { id: 'alert-overview', label: '预警总览', path: 'alert_overview.html' },
     { id: 'alert-device', label: '设备预警', path: 'alert_device.html' },
     { id: 'alert-farming', label: '农事预警', path: 'alert_farming.html' },
     { id: 'alert-internal', label: '内部报告', path: 'alert_internal_report.html' },
@@ -853,7 +854,6 @@ const MENU_CONFIG = [
   { id: 'system', icon: 'settings', label: '系统运维', children: [
     { id: 'system-settings', label: '系统设置', path: 'system_settings.html' },
     { id: 'user-settings', label: '用户设置', path: 'user_settings.html' },
-    { id: 'task-schedule', label: '任务调度', path: 'task_schedule.html' },
     { id: 'task-assign', label: '任务分配', path: 'task_assign.html' },
   ]},
 

@@ -3,609 +3,253 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智慧果园 - 物候期模型</title>
-<!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
+<title>智慧果园 - 物候模型</title>
 <link rel="stylesheet" href="css/design-system.css">
 <link rel="stylesheet" href="css/sidebar-layout.css">
-  <link rel="stylesheet" href="css/page-content.css">
-<style>
-  /* 模块卡片 hover 效果 */
-  .module-card {
-    transition:all 0.2s ease;
-  }
-  .module-card:hover {
-    background:var(--bg-hover);
-    transform:translateY(-2px);
-    box-shadow:var(--shadow-md);
-  }
-  
-  /* 物候期页面专属样式 */
-  .phenology-overview {
-    display:grid;
-    grid-template-columns:repeat(4, 1fr);
-    gap:16px;
-    margin-bottom:10px;
-  }
-  
-  /* 紧凑型统计卡片 - 参考巡园管理 */
-  .patrol-stat-card {
-    background:var(--bg-card);
-    border-radius:12px;
-    padding:16px 20px;
-    text-align:center;
-    box-shadow:0 1px 3px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.02);
-    border:1px solid rgba(0,0,0,0.06);
-    transition:all 0.25s ease;
-  }
-  
-  .patrol-stat-card:hover {
-    transform:translateY(-2px);
-    box-shadow:0 4px 12px rgba(0,0,0,0.08);
-  }
-  
-  .patrol-stat-card .stat-value {
-    font-size:28px;
-    font-weight:700;
-    color:var(--text-primary);
-    margin-bottom:6px;
-  }
-  
-  .patrol-stat-card .stat-label {
-    font-size:13px;
-    color:var(--text-secondary);
-  }
-  
-  .patrol-stat-card.green .stat-value { color:var(--primary-500); }
-  .patrol-stat-card.blue .stat-value { color:var(--primary-600); }
-  .patrol-stat-card.red .stat-value { color:var(--error); }
-  .patrol-stat-card.orange .stat-value { color:var(--warning); }
-  .patrol-stat-card.purple .stat-value { color:#722ed1; }
-  
-  .phenology-card {
-    background:var(--bg-card);
-    border-radius:14px;
-    padding:20px;
-    box-shadow:0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.02);
-    border:1px solid rgba(0,0,0,0.06);
-    transition:all 0.25s ease;
-  }
-  
-  .phenology-card:hover {
-    transform:translateY(-3px);
-    box-shadow:0 8px 24px rgba(0,0,0,0.08);
-  }
-  
-  .phenology-card-header {
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-bottom:16px;
-  }
-  
-  .phenology-variety {
-    display:flex;
-    align-items:center;
-    gap:8px;
-    font-size:15px;
-    font-weight:600;
-    color:var(--text-primary);
-  }
-  
-  .phenology-stage {
-    padding:4px 12px;
-    border-radius:20px;
-    font-size:12px;
-    font-weight:500;
-  }
-  
-  .phenology-stage.enlarging { background:var(--primary-50); color:var(--primary-600); }
-  .phenology-stage.coloring { background:#f5f0ff; color:#722ed1; }
-  .phenology-stage.harvesting { background:var(--error-bg); color:#cf1322; }
-  .phenology-stage.dormancy { background:var(--gray-100); color:var(--text-secondary); }
-  .phenology-stage.sprouting { background:#d4f4dd; color:var(--primary-600); }
-  .phenology-stage.flowering { background:#ffe6f0; color:#c44d7d; }
-  .phenology-stage.fruiting { background:var(--warning-bg); color:#d48806; }
-  
-  .phenology-progress {
-    height:8px;
-    background:#eef1ef;
-    border-radius:4px;
-    overflow:hidden;
-    margin-bottom:10px;
-  }
-  
-  .phenology-progress-bar {
-    height:100%;
-    border-radius:4px;
-    transition:width 0.5s ease;
-  }
-  
-  .phenology-progress-bar.blue { background:linear-gradient(90deg, #1890ff, #40a9ff); }
-  .phenology-progress-bar.purple { background:linear-gradient(90deg, #722ed1, #9254de); }
-  .phenology-progress-bar.red { background:linear-gradient(90deg, #ff4d4f, #ff7875); }
-  .phenology-progress-bar.green { background:linear-gradient(90deg, #52c41a, #73d13d); }
-  
-  .phenology-deviation {
-    font-size:12px;
-    color:var(--text-tertiary);
-  }
-  
-  .phenology-deviation.delay { color:var(--warning); }
-  .phenology-deviation.advance { color:#722ed1; }
-  
-  .main-grid {
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:20px;
-  }
-  
-  /* 物候期年历 */
-  .calendar-container {
-    background:var(--gray-50);
-    border-radius:10px;
-    padding:16px;
-  }
-  
-  .calendar-months {
-    display:grid;
-    grid-template-columns:repeat(12, 1fr);
-    gap:4px;
-    margin-bottom:12px;
-  }
-  
-  .calendar-month {
-    font-size:10px;
-    color:var(--text-tertiary);
-    text-align:center;
-    padding:4px 0;
-  }
-  
-  .calendar-row {
-    display:flex;
-    align-items:center;
-    gap:8px;
-    margin-bottom:8px;
-  }
-  
-  .calendar-label {
-    width:50px;
-    font-size:12px;
-    font-weight:500;
-    color:var(--text-secondary);
-    flex-shrink:0;
-  }
-  
-  .calendar-bar {
-    flex:1;
-    height:24px;
-    background:var(--gray-100);
-    border-radius:4px;
-    position:relative;
-    overflow:hidden;
-  }
-  
-  .calendar-segment {
-    position:absolute;
-    top:2px;
-    height:20px;
-    border-radius:3px;
-  }
-  
-  .calendar-segment.dormancy { background:var(--gray-200); }
-  .calendar-segment.sprouting { background:#d4f4dd; }
-  .calendar-segment.flowering { background:#ffe6f0; }
-  .calendar-segment.fruiting { background:var(--warning-bg); }
-  .calendar-segment.enlarging { background:var(--primary-50); }
-  .calendar-segment.coloring { background:#f5f0ff; }
-  .calendar-segment.harvesting { background:var(--error-bg); }
-  
-  .calendar-today {
-    position:absolute;
-    top:0;
-    width:2px;
-    height:100%;
-    background:var(--error);
-  }
-  
-  /* 任务列表 */
-  .task-list {
-    list-style:none;
-    padding:0;
-    margin:0;
-  }
-  
-  .task-item {
-    display:flex;
-    align-items:flex-start;
-    gap:14px;
-    padding:16px;
-    background:linear-gradient(135deg, #fafcfc 0%, #f5f9f5 100%);
-    border-radius:12px;
-    border:1px solid rgba(0,0,0,0.04);
-    margin-bottom:12px;
-    transition:all 0.25s ease;
-  }
-  
-  .task-item:hover {
-    background:linear-gradient(135deg, var(--primary-50) 0%, var(--bg-card) 100%);
-    border-color:rgba(24, 144, 255, 0.1);
-    transform:translateY(-2px);
-    box-shadow:0 4px 12px rgba(24, 144, 255, 0.08);
-  }
-  
-  .task-item:last-child {
-    margin-bottom:0;
-  }
-  
-  .task-icon {
-    width:44px;
-    height:44px;
-    border-radius:10px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    flex-shrink:0;
-  }
-  
-  .task-icon.water { background:linear-gradient(135deg, #bae0ff, #91d5ff); color:var(--primary-600); }
-  .task-icon.fertilizer { background:linear-gradient(135deg, #d4f4dd, #91d5ff); color:var(--primary-600); }
-  .task-icon.pest { background:linear-gradient(135deg, #ffd1d1, #ffccc7); color:#cf1322; }
-  
-  .task-content {
-    flex:1;
-  }
-  
-  .task-title {
-    font-size:14px;
-    font-weight:600;
-    color:var(--text-primary);
-    margin-bottom:6px;
-  }
-  
-  .task-desc {
-    font-size:12.5px;
-    color:var(--text-secondary);
-    line-height:1.5;
-    margin-bottom:8px;
-  }
-  
-  .task-meta {
-    display:flex;
-    gap:12px;
-    font-size:11.5px;
-    color:var(--text-tertiary);
-  }
-  
-  .task-action {
-    padding:8px 16px;
-    background:var(--primary-500);
-    color:var(--text-inverse);
-    border:none;
-    border-radius:8px;
-    font-size:12.5px;
-    font-weight:500;
-    cursor:pointer;
-    transition:all 0.2s ease;
-    white-space:nowrap;
-    height:fit-content;
-  }
-  
-  .task-action:hover {
-    background:var(--primary-600);
-    transform:translateY(-1px);
-    box-shadow:0 4px 12px rgba(24, 144, 255, 0.25);
-  }
-  
-  /* 偏差列表 */
-  .deviation-list {
-    list-style:none;
-    padding:0;
-    margin:0;
-  }
-  
-  .deviation-item {
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding:14px;
-    background:var(--gray-50);
-    border-radius:10px;
-    border:1px solid rgba(0,0,0,0.04);
-    margin-bottom:10px;
-    transition:all 0.2s ease;
-  }
-  
-  .deviation-item:hover {
-    background:var(--gray-50);
-  }
-  
-  .deviation-item:last-child {
-    margin-bottom:0;
-  }
-  
-  .deviation-icon {
-    width:36px;
-    height:36px;
-    border-radius:8px;
-    background:var(--gray-50);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    flex-shrink:0;
-    color:var(--text-tertiary);
-  }
-  
-  .deviation-content {
-    flex:1;
-  }
-  
-  .deviation-title {
-    font-size:13.5px;
-    font-weight:500;
-    color:var(--text-primary);
-    margin-bottom:2px;
-  }
-  
-  .deviation-desc {
-    font-size:12px;
-    color:var(--text-tertiary);
-  }
-  
-  .deviation-value {
-    padding:4px 10px;
-    border-radius:20px;
-    font-size:11.5px;
-    font-weight:500;
-    flex-shrink:0;
-  }
-  
-  .deviation-value.delay {
-    background:#fff1b8;
-    color:#8c6d10;
-  }
-  
-  .deviation-value.advance {
-    background:#f5f0ff;
-    color:#722ed1;
-  }
-  
-  .chart-container {
-    min-height:180px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    background:linear-gradient(180deg, #f8fbf9 0%, #f0f4f3 100%);
-    border-radius:10px;
-    padding:16px;
-  }
-</style>
-<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
-  .main-wrapper{margin-left:0!important;width:100%!important;}
-</style>
+<link rel="stylesheet" href="css/page-content.css">
 <link rel="stylesheet" href="css/unified-theme.css">
 <link rel="stylesheet" href="css/typography.css">
+<style>
+  /* 偏差列表 */
+  .deviation-list { display:flex; flex-direction:column; }
+  .deviation-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #f4f6f4; font-size:13.5px; cursor:pointer; transition:background 0.15s; }
+  .deviation-item:last-child { border-bottom:none; }
+  .deviation-item:hover { background:#f8fbf9; }
+  .deviation-icon { width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+  .deviation-content { flex:1; min-width:0; }
+  .deviation-title { font-weight:500; color:var(--text-primary); }
+  .deviation-desc { font-size:11.5px; color:var(--text-tertiary); margin-top:2px; }
+  .deviation-value { padding:3px 10px; border-radius:10px; font-size:11px; font-weight:500; flex-shrink:0; }
+  .deviation-value.delay { background:#fff1b8; color:#8c6d10; }
+  .deviation-value.advance { background:#f5f0ff; color:#722ed1; }
+  .deviation-value.normal { background:#d9f7be; color:#3a8618; }
+  /* 紧凑任务项 */
+  .task-item { display:flex; align-items:center; gap:12px; padding:12px 14px; background:#fff; border-radius:10px; border:1px solid rgba(0,0,0,0.06); transition:all 0.2s ease; }
+  .task-item:hover { border-color:rgba(24,144,255,0.25); box-shadow:0 2px 8px rgba(0,0,0,0.05); }
+  .task-icon { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .task-icon.water { background:linear-gradient(135deg,#bae0ff,#91d5ff); color:var(--primary-600); }
+  .task-icon.fertilizer { background:linear-gradient(135deg,#d4f4dd,#91d5ff); color:var(--primary-600); }
+  .task-icon.pest { background:linear-gradient(135deg,#ffd1d1,#ffccc7); color:#cf1322; }
+  .task-content { flex:1; min-width:0; }
+  .task-title { font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px; }
+  .task-meta { font-size:11.5px; color:var(--text-tertiary); }
+  .task-action { padding:7px 16px; background:linear-gradient(135deg,#1890ff,#096dd9); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer; white-space:nowrap; transition:all 0.2s; }
+  .task-action:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(24,144,255,0.25); }
+</style>
+<style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
 </head>
 <body data-active-menu="model" data-active-submenu="model-phenology">
-
-<!-- ===== 整体布局容器 ===== -->
 <div class="app-layout">
-
-  <!-- ===== 侧边栏 ===== -->
-  <!-- 移动端遮罩层 -->
-  <!-- ===== 主内容区 ===== -->
   <div class="main-wrapper">
-
-    <!-- 顶栏 -->
-    <!-- Tab 标签栏 -->
     <div class="tab-bar">
-      <!-- Tab 标签由 JS 动态渲染 -->
       <div class="tab-bar-actions">
         <button class="tab-close-all" title="关闭全部标签">
-          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 3L11 11M11 3L3 11"/>
-          </svg>
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3L11 11M11 3L3 11"/></svg>
         </button>
       </div>
     </div>
 
-    <!-- 主内容区 -->
     <main class="main-content">
-<div class="phenology-overview">
-    <div class="patrol-stat-card green">
-      <div class="stat-value">膨大期</div>
-      <div class="stat-label">花牛苹果 - 主流品种</div>
-    </div>
-    <div class="patrol-stat-card purple">
-      <div class="stat-value">着色期</div>
-      <div class="stat-label">花牛苹果 - 早熟品种</div>
-    </div>
-    <div class="patrol-stat-card orange">
-      <div class="stat-value">采收期</div>
-      <div class="stat-label">金帅 - 中熟品种</div>
-    </div>
-    <div class="patrol-stat-card blue">
-      <div class="stat-value">3个</div>
-      <div class="stat-label">品种物候期跟踪</div>
-    </div>
+<div class="page-container">
+  <!-- 顶部 4 指标 -->
+  <div class="patrol-stats">
+    <div class="patrol-stat-card green"><div class="stat-value" style="font-size:20px;">膨大期</div><div class="stat-label">花牛苹果·晚熟</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">98块地块</div></div>
+    <div class="patrol-stat-card purple"><div class="stat-value" style="font-size:20px;">着色期</div><div class="stat-label">花牛苹果·早熟</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">8块地块</div></div>
+    <div class="patrol-stat-card orange"><div class="stat-value" style="font-size:20px;">采收期</div><div class="stat-label">金帅·中熟</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">4块地块</div></div>
+    <div class="patrol-stat-card blue"><div class="stat-value">3</div><div class="stat-label">品种跟踪</div><div class="stat-trend" style="font-size:12px;color:var(--success);">本周全预测</div></div>
   </div>
 
-  <div class="main-grid">
-    <div>
-      <div class="snzg-panel" style="margin-bottom:16px;">
-        <div class="snzg-panel-header">
-          <div class="snzg-panel-title"><span class="pt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg></span> 物候期年历视图</div>
-        </div>
-        <div class="calendar-container">
-          <div class="calendar-months">
-            <div class="calendar-month">1月</div>
-            <div class="calendar-month">2月</div>
-            <div class="calendar-month">3月</div>
-            <div class="calendar-month">4月</div>
-            <div class="calendar-month">9月</div>
-            <div class="calendar-month">6月</div>
-            <div class="calendar-month">7月</div>
-            <div class="calendar-month">8月</div>
-            <div class="calendar-month">9月</div>
-            <div class="calendar-month">10月</div>
-            <div class="calendar-month">11月</div>
-            <div class="calendar-month">12月</div>
-          </div>
-          <div class="calendar-row">
-            <span class="calendar-label">花牛苹果</span>
-            <div class="calendar-bar">
-              <div class="calendar-segment dormancy" style="left:0%;width:16%"></div>
-              <div class="calendar-segment sprouting" style="left:16%;width:8%"></div>
-              <div class="calendar-segment flowering" style="left:24%;width:8%"></div>
-              <div class="calendar-segment fruiting" style="left:32%;width:12%"></div>
-              <div class="calendar-segment enlarging" style="left:44%;width:28%"></div>
-              <div class="calendar-segment coloring" style="left:72%;width:12%"></div>
-              <div class="calendar-segment harvesting" style="left:84%;width:12%"></div>
-              <div class="calendar-today" style="left:43%"></div>
-            </div>
-          </div>
-          <div class="calendar-row">
-            <span class="calendar-label">花牛苹果</span>
-            <div class="calendar-bar">
-              <div class="calendar-segment dormancy" style="left:0%;width:16%"></div>
-              <div class="calendar-segment sprouting" style="left:16%;width:8%"></div>
-              <div class="calendar-segment flowering" style="left:24%;width:8%"></div>
-              <div class="calendar-segment fruiting" style="left:32%;width:10%"></div>
-              <div class="calendar-segment enlarging" style="left:42%;width:24%"></div>
-              <div class="calendar-segment coloring" style="left:66%;width:14%"></div>
-              <div class="calendar-segment harvesting" style="left:80%;width:16%"></div>
-              <div class="calendar-today" style="left:43%"></div>
-            </div>
-          </div>
-          <div class="calendar-row">
-            <span class="calendar-label">金帅</span>
-            <div class="calendar-bar">
-              <div class="calendar-segment dormancy" style="left:0%;width:16%"></div>
-              <div class="calendar-segment sprouting" style="left:16%;width:8%"></div>
-              <div class="calendar-segment flowering" style="left:24%;width:8%"></div>
-              <div class="calendar-segment fruiting" style="left:32%;width:10%"></div>
-              <div class="calendar-segment enlarging" style="left:42%;width:22%"></div>
-              <div class="calendar-segment coloring" style="left:64%;width:12%"></div>
-              <div class="calendar-segment harvesting" style="left:76%;width:18%"></div>
-              <div class="calendar-today" style="left:43%"></div>
-            </div>
-          </div>
-        </div>
-      </div>
+  <!-- 物候期年历视图（整行） -->
+  <div class="chart-section" style="margin-bottom:20px;">
+    <h2 class="section-title">物候期年历视图 <span style="font-size:12px;color:var(--text-tertiary);font-weight:400;">红虚线=今天 09-24</span></h2>
+    <div id="chart-calendar" class="chart-container" style="height:340px;"></div>
+  </div>
 
-      <div class="snzg-panel">
-        <div class="snzg-panel-header">
-          <div class="snzg-panel-title"><span class="pt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></span> 物候期驱动任务</div>
-          <a class="snzg-panel-link" href="farming_plan.html">创建计划 →</a>
+  <!-- 农时偏差 + 驱动任务（2 列） -->
+  <div style="display:grid; grid-template-columns:1fr 2fr; gap:16px;">
+    <div class="chart-section">
+      <h2 class="section-title">农时偏差</h2>
+      <div class="deviation-list">
+        <div class="deviation-item">
+          <div class="deviation-content"><div class="deviation-title">早熟·盛花期</div><div class="deviation-desc">推迟5天，关注授粉</div></div>
+          <span class="deviation-value delay">推迟5天</span>
         </div>
-        <div class="snzg-panel-body">
-          <ul class="task-list">
-            <li class="task-item">
-              <div class="task-icon water"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg></div>
-              <div class="task-content">
-                <div class="task-title">膨大期灌溉任务</div>
-                <div class="task-desc">花牛苹果进入膨大期关键阶段，建议增加灌溉频率，确保果实正常膨大。</div>
-                <div class="task-meta"><span>适用：花牛苹果</span><span>优先级：高</span></div>
-              </div>
-              <button class="task-action" onclick="Toast.show('已生成灌溉任务', 'success')">发布任务</button>
-            </li>
-            <li class="task-item">
-              <div class="task-icon fertilizer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M7 20h10"/><path d="M10 20c5.5-3 6-9 6-12-2 0-5 1-7 4-2-3-5-4-7-4 0 3 .5 9 6 12z"/></svg></div>
-              <div class="task-content">
-                <div class="task-title">膨大期追肥任务</div>
-                <div class="task-desc">追施高钾复合肥，促进果实膨大和糖分积累，建议用量0.5-1kg/株。</div>
-                <div class="task-meta"><span>适用：花牛苹果</span><span>优先级：高</span></div>
-              </div>
-              <button class="task-action" onclick="Toast.show('已生成追肥任务', 'success')">发布任务</button>
-            </li>
-            <li class="task-item">
-              <div class="task-icon pest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M6 4v16"/><path d="M18 4v16"/><path d="M6 12h12"/><path d="M3 8h3"/><path d="M18 8h3"/><path d="M3 16h3"/><path d="M18 16h3"/></svg></div>
-              <div class="task-content">
-                <div class="task-title">着色期病虫害防治</div>
-                <div class="task-desc">花牛苹果进入着色期，注意防治炭疽病和轮纹病，建议喷施保护性杀菌剂。</div>
-                <div class="task-meta"><span>适用：花牛苹果</span><span>优先级：中</span></div>
-              </div>
-              <button class="task-action" onclick="Toast.show('已生成防治任务', 'success')">发布任务</button>
-            </li>
-          </ul>
+        <div class="deviation-item">
+          <div class="deviation-content"><div class="deviation-title">晚熟·幼果期</div><div class="deviation-desc">推迟3天，加强营养</div></div>
+          <span class="deviation-value delay">推迟3天</span>
+        </div>
+        <div class="deviation-item">
+          <div class="deviation-content"><div class="deviation-title">早熟·着色期</div><div class="deviation-desc">提前2天，控水促色</div></div>
+          <span class="deviation-value advance">提前2天</span>
+        </div>
+        <div class="deviation-item">
+          <div class="deviation-content"><div class="deviation-title">金帅·采收期</div><div class="deviation-desc">常年持平</div></div>
+          <span class="deviation-value normal">正常</span>
         </div>
       </div>
     </div>
 
-    <div>
-      <div class="snzg-panel" style="margin-bottom:16px;">
-        <div class="snzg-panel-header">
-          <div class="snzg-panel-title"><span class="pt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span> 农时偏差提醒</div>
-        </div>
-        <div class="snzg-panel-body">
-          <ul class="deviation-list">
-            <li class="deviation-item">
-              <span class="deviation-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><circle cx="12" cy="12" r="3"/><path d="M12 2a4 4 0 0 1 0 8"/><path d="M12 2a4 4 0 0 0 0 8"/><path d="M20.2 7a4 4 0 0 1-7 3.5"/><path d="M20.2 7a4 4 0 0 0-7 3.5"/><path d="M20.2 17a4 4 0 0 1-7-3.5"/><path d="M20.2 17a4 4 0 0 0-7-3.5"/><path d="M12 22a4 4 0 0 1 0-8"/><path d="M12 22a4 4 0 0 0 0-8"/><path d="M3.8 17a4 4 0 0 1 7-3.5"/><path d="M3.8 17a4 4 0 0 0 7-3.5"/><path d="M3.8 7a4 4 0 0 1 7 3.5"/><path d="M3.8 7a4 4 0 0 0 7 3.5"/></svg></span>
-              <div class="deviation-content">
-                <div class="deviation-title">花牛苹果盛花期</div>
-                <div class="deviation-desc">较常年推迟5天，需关注授粉条件</div>
-              </div>
-              <span class="deviation-value delay">推迟5天</span>
-            </li>
-            <li class="deviation-item">
-              <span class="deviation-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M11 20A7 7 0 0 1 9.8 6.9C15.5 4.9 17 3.5 19 2c1 2 2 4.5 2 8 0 5.5-4.8 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.09-6C9.5 14.52 12 13 13 12"/></svg></span>
-              <div class="deviation-content">
-                <div class="deviation-title">花牛苹果幼果期</div>
-                <div class="deviation-desc">较常年推迟3天，建议加强营养</div>
-              </div>
-              <span class="deviation-value delay">推迟3天</span>
-            </li>
-            <li class="deviation-item">
-              <span class="deviation-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;"><path d="M12 3c-1.5-1.5-5-1-5 3 0 4 3 8 5 10 2-2 5-6 5-10 0-4-3.5-4.5-5-3z"/><path d="M12 3V1"/></svg></span>
-              <div class="deviation-content">
-                <div class="deviation-title">花牛苹果着色期</div>
-                <div class="deviation-desc">较常年提前2天，注意控水促色</div>
-              </div>
-              <span class="deviation-value advance">提前2天</span>
-            </li>
-            <li class="deviation-item">
-              <span class="deviation-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M2 22 16 8"/><path d="M3.47 12.53 5 11l1.53 1.53a3.5 3.5 0 0 1 0 4.94L5 19l-1.53-1.53a3.5 3.5 0 0 1 0-4.94z"/><path d="M7.47 8.53 9 7l1.53 1.53a3.5 3.5 0 0 1 0 4.94L9 15l-1.53-1.53a3.5 3.5 0 0 1 0-4.94z"/><path d="M11.47 4.53 13 3l1.53 1.53a3.5 3.5 0 0 1 0 4.94L13 11l-1.53-1.53a3.5 3.5 0 0 1 0-4.94z"/><path d="M20 2h2v2a4 4 0 0 1-4 4h-2V6a4 4 0 0 1 4-4z"/><path d="M11.47 17.47 13 19l-1.53 1.53a3.5 3.5 0 0 1-4.94 0L5 19l1.53-1.53a3.5 3.5 0 0 1 4.94 0z"/></svg></span>
-              <div class="deviation-content">
-                <div class="deviation-title">金帅采收期</div>
-                <div class="deviation-desc">与常年持平，可按计划采收</div>
-              </div>
-              <span class="deviation-value advance" style="background:var(--gray-100);color:var(--text-secondary)">正常</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="snzg-panel">
-        <div class="snzg-panel-header">
-          <div class="snzg-panel-title"><span class="pt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></span> 物候期图例</div>
-        </div>
-        <div class="snzg-panel-body">
-          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
-            <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:16px;height:16px;border-radius:4px;background:var(--gray-200);display:inline-block;"></span> 休眠期</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:16px;height:16px;border-radius:4px;background:#d4f4dd;display:inline-block;"></span> 萌芽期</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:16px;height:16px;border-radius:4px;background:#ffe6f0;display:inline-block;"></span> 花期</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:16px;height:16px;border-radius:4px;background:var(--warning-bg);display:inline-block;"></span> 幼果期</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:16px;height:16px;border-radius:4px;background:var(--primary-50);display:inline-block;"></span> 膨大期</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:16px;height:16px;border-radius:4px;background:#f5f0ff;display:inline-block;"></span> 着色期</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:16px;height:16px;border-radius:4px;background:var(--error-bg);display:inline-block;"></span> 采收期</div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:2px;height:16px;background:var(--error);display:inline-block;"></span> 今天</div>
+    <div class="chart-section">
+      <h2 class="section-title">物候期驱动任务</h2>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div class="task-item">
+          <div class="task-content">
+            <div class="task-title">膨大期灌溉任务</div>
+            <div class="task-meta">花牛苹果膨大期关键阶段，建议增加灌溉频率</div>
           </div>
+          <button class="task-action" onclick="publishPhenologyTask('膨大期灌溉任务','花牛苹果')">发布</button>
+        </div>
+        <div class="task-item">
+          <div class="task-content">
+            <div class="task-title">膨大期追肥任务</div>
+            <div class="task-meta">追施高钾复合肥 0.5-1kg/株</div>
+          </div>
+          <button class="task-action" onclick="publishPhenologyTask('膨大期追肥任务','花牛苹果')">发布</button>
+        </div>
+        <div class="task-item">
+          <div class="task-content">
+            <div class="task-title">着色期病虫害防治</div>
+            <div class="task-meta">注意防治炭疽病和轮纹病</div>
+          </div>
+          <button class="task-action" onclick="publishPhenologyTask('着色期病虫害防治','花牛苹果')">发布</button>
         </div>
       </div>
     </div>
   </div>
 </div>
-
-<!-- [旧导航脚本已移除] -->
     </main>
   </div>
-
 </div>
 
-<!-- 引入交互脚本 -->
 <script src="js/components/modal.js"></script>
-<!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->
+<script src="js/components/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const dom = document.getElementById('chart-calendar');
+  if (!dom || typeof Chart === 'undefined' || !Chart.initChart) {
+    if (dom) dom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;">图表库加载失败</div>';
+    return;
+  }
+
+  Chart.initChart(dom).then((chart) => {
+    if (!chart) {
+      dom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;">图表初始化失败</div>';
+      return;
+    }
+
+    const varieties = ['花牛苹果（早熟）', '花牛苹果（晚熟）', '金帅'];
+    const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+    const stages = {
+      '休眠期': { range:[0, 1.5], color:'#d5dbd5' },
+      '萌芽期': { range:[1.5, 2.5], color:'#b7eb8f' },
+      '花期':   { range:[2.5, 3.5], color:'#ffadd2' },
+      '幼果期': { range:[3.5, 4.5], color:'#ffd591' },
+      '膨大期': { range:[4.5, 8.5], color:'#91d5ff' },
+      '着色期': { range:[8.5, 10.0], color:'#d3adf7' },
+      '采收期': { range:[10.0, 12.0], color:'#ffa39e' }
+    };
+
+    const offsets = { '花牛苹果（早熟）': -0.3, '花牛苹果（晚熟）': 0, '金帅': 0.2 };
+
+    const series = [];
+    Object.keys(stages).forEach((sName) => {
+      const s = stages[sName];
+      const data = varieties.map(v => {
+        const off = offsets[v] || 0;
+        return [Math.max(0, s.range[0] + off), Math.min(12, s.range[1] + off)];
+      });
+      series.push({
+        name: sName,
+        type: 'bar',
+        stack: 'calendar',
+        barWidth: 22,
+        itemStyle: {
+          color: s.color,
+          borderRadius: sName === '休眠期' ? [4,4,0,0] : (sName === '采收期' ? [0,0,4,4] : 0)
+        },
+        emphasis: { focus: 'series' },
+        data: data
+      });
+    });
+
+    series.push({
+      name: '今天',
+      type: 'line',
+      markLine: {
+        silent: true,
+        symbol: 'none',
+        lineStyle: { color: '#ff4d4f', type: 'dashed', width: 2 },
+        label: { show: true, position: 'end', formatter: '今天', color: '#ff4d4f', fontSize: 11 },
+        data: [{ xAxis: 8.6, yAxis: 0 }, { xAxis: 8.6, yAxis: varieties.length - 1 }]
+      },
+      data: []
+    });
+
+    chart.setOption({
+      tooltip: {
+        trigger: 'item',
+        formatter: function(p) {
+          if (!p.data || p.data.length !== 2) return '';
+          const v = p.name;
+          const m1 = months[Math.floor(p.data[0])];
+          const m2 = months[Math.min(11, Math.floor(p.data[1]))];
+          return '<b>' + v + '</b><br/>' + p.seriesName + '：' + m1 + ' ~ ' + m2;
+        }
+      },
+      legend: {
+        data: Object.keys(stages),
+        top: 0,
+        itemWidth: 12,
+        itemHeight: 12,
+        itemGap: 12,
+        textStyle: { color: '#595959', fontSize: 12 }
+      },
+      grid: { left: 110, right: 30, top: 40, bottom: 30, containLabel: true },
+      xAxis: {
+        type: 'value', min: 0, max: 12, interval: 1,
+        axisLabel: { formatter: function(v) { return months[v] || ''; }, color: '#8c8c8c', fontSize: 12 },
+        splitLine: { lineStyle: { color: '#f0f0f0' } },
+        axisLine: { lineStyle: { color: '#e8e8e8' } },
+        axisTick: { show: false }
+      },
+      yAxis: {
+        type: 'category', data: varieties,
+        axisLabel: { color: '#595959', fontSize: 13 },
+        axisLine: { lineStyle: { color: '#e8e8e8' } },
+        axisTick: { show: false }
+      },
+      series: series
+    }, true);
+  });
+
+  // 顶部统计卡点击
+  document.querySelectorAll('.patrol-stat-card').forEach((card, i) => {
+    card.addEventListener('click', () => {
+      const targets = ['enterprise_plot.html', 'enterprise_plot.html?stage=coloring', 'enterprise_plot.html?stage=harvesting', 'model_phenology.html'];
+      const f = window.parent.document.querySelector('iframe[name="mainFrame"]');
+      if (f) f.src = targets[i];
+      else location.href = targets[i];
+    });
+  });
+});
+
+function publishPhenologyTask(taskType, variety) {
+  try {
+    const prefills = JSON.parse(localStorage.getItem('orchard_farming_prefill') || '[]');
+    prefills.push({ title: taskType + '（来自物候模型）', taskType: taskType, plotRange: variety + '相关地块', priority: '高' });
+    localStorage.setItem('orchard_farming_prefill', JSON.stringify(prefills));
+    Toast.show('已生成' + taskType, 'success');
+    setTimeout(() => {
+      const f = window.parent.document.querySelector('iframe[name="mainFrame"]');
+      if (f) f.src = 'farming_plan.html?from=model_phenology';
+      else location.href = 'farming_plan.html?from=model_phenology';
+    }, 700);
+  } catch (e) { Toast.show('发布失败：' + e.message, 'error'); }
+}
+</script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-  <script src="js/typography.js"></script>
+<script src="js/typography.js"></script>
 </body>
 </html>

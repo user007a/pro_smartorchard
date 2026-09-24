@@ -3,59 +3,120 @@
  * 包含：数据模拟、表单操作、列表操作、分页、导入导出、扫码等功能
  */
 
+// 人员下拉选项（系统设置中的用户列表，与 common-functions.js 保持一致）
+const USER_OPTIONS_LIST = [
+  '惠加宁', '黄忠坚', '徐水应', '朱泉龙', '陈小忠',
+  '廖春亮', '李建明', '李根', '张才孙', '刘全国',
+  '毛定卫', '叶三东', '周才贵', '程名高', '邓小华',
+  '周成友', '危红卫', '方超', '曹红英', '崔新根',
+  '超级用户'
+];
+// 生成人员 select 字段的 options 数组（供 Modal.form 的 type:'select' 使用）
+function buildUserOptions(selectedValue) {
+  const opts = [{ value: '', label: '请选择负责人' }];
+  USER_OPTIONS_LIST.forEach(function(name) {
+    opts.push({ value: name, label: name });
+  });
+  return opts;
+}
+// 多选人员 select（用于采收人等场景）
+function buildUserOptionsMulti(selectedValues) {
+  const arr = Array.isArray(selectedValues) ? selectedValues : (selectedValues ? String(selectedValues).split(/[,，、]/) : []);
+  const opts = [{ value: '', label: '请选择人员（可多选）' }];
+  USER_OPTIONS_LIST.forEach(function(name) {
+    opts.push({ value: name, label: name, selected: arr.indexOf(name) !== -1 });
+  });
+  return opts;
+}
+
 const PageActions = (function() {
   // 模拟数据
   const mockData = {
     // 产品源（证书签发 / 批次管理 / 溯源编码共用）
     products: ['花牛苹果', '金帅苹果', '秦冠苹果', '礼盒装苹果'],
+    // VR 全景图片库（来源于原 VR 全景页，归并到基地管理使用）
+    vrPanoramas: [
+      { id: 1, name: '苹果园全景-入口', group: '苹果园', image: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop' },
+      { id: 2, name: '苹果园全景-观景台', group: '苹果园', image: 'https://images.unsplash.com/photo-1570913149827-d2ac84ab3f9a?w=400&h=300&fit=crop' },
+      { id: 3, name: '苹果园全景-采摘区', group: '苹果园', image: 'https://images.unsplash.com/photo-1584306670957-acf935f5033c?w=400&h=300&fit=crop' },
+      { id: 4, name: '葡萄园全景-入口', group: '葡萄园', image: 'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?w=400&h=300&fit=crop' },
+      { id: 5, name: '葡萄园全景-藤架区', group: '葡萄园', image: 'https://images.unsplash.com/photo-1560493676-04071c5f467b?w=400&h=300&fit=crop' },
+      { id: 6, name: '樱桃园全景-入口', group: '樱桃园', image: 'https://images.unsplash.com/photo-1528821128474-27f963b062bf?w=400&h=300&fit=crop' },
+      { id: 7, name: '樱桃园全景-采摘区', group: '樱桃园', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop' },
+      { id: 8, name: '樱桃园全景-观景台', group: '樱桃园', image: 'https://images.unsplash.com/photo-1515907007725-a1e3d70c6e73?w=400&h=300&fit=crop' }
+    ],
     enterprises: [
-      { id: 'ENT001', code: 'JD-001', name: '天水麦积区基地', address: '甘肃省天水市麦积区市', area: 2800, manager: '张经理', phone: '138-0000-1001', status: 'active' },
-      { id: 'ENT002', code: 'JD-002', name: '天水荣成基地', address: '甘肃省天水市荣成市', area: 1600, manager: '李经理', phone: '138-0000-1002', status: 'active' },
-      { id: 'ENT003', code: 'JD-003', name: '青岛莱西基地', address: '甘肃省青岛市莱西市', area: 2100, manager: '王经理', phone: '138-0000-1003', status: 'active' },
-      { id: 'ENT004', code: 'JD-004', name: '龙口南山基地', address: '甘肃省天水市龙口市', area: 1800, manager: '赵经理', phone: '138-0000-1004', status: 'inactive' },
-      { id: 'ENT005', code: 'JD-005', name: '麦积区阁基地', address: '甘肃省天水市麦积区区', area: 3200, manager: '刘经理', phone: '138-0000-1005', status: 'active' },
-      { id: 'ENT006', code: 'JD-006', name: '招远金岭基地', address: '甘肃省天水市招远市', area: 1500, manager: '陈经理', phone: '138-0000-1006', status: 'disabled' },
-      { id: 'ENT007', code: 'JD-007', name: '天水梨乡基地', address: '甘肃省天水市天水市', area: 2400, manager: '杨经理', phone: '138-0000-1007', status: 'active' },
-      { id: 'ENT008', code: 'JD-008', name: '海阳万米海滩基地', address: '甘肃省天水市海阳市', area: 1200, manager: '周经理', phone: '138-0000-1008', status: 'inactive' },
-      { id: 'ENT009', code: 'JD-009', name: '牟平养马岛基地', address: '甘肃省天水市牟平区', area: 1900, manager: '吴经理', phone: '138-0000-1009', status: 'active' },
-      { id: 'ENT010', code: 'JD-010', name: '福山张格庄基地', address: '甘肃省天水市福山区', area: 800, manager: '郑经理', phone: '138-0000-1010', status: 'active' },
-      { id: 'ENT011', code: 'JD-011', name: '芝罘岛基地', address: '甘肃省天水市芝罘区', area: 650, manager: '孙经理', phone: '138-0000-1011', status: 'disabled' },
-      { id: 'ENT012', code: 'JD-012', name: '开发区八角基地', address: '甘肃省天水经济技术开发区', area: 3500, manager: '钱经理', phone: '138-0000-1012', status: 'active' },
-      { id: 'ENT013', code: 'JD-013', name: '高新区科技基地', address: '甘肃省天水高新技术产业开发区', area: 1100, manager: '冯经理', phone: '138-0000-1013', status: 'inactive' },
-      { id: 'ENT014', code: 'JD-014', name: '昆嵛山生态基地', address: '甘肃省天水市昆嵛山国家级自然保护区', area: 4200, manager: '许经理', phone: '138-0000-1014', status: 'active' },
-      { id: 'ENT015', code: 'JD-015', name: '长岛海洋基地', address: '甘肃省天水市长岛县', area: 900, manager: '何经理', phone: '138-0000-1015', status: 'active' },
-      { id: 'ENT016', code: 'JD-016', name: '日照岚山基地', address: '甘肃省日照市岚山区', area: 2600, manager: '曹经理', phone: '138-0000-1016', status: 'active' },
-      { id: 'ENT017', code: 'JD-017', name: '潍坊诸城基地', address: '甘肃省潍坊市诸城市', area: 1700, manager: '谢经理', phone: '138-0000-1017', status: 'inactive' },
-      { id: 'ENT018', code: 'JD-018', name: '临沂沂水基地', address: '甘肃省临沂市沂水县', area: 3100, manager: '韩经理', phone: '138-0000-1018', status: 'active' },
-      { id: 'ENT019', code: 'JD-019', name: '泰安肥城基地', address: '甘肃省泰安市肥城市', area: 2300, manager: '唐经理', phone: '138-0000-1019', status: 'active' },
-      { id: 'ENT020', code: 'JD-020', name: '济宁曲阜基地', address: '甘肃省济宁市曲阜市', area: 1400, manager: '邓经理', phone: '138-0000-1020', status: 'disabled' },
-      { id: 'ENT021', code: 'JD-021', name: '滨州阳信基地', address: '甘肃省滨州市阳信县', area: 1850, manager: '梁经理', phone: '138-0000-1021', status: 'active' },
-      { id: 'ENT022', code: 'JD-022', name: '德州乐陵基地', address: '甘肃省德州市乐陵市', area: 2000, manager: '宋经理', phone: '138-0000-1022', status: 'active' }
+      { id: 'ENT001', code: 'JD-001', name: '天水麦积区基地', address: '甘肃省天水市麦积区市', area: 2800, manager: '惠加宁', phone: '133-0791-2585', status: 'active',
+        baseImages: [
+          'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop',
+          'https://images.unsplash.com/photo-1570913149827-d2ac84ab3f9a?w=400&h=300&fit=crop'
+        ],
+        vrScene: { url: 'https://images.unsplash.com/photo-1584306670957-acf935f5033c?w=400&h=300&fit=crop', name: '苹果园全景-采摘区' } },
+      { id: 'ENT002', code: 'JD-002', name: '天水荣成基地', address: '甘肃省天水市荣成市', area: 1600, manager: '黄忠坚', phone: '139-7941-2180', status: 'active',
+        baseImages: [
+          'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?w=400&h=300&fit=crop'
+        ],
+        vrScene: { url: 'https://images.unsplash.com/photo-1560493676-04071c5f467b?w=400&h=300&fit=crop', name: '葡萄园全景-藤架区' } },
+      { id: 'ENT003', code: 'JD-003', name: '青岛莱西基地', address: '甘肃省青岛市莱西市', area: 2100, manager: '徐水应', phone: '138-7941-8637', status: 'active' },
+      { id: 'ENT004', code: 'JD-004', name: '龙口南山基地', address: '甘肃省天水市龙口市', area: 1800, manager: '朱泉龙', phone: '182-9645-2648', status: 'inactive' },
+      { id: 'ENT005', code: 'JD-005', name: '麦积区阁基地', address: '甘肃省天水市麦积区区', area: 3200, manager: '陈小忠', phone: '187-7941-7899', status: 'active' },
+      { id: 'ENT006', code: 'JD-006', name: '招远金岭基地', address: '甘肃省天水市招远市', area: 1500, manager: '廖春亮', phone: '137-6767-9075', status: 'disabled' },
+      { id: 'ENT007', code: 'JD-007', name: '天水梨乡基地', address: '甘肃省天水市天水市', area: 2400, manager: '李建明', phone: '139-7043-2567', status: 'active' },
+      { id: 'ENT008', code: 'JD-008', name: '海阳万米海滩基地', address: '甘肃省天水市海阳市', area: 1200, manager: '李根', phone: '130-3058-7809', status: 'inactive' },
+      { id: 'ENT009', code: 'JD-009', name: '牟平养马岛基地', address: '甘肃省天水市牟平区', area: 1900, manager: '张才孙', phone: '150-7942-7679', status: 'active' },
+      { id: 'ENT010', code: 'JD-010', name: '福山张格庄基地', address: '甘肃省天水市福山区', area: 800, manager: '刘全国', phone: '138-7040-9283', status: 'active' },
+      { id: 'ENT011', code: 'JD-011', name: '芝罘岛基地', address: '甘肃省天水市芝罘区', area: 650, manager: '毛定卫', phone: '159-7958-0151', status: 'disabled' },
+      { id: 'ENT012', code: 'JD-012', name: '开发区八角基地', address: '甘肃省天水经济技术开发区', area: 3500, manager: '叶三东', phone: '133-0794-6219', status: 'active' },
+      { id: 'ENT013', code: 'JD-013', name: '高新区科技基地', address: '甘肃省天水高新技术产业开发区', area: 1100, manager: '周才贵', phone: '133-0704-3277', status: 'inactive' },
+      { id: 'ENT014', code: 'JD-014', name: '昆嵛山生态基地', address: '甘肃省天水市昆嵛山国家级自然保护区', area: 4200, manager: '程名高', phone: '138-7941-1631', status: 'active' },
+      { id: 'ENT015', code: 'JD-015', name: '长岛海洋基地', address: '甘肃省天水市长岛县', area: 900, manager: '邓小华', phone: '151-7945-0918', status: 'active' },
+      { id: 'ENT016', code: 'JD-016', name: '日照岚山基地', address: '甘肃省日照市岚山区', area: 2600, manager: '周成友', phone: '134-0794-5529', status: 'active' },
+      { id: 'ENT017', code: 'JD-017', name: '潍坊诸城基地', address: '甘肃省潍坊市诸城市', area: 1700, manager: '危红卫', phone: '138-7045-6916', status: 'inactive' },
+      { id: 'ENT018', code: 'JD-018', name: '临沂沂水基地', address: '甘肃省临沂市沂水县', area: 3100, manager: '方超', phone: '134-3794-2227', status: 'active' },
+      { id: 'ENT019', code: 'JD-019', name: '泰安肥城基地', address: '甘肃省泰安市肥城市', area: 2300, manager: '曹红英', phone: '151-7948-0005', status: 'active' },
+      { id: 'ENT020', code: 'JD-020', name: '济宁曲阜基地', address: '甘肃省济宁市曲阜市', area: 1400, manager: '崔新根', phone: '139-7040-2086', status: 'disabled' },
+      { id: 'ENT021', code: 'JD-021', name: '滨州阳信基地', address: '甘肃省滨州市阳信县', area: 1850, manager: '惠加宁', phone: '133-0791-2585', status: 'active' },
+      { id: 'ENT022', code: 'JD-022', name: '德州乐陵基地', address: '甘肃省德州市乐陵市', area: 2000, manager: '黄忠坚', phone: '139-7941-2180', status: 'active' }
     ],
     plots: [
-      { id: 'PLOT001', name: '东区1号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 85, year: 2018, status: 'normal', manager: '刘师傅' },
-      { id: 'PLOT002', name: '东区2号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 120, year: 2016, status: 'normal', manager: '陈师傅' },
-      { id: 'PLOT003', name: '西区1号地', enterprise: '天水麦积区苹果基地', variety: '金帅', area: 95, year: 2019, status: 'warning', manager: '赵师傅' },
-      { id: 'PLOT004', name: '南区1号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 70, year: 2017, status: 'normal', manager: '马师傅' },
-      { id: 'PLOT005', name: '北区1号地', enterprise: '甘肃麦积区苹果基地', variety: '秦冠', area: 150, year: 2015, status: 'danger', manager: '王师傅' },
-      { id: 'PLOT006', name: '中区1号地', enterprise: '甘肃吉县苹果园', variety: '花牛苹果', area: 65, year: 2020, status: 'normal', manager: '张师傅' },
-      { id: 'PLOT007', name: '南区2号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 88, year: 2018, status: 'normal', manager: '李师傅' },
-      { id: 'PLOT008', name: '西区2号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 110, year: 2017, status: 'warning', manager: '刘师傅' },
-      { id: 'PLOT009', name: '北区2号地', enterprise: '甘肃麦积区苹果基地', variety: '花牛苹果', area: 92, year: 2016, status: 'normal', manager: '王师傅' },
-      { id: 'PLOT010', name: '东区3号地', enterprise: '天水麦积区苹果基地', variety: '金帅', area: 78, year: 2021, status: 'danger', manager: '陈师傅' },
-      { id: 'PLOT011', name: '南区3号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 105, year: 2019, status: 'normal', manager: '马师傅' },
-      { id: 'PLOT012', name: '西区3号地', enterprise: '天水麦积区苹果基地', variety: '秦冠', area: 82, year: 2022, status: 'normal', manager: '赵师傅' },
-      { id: 'PLOT013', name: '北区3号地', enterprise: '甘肃麦积区苹果基地', variety: '花牛苹果', area: 75, year: 2018, status: 'warning', manager: '王师傅' },
-      { id: 'PLOT014', name: '中区2号地', enterprise: '甘肃吉县苹果园', variety: '花牛苹果', area: 98, year: 2017, status: 'normal', manager: '张师傅' },
-      { id: 'PLOT015', name: '东区4号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 68, year: 2020, status: 'normal', manager: '刘师傅' },
-      { id: 'PLOT016', name: '南区4号地', enterprise: '甘肃麦积区苹果园', variety: '金帅', area: 115, year: 2015, status: 'danger', manager: '李师傅' },
-      { id: 'PLOT017', name: '西区4号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 89, year: 2019, status: 'normal', manager: '赵师傅' },
-      { id: 'PLOT018', name: '北区4号地', enterprise: '甘肃麦积区苹果基地', variety: '花牛苹果', area: 96, year: 2021, status: 'warning', manager: '王师傅' },
-      { id: 'PLOT019', name: '中区3号地', enterprise: '甘肃吉县苹果园', variety: '花牛苹果', area: 72, year: 2018, status: 'normal', manager: '张师傅' },
-      { id: 'PLOT020', name: '东区5号地', enterprise: '天水麦积区苹果基地', variety: '秦冠', area: 102, year: 2016, status: 'normal', manager: '陈师傅' },
-      { id: 'PLOT021', name: '南区5号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 86, year: 2022, status: 'normal', manager: '马师傅' },
-      { id: 'PLOT022', name: '西区5号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 93, year: 2017, status: 'danger', manager: '刘师傅' },
-      { id: 'PLOT023', name: '北区5号地', enterprise: '甘肃麦积区苹果基地', variety: '金帅', area: 81, year: 2020, status: 'normal', manager: '王师傅' },
+      { id: 'PLOT001', code: 'D-001', name: '东区1号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 85, year: 2018, status: 'normal', manager: '惠加宁',
+        baseImages: [
+          'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop',
+          'https://images.unsplash.com/photo-1570913149827-d2ac84ab3f9a?w=400&h=300&fit=crop',
+          'https://images.unsplash.com/photo-1584306670957-acf935f5033c?w=400&h=300&fit=crop'
+        ] },
+      { id: 'PLOT002', code: 'D-002', name: '东区2号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 120, year: 2016, status: 'normal', manager: '黄忠坚',
+        baseImages: [
+          'https://images.unsplash.com/photo-1570913149827-d2ac84ab3f9a?w=400&h=300&fit=crop'
+        ] },
+      { id: 'PLOT003', code: 'D-003', name: '西区1号地', enterprise: '天水麦积区苹果基地', variety: '金帅', area: 95, year: 2019, status: 'warning', manager: '徐水应',
+        baseImages: [
+          'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?w=400&h=300&fit=crop',
+          'https://images.unsplash.com/photo-1560493676-04071c5f467b?w=400&h=300&fit=crop'
+        ] },
+      { id: 'PLOT004', code: 'D-004', name: '南区1号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 70, year: 2017, status: 'normal', manager: '朱泉龙' },
+      { id: 'PLOT005', code: 'D-005', name: '北区1号地', enterprise: '甘肃麦积区苹果基地', variety: '秦冠', area: 150, year: 2015, status: 'danger', manager: '陈小忠',
+        baseImages: [
+          'https://images.unsplash.com/photo-1528821128474-27f963b062bf?w=400&h=300&fit=crop'
+        ] },
+      { id: 'PLOT006', code: 'D-006', name: '中区1号地', enterprise: '甘肃吉县苹果园', variety: '花牛苹果', area: 65, year: 2020, status: 'normal', manager: '廖春亮' },
+      { id: 'PLOT007', code: 'D-007', name: '南区2号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 88, year: 2018, status: 'normal', manager: '李建明' },
+      { id: 'PLOT008', code: 'D-008', name: '西区2号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 110, year: 2017, status: 'warning', manager: '李根' },
+      { id: 'PLOT009', code: 'D-009', name: '北区2号地', enterprise: '甘肃麦积区苹果基地', variety: '花牛苹果', area: 92, year: 2016, status: 'normal', manager: '张才孙' },
+      { id: 'PLOT010', code: 'D-010', name: '东区3号地', enterprise: '天水麦积区苹果基地', variety: '金帅', area: 78, year: 2021, status: 'danger', manager: '刘全国' },
+      { id: 'PLOT011', code: 'D-011', name: '南区3号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 105, year: 2019, status: 'normal', manager: '毛定卫' },
+      { id: 'PLOT012', code: 'D-012', name: '西区3号地', enterprise: '天水麦积区苹果基地', variety: '秦冠', area: 82, year: 2022, status: 'normal', manager: '叶三东' },
+      { id: 'PLOT013', code: 'D-013', name: '北区3号地', enterprise: '甘肃麦积区苹果基地', variety: '花牛苹果', area: 75, year: 2018, status: 'warning', manager: '周才贵' },
+      { id: 'PLOT014', code: 'D-014', name: '中区2号地', enterprise: '甘肃吉县苹果园', variety: '花牛苹果', area: 98, year: 2017, status: 'normal', manager: '程名高' },
+      { id: 'PLOT015', code: 'D-015', name: '东区4号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 68, year: 2020, status: 'normal', manager: '邓小华' },
+      { id: 'PLOT016', code: 'D-016', name: '南区4号地', enterprise: '甘肃麦积区苹果园', variety: '金帅', area: 115, year: 2015, status: 'danger', manager: '周成友' },
+      { id: 'PLOT017', code: 'D-017', name: '西区4号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 89, year: 2019, status: 'normal', manager: '危红卫' },
+      { id: 'PLOT018', code: 'D-018', name: '北区4号地', enterprise: '甘肃麦积区苹果基地', variety: '花牛苹果', area: 96, year: 2021, status: 'warning', manager: '方超' },
+      { id: 'PLOT019', code: 'D-019', name: '中区3号地', enterprise: '甘肃吉县苹果园', variety: '花牛苹果', area: 72, year: 2018, status: 'normal', manager: '曹红英' },
+      { id: 'PLOT020', code: 'D-020', name: '东区5号地', enterprise: '天水麦积区苹果基地', variety: '秦冠', area: 102, year: 2016, status: 'normal', manager: '崔新根' },
+      { id: 'PLOT021', code: 'D-021', name: '南区5号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 86, year: 2022, status: 'normal', manager: '惠加宁' },
+      { id: 'PLOT022', code: 'D-022', name: '西区5号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 93, year: 2017, status: 'danger', manager: '黄忠坚' },
+      { id: 'PLOT023', code: 'D-023', name: '北区5号地', enterprise: '甘肃麦积区苹果基地', variety: '金帅', area: 81, year: 2020, status: 'normal', manager: '徐水应' },
     ],
     certificates: [
       { id: 'CERT001', type: '质量合格证', batch: 'PC-20260901-001', customer: '北京华联超市', validStart: '2026-09-01', validEnd: '2027-09-01', status: 'enabled', issueTime: '2026-09-01' },
@@ -146,6 +207,125 @@ const PageActions = (function() {
       }
     };
     return statusMap[type]?.[status] || statusMap.default[status] || status;
+  }
+
+  // 渲染图片集（基地图片）
+  function renderImageGallery(images) {
+    if (!images || !images.length) {
+      return '<span style="color:var(--text-tertiary);font-size:13px;">暂无图片</span>';
+    }
+    return `
+      <div class="ent-gallery">
+        ${images.map(url => `
+          <a href="${url}" target="_blank" rel="noopener" class="ent-gallery-item" title="点击查看大图">
+            <img src="${url}" alt="基地图片" loading="lazy" />
+          </a>
+        `).join('')}
+      </div>
+      <div class="ent-gallery-meta">共 ${images.length} 张图片</div>
+    `;
+  }
+
+
+
+  // ========== 新建/编辑表单中：基地图片多图上传 custom 字段 ==========
+  function buildBaseImagesUploader(images) {
+    const list = Array.isArray(images) ? images : [];
+    const previews = list.map((url, i) => `
+      <div class="ent-upload-item" data-url="${url.replace(/"/g, '&quot;')}" data-source="preset">
+        <img src="${url}" alt="基地图片" />
+        <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">×</button>
+        <span class="ent-upload-source">${url.startsWith('data:') ? '本地上传' : '已上传'}</span>
+      </div>
+    `).join('');
+
+    return `
+      <div class="ent-upload" data-field="baseImages">
+        <div class="ent-upload-toolbar">
+          <label class="jg-btn jg-btn">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px;margin-right:4px;">
+              <path d="M8 2V14M2 8H14"/>
+            </svg>
+            上传图片
+            <input type="file" accept="image/*" multiple class="ent-upload-input" />
+          </label>
+          <span class="ent-upload-hint">支持 JPG/PNG，最多 9 张，单张不超过 5MB</span>
+        </div>
+        <div class="ent-upload-list">${previews}</div>
+      </div>
+    `;
+  }
+
+  function collectBaseImages(modal) {
+    const wrap = modal.querySelector('.ent-upload[data-field="baseImages"]');
+    if (!wrap) return [];
+    const urls = [];
+    wrap.querySelectorAll('.ent-upload-item').forEach(item => {
+      const url = item.dataset.url;
+      if (url && urls.indexOf(url) === -1) urls.push(url);
+    });
+    return urls;
+  }
+
+  // 弹窗打开后为 enterprise 表单中的 custom 字段绑定交互事件
+  function bindEnterpriseFormInteractions(modal) {
+    // 1. 基地图片：上传
+    const uploadWrap = modal.querySelector('.ent-upload[data-field="baseImages"]');
+    if (uploadWrap) {
+      const list = uploadWrap.querySelector('.ent-upload-list');
+      const fileInput = uploadWrap.querySelector('.ent-upload-input');
+
+      fileInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        const existing = list.querySelectorAll('.ent-upload-item').length;
+        const max = 9;
+        const remain = Math.max(0, max - existing);
+        files.slice(0, remain).forEach(file => {
+          if (file.size > 5 * 1024 * 1024) {
+            window.Toast && window.Toast.show(`${file.name} 超过 5MB，已跳过`, 'warning');
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            addBaseImageItem(list, ev.target.result, 'local');
+          };
+          reader.readAsDataURL(file);
+        });
+        e.target.value = '';
+      });
+
+      list.addEventListener('click', (e) => {
+        const removeBtn = e.target.closest('.ent-upload-remove');
+        if (!removeBtn) return;
+        const item = removeBtn.closest('.ent-upload-item');
+        if (item) item.remove();
+      });
+    }
+  }
+
+  function addBaseImageItem(list, url, source, name) {
+    const existingCount = list.querySelectorAll('.ent-upload-item').length;
+    if (existingCount >= 9) {
+      window.Toast && window.Toast.show('最多上传 9 张图片', 'warning');
+      return;
+    }
+    // 重复检测
+    const dup = Array.from(list.querySelectorAll('.ent-upload-item')).some(el => el.dataset.url === url);
+    if (dup) {
+      window.Toast && window.Toast.show('该图片已存在', 'warning');
+      return;
+    }
+    const item = document.createElement('div');
+    item.className = 'ent-upload-item';
+    item.dataset.url = url;
+    item.dataset.source = source;
+    item.innerHTML = `
+      <img src="${url}" alt="${name || '基地图片'}" />
+      <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">×</button>
+      <span class="ent-upload-source">${source === 'vr' ? 'VR库' : (url.startsWith('data:') ? '本地上传' : 'VR库')}</span>
+    `;
+    list.appendChild(item);
   }
 
   // 获取状态样式类
@@ -277,12 +457,13 @@ const PageActions = (function() {
           { label: '负责人', name: 'manager' },
           { label: '联系电话', name: 'phone' },
           { label: '状态', name: 'status', render: v => `<span class="${getStatusClass(v)}">${getStatusText(v, 'enterprise')}</span>` },
+          { label: '基地图片', name: 'baseImages', render: v => renderImageGallery(v) },
         ];
         break;
       case 'plot':
         data = mockData.plots.find(p => p.id === id);
         fields = [
-          { label: '地块编号', name: 'id' },
+          { label: '地块编号', name: 'code' },
           { label: '地块名称', name: 'name' },
           { label: '所属基地', name: 'enterprise' },
           { label: '品种', name: 'variety' },
@@ -290,6 +471,7 @@ const PageActions = (function() {
           { label: '种植年份', name: 'year' },
           { label: '负责人', name: 'manager' },
           { label: '状态', name: 'status', render: v => `<span class="${getStatusClass(v)}">${getStatusText(v, 'plot')}</span>` },
+          { label: '地块图片', name: 'baseImages', render: v => renderImageGallery(v) },
         ];
         break;
       case 'cert-manage':
@@ -308,7 +490,7 @@ const PageActions = (function() {
     }
 
     if (data) {
-      Modal.detail('详情', data, { fields, width: '560px' });
+      Modal.detail('详情', data, { fields, width: currentPage === 'plot' ? '580px' : '620px' });
     }
   }
 
@@ -326,13 +508,16 @@ const PageActions = (function() {
           { name: 'name', label: '基地名称', type: 'text', required: true },
           { name: 'address', label: '地址', type: 'text', required: true },
           { name: 'area', label: '面积(亩)', type: 'number', required: true },
-          { name: 'manager', label: '负责人', type: 'text', required: true },
+          { name: 'manager', label: '负责人', type: 'select', required: true, options: buildUserOptions(data && data.manager) },
           { name: 'phone', label: '联系电话', type: 'tel', required: true },
           { name: 'status', label: '状态', type: 'select', options: [
             { value: 'active', label: '运营中' },
             { value: 'inactive', label: '建设中' },
             { value: 'disabled', label: '已停用' }
           ]},
+          { name: 'baseImages', label: '基地图片', type: 'custom',
+            html: buildBaseImagesUploader(data && data.baseImages),
+            collect: collectBaseImages },
         ];
         break;
       case 'plot':
@@ -351,7 +536,10 @@ const PageActions = (function() {
           ]},
           { name: 'area', label: '面积(亩)', type: 'number', required: true },
           { name: 'year', label: '种植年份', type: 'number', required: true },
-          { name: 'manager', label: '负责人', type: 'text', required: true },
+          { name: 'manager', label: '负责人', type: 'select', required: true, options: buildUserOptions(data && data.manager) },
+          { name: 'baseImages', label: '地块图片', type: 'custom',
+            html: buildBaseImagesUploader(data && data.baseImages),
+            collect: collectBaseImages },
         ];
         break;
       case 'cert-manage':
@@ -376,6 +564,8 @@ const PageActions = (function() {
         fields: fields,
         values: data,
         submitText: '保存',
+        width: currentPage === 'plot' ? '580px' : '640px',
+        onRender: bindEnterpriseFormInteractions,
         onSubmit: (formData) => {
           Toast.show('修改成功', 'success');
           return true;
@@ -434,13 +624,16 @@ const PageActions = (function() {
           { name: 'name', label: '基地名称', type: 'text', required: true },
           { name: 'address', label: '地址', type: 'text', required: true },
           { name: 'area', label: '面积(亩)', type: 'number', required: true },
-          { name: 'manager', label: '负责人', type: 'text', required: true },
+          { name: 'manager', label: '负责人', type: 'select', required: true, options: buildUserOptions() },
           { name: 'phone', label: '联系电话', type: 'tel', required: true },
           { name: 'status', label: '状态', type: 'select', options: [
             { value: 'active', label: '运营中' },
             { value: 'inactive', label: '建设中' },
             { value: 'disabled', label: '已停用' }
           ]},
+          { name: 'baseImages', label: '基地图片', type: 'custom',
+            html: buildBaseImagesUploader([]),
+            collect: collectBaseImages },
         ];
         break;
       case 'plot':
@@ -459,7 +652,10 @@ const PageActions = (function() {
           ]},
           { name: 'area', label: '面积(亩)', type: 'number', required: true },
           { name: 'year', label: '种植年份', type: 'number', required: true },
-          { name: 'manager', label: '负责人', type: 'text', required: true },
+          { name: 'manager', label: '负责人', type: 'select', required: true, options: buildUserOptions() },
+          { name: 'baseImages', label: '地块图片', type: 'custom',
+            html: buildBaseImagesUploader([]),
+            collect: collectBaseImages },
         ];
         break;
       case 'cert-manage':
@@ -502,6 +698,8 @@ const PageActions = (function() {
       title: title,
       fields: fields,
       submitText: '创建',
+      width: currentPage === 'plot' ? '580px' : '640px',
+      onRender: bindEnterpriseFormInteractions,
       onSubmit: (formData) => {
         Toast.show('创建成功', 'success');
         return true;
@@ -714,7 +912,7 @@ const PageActions = (function() {
         netWeight: '500g/袋',
         grade: '特级',
         result: '合格',
-        tester: '张三',
+        tester: '惠加宁',
         queryCount: '第3次查询',
         firstQuery: '2026-09-13 10:30:00'
       };

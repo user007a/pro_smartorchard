@@ -246,6 +246,7 @@ const Modal = (function() {
       cancelText = '取消',
       onSubmit = null,
       onCancel = null,
+      onRender = null,
       width = '520px'
     } = options;
 
@@ -265,12 +266,25 @@ const Modal = (function() {
           break;
         case 'select':
           const options = field.options || [];
-          let optionsHtml = `<option value="">请选择</option>`;
+          let optionsHtml = `<option value="">${field.placeholder || '请选择'}</option>`;
           options.forEach(opt => {
-            const selected = opt.value === value ? 'selected' : '';
+            let selected = '';
+            if (field.multiple) {
+              // 多选模式：根据 selectedValues 数组或逗号字符串匹配
+              if (Array.isArray(field.selectedValues) && field.selectedValues.indexOf(opt.value) !== -1) {
+                selected = 'selected';
+              } else if (typeof opt.selected === 'boolean' && opt.selected) {
+                selected = 'selected';
+              } else if (opt.value && opt.value === value) {
+                selected = 'selected';
+              }
+            } else {
+              selected = opt.value === value ? 'selected' : '';
+            }
             optionsHtml += `<option value="${opt.value}" ${selected}>${opt.label}</option>`;
           });
-          formHtml += `<select class="form-select" name="${field.name}" ${required}>${optionsHtml}</select>`;
+          const selectAttrs = `${required}${field.multiple ? ' multiple' : ''}`;
+          formHtml += `<select class="form-select" name="${field.name}" ${selectAttrs}>${optionsHtml}</select>`;
           break;
         case 'checkbox':
           formHtml += `<input type="checkbox" name="${field.name}" value="1" ${value ? 'checked' : ''} />`;
@@ -282,6 +296,12 @@ const Modal = (function() {
               <span class="slider"></span>
             </label>
           `;
+          break;
+        case 'custom':
+          // 完全由调用方提供的 HTML（field.html），常用于多图上传等复合控件
+          formHtml += `<div class="form-custom" data-field="${field.name}">${field.html || ''}</div>`;
+          // custom 类型没有原生 input，避免被 FormData 干扰
+          if (field.placeholder) formHtml += `<div class="form-hint">${field.placeholder}</div>`;
           break;
         default:
           formHtml += `<input type="${field.type || 'text'}" class="form-input" name="${field.name}" value="${value}" placeholder="${placeholder}" ${required} />`;
@@ -318,13 +338,48 @@ const Modal = (function() {
       if (onCancel) onCancel();
     });
 
+    // 渲染完成钩子（供调用方绑定复合控件交互）
+    if (typeof onRender === 'function') {
+      try { onRender(modal); } catch (err) { /* ignore */ }
+    }
+
     // 表单提交
     formEl.addEventListener('submit', (e) => {
       e.preventDefault();
       const formData = new FormData(formEl);
       const data = {};
+      // 处理多选 select：同名 key 会出现多次，需要合并为逗号分隔字符串
+      const seenKeys = {};
       formData.forEach((value, key) => {
-        data[key] = value;
+        if (seenKeys[key]) {
+          seenKeys[key].push(value);
+        } else {
+          seenKeys[key] = [value];
+        }
+      });
+      Object.keys(seenKeys).forEach(function(key) {
+        const vals = seenKeys[key];
+        data[key] = vals.length > 1 ? vals.join(',') : vals[0];
+      });
+      // 自定义多选字段：若 select 设置了 multiple，从 DOM 重新读取（更可靠）
+      fields.forEach(function(field) {
+        if (field.type === 'select' && field.multiple) {
+          const sel = formEl.querySelector('select[name="' + field.name + '"]');
+          if (sel) {
+            const selectedVals = Array.from(sel.selectedOptions).map(function(o){ return o.value; }).filter(function(v){ return v !== ''; });
+            data[field.name] = selectedVals.join(',');
+          }
+        }
+      });
+
+      // 自定义字段收集：每个 custom 字段可定义 collect 来补充 data
+      fields.forEach(field => {
+        if (field.type === 'custom' && typeof field.collect === 'function') {
+          try {
+            const collected = field.collect(modal);
+            if (collected !== undefined) data[field.name] = collected;
+          } catch (err) { /* ignore */ }
+        }
       });
 
       if (onSubmit) {

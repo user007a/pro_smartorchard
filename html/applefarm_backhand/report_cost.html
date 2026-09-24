@@ -69,15 +69,22 @@
         <option>2月</option>
         <option>3月</option>
         <option>4月</option>
-        <option>9月</option>
+        <option>5月</option>
         <option>6月</option>
+        <option>7月</option>
+        <option>8月</option>
+        <option>9月</option>
+        <option>10月</option>
+        <option>11月</option>
+        <option>12月</option>
       </select>
       <select class="search-select">
         <option>全部地块</option>
-        <option>A1区</option>
-        <option>A2区</option>
-        <option>B1区</option>
-        <option>B2区</option>
+        <option>D-001 · 东区1号地</option>
+        <option>D-003 · 西区1号地</option>
+        <option>D-004 · 北区1号地</option>
+        <option>D-005 · 南区1号地</option>
+        <option>D-006 · 中区1号地</option>
       </select>
       <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="smartSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div><div class="search-actions" style="margin-left:auto;">
         
@@ -87,21 +94,21 @@
   </div>
 
   <!-- 分类标签 -->
-  <div class="tab-nav">
-    <div class="tab-item active">农资成本</div>
-    <div class="tab-item">人工成本</div>
-    <div class="tab-item">设备维护</div>
-    <div class="tab-item">其他成本</div>
+  <div class="tab-nav" id="cost-tabs">
+    <div class="tab-item active" data-tab="agri">农资成本</div>
+    <div class="tab-item" data-tab="labor">人工成本</div>
+    <div class="tab-item" data-tab="equip">设备维护</div>
+    <div class="tab-item" data-tab="other">其他成本</div>
   </div>
 
-  <!-- 三个图表并排 - 农资成本趋势、农资成本构成、同期成本对比 -->
+  <!-- 三个图表并排 - 成本趋势、成本构成、同期成本对比 -->
   <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:20px;">
     <div class="chart-section" style="margin-bottom:0;">
-      <h2 class="section-title">农资成本趋势</h2>
+      <h2 class="section-title" id="cost-trend-title">农资成本趋势</h2>
       <div id="chart-cost-trend" class="chart-container" style="height:260px;"></div>
     </div>
     <div class="chart-section" style="margin-bottom:0;">
-      <h2 class="section-title">农资成本构成</h2>
+      <h2 class="section-title" id="cost-pie-title">农资成本构成</h2>
       <div id="chart-cost-pie" class="chart-container" style="height:260px;"></div>
     </div>
     <div class="chart-section" style="margin-bottom:0;">
@@ -110,69 +117,10 @@
     </div>
   </div>
 
-  <!-- 农资成本明细 -->
+  <!-- 成本明细 -->
   <div class="table-container">
-    <h2 class="section-title">农资成本明细</h2>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>序号</th>
-          <th>农资名称</th>
-          <th>规格</th>
-          <th>单价(元)</th>
-          <th>采购数量</th>
-          <th>金额(元)</th>
-          <th>使用地块</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>1</td>
-          <td>复合肥</td>
-          <td>50kg/袋</td>
-          <td>180</td>
-          <td>150</td>
-          <td>27,000</td>
-          <td>A1区、A2区</td>
-        </tr>
-        <tr>
-          <td>2</td>
-          <td>尿素</td>
-          <td>50kg/袋</td>
-          <td>120</td>
-          <td>100</td>
-          <td>12,000</td>
-          <td>B1区、B2区</td>
-        </tr>
-        <tr>
-          <td>3</td>
-          <td>多菌灵</td>
-          <td>1kg/瓶</td>
-          <td>65</td>
-          <td>80</td>
-          <td>5,200</td>
-          <td>全部地块</td>
-        </tr>
-        <tr>
-          <td>4</td>
-          <td>杀虫剂</td>
-          <td>500ml/瓶</td>
-          <td>45</td>
-          <td>120</td>
-          <td>5,400</td>
-          <td>全部地块</td>
-        </tr>
-        <tr>
-          <td>5</td>
-          <td>叶面肥</td>
-          <td>500ml/瓶</td>
-          <td>35</td>
-          <td>60</td>
-          <td>2,100</td>
-          <td>A1区、B2区</td>
-        </tr>
-      </tbody>
-    </table>
+    <h2 class="section-title" id="cost-detail-title">农资成本明细</h2>
+    <div id="cost-detail-container"></div>
   </div>
 </div>
 
@@ -190,50 +138,138 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  // 农资成本趋势数据
-  const costTrendData = {
-    categories: ['1月', '2月', '3月', '4月', '9月', '6月'],
-    series: [{
-      name: '农资成本',
-      data: [285000, 312000, 298000, 356000, 325000, 287000],
-      color: '#ff6b35',
-      area: true
-    }]
-  };
-  Chart.line('#chart-cost-trend', costTrendData);
+  // 各类成本完整数据（本月明细，金额单位：元）
+  const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
 
-  // 成本构成饼图数据
-  const costPieData = {
-    series: [
-      { name: '肥料', value: 40 },
-      { name: '农药', value: 35 },
-      { name: '其他', value: 25 }
-    ]
+  const costDataSet = {
+    agri: {
+      title: '农资成本',
+      trend: { name: '农资成本', data: [82000, 95000, 88000, 105000, 96000, 88000, 78000, 72000, 95000, 88000, 76000, 65000], color: '#ff6b35' },
+      pie: [
+        { name: '复合肥', value: 45000 },
+        { name: '尿素', value: 22000 },
+        { name: '多菌灵', value: 9500 },
+        { name: '杀虫剂', value: 9800 },
+        { name: '叶面肥', value: 3800 }
+      ],
+      detailCols: ['序号', '农资名称', '规格', '单价(元)', '采购数量', '金额(元)', '使用地块'],
+      detailRows: [
+        ['1', '复合肥', '50kg/袋', '180', '250', '45,000', 'D-001 · 东区1号地'],
+        ['2', '尿素', '50kg/袋', '120', '183', '21,960', 'D-003 · 西区1号地'],
+        ['3', '多菌灵', '1kg/瓶', '65', '146', '9,490', '全部地块'],
+        ['4', '杀虫剂', '500ml/瓶', '45', '218', '9,810', '全部地块'],
+        ['5', '叶面肥', '500ml/瓶', '35', '108', '3,780', 'D-005 · 南区1号地']
+      ]
+    },
+    labor: {
+      title: '人工成本',
+      trend: { name: '人工成本', data: [58000, 62000, 68000, 75000, 78000, 70000, 65000, 62000, 72000, 68000, 60000, 52000], color: '#1890ff' },
+      pie: [
+        { name: '施肥用工', value: 28000 },
+        { name: '采摘用工', value: 22500 },
+        { name: '修剪用工', value: 14000 },
+        { name: '除草用工', value: 8800 },
+        { name: '其他用工', value: 5800 }
+      ],
+      detailCols: ['序号', '工种', '用工人数', '工时(天)', '日工资(元)', '金额(元)', '工作地块'],
+      detailRows: [
+        ['1', '施肥用工', '12', '20', '350', '25,200', 'D-001 · 东区1号地'],
+        ['2', '采摘用工', '18', '15', '280', '22,400', 'D-005 · 南区1号地'],
+        ['3', '修剪用工', '8', '18', '320', '13,800', 'D-006 · 中区1号地'],
+        ['4', '除草用工', '6', '16', '300', '8,640', '全部地块'],
+        ['5', '其他用工', '4', '15', '300', '5,400', 'D-004 · 北区1号地']
+      ]
+    },
+    equip: {
+      title: '设备维护',
+      trend: { name: '设备维护', data: [12000, 11000, 13500, 15500, 14500, 16500, 18500, 17500, 19500, 17500, 13500, 11500], color: '#52c41a' },
+      pie: [
+        { name: '灌溉设备', value: 11500 },
+        { name: '修剪机械', value: 8400 },
+        { name: '运输车辆', value: 9600 },
+        { name: '监测设备', value: 5400 },
+        { name: '其他设备', value: 3600 }
+      ],
+      detailCols: ['序号', '设备名称', '维护类型', '维护次数', '单价(元)', '金额(元)', '使用基地'],
+      detailRows: [
+        ['1', '灌溉设备', '例行保养', '8', '1,438', '11,500', '天水麦积区基地'],
+        ['2', '修剪机械', '维修更换', '12', '700', '8,400', '天水荣成基地'],
+        ['3', '运输车辆', '保养维修', '6', '1,600', '9,600', '天水麦积区基地'],
+        ['4', '监测设备', '校准升级', '4', '1,350', '5,400', '甘肃吉县苹果园'],
+        ['5', '其他设备', '易损更换', '5', '720', '3,600', '全部基地']
+      ]
+    },
+    other: {
+      title: '其他成本',
+      trend: { name: '其他成本', data: [8500, 9500, 10500, 12500, 11500, 13500, 14500, 15500, 16500, 14500, 11500, 9500], color: '#722ed1' },
+      pie: [
+        { name: '包装材料', value: 8500 },
+        { name: '水电费', value: 5500 },
+        { name: '土地租赁', value: 10500 },
+        { name: '保险费', value: 4500 },
+        { name: '其他杂费', value: 3500 }
+      ],
+      detailCols: ['序号', '费用类型', '说明', '数量', '单价(元)', '金额(元)', '归属基地'],
+      detailRows: [
+        ['1', '包装材料', '苹果包装箱', '700', '12', '8,400', '天水麦积区基地'],
+        ['2', '水电费', '基地用电用水', '1', '5,500', '5,500', '全部基地'],
+        ['3', '土地租赁', '流转土地租金', '35亩', '300', '10,500', '甘肃吉县苹果园'],
+        ['4', '保险费', '农业保险摊销', '1月', '4,500', '4,500', '全部基地'],
+        ['5', '其他杂费', '办公及杂项', '1', '3,500', '3,500', '天水麦积区基地']
+      ]
+    }
   };
-  Chart.donut('#chart-cost-pie', costPieData);
 
-  // 同期成本对比柱状图
+  // 同期成本对比（农资）保持独立不变
   const costCompareData = {
-    categories: ['1月', '2月', '3月', '4月', '9月', '6月'],
+    categories: months,
     series: [
-      {
-        name: '2026年',
-        data: [245000, 268000, 252000, 298000, 275000, 248000],
-        color: '#bfbfbf'
-      },
-      {
-        name: '2026年',
-        data: [268000, 289000, 275000, 318000, 295000, 268000],
-        color: '#8c8c8c'
-      },
-      {
-        name: '2026年',
-        data: [285000, 312000, 298000, 356000, 325000, 287000],
-        color: '#ff6b35'
-      }
+      { name: '2024年', data: [70000, 80000, 75000, 90000, 82000, 74000, 70000, 65000, 85000, 80000, 70000, 58000], color: '#bfbfbf' },
+      { name: '2025年', data: [76000, 86000, 82000, 95000, 88000, 80000, 75000, 70000, 90000, 85000, 74000, 62000], color: '#8c8c8c' },
+      { name: '2026年', data: [82000, 95000, 88000, 105000, 96000, 88000, 78000, 72000, 95000, 88000, 76000, 65000], color: '#ff6b35' }
     ]
   };
   Chart.bar('#chart-cost-compare', costCompareData);
+
+  // 渲染指定 tab
+  function renderTab(tabKey) {
+    const d = costDataSet[tabKey];
+    if (!d) return;
+
+    // 更新标题
+    document.getElementById('cost-trend-title').textContent = d.title + '趋势';
+    document.getElementById('cost-pie-title').textContent = d.title + '构成';
+    document.getElementById('cost-detail-title').textContent = d.title + '明细';
+
+    // 趋势图
+    Chart.line('#chart-cost-trend', {
+      categories: months,
+      series: [{ name: d.trend.name, data: d.trend.data, color: d.trend.color, area: true }]
+    });
+
+    // 饼图
+    Chart.donut('#chart-cost-pie', { series: d.pie });
+
+    // 明细表
+    const thead = '<tr>' + d.detailCols.map(c => '<th>' + c + '</th>').join('') + '</tr>';
+    const tbody = d.detailRows.map(row =>
+      '<tr>' + row.map(c => '<td>' + c + '</td>').join('') + '</tr>'
+    ).join('');
+    document.getElementById('cost-detail-container').innerHTML =
+      '<table class="data-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
+  }
+
+  // 初始化默认 tab
+  renderTab('agri');
+
+  // tab 切换
+  document.querySelectorAll('#cost-tabs .tab-item').forEach(tab => {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('#cost-tabs .tab-item').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+      renderTab(this.dataset.tab);
+    });
+  });
 });
 </script>
 

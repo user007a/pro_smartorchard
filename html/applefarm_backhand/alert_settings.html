@@ -69,7 +69,7 @@
   .action-bar {
     display:flex;
     align-items:center;
-    justify-content:space-between;
+    justify-content:flex-start;
     margin-bottom:var(--space-xl);
     padding:16px 20px;
     background:var(--bg-card);
@@ -597,10 +597,10 @@
         <div class="form-group">
           <label>预警级别</label>
           <select class="form-select" id="editLevel">
-            <option value="low">低</option>
-            <option value="medium">中</option>
-            <option value="high">高</option>
-            <option value="critical">紧急</option>
+            <option value="notice">通知</option>
+            <option value="reminder">提醒</option>
+            <option value="important">重要</option>
+            <option value="urgent">紧急</option>
           </select>
         </div>
       </div>
@@ -756,12 +756,12 @@
 
 <script>
   const mockData = [
-    { id: 'W001', code: 'W001', name: '低温霜冻预警', type: 'weather', typeText: '气象预警', threshold: '温度 < 5°C', notify: '站内+短信', level: 'high', levelText: '高', users: '张三, 李四', status: 'active', statusText: '启用', createTime: '2026-09-15 10:30', desc: '当温度低于5°C时触发预警，提醒做好防寒措施。' },
+    { id: 'W001', code: 'W001', name: '低温霜冻预警', type: 'weather', typeText: '气象预警', threshold: '温度 < 5°C', notify: '站内+短信', level: 'high', levelText: '高', users: '惠加宁, 黄忠坚', status: 'active', statusText: '启用', createTime: '2026-09-15 10:30', desc: '当温度低于5°C时触发预警，提醒做好防寒措施。' },
     { id: 'W002', code: 'W002', name: '设备离线预警', type: 'device', typeText: '设备预警', threshold: '离线 > 10分钟', notify: '站内+推送', level: 'critical', levelText: '紧急', users: '运维组', status: 'active', statusText: '启用', createTime: '2026-09-16 14:20', desc: '设备离线超过10分钟自动触发预警通知。' },
-    { id: 'W003', code: 'W003', name: '农资库存告急', type: 'inventory', typeText: '库存预警', threshold: '库存 < 安全线', notify: '站内', level: 'medium', levelText: '中', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-18 09:10', desc: '农资库存低于安全线时自动预警。' },
+    { id: 'W003', code: 'W003', name: '农资库存告急', type: 'inventory', typeText: '库存预警', threshold: '库存 < 安全线', notify: '站内', level: 'reminder', levelText: '提醒', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-18 09:10', desc: '农资库存低于安全线时自动预警。' },
     { id: 'W004', code: 'W004', name: '农事任务逾期', type: 'farming', typeText: '农事预警', threshold: '超时 > 24小时', notify: '站内+短信', level: 'medium', levelText: '中', users: '任务负责人', status: 'inactive', statusText: '停用', createTime: '2026-09-20 11:30', desc: '农事任务逾期超过24小时触发预警。' },
     { id: 'W005', code: 'W005', name: '病虫害风险预警', type: 'farming', typeText: '农事预警', threshold: '虫情数量 > 阈值', notify: '站内+推送', level: 'high', levelText: '高', users: '植保组', status: 'active', statusText: '启用', createTime: '2026-09-22 16:45', desc: '病虫害监测数据超过阈值时触发预警。' },
-    { id: 'W006', code: 'W006', name: '土壤湿度异常', type: 'device', typeText: '设备预警', threshold: '湿度 < 20%', notify: '站内', level: 'low', levelText: '低', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-25 10:00', desc: '土壤湿度低于20%时触发预警。' },
+    { id: 'W006', code: 'W006', name: '土壤湿度异常', type: 'device', typeText: '设备预警', threshold: '湿度 < 20%', notify: '站内', level: 'notice', levelText: '通知', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-25 10:00', desc: '土壤湿度低于20%时触发预警。' },
     { id: 'W007', code: 'W007', name: '高温预警', type: 'weather', typeText: '气象预警', threshold: '温度 > 35°C', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-01 08:30', desc: '温度超过35°C时触发高温预警。' },
     { id: 'W008', code: 'W008', name: '设备故障预警', type: 'device', typeText: '设备预警', threshold: '故障码触发', notify: '站内+短信', level: 'critical', levelText: '紧急', users: '运维组', status: 'active', statusText: '启用', createTime: '2026-09-05 13:20', desc: '设备检测到故障码时自动触发预警。' },
     { id: 'W009', code: 'W009', name: '肥料库存预警', type: 'inventory', typeText: '库存预警', threshold: '库存 < 50kg', notify: '站内', level: 'medium', levelText: '中', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-10 15:00', desc: '肥料库存低于50kg时触发预警。' },
@@ -784,6 +784,7 @@
   let filteredData = [...mockData];
   let currentAction = null;
   let currentRuleId = null;
+  let currentDetailId = null;
 
   document.addEventListener('DOMContentLoaded', function() {
     Pagination.init({
@@ -869,7 +870,7 @@
       document.getElementById('editName').value = '';
       document.getElementById('editType').value = 'farming';
       document.getElementById('editThreshold').value = '';
-      document.getElementById('editLevel').value = 'medium';
+      document.getElementById('editLevel').value = 'reminder';
       document.getElementById('notifyInternal').checked = true;
       document.getElementById('notifySms').checked = false;
       document.getElementById('notifyPush').checked = false;
@@ -892,6 +893,21 @@
     document.getElementById('btnSaveRule').addEventListener('click', function() {
       const name = document.getElementById('editName').value;
       const threshold = document.getElementById('editThreshold').value;
+      const type = document.getElementById('editType').value;
+      const typeText = { farming: '农事预警', device: '设备预警', inventory: '库存预警', weather: '气象预警' }[type];
+      const level = document.getElementById('editLevel').value;
+      const levelText = { notice: '通知', reminder: '提醒', important: '重要', urgent: '紧急' }[level];
+      const levelStoredMap = { notice: 'low', reminder: 'medium', important: 'high', urgent: 'critical' };
+      const levelStored = levelStoredMap[level] || level;
+      const desc = document.getElementById('editDesc').value;
+      const users = document.getElementById('editUsers').value;
+      const status = document.getElementById('editStatus').value;
+      const statusText = status === 'active' ? '启用' : '停用';
+      const notifyParts = [];
+      if (document.getElementById('notifyInternal').checked) notifyParts.push('站内');
+      if (document.getElementById('notifySms').checked) notifyParts.push('短信');
+      if (document.getElementById('notifyPush').checked) notifyParts.push('推送');
+      const notify = notifyParts.join('+') || '站内';
       
       if (!name || !threshold) {
         showToast('请填写规则名称和阈值条件', 'warning');
@@ -900,8 +916,29 @@
 
       const id = document.getElementById('editId').value;
       if (id) {
+        const item = filteredData.find(d => d.id === id);
+        if (item) {
+          item.name = name;
+          item.type = type;
+          item.typeText = typeText;
+          item.threshold = threshold;
+          item.level = levelStored;
+          item.levelText = levelText;
+          item.notify = notify;
+          item.users = users;
+          item.desc = desc;
+          item.status = status;
+          item.statusText = statusText;
+        }
         showToast('规则编辑成功', 'success');
       } else {
+        const newId = 'W' + String(filteredData.length + 1).padStart(3, '0');
+        const now = new Date();
+        const pad = n => n < 10 ? '0' + n : n;
+        const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        filteredData.unshift({
+          id: newId, code: newId, name, type, typeText, threshold, level: levelStored, levelText, notify, users, status, statusText, createTime: timeStr, desc
+        });
         showToast('规则创建成功', 'success');
       }
       document.getElementById('editModal').classList.remove('show');
@@ -979,7 +1016,9 @@
 
     document.getElementById('btnEditFromDetail').addEventListener('click', function() {
       document.getElementById('detailModal').classList.remove('show');
-      document.getElementById('btnAddRule').click();
+      if (currentDetailId) {
+        showEditModal(currentDetailId);
+      }
     });
 
     document.querySelectorAll('.btn-cancel').forEach(btn => {
@@ -1016,6 +1055,7 @@
     const item = filteredData.find(d => d.id === id);
     if (!item) return;
     
+    currentDetailId = id;
     document.getElementById('detailCode').textContent = item.code;
     document.getElementById('detailName').textContent = item.name;
     document.getElementById('detailType').textContent = item.typeText;
@@ -1034,12 +1074,14 @@
     const item = filteredData.find(d => d.id === id);
     if (!item) return;
     
+    const levelMap = { low: 'notice', medium: 'reminder', high: 'important', critical: 'urgent' };
+    
     document.getElementById('editModalTitle').textContent = '编辑预警规则';
     document.getElementById('editId').value = item.id;
     document.getElementById('editName').value = item.name;
     document.getElementById('editType').value = item.type;
     document.getElementById('editThreshold').value = item.threshold;
-    document.getElementById('editLevel').value = item.level;
+    document.getElementById('editLevel').value = levelMap[item.level] || item.level;
     document.getElementById('notifyInternal').checked = item.notify.includes('站内');
     document.getElementById('notifySms').checked = item.notify.includes('短信');
     document.getElementById('notifyPush').checked = item.notify.includes('推送');
