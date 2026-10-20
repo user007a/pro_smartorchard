@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <!-- 共享数据层 -->
+  <script src="js/mobile-store.js"></script>
   <style>
     /* ========== 页面专属样式（仅保留设计系统未覆盖的部分） ========== */
     
@@ -39,6 +41,22 @@
     .upload-icon svg { width: 28px; height: 28px; color: var(--primary-700); }
     .upload-text { font-size: var(--font-base); color: var(--text-secondary); }
     .upload-hint { font-size: var(--font-xs); color: var(--text-tertiary); }
+
+    /* --- 上传后预览 --- */
+    .upload-area { position: relative; overflow: hidden; }
+    .upload-area.has-image {
+      padding: 0;
+      border-style: solid;
+      border-color: var(--primary-300);
+    }
+    .upload-area.has-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .upload-area .preview-hint {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      padding: 8px 12px; text-align: center;
+      font-size: var(--font-xs); color: #fff;
+      background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0.55));
+    }
+    .result-note { font-size: var(--font-xs); color: var(--text-tertiary); margin-top: var(--space-1); }
 
     /* --- 识别结果卡片 --- */
     .result-header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
@@ -168,7 +186,7 @@
           <div class="mb-card" style="margin-top: var(--space-4);">
             <div class="mb-section-title"><span class="mb-section-dot"></span>识别结果</div>
             <div class="result-header">
-              <div class="result-icon danger">
+              <div class="result-icon danger" id="resultIcon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                   <line x1="12" y1="9" x2="12" y2="13"/>
@@ -176,14 +194,15 @@
                 </svg>
               </div>
               <div class="result-info">
-                <div class="result-name">苹果轮纹病</div>
-                <div class="result-confidence">置信度：92%</div>
+                <div class="result-name" id="resultName">苹果轮纹病</div>
+                <div class="result-confidence" id="resultConfidence">置信度：92%</div>
+                <div class="result-note" id="resultNote">演示识别 · 依据文件名启发式判断</div>
               </div>
-              <span class="mb-tag error mb-tag-lg">高风险</span>
+              <span class="mb-tag error mb-tag-lg" id="resultTag">高风险</span>
             </div>
             <div class="tips-box">
               <div class="tips-title">防治建议</div>
-              <div class="tips-content">1. 及时清除病枝病果<br>2. 春季发芽前喷布波尔多液<br>3. 谢花后喷施甲基托布津<br>4. 加强果园排水通风</div>
+              <div class="tips-content" id="resultTips">1. 及时清除病枝病果<br>2. 春季发芽前喷布波尔多液<br>3. 谢花后喷施甲基托布津<br>4. 加强果园排水通风</div>
             </div>
           </div>
         </div>
@@ -267,19 +286,88 @@
       document.getElementById('imageInput').click();
     }
 
-    function handleUpload(e) {
-      const file = e.target.files[0];
-      if (file) {
-        console.log('Uploaded:', file.name);
+    // 已选图片状态
+    var uploadedFile = { name: '', dataUrl: '' };
+
+    // 演示识别规则：文件名关键词 → 结果（非真实模型推理）
+    var DEMO_RULES = [
+      { keys: ['rot', 'fub', '腐烂'], name: '苹果腐烂病', risk: '高风险', riskClass: 'error', icon: 'danger', conf: 91,
+        tips: '1. 及时刮除病斑并涂抹杀菌剂（如戊唑醇）<br>2. 剪除病枝集中烧毁，减少侵染源<br>3. 增施有机肥、控制负载，增强树势<br>4. 冬季清园，树干涂白防冻防病' },
+      { keys: ['ring', 'lunwen', '轮纹'], name: '苹果轮纹病', risk: '高风险', riskClass: 'error', icon: 'danger', conf: 92,
+        tips: '1. 及时清除病枝病果<br>2. 春季发芽前喷布波尔多液<br>3. 谢花后喷施甲基托布津<br>4. 加强果园排水通风' },
+      { keys: ['spot', 'leaf', '斑点', '落叶'], name: '苹果斑点落叶病', risk: '中风险', riskClass: 'warning', icon: 'warning', conf: 88,
+        tips: '1. 清除落叶与病枝，减少病原<br>2. 谢花后喷多抗霉素或代森锰锌<br>3. 生长期视病情间隔 10~15 天连喷 2~3 次<br>4. 平衡施肥，避免偏施氮肥' },
+      { keys: ['red', 'spider', 'mite', 'hongzhizhu', '红蜘蛛'], name: '红蜘蛛虫害', risk: '高风险', riskClass: 'error', icon: 'danger', conf: 90,
+        tips: '1. 冬季刮除粗老树皮、清除越冬螨卵<br>2. 萌芽前喷石硫合剂或矿物油<br>3. 发生期喷阿维菌素、螺螨酯，注意轮换<br>4. 保护捕食螨、草蛉等天敌' },
+      { keys: ['aphid', 'ya', '蚜虫'], name: '蚜虫虫害', risk: '中风险', riskClass: 'warning', icon: 'warning', conf: 86,
+        tips: '1. 剪除虫梢，减少虫源<br>2. 发生期喷吡虫啉、噻虫嗪<br>3. 保护瓢虫、草蛉等天敌<br>4. 避免偏施氮肥，防止徒长诱蚜' },
+      { keys: ['anthracnose', '炭疽'], name: '苹果炭疽病', risk: '中风险', riskClass: 'warning', icon: 'warning', conf: 85,
+        tips: '1. 清除病果、病枝，集中处理<br>2. 套袋前喷保护性杀菌剂<br>3. 生长期喷多菌灵、咪鲜胺等<br>4. 加强通风透光，降低果园湿度' },
+      { keys: ['healthy', 'normal', 'ok', '健康', '正常'], name: '未发现明显病害', risk: '低风险', riskClass: 'success', icon: 'success', conf: 94,
+        tips: '1. 叶片、果面未见典型病斑<br>2. 建议保持现有水肥与通风管理<br>3. 定期巡园，早发现早防治<br>4. 关注后续天气变化，做好预防' }
+    ];
+
+    function identifyByFile(name) {
+      var t = String(name || '').toLowerCase();
+      for (var i = 0; i < DEMO_RULES.length; i++) {
+        for (var j = 0; j < DEMO_RULES[i].keys.length; j++) {
+          if (t.indexOf(DEMO_RULES[i].keys[j]) >= 0) return DEMO_RULES[i];
+        }
       }
+      // 无命中：按文件名哈希稳定映射到一种常见病害
+      var h = 0;
+      for (var k = 0; k < t.length; k++) { h = (h * 31 + t.charCodeAt(k)) >>> 0; }
+      var pool = DEMO_RULES.slice(0, 6);
+      return pool[h % pool.length];
+    }
+
+    function handleUpload(e) {
+      var file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (!/^image\//.test(file.type)) {
+        MobileStore.toast('请选择图片文件', 'error');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function (ev) {
+        uploadedFile.name = file.name;
+        uploadedFile.dataUrl = ev.target.result;
+        var area = document.querySelector('.upload-area');
+        area.classList.add('has-image');
+        area.innerHTML =
+          '<img src="' + ev.target.result + '" alt="已上传图片预览">' +
+          '<div class="preview-hint">点击可重新选择图片</div>';
+        // 重新选图后收起旧结果，避免误导
+        document.getElementById('resultArea').style.display = 'none';
+      };
+      reader.onerror = function () {
+        MobileStore.toast('图片读取失败，请重试', 'error');
+      };
+      reader.readAsDataURL(file);
     }
 
     function startIdentify() {
-      document.getElementById('loadingModal').classList.add('show');
-      setTimeout(() => {
-        document.getElementById('loadingModal').classList.remove('show');
-        document.getElementById('resultArea').style.display = 'block';
-      }, 2000);
+      if (!uploadedFile.dataUrl) {
+        MobileStore.toast('请先上传图片', 'warning');
+        return;
+      }
+      var modal = document.getElementById('loadingModal');
+      modal.classList.add('show');
+      setTimeout(function () {
+        modal.classList.remove('show');
+        var r = identifyByFile(uploadedFile.name);
+        document.getElementById('resultIcon').className = 'result-icon ' + r.icon;
+        document.getElementById('resultName').textContent = r.name;
+        document.getElementById('resultConfidence').textContent = '置信度：' + r.conf + '%';
+        document.getElementById('resultNote').textContent = '演示识别 · 依据“' + uploadedFile.name + '”启发式判断';
+        var tag = document.getElementById('resultTag');
+        tag.className = 'mb-tag mb-tag-lg ' + r.riskClass;
+        tag.textContent = r.risk;
+        document.getElementById('resultTips').innerHTML = r.tips;
+        var resultArea = document.getElementById('resultArea');
+        resultArea.style.display = 'block';
+        resultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 1200);
     }
 
     // 骨架屏加载模拟

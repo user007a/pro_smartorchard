@@ -348,6 +348,113 @@
     color:var(--text-secondary);
     margin-bottom:var(--space-sm);
   }
+  /* 静默时段设置卡片 */
+  .settings-card {
+    background:var(--bg-card);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-xl);
+    padding:var(--space-xl);
+    margin-bottom:var(--space-xl);
+    box-shadow:0 4px 20px rgba(24, 144, 255, 0.06);
+  }
+  .settings-card h3 {
+    font-size:var(--font-size-base);
+    font-weight:600;
+    color:var(--text-primary);
+    margin:0 0 var(--space-lg);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .silence-row {
+    display:flex;
+    flex-wrap:wrap;
+    gap:var(--space-lg);
+    align-items:flex-end;
+  }
+  .silence-row .form-group { margin-bottom:0; flex:0 0 auto; min-width:160px; }
+  .silence-status {
+    margin-top:var(--space-md);
+    padding:10px 14px;
+    border-radius:var(--radius-md);
+    font-size:var(--font-size-sm);
+    background:var(--gray-50);
+    color:var(--text-secondary);
+    border:1px solid var(--border-light);
+  }
+  .silence-status.on { background:var(--warning-bg); color:#ad8b00; border-color:var(--warning-border); }
+  .silence-status.off { background:var(--success-bg); color:var(--success); border-color:var(--success-border); }
+  /* 阈值可视化区间组件 */
+  .range-comp { padding-top:4px; }
+  .range-track {
+    position:relative;
+    height:6px;
+    background:var(--gray-200);
+    border-radius:3px;
+    margin:16px 0 8px;
+  }
+  .range-fill {
+    position:absolute;
+    top:0;
+    height:6px;
+    background:var(--primary-500);
+    border-radius:3px;
+  }
+  .range-thumb {
+    position:absolute;
+    top:50%;
+    left:0;
+    width:100%;
+    height:6px;
+    transform:translateY(-50%);
+  }
+  .range-thumb input[type=range] {
+    position:absolute;
+    left:0;
+    top:-11px;
+    width:100%;
+    height:28px;
+    margin:0;
+    background:transparent;
+    -webkit-appearance:none;
+    appearance:none;
+    pointer-events:none;
+  }
+  .range-thumb input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance:none;
+    appearance:none;
+    pointer-events:auto;
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    background:#fff;
+    border:2px solid var(--primary-500);
+    box-shadow:0 1px 4px rgba(0,0,0,.2);
+    cursor:pointer;
+  }
+  .range-thumb input[type=range]::-moz-range-thumb {
+    pointer-events:auto;
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    background:#fff;
+    border:2px solid var(--primary-500);
+    cursor:pointer;
+  }
+  .range-vals {
+    display:flex;
+    flex-wrap:wrap;
+    gap:var(--space-lg);
+    align-items:center;
+    font-size:var(--font-size-sm);
+    color:var(--text-secondary);
+  }
+  .range-vals .range-num {
+    width:80px;
+    padding:6px 8px;
+    margin-left:4px;
+    display:inline-block;
+  }
   .toast-container {
     position:fixed;
     top:80px;
@@ -429,6 +536,34 @@
     </div>
     <main class="main-content">
       <div class="content-wrapper">
+        <div class="settings-card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--warning);"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            静默时段设置
+          </h3>
+          <div class="silence-row">
+            <div class="form-group">
+              <label>静默开始时间</label>
+              <input type="time" class="form-input" id="silenceStart" value="22:00">
+            </div>
+            <div class="form-group">
+              <label>静默结束时间</label>
+              <input type="time" class="form-input" id="silenceEnd" value="07:00">
+            </div>
+            <div class="form-group">
+              <label>生效范围</label>
+              <select class="form-select" id="silenceScope">
+                <option value="all">全部预警</option>
+                <option value="notice">仅通知</option>
+                <option value="reminder">仅提醒</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <button class="jg-btn jg-btn-primary" id="btnSaveSilence">保存静默设置</button>
+            </div>
+          </div>
+          <div class="silence-status" id="silenceStatus">静默时段：22:00 - 07:00 · 生效范围：全部预警</div>
+        </div>
                 <div class="search-section">
           <div class="search-bar">
             <select class="search-select" id="typeSelect">
@@ -591,7 +726,7 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>阈值条件</label>
+          <label>阈值条件（自动生成，可微调）</label>
           <input type="text" class="form-input" id="editThreshold" placeholder="例如：温度 &lt; 5°C">
         </div>
         <div class="form-group">
@@ -602,6 +737,23 @@
             <option value="important">重要</option>
             <option value="urgent">紧急</option>
           </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>阈值区间（可视化设置）</label>
+        <div class="range-comp">
+          <div class="range-track">
+            <div class="range-fill" id="rangeFill"></div>
+            <div class="range-thumb">
+              <input type="range" id="editRangeMin" min="0" max="100" value="20" aria-label="阈值下限">
+              <input type="range" id="editRangeMax" min="0" max="100" value="80" aria-label="阈值上限">
+            </div>
+          </div>
+          <div class="range-vals">
+            <span>下限 <input type="number" class="form-input range-num" id="editNumMin" value="20"></span>
+            <span>上限 <input type="number" class="form-input range-num" id="editNumMax" value="80"></span>
+            <span>单位 <input type="text" class="form-input range-num" id="editUnit" value="°C"></span>
+          </div>
         </div>
       </div>
       <div class="form-group">
@@ -869,7 +1021,7 @@
       document.getElementById('editId').value = '';
       document.getElementById('editName').value = '';
       document.getElementById('editType').value = 'farming';
-      document.getElementById('editThreshold').value = '';
+      resetRangeForNew();
       document.getElementById('editLevel').value = 'reminder';
       document.getElementById('notifyInternal').checked = true;
       document.getElementById('notifySms').checked = false;
@@ -1021,6 +1173,16 @@
       }
     });
 
+    // F-092 静默时段设置（PC-B-036）
+    initSilence();
+    document.getElementById('btnSaveSilence').addEventListener('click', saveSilence);
+    document.querySelectorAll('#silenceStart, #silenceEnd, #silenceScope').forEach(function(el){
+      el.addEventListener('change', renderSilenceStatus);
+    });
+
+    // 阈值可视化上下限区间组件（PC-B-037）
+    initRangeComponent();
+
     document.querySelectorAll('.btn-cancel').forEach(btn => {
       btn.addEventListener('click', function() {
         document.querySelectorAll('.modal-overlay').forEach(modal => {
@@ -1029,6 +1191,137 @@
       });
     });
   });
+
+  // ---------- 静默时段设置（localStorage: snzg_alert_silence）----------
+  const SILENCE_KEY = 'snzg_alert_silence';
+  const SCOPE_TEXT = { all: '全部预警', notice: '仅通知', reminder: '仅提醒' };
+
+  function readSilence() {
+    var def = { start: '22:00', end: '07:00', scope: 'all' };
+    try {
+      var raw = localStorage.getItem(SILENCE_KEY);
+      if (!raw) return def;
+      var o = JSON.parse(raw);
+      if (!o || !o.start || !o.end) return def;
+      return { start: o.start, end: o.end, scope: o.scope || 'all' };
+    } catch (e) { return def; }
+  }
+
+  function initSilence() {
+    var s = readSilence();
+    document.getElementById('silenceStart').value = s.start;
+    document.getElementById('silenceEnd').value = s.end;
+    document.getElementById('silenceScope').value = s.scope;
+    renderSilenceStatus();
+  }
+
+  function isInSilence(start, end) {
+    var now = new Date();
+    var cur = now.getHours() * 60 + now.getMinutes();
+    var toMin = function (t) { var p = String(t).split(':'); return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0); };
+    var s = toMin(start), e = toMin(end);
+    if (s === e) return false;
+    if (s < e) return cur >= s && cur < e;
+    return cur >= s || cur < e; // 跨天
+  }
+
+  function renderSilenceStatus() {
+    var start = document.getElementById('silenceStart').value || '22:00';
+    var end = document.getElementById('silenceEnd').value || '07:00';
+    var scope = document.getElementById('silenceScope').value || 'all';
+    var on = isInSilence(start, end);
+    var el = document.getElementById('silenceStatus');
+    el.className = 'silence-status ' + (on ? 'on' : 'off');
+    el.textContent = '静默时段：' + start + ' - ' + end + ' · 生效范围：' + (SCOPE_TEXT[scope] || scope)
+      + ' · 当前状态：' + (on ? '静默生效中（预警暂缓推送）' : '非静默时段（正常推送）');
+  }
+
+  function saveSilence() {
+    var start = document.getElementById('silenceStart').value;
+    var end = document.getElementById('silenceEnd').value;
+    var scope = document.getElementById('silenceScope').value;
+    if (!start || !end) {
+      showToast('请选择静默开始与结束时间', 'warning');
+      return;
+    }
+    if (start === end) {
+      showToast('静默开始与结束时间不能相同', 'warning');
+      return;
+    }
+    try { localStorage.setItem(SILENCE_KEY, JSON.stringify({ start: start, end: end, scope: scope })); } catch (e) {}
+    renderSilenceStatus();
+    showToast('静默时段设置已保存', 'success');
+  }
+
+  // ---------- 阈值可视化上下限区间组件 ----------
+  function initRangeComponent() {
+    var rMin = document.getElementById('editRangeMin');
+    var rMax = document.getElementById('editRangeMax');
+    var nMin = document.getElementById('editNumMin');
+    var nMax = document.getElementById('editNumMax');
+    var unit = document.getElementById('editUnit');
+    if (!rMin) return;
+
+    function onSlider() {
+      var a = Number(rMin.value), b = Number(rMax.value);
+      if (a > b) { var t = a; a = b; b = t; rMin.value = a; rMax.value = b; }
+      nMin.value = a; nMax.value = b;
+      updateRangeVisual();
+    }
+    rMin.addEventListener('input', onSlider);
+    rMax.addEventListener('input', onSlider);
+    nMin.addEventListener('input', updateRangeVisual);
+    nMax.addEventListener('input', updateRangeVisual);
+    unit.addEventListener('input', updateRangeVisual);
+    updateRangeVisual();
+  }
+
+  function updateRangeVisual() {
+    var nMin = document.getElementById('editNumMin');
+    var nMax = document.getElementById('editNumMax');
+    var unit = document.getElementById('editUnit').value || '';
+    if (!nMin || !nMax) return;
+    var lo = Number(nMin.value) || 0;
+    var hi = Number(nMax.value) || 0;
+    if (lo > hi) { var t = lo; lo = hi; hi = t; nMin.value = lo; nMax.value = hi; }
+    var l = Math.max(0, Math.min(100, lo));
+    var r = Math.max(0, Math.min(100, hi));
+    var fill = document.getElementById('rangeFill');
+    if (fill) {
+      fill.style.left = l + '%';
+      fill.style.width = Math.max(0, r - l) + '%';
+    }
+    var sr = document.getElementById('editRangeMin');
+    var srMax = document.getElementById('editRangeMax');
+    if (sr) sr.value = l;
+    if (srMax) srMax.value = r;
+    document.getElementById('editThreshold').value = lo + unit + ' ~ ' + hi + unit;
+  }
+
+  function resetRangeForNew() {
+    var nMin = document.getElementById('editNumMin');
+    if (!nMin) return;
+    nMin.value = 20;
+    document.getElementById('editNumMax').value = 80;
+    document.getElementById('editUnit').value = '°C';
+    updateRangeVisual();
+  }
+
+  function syncRangeFromThreshold(text) {
+    var nMin = document.getElementById('editNumMin');
+    if (!nMin) return;
+    if (text) {
+      document.getElementById('editThreshold').value = text;
+    }
+    var nums = String(text || '').match(/\d+(?:\.\d+)?/g);
+    if (nums && nums.length >= 1) {
+      nMin.value = nums[0];
+      document.getElementById('editNumMax').value = nums[1] !== undefined ? nums[1] : nums[0];
+    }
+    var unit = String(text || '').replace(/[0-9./\s~约<>=≤≥]/g, '');
+    if (unit) document.getElementById('editUnit').value = unit;
+    updateRangeVisual();
+  }
 
   function renderRow(item, index) {
     return `
@@ -1080,7 +1373,7 @@
     document.getElementById('editId').value = item.id;
     document.getElementById('editName').value = item.name;
     document.getElementById('editType').value = item.type;
-    document.getElementById('editThreshold').value = item.threshold;
+    syncRangeFromThreshold(item.threshold);
     document.getElementById('editLevel').value = levelMap[item.level] || item.level;
     document.getElementById('notifyInternal').checked = item.notify.includes('站内');
     document.getElementById('notifySms').checked = item.notify.includes('短信');

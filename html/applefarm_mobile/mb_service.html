@@ -6,6 +6,8 @@
   <title>智慧果园 - 服务</title>
   <!-- H5设计系统 -->
   <link rel="stylesheet" href="css/mobile-design-system.css">
+  <!-- 移动端共享数据层 -->
+  <script src="js/mobile-store.js"></script>
   <style>
     /* Content */
     .content { padding: var(--space-4); padding-bottom: 80px; }
@@ -50,6 +52,7 @@
     .category-title.supply::before { background: var(--warning); }
     .category-title.feedback::before { background: var(--info); }
     .category-title.marketing::before { background: var(--primary); }
+    .category-title.recent::before { background: var(--primary); }
     
     .service-item {
       background: var(--bg-white);
@@ -141,6 +144,12 @@
     </div>
     
     <div class="content">
+      <!-- 最近使用（读取 smartorchard_service_action） -->
+      <div class="service-category" id="recentCategory" style="display:none;">
+        <div class="category-title recent">最近使用</div>
+        <div class="service-grid four" id="recentGrid"></div>
+      </div>
+
       <!-- 农事操作 -->
       <div class="service-category">
         <div class="category-title farming">农事操作</div>
@@ -436,12 +445,67 @@
   </div>
 
   <script>
-    function navigateTo(page) {
-      window.location.href = page;
+    /* 服务入口注册表：服务中心跳转意图（含目标页）→ 真实可用的导航 + 最近使用记录 */
+    var SERVICE_MAP = {
+      plan:         { label: '看计划',     target: 'mb_plan.html',            icon: 'green' },
+      record:       { label: '记农事',     target: 'mb_record_task.html',     icon: 'orange' },
+      patrol:       { label: '巡果园',     target: 'mb_patrol.html',          icon: 'blue' },
+      draw:         { label: '画地块',     target: 'mb_draw_plot.html',       icon: 'cyan' },
+      map:          { label: '看地图',     target: 'mb_map.html',             icon: 'purple' },
+      device:       { label: '看设备',     target: 'mb_device.html',          icon: 'blue' },
+      troubleshoot: { label: '查故障',     target: 'mb_troubleshoot.html',    icon: 'red' },
+      drone:        { label: '无人机巡园', target: 'mb_drone_patrol.html',    icon: 'cyan' },
+      vr:           { label: 'VR全景',     target: 'vr_panorama.html',        icon: 'gradient' },
+      growth:       { label: '生长预测',   target: 'mb_growth.html',          icon: 'green' },
+      weather:      { label: '气象预测',   target: 'mb_weather_predict.html', icon: 'blue' },
+      pest:         { label: '病虫害预测', target: 'mb_pest_risk.html',       icon: 'red' },
+      yield:        { label: '产量预测',   target: 'mb_yield.html',           icon: 'yellow' },
+      price:        { label: '价格预测',   target: 'mb_price.html',           icon: 'orange' },
+      material:     { label: '领农资',     target: 'mb_material.html',        icon: 'cyan' },
+      label:        { label: '领标签',     target: 'mb_label.html',           icon: 'yellow' },
+      adoption:     { label: '云认养',     target: 'mb_adoption.html',        icon: 'green' },
+      feedback:     { label: '跟反馈',     target: 'mb_feedback.html',        icon: 'yellow' },
+      expert:       { label: '问专家',     target: 'mb_expert.html',          icon: 'green' },
+      disease:      { label: '识病虫',     target: 'mb_disease.html',         icon: 'red' }
+    };
+
+    var RECENT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>';
+
+    function navigateTo(page) { window.location.href = page; }
+    function goBack() { window.history.back(); }
+
+    /* 记录"用户从服务中心点了什么"，作为最近使用数据源 */
+    function openService(code) {
+      var s = SERVICE_MAP[code];
+      if (!s) { MobileStore.toast('该服务暂不可用', 'warning'); return; }
+      MobileStore.upsert(MobileStore.KEYS.serviceAction, {
+        id: code, code: code, label: s.label, target: s.target, icon: s.icon,
+        lastUsed: Date.now(), lastUsedText: MobileStore.fmtTime(Date.now())
+      });
+      MobileStore.toast('正在打开 · ' + s.label, 'info');
+      setTimeout(function () { navigateTo(s.target); }, 150);
     }
-    function goBack() {
-      window.history.back();
+
+    function renderRecent() {
+      var cat = document.getElementById('recentCategory');
+      var grid = document.getElementById('recentGrid');
+      if (!cat || !grid) return;
+      var list = MobileStore.list(MobileStore.KEYS.serviceAction)
+        .filter(function (x) { return x && x.code && SERVICE_MAP[x.code]; })
+        .sort(function (a, b) { return (b.lastUsed || 0) - (a.lastUsed || 0); })
+        .slice(0, 8);
+      if (!list.length) { cat.style.display = 'none'; return; }
+      cat.style.display = '';
+      grid.innerHTML = list.map(function (x) {
+        var s = SERVICE_MAP[x.code];
+        return '<div class="service-item" onclick="openService(\'' + x.code + '\')">' +
+          '<div class="service-icon ' + s.icon + '">' + RECENT_ICON + '</div>' +
+          '<div class="service-name">' + s.label + '</div>' +
+          '</div>';
+      }).join('');
     }
+
     function openModal(title) {
       document.getElementById('modalTitle').textContent = title;
       document.getElementById('modal').classList.add('show');
@@ -449,89 +513,33 @@
     function closeModal() {
       document.getElementById('modal').classList.remove('show');
     }
-    function openRecordTask() {
-      localStorage.setItem('serviceAction', 'record');
-      navigateTo('mb_record_task.html');
-    }
-    function openPatrol() {
-      localStorage.setItem('serviceAction', 'patrol');
-      navigateTo('mb_patrol.html');
-    }
-    function openDrawPlot() {
-      localStorage.setItem('serviceAction', 'draw');
-      navigateTo('mb_draw_plot.html');
-    }
-    function openMap() {
-      localStorage.setItem('serviceAction', 'map');
-      navigateTo('mb_map.html');
-    }
-    function openDevice() {
-      localStorage.setItem('serviceAction', 'device');
-      navigateTo('mb_device.html');
-    }
-    function openFeedback() {
-      localStorage.setItem('serviceAction', 'feedback');
-      navigateTo('mb_feedback.html');
-    }
-    function openGrowth() {
-      localStorage.setItem('serviceAction', 'growth');
-      navigateTo('mb_growth.html');
-    }
-    function openWeatherPredict() {
-      localStorage.setItem('serviceAction', 'weather');
-      navigateTo('mb_weather_predict.html');
-    }
-    function openPestRisk() {
-      localStorage.setItem('serviceAction', 'pest');
-      navigateTo('mb_pest_risk.html');
-    }
-    function openYield() {
-      localStorage.setItem('serviceAction', 'yield');
-      navigateTo('mb_yield.html');
-    }
-    function openPrice() {
-      localStorage.setItem('serviceAction', 'price');
-      navigateTo('mb_price.html');
-    }
-    function openExpert() {
-      localStorage.setItem('serviceAction', 'expert');
-      navigateTo('mb_expert.html');
-    }
-    function openDisease() {
-      localStorage.setItem('serviceAction', 'disease');
-      navigateTo('mb_disease.html');
-    }
-    function openTroubleshoot() {
-      localStorage.setItem('serviceAction', 'troubleshoot');
-      navigateTo('mb_troubleshoot.html');
-    }
-    function openMaterial() {
-      localStorage.setItem('serviceAction', 'material');
-      navigateTo('mb_material.html');
-    }
-    function openLabel() {
-      localStorage.setItem('serviceAction', 'label');
-      navigateTo('mb_label.html');
-    }
-    function openPlan() {
-      localStorage.setItem('serviceAction', 'plan');
-      navigateTo('mb_plan.html');
-    }
-    function openDrone() {
-      localStorage.setItem('serviceAction', 'drone');
-      navigateTo('mb_drone_patrol.html');
-    }
-    function openVR() {
-      localStorage.setItem('serviceAction', 'vr');
-      navigateTo('vr_panorama.html');
-    }
-    function openAdoption() {
-      localStorage.setItem('serviceAction', 'adoption');
-      navigateTo('mb_adoption.html');
-    }
-    function openNewsDetail() {
-      openModal('资讯详情');
-    }
+
+    function openRecordTask() { openService('record'); }
+    function openPatrol() { openService('patrol'); }
+    function openDrawPlot() { openService('draw'); }
+    function openMap() { openService('map'); }
+    function openDevice() { openService('device'); }
+    function openFeedback() { openService('feedback'); }
+    function openGrowth() { openService('growth'); }
+    function openWeatherPredict() { openService('weather'); }
+    function openPestRisk() { openService('pest'); }
+    function openYield() { openService('yield'); }
+    function openPrice() { openService('price'); }
+    function openExpert() { openService('expert'); }
+    function openDisease() { openService('disease'); }
+    function openTroubleshoot() { openService('troubleshoot'); }
+    function openMaterial() { openService('material'); }
+    function openLabel() { openService('label'); }
+    function openPlan() { openService('plan'); }
+    function openDrone() { openService('drone'); }
+    function openVR() { openService('vr'); }
+    function openAdoption() { openService('adoption'); }
+    function openNewsDetail() { openModal('资讯详情'); }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      renderRecent();
+      MobileStore.subscribe(renderRecent);
+    });
   </script>
 </body>
 </html>

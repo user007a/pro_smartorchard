@@ -6,6 +6,7 @@
   <title>智慧果园 - 绑定农事</title>
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <script src="js/mobile-store.js"></script>
   <style>
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: 80px; }
     
@@ -173,12 +174,36 @@
     }
     
     function submitBind() {
-      var selected = document.querySelectorAll('.farming-checkbox.checked');
+      var selected = document.querySelectorAll('.farming-item.selected');
       if (selected.length === 0) {
-        alert('请至少选择一项农事记录');
+        MobileStore.toast('请至少选择一项农事记录', 'warning');
         return;
       }
+
+      // 读取被勾选的真实条目并落库
+      var records = [];
+      selected.forEach(function(item) {
+        var titleEl = item.querySelector('.farming-title');
+        var typeEl = item.querySelector('.farming-type');
+        var timeEl = item.querySelector('.farming-time');
+        var title = titleEl ? titleEl.textContent.trim() : '';
+        if (typeEl) title = title.replace(typeEl.textContent.trim(), '').trim();
+        records.push({
+          title: title,
+          type: typeEl ? typeEl.textContent.trim() : '',
+          time: timeEl ? timeEl.textContent.trim() : ''
+        });
+      });
+
+      MobileStore.push(MobileStore.KEYS.adoptionTag, {
+        kind: 'farming_bind',
+        records: records,
+        count: records.length,
+        bindTime: new Date().toISOString()
+      });
+
       document.getElementById('successModal').classList.add('show');
+      MobileStore.toast('已绑定 ' + records.length + ' 条农事记录', 'success');
     }
     
     function closeModal() {

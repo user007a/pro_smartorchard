@@ -218,28 +218,39 @@
     document.getElementById('kpiRate').textContent = s.rate + '%';
   }
 
+  function pad2(n){ return n < 10 ? '0' + n : '' + n; }
+
+  // 动态推导最近 6 个月标签（含当月），避免硬编码年份（PC-B-031）
+  function last6Months(){
+    var out = [];
+    var now = new Date();
+    for (var i = 5; i >= 0; i--){
+      var m = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      out.push({ key: m.getFullYear() + '-' + pad2(m.getMonth() + 1), label: (m.getMonth() + 1) + '月' });
+    }
+    return out;
+  }
+
   function renderCharts(){
     if (!window.Chart) return;
     window.Chart.loadECharts().then(function(){
-      var trend = AlertStore.typeTrend();
-      var cats = trend.map(function(d){ return d.date.substring(5); });
-      var devSeries = trend.map(function(d){ return d.device; });
-      var farmSeries = trend.map(function(d){ return d.farming; });
-      var all = AlertStore.all();
-      var closedMap = {};
-      all.forEach(function(x){
-        if (x.status === 'completed') {
-          var d = (x.time||'').substring(0,10);
-          if (d) closedMap[d] = (closedMap[d]||0) + 1;
-        }
+      var months = last6Months();
+      var agg = {};
+      months.forEach(function(m){ agg[m.key] = { device:0, farming:0, closed:0 }; });
+      AlertStore.all().forEach(function(x){
+        var k = String(x.time || '').substring(0, 7); // YYYY-MM
+        if (!agg[k]) return;
+        if (x.type === 'device') agg[k].device++;
+        if (x.type === 'farming') agg[k].farming++;
+        if (x.status === 'completed') agg[k].closed++;
       });
-      var closedSeries = cats.map(function(c){ return closedMap['2026-'+c] || 0; });
+      var cats = months.map(function(m){ return m.label; });
       Chart.line('#alertTrend', {
         categories: cats,
         series:[
-          {name:'设备预警', data:devSeries},
-          {name:'农事预警', data:farmSeries},
-          {name:'已闭环', data:closedSeries}
+          {name:'设备预警', data: months.map(function(m){ return agg[m.key].device; })},
+          {name:'农事预警', data: months.map(function(m){ return agg[m.key].farming; })},
+          {name:'已闭环', data: months.map(function(m){ return agg[m.key].closed; })}
         ]
       });
       var dist = AlertStore.levelDistribution();

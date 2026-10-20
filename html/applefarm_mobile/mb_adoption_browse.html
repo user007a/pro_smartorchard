@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <script src="js/mobile-store.js"></script>
   <style>
     /* 使用设计系统变量，移除重复定义 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: 72px; }
@@ -88,6 +89,15 @@
     .price-value { font-size: var(--font-xl); font-weight: 700; color: var(--primary-600); }
     .price-unit { font-size: var(--font-sm); color: var(--text-light); }
     .adopt-btn { flex: 1; height: 48px; background: linear-gradient(135deg, var(--primary-600), var(--primary-700)); color: var(--bg-white); border: none; border-radius: var(--radius-xl); font-size: var(--font-md); font-weight: 600; cursor: pointer; }
+
+    /* 认养指南弹窗 */
+    .guide-step { display: flex; gap: var(--space-3); margin-bottom: var(--space-3); }
+    .guide-step-num { width: 26px; height: 26px; border-radius: var(--radius-full); background: var(--primary); color: var(--bg-white); font-size: var(--font-sm); font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .guide-step-main { flex: 1; }
+    .guide-step-title { font-size: var(--font-base); font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .guide-step-desc { font-size: var(--font-sm); color: var(--text-secondary); line-height: 1.4; }
+    .guide-subtitle { font-size: var(--font-base); font-weight: 600; color: var(--text); margin: var(--space-4) 0 var(--space-3); }
+    .guide-rights { font-size: var(--font-sm); color: var(--text-secondary); line-height: 1.9; }
   </style>
 </head>
 <body>
@@ -115,10 +125,10 @@
       <div class="filter-scroll">
         <div class="filter-tag active" onclick="filterByVariety(this, 'all')">全部</div>
         <div class="filter-tag" onclick="filterByVariety(this, 'hongfushi')">花牛苹果</div>
-        <div class="filter-tag" onclick="filterByVariety(this, 'gala')">花牛苹果</div>
         <div class="filter-tag" onclick="filterByVariety(this, 'qinguang')">秦冠</div>
         <div class="filter-tag" onclick="filterByVariety(this, 'jonagold')">乔纳金</div>
         <div class="filter-tag" onclick="filterByVariety(this, 'xinredstar')">新红星</div>
+        <div class="filter-tag" onclick="filterByVariety(this, 'gala')">嘎拉</div>
       </div>
     </div>
     
@@ -146,7 +156,7 @@
       </div>
       
       <div class="tree-grid">
-        <div class="tree-card" onclick="showTreeDetail('A001')">
+        <div class="tree-card" data-variety="hongfushi" onclick="showTreeDetail('A001')">
           <div class="card-photo">
             <span class="card-photo-icon">🍎</span>
             <span class="card-badge badge-available">可认养</span>
@@ -161,7 +171,7 @@
           </div>
         </div>
         
-        <div class="tree-card" onclick="showTreeDetail('A025')">
+        <div class="tree-card" data-variety="hongfushi" onclick="showTreeDetail('A025')">
           <div class="card-photo">
             <span class="card-photo-icon">🍎</span>
             <span class="card-badge badge-available">可认养</span>
@@ -176,7 +186,7 @@
           </div>
         </div>
         
-        <div class="tree-card" onclick="showTreeDetail('G012')">
+        <div class="tree-card" data-variety="gala" onclick="showTreeDetail('G012')">
           <div class="card-photo">
             <span class="card-photo-icon">🍎</span>
             <span class="card-badge badge-reserved">已认养</span>
@@ -191,7 +201,7 @@
           </div>
         </div>
         
-        <div class="tree-card" onclick="showTreeDetail('Q008')">
+        <div class="tree-card" data-variety="qinguang" onclick="showTreeDetail('Q008')">
           <div class="card-photo">
             <span class="card-photo-icon">🍎</span>
             <span class="card-badge badge-available">可认养</span>
@@ -206,7 +216,7 @@
           </div>
         </div>
         
-        <div class="tree-card" onclick="showTreeDetail('J015')">
+        <div class="tree-card" data-variety="jonagold" onclick="showTreeDetail('J015')">
           <div class="card-photo">
             <span class="card-photo-icon">🍎</span>
             <span class="card-badge badge-available">可认养</span>
@@ -221,7 +231,7 @@
           </div>
         </div>
         
-        <div class="tree-card" onclick="showTreeDetail('X003')">
+        <div class="tree-card" data-variety="xinredstar" onclick="showTreeDetail('X003')">
           <div class="card-photo">
             <span class="card-photo-icon">🍎</span>
             <span class="card-badge badge-available">可认养</span>
@@ -235,6 +245,7 @@
             </div>
           </div>
         </div>
+        <div id="varietyEmpty" style="display:none;padding:32px 0;text-align:center;color:var(--text-tertiary);font-size:13px;">该品种暂无可认养果树</div>
       </div>
     </div>
     
@@ -366,6 +377,73 @@
     </div>
   </div>
 
+  <!-- 认养指南弹窗 -->
+  <div class="mb-modal-overlay is-sheet" id="guideModal">
+    <div class="mb-modal is-sheet">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);">
+        <div class="mb-modal-title" style="margin-bottom:0;text-align:left;">果树认养指南</div>
+        <div class="detail-back" style="position:static;width:32px;height:32px;background:var(--gray-100);" onclick="closeGuide()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="guide-subtitle" style="margin-top:0;">认养流程</div>
+      <div class="guide-step">
+        <div class="guide-step-num">1</div>
+        <div class="guide-step-main">
+          <div class="guide-step-title">挑选果树</div>
+          <div class="guide-step-desc">在实景监控中按品种、树龄、产量筛选心仪的果树。</div>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="guide-step-num">2</div>
+        <div class="guide-step-main">
+          <div class="guide-step-title">在线认养</div>
+          <div class="guide-step-desc">选择认养年限并支付，认养费用包含全年养护与产出。</div>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="guide-step-num">3</div>
+        <div class="guide-step-main">
+          <div class="guide-step-title">专属挂牌</div>
+          <div class="guide-step-desc">为果树挂上写有您名字的认养牌，并生成专属认养证书。</div>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="guide-step-num">4</div>
+        <div class="guide-step-main">
+          <div class="guide-step-title">远程守护</div>
+          <div class="guide-step-desc">随时查看果树视频、实时监控、农事记录与生长报告。</div>
+        </div>
+      </div>
+      <div class="guide-step">
+        <div class="guide-step-num">5</div>
+        <div class="guide-step-main">
+          <div class="guide-step-title">采摘收获</div>
+          <div class="guide-step-desc">果实成熟后预约到园采摘，或选择冷链配送到家。</div>
+        </div>
+      </div>
+
+      <div class="guide-subtitle">认养权益</div>
+      <div class="guide-rights">
+        <div>• 果树全年产出归您所有</div>
+        <div>• 实时视频监控您的果树</div>
+        <div>• 专业果农代为养护</div>
+        <div>• 免费采摘体验一次</div>
+        <div>• 专属认养证书</div>
+        <div>• 冷链配送到家服务</div>
+      </div>
+
+      <div class="mb-modal-actions">
+        <button class="mb-btn mb-btn-secondary" onclick="closeGuide()">我知道了</button>
+        <button class="mb-btn mb-btn-primary" onclick="closeGuide();startAdopt();">去认养</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     function goBack() {
       window.history.back();
@@ -378,23 +456,37 @@
     function filterByVariety(el, variety) {
       document.querySelectorAll('.filter-tag').forEach(tag => tag.classList.remove('active'));
       el.classList.add('active');
+      var visible = 0;
+      document.querySelectorAll('.tree-card').forEach(card => {
+        var match = variety === 'all' || card.dataset.variety === variety;
+        card.style.display = match ? '' : 'none';
+        if (match) visible++;
+      });
+      var empty = document.getElementById('varietyEmpty');
+      if (empty) empty.style.display = visible ? 'none' : 'block';
     }
     
     function showAdoptGuide() {
-      alert('果树认养指南');
+      document.getElementById('guideModal').classList.add('show');
     }
-    
+
+    function closeGuide() {
+      document.getElementById('guideModal').classList.remove('show');
+    }
+
     function showTreeDetail(treeCode) {
+      window.__curTreeCode = treeCode;
       document.getElementById('detailName').textContent = '花牛苹果 #' + treeCode;
       document.getElementById('detailModal').classList.add('show');
     }
-    
+
     function closeDetail() {
       document.getElementById('detailModal').classList.remove('show');
     }
-    
+
     function startAdopt() {
-      alert('开始认养流程');
+      var code = window.__curTreeCode || '';
+      window.location.href = 'mb_adoption_detail.html' + (code ? ('?tree=' + encodeURIComponent(code)) : '');
     }
   </script>
 </body>

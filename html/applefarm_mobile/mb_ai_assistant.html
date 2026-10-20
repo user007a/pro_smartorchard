@@ -517,6 +517,30 @@
     }
     .related-item:active { background: var(--gray-100); }
     .related-text { font-size: var(--font-sm); color: var(--text); }
+
+    /* 思考/打字加载态 */
+    .answer-loading {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      color: var(--text-secondary);
+      font-size: var(--font-sm);
+      padding: var(--space-3) 0;
+    }
+    .answer-loading .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--primary);
+      display: inline-block;
+      animation: ai-dot 1.2s ease-in-out infinite;
+    }
+    .answer-loading .dot:nth-child(2) { animation-delay: 0.15s; }
+    .answer-loading .dot:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes ai-dot {
+      0%, 100% { opacity: 0.25; transform: translateY(0); }
+      50% { opacity: 1; transform: translateY(-3px); }
+    }
   </style>
 </head>
 <body>
@@ -817,7 +841,7 @@
         '如何选择苹果授粉品种？',
         '苹果品种更新换代建议',
         '花牛苹果特点及管理',
-        '乔纳金苹果种植要点',
+        '红富士苹果种植要点',
         '新红星苹果品种介绍',
         '秦冠苹果栽培技术',
         '蜜脆苹果品种特点'
@@ -825,7 +849,7 @@
       crop: [
         '花牛苹果种植技术要点',
         '花牛苹果管理要点',
-        '乔纳金苹果特点',
+        '红富士苹果特点',
         '苹果矮化栽培技术',
         '有机苹果种植技术',
         '苹果高纺锤形整形技术',
@@ -931,7 +955,7 @@
         answer: `提高苹果果实品质需要从多个方面综合管理：
 
 **一、品种选择**
-- 选择优质品种如花牛苹果、花牛苹果等
+- 选择优质品种如花牛苹果、红富士等
 - 考虑市场需求和当地气候适应性
 
 **二、果园管理**
@@ -1012,7 +1036,7 @@
 
 **一、品种来源**
 - 日本国青森县果树试验场育成
-- 亲本为花牛苹果×花牛苹果
+- 亲本为红元帅×金冠
 - 1962年正式命名为"花牛苹果"
 
 **二、植物学特征**
@@ -1036,7 +1060,7 @@
 - 自花授粉能力差，需要配置授粉品种
 
 **五、栽培要点**
-- 需要配置授粉树（如花牛苹果、金帅等）
+- 需要配置授粉树（如金帅、嘎拉等）
 - 注意疏花疏果，控制负载量
 - 加强夏季修剪，改善光照条件
 - 果实套袋可显著提高外观品质
@@ -1045,7 +1069,7 @@
 - 适应范围广，在我国大部分苹果产区均可种植
 - 对土壤要求不严，但以肥沃的砂壤土为宜
 - 抗寒能力较强，但花期易受晚霜危害`,
-        related: ['花牛苹果特点及管理', '乔纳金苹果种植要点', '如何选择苹果授粉品种？']
+        related: ['花牛苹果特点及管理', '红富士苹果种植要点', '如何选择苹果授粉品种？']
       },
       q6: {
         question: '红蜘蛛怎么防治？',
@@ -1144,7 +1168,7 @@
           <div class="answer-text">${formatAnswer(answer.answer)}</div>
         </div>
         <div class="answer-footer">
-          <div class="answer-footer-text">本回答由AI生成，内容仅供参考。</div>
+          <div class="answer-footer-text">本回答来自演示知识库，仅作种植参考。</div>
         </div>
         <div class="action-bar">
           <div class="action-item">
@@ -1199,14 +1223,14 @@
 
     function formatAnswer(text) {
       return text.split('\n').map(p => {
-        if (p.match(/^\d+\.\s/)) {
-          return `<p><strong>${p}</strong></p>`;
-        } else if (p.match(/^[一|二|三|四|五|六|七|八|九|十]、/)) {
-          return `<p><strong>${p}</strong></p>`;
-        } else if (p.trim()) {
-          return `<p>${p}</p>`;
+        if (!p.trim()) return '';
+        // 处理 **加粗** 标记
+        const html = p.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        if (p.match(/^\d+\.\s/) || p.match(/^[一二三四五六七八九十]、/)) {
+          // 序号/标题行整体加粗（去掉内部嵌套 strong 避免重复）
+          return `<p><strong>${html.replace(/<\/?strong>/g, '')}</strong></p>`;
         }
-        return '';
+        return `<p>${html}</p>`;
       }).join('');
     }
 
@@ -1238,6 +1262,186 @@
       }
     }
 
+    function escHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
+    }
+
+    // 内联 onclick 属性中安全传递字符串：转义单引号、反斜杠与换行
+    function escape(s) {
+      return String(s == null ? '' : s)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r?\n/g, '\\n');
+    }
+
+    function unescape(s) {
+      return String(s == null ? '' : s).replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\\\/g, '\\');
+    }
+
+    // 演示知识库：意图 → 回答
+    var INTENT_RESULTS = {
+      pest: {
+        answer: `**初步判断（演示识别）**
+根据您的描述，这类问题通常与果园病虫害有关，常见情况如下：
+
+**一、主要病害**
+1. 腐烂病：枝干皮层腐烂、有酒糟味；刮除病斑后涂杀菌剂，冬季清园消毒
+2. 轮纹病：枝干和果实出现瘤状凸起；发芽前喷石硫合剂，生长期用代森锰锌
+3. 斑点落叶病：叶片出现褐色斑点并大量落叶；谢花后喷多抗霉素、代森锰锌
+4. 炭疽病：果实出现褐色凹陷病斑；套袋前喷保护性杀菌剂
+
+**二、主要虫害**
+1. 红蜘蛛：吸食叶片汁液致失绿；冬季刮皮清园，生长期喷阿维菌素、螺螨酯
+2. 蚜虫：群集新梢与叶背致卷叶；喷吡虫啉、噻虫嗪
+3. 桃小食心虫：蛀果危害；地面防治＋树上喷氯氟氰菊酯
+
+**三、综合防治建议**
+- 加强通风透光，增施有机肥增强树势
+- 冬季彻底清园，剪除病枝病果
+- 轮换用药，严格遵守安全间隔期
+- 优先农业防治、生物防治，化学防治为辅`,
+        related: ['红蜘蛛怎么防治？', '苹果腐烂病如何处理？', '苹果轮纹病怎么防治？']
+      },
+      fertilize: {
+        answer: `苹果施肥应按生长周期分区安排，关键是"秋施基肥、按需追肥"：
+
+**一、基肥（最重要）**
+- 时间：秋季落叶后至封冻前（9月下旬—11月上旬）
+- 以有机肥为主，配合磷钾肥，开沟深施
+
+**二、追肥**
+1. 萌芽前（3月中下旬）：氮肥为主，促萌芽开花
+2. 花后（4月下旬—5月）：氮磷钾复合肥，促幼果发育
+3. 果实膨大期（6月下旬—7月上旬）：钾肥为主，提高品质
+4. 花芽分化期（7月下旬—8月上旬）：磷钾肥为主
+
+**三、叶面喷肥**
+- 花期喷硼，提高坐果率
+- 幼果期喷钙，预防苦痘病
+- 生长期喷磷酸二氢钾，增强树势
+
+**四、原则**：有机无机结合、按需施用、注意施肥深度与位置，避免过量烧根。`,
+        related: ['苹果最佳施肥时间是什么时候？', '苹果园如何科学灌溉？', '如何提高苹果果实品质？']
+      },
+      irrigate: {
+        answer: `苹果园灌溉要结合土壤墒情与物候期，做到"关键期不缺水、雨季不积水"：
+
+**一、关键需水期**
+1. 花前水：促进萌芽开花，宜小水
+2. 花后水：促进幼果和新梢生长
+3. 果实膨大期：需水量最大，保持土壤湿度 60%~80%
+4. 采收前：适度控水，提高果实含糖量与耐储性
+
+**二、灌溉方式**
+- 滴灌/微喷：省水可控，推荐使用
+- 沟灌/穴灌：水源充足时使用，避免大水漫灌
+- 覆盖保墒：树下覆草或覆膜，减少水分蒸发
+
+**三、注意事项**
+- 土壤湿度低于 60% 时及时补水
+- 雨季及时排水，防止根系缺氧腐烂
+- 高温时段避免中午浇水，选清晨或傍晚`,
+        related: ['苹果园如何科学灌溉？', '如何预防苹果生理性病害？', '苹果种植需要哪些土壤条件？']
+      },
+      prune: {
+        answer: `苹果树修剪分冬季修剪与夏季修剪，核心是"通风透光、平衡树势"：
+
+**一、冬季修剪（落叶后—萌芽前）**
+- 疏除过密枝、交叉枝、病虫枝、衰弱枝
+- 回缩过长结果枝组，更新复壮
+- 保持合理树形（疏散分层形或自由纺锤形）
+
+**二、夏季修剪（生长期）**
+1. 抹芽疏梢：及时抹除无用萌芽，减少养分消耗
+2. 拉枝：开张角度，缓和树势、促进成花（一般拉至 80°~100°）
+3. 环剥/环割：旺树促花，宽度不超过枝径的 1/10
+4. 摘心、扭梢：控制旺长，改善光照
+
+**三、原则**
+- 幼树轻剪长放，早成形、早结果
+- 盛果期平衡负载，稳定产量
+- 剪口及时涂抹保护剂，防止病菌侵入`,
+        related: ['夏季修剪的要点是什么？', '拉枝技术如何操作？', '苹果授粉技术有哪些？']
+      },
+      weather: {
+        answer: `结合当前物候与常见天气，给您几点管理提示：
+
+**一、温度**
+- 苹果适宜生长温度 15~25℃，昼夜温差大有利于糖分积累
+- 花期遇晚霜（低于 0℃）易冻花，可提前熏烟、灌水预防
+
+**二、降雨**
+- 连续降雨利于病害孢子传播，雨前雨后各喷一次保护性杀菌剂
+- 低洼地块提前疏通排水沟，防止积水沤根
+
+**三、大风与光照**
+- 阵风前加固幼树、绑缚枝干，防止折枝落果
+- 盛果期保持通风透光，必要时疏枝、摘叶改善着色
+
+**建议**：多关注未来 3~7 天预报，喷药、套袋、灌溉等农事尽量避开降雨和大风时段。`,
+        related: ['苹果套袋最佳时间是什么时候？', '如何预防苹果生理性病害？', '苹果采收后如何储存保鲜？']
+      },
+      price: {
+        answer: `关于苹果价格行情，可参考以下思路（演示数据，实际以市场为准）：
+
+**一、影响价格的主要因素**
+- 当年全国及产区产量：减产年份价格往往上行
+- 冷库库存与出库节奏：库存高则价格承压
+- 收购商收购意愿与流通成本
+- 品种与品质：优果优价，大小、色泽、糖度分级明显
+
+**二、销售建议**
+1. 关注收购开秤价与走货速度，避免盲目等价
+2. 分批销售、分级销售，优质果可暂存冷库待价
+3. 结合消费旺季（节前）择机出货
+4. 拓展电商、认养、采摘等渠道，减少中间环节
+
+**三、风险提示**：价格预测存在较大不确定性，建议以实时行情为准，理性决策。`,
+        related: ['苹果采收后如何储存保鲜？', '认养费用包含哪些服务？', '果树产出如何计算？']
+      },
+      fallback: {
+        answer: `暂时没有匹配到很具体的问题。作为您的苹果种植助手，我可以从以下方面帮您分析：
+
+- 病虫害识别与防治（如腐烂病、轮纹病、红蜘蛛、蚜虫等）
+- 施肥与灌溉安排
+- 修剪整形、疏花疏果、套袋
+- 天气影响应对与价格行情参考
+
+请把问题描述得更具体一些，例如"叶片出现褐色斑点该怎么办""膨大期怎么施肥"，我会给出更有针对性的建议。`,
+        related: ['苹果常见病虫害有哪些？如何防治？', '苹果最佳施肥时间是什么时候？', '如何提高苹果果实品质？']
+      }
+    };
+
+    function matchIntent(q) {
+      var t = String(q).toLowerCase();
+      var has = function (list) { return list.some(function (k) { return t.indexOf(k) >= 0; }); };
+      if (has(['病', '虫', '防治', '喷药', '农药', '腐烂', '轮纹', '蚜虫', '红蜘蛛', '落叶', '炭疽', '白粉', '锈病', '食心虫', '卷叶'])) return INTENT_RESULTS.pest;
+      if (has(['施肥', '肥料', '氮', '磷', '钾', '基肥', '追肥', '叶面肥', '水肥'])) return INTENT_RESULTS.fertilize;
+      if (has(['灌溉', '浇水', '水分', '墒情', '排水', '干旱', '需水'])) return INTENT_RESULTS.irrigate;
+      if (has(['修剪', '整枝', '拉枝', '环剥', '环割', '整形', '疏枝', '摘心', '剪枝'])) return INTENT_RESULTS.prune;
+      if (has(['天气', '气温', '温度', '降雨', '下雨', '霜', '气候', '预报', '大风', '光照'])) return INTENT_RESULTS.weather;
+      if (has(['价格', '行情', '收购', '售价', '卖', '市场', '价钱', '销售'])) return INTENT_RESULTS.price;
+      return INTENT_RESULTS.fallback;
+    }
+
+    // 加载/打字态
+    function showThinking(question) {
+      const html = `
+        <div class="answer-question">${escHtml(question)}</div>
+        <div class="answer-loading">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span>正在思考…</span>
+        </div>
+        <div class="answer-footer">
+          <div class="answer-footer-text">演示知识库 · 正在生成回答</div>
+        </div>
+      `;
+      document.getElementById('modalContent').innerHTML = html;
+      document.getElementById('answerModal').classList.add('show');
+    }
+
     function sendMessage() {
       const input = document.getElementById('inputBox').value.trim();
       if (!input) return;
@@ -1245,27 +1449,16 @@
       // 保存到历史
       saveToHistory(input, '正在思考中...');
 
-      // 模拟AI回答
+      // 展示加载/打字态后返回匹配回答
+      showThinking(input);
+
       setTimeout(() => {
+        // 演示知识库：按关键词匹配意图
+        const matched = matchIntent(input);
         const mockAnswer = {
           question: input,
-          answer: `关于"${input}"的专业解答：
-
-苹果种植是一项系统工程，需要从品种选择、园区规划、日常管理到病虫害防治等多个方面综合考虑。
-
-**核心要点：**
-
-1. **品种选择**：根据当地气候、土壤条件和市场需求选择合适的苹果品种。花牛苹果、花牛苹果、乔纳金等都是优良品种。
-
-2. **园区管理**：合理密植，保持通风透光；科学修剪，培养健壮树形；适时疏花疏果，保证果实品质。
-
-3. **水肥管理**：秋季施足基肥，生长期合理追肥，注重钾肥和钙肥的使用；根据土壤墒情及时灌溉。
-
-4. **病虫害防治**：采用综合防治措施，优先农业防治和生物防治，科学使用农药。
-
-**建议：**
-如果您有更具体的问题，比如关于某个特定品种的管理、病虫害的具体防治方法等，欢迎继续提问，我会为您提供更详细的解答。`,
-          related: ['苹果常见病虫害有哪些？如何防治？', '苹果最佳施肥时间是什么时候？', '如何提高苹果果实品质？']
+          answer: matched.answer,
+          related: matched.related
         };
 
         // 更新历史记录
@@ -1278,7 +1471,7 @@
             <div class="answer-text">${formatAnswer(mockAnswer.answer)}</div>
           </div>
           <div class="answer-footer">
-            <div class="answer-footer-text">本回答由AI生成，内容仅供参考。</div>
+            <div class="answer-footer-text">本回答来自演示知识库，仅作种植参考。</div>
           </div>
           <div class="action-bar">
             <div class="action-item">
@@ -1416,7 +1609,7 @@
           <div class="answer-text">${formatAnswer(answer)}</div>
         </div>
         <div class="answer-footer">
-          <div class="answer-footer-text">本回答由AI生成，内容仅供参考。</div>
+          <div class="answer-footer-text">本回答来自演示知识库，仅作种植参考。</div>
         </div>
         <div class="action-bar">
           <div class="action-item">

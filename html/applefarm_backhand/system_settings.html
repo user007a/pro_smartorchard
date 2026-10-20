@@ -700,6 +700,23 @@
             </table>
             <div id="rolePagination"></div>
           </div>
+
+          <!-- 权限矩阵（PC-B-054）：角色 × 模块 -->
+          <div style="margin-top:24px;border-top:1px solid var(--border-light);padding-top:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <div style="font-weight:600;font-size:14px;color:var(--text-primary);">权限矩阵（角色 × 模块）</div>
+              <div>
+                <select id="permRoleSelect" style="padding:6px 12px;border:1px solid var(--border-default);border-radius:6px;font-size:13px;"></select>
+                <button class="jg-btn jg-btn-primary" style="margin-left:8px;" onclick="savePermission()">保存</button>
+              </div>
+            </div>
+            <table class="data-grid" style="font-size:13px;">
+              <thead>
+                <tr><th>模块</th><th>查看</th><th>新增</th><th>编辑</th><th>删除</th><th>导出</th></tr>
+              </thead>
+              <tbody id="permMatrixBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
       <div id="tab-dict" class="system-tab-content">
@@ -912,8 +929,8 @@ const mockUsers = [
   { id: 3, username: 'huangzhongjian', realName: '黄忠坚', role: 'manager', phone: '13979412180', base: '天水麦积区基地', status: 'active', lastLogin: '2026-09-20 08:40' },
   { id: 4, username: 'xushuiying', realName: '徐水应', role: 'operator', phone: '13879418637', base: '招远基地', status: 'active', lastLogin: '2026-09-19 16:45' },
   { id: 5, username: 'zhuquanlong', realName: '朱泉龙', role: 'operator', phone: '18296452648', base: '招远基地', status: 'active', lastLogin: '2026-09-19 15:20' },
-  { id: 6, username: 'chenxiaozhong', realName: '陈小忠', role: 'operator', phone: '18779417899', base: '麦积区阁基地', status: 'active', lastLogin: '2026-09-20 11:20' },
-  { id: 7, username: 'liaochunliang', realName: '廖春亮', role: 'operator', phone: '13767679075', base: '天水荣成基地', status: 'active', lastLogin: '2026-09-19 14:30' },
+  { id: 6, username: 'chenxiaozhong', realName: '陈小忠', role: 'operator', phone: '18779417899', base: '天水甘谷基地', status: 'active', lastLogin: '2026-09-20 11:20' },
+  { id: 7, username: 'liaochunliang', realName: '廖春亮', role: 'operator', phone: '13767679075', base: '天水秦州基地', status: 'active', lastLogin: '2026-09-19 14:30' },
   { id: 8, username: 'lijianming', realName: '李建明', role: 'manager', phone: '13970432567', base: '青岛崂山基地', status: 'active', lastLogin: '2026-09-20 10:00' },
   { id: 9, username: 'ligen', realName: '李根', role: 'operator', phone: '13030587809', base: '天水福山基地', status: 'active', lastLogin: '2026-09-18 09:00' },
   { id: 10, username: 'zhangcaisun', realName: '张才孙', role: 'operator', phone: '15079427679', base: '潍坊寿光基地', status: 'active', lastLogin: '2026-09-20 08:30' },
@@ -1362,15 +1379,117 @@ function openLogDetailModal(logId) {
 }
 function addUser() { closeModal(); alert('新增用户成功'); }
 function editUser() { closeModal(); alert('编辑用户成功'); }
-function resetPassword() { closeModal(); alert('密码重置成功'); }
-function disableUser() { closeModal(); alert('用户已禁用'); }
-function doEnableUser() { closeModal(); alert('用户已启用'); }
-function addRole() { closeModal(); alert('新增角色成功'); }
+function resetPassword() {
+  // 收集弹窗中的用户名 + 新密码，落库到 snzg_passwords
+  var uname = (document.getElementById('resetUser') || {}).value || '';
+  var npwd = (document.getElementById('resetPwd') || {}).value || '';
+  if (!uname || !npwd) { alert('请填写完整用户名与新密码'); return; }
+  if (npwd.length < 6) { alert('新密码至少 6 位'); return; }
+  try {
+    var map = JSON.parse(localStorage.getItem('snzg_passwords') || '{}');
+    map[uname] = npwd;
+    localStorage.setItem('snzg_passwords', JSON.stringify(map));
+    alert('密码重置成功：' + uname);
+  } catch (e) { alert('保存失败：' + e.message); }
+  closeModal();
+}
+function disableUser() {
+  var uname = window.__currentOpUser || '';
+  if (!uname) { alert('请选择要禁用的用户'); return; }
+  try {
+    var list = JSON.parse(localStorage.getItem('snzg_user_states') || '{}');
+    list[uname] = 'disabled';
+    localStorage.setItem('snzg_user_states', JSON.stringify(list));
+  } catch (e) {}
+  alert('用户已禁用：' + uname);
+  closeModal();
+}
+function doEnableUser() {
+  var uname = window.__currentOpUser || '';
+  if (!uname) { alert('请选择要启用的用户'); return; }
+  try {
+    var list = JSON.parse(localStorage.getItem('snzg_user_states') || '{}');
+    list[uname] = 'active';
+    localStorage.setItem('snzg_user_states', JSON.stringify(list));
+  } catch (e) {}
+  alert('用户已启用：' + uname);
+  closeModal();
+}
+// 权限矩阵：12 模块 × 5 操作
+var PERM_MODULES = ['农事计划', '农事记录', '农资管理', '设备管理', '预警中心', '溯源管理', '采收管理', '认养管理', '模型中心', '销售订单', '任务分配', '系统设置'];
+var PERM_ACTIONS = ['view', 'add', 'edit', 'delete', 'export'];
+function renderPermMatrix() {
+  var sel = document.getElementById('permRoleSelect');
+  if (sel) {
+    sel.innerHTML = mockRoles.map(function(r){ return '<option value="' + r.code + '">' + r.name + '</option>'; }).join('');
+  }
+  var saved = JSON.parse(localStorage.getItem('snzg_permissions') || '{}');
+  var role = sel ? sel.value : '';
+  var body = document.getElementById('permMatrixBody');
+  if (!body) return;
+  body.innerHTML = PERM_MODULES.map(function(m){
+    var cells = PERM_ACTIONS.map(function(a){
+      var key = role + ':' + m + ':' + a;
+      var checked = saved[key] ? 'checked' : '';
+      return '<td style="text-align:center;"><label style="display:inline-block;cursor:pointer;"><input type="checkbox" name="perm" value="' + key + '" ' + checked + '> <span style="font-size:12px;">' + a + '</span></label></td>';
+    }).join('');
+    return '<tr><td style="font-weight:500;">' + m + '</td>' + cells + '</tr>';
+  }).join('');
+}
+function savePermission() {
+  var perms = {};
+  document.querySelectorAll('input[name="perm"]:checked').forEach(function(el){ perms[el.value] = true; });
+  try { localStorage.setItem('snzg_permissions', JSON.stringify(perms)); } catch (e) {}
+  alert('权限配置已保存（' + Object.keys(perms).length + ' 项）');
+  closeModal();
+}
+
+function addRole() {
+  var name = (document.getElementById('roleName') || {}).value || '';
+  if (!name) { alert('请填写角色名'); return; }
+  try {
+    var list = JSON.parse(localStorage.getItem('snzg_roles') || '[]');
+    list.push({ id: 'R' + Date.now(), name: name, createdAt: new Date().toISOString() });
+    localStorage.setItem('snzg_roles', JSON.stringify(list));
+  } catch (e) {}
+  alert('新增角色成功：' + name);
+  closeModal();
+}
 function editRole() { closeModal(); alert('编辑角色成功'); }
-function savePermission() { closeModal(); alert('权限配置已保存'); }
-function addDict() { closeModal(); alert('新增字典成功'); }
+function savePermission() {
+  // 收集所有复选框权限 → 写入 snzg_permissions
+  var perms = {};
+  document.querySelectorAll('input[name="perm"]:checked').forEach(function(el){
+    perms[el.value] = true;
+  });
+  try { localStorage.setItem('snzg_permissions', JSON.stringify(perms)); } catch (e) {}
+  alert('权限配置已保存（' + Object.keys(perms).length + ' 项）');
+  closeModal();
+}
+function addDict() {
+  var key = (document.getElementById('dictKey') || {}).value || '';
+  var val = (document.getElementById('dictVal') || {}).value || '';
+  if (!key || !val) { alert('请填写字典键与值'); return; }
+  try {
+    var list = JSON.parse(localStorage.getItem('snzg_dict') || '{}');
+    list[key] = val;
+    localStorage.setItem('snzg_dict', JSON.stringify(list));
+  } catch (e) {}
+  alert('新增字典成功：' + key + ' = ' + val);
+  closeModal();
+}
 function editDict() { closeModal(); alert('编辑字典成功'); }
-function deleteDict() { closeModal(); alert('字典已删除'); }
+function deleteDict() {
+  var key = window.__currentDictKey || '';
+  if (!key) { alert('请选择要删除的字典'); return; }
+  try {
+    var list = JSON.parse(localStorage.getItem('snzg_dict') || '{}');
+    delete list[key];
+    localStorage.setItem('snzg_dict', JSON.stringify(list));
+  } catch (e) {}
+  alert('字典已删除：' + key);
+  closeModal();
+}
 function switchTab(event, tabId) {
   document.querySelectorAll('.system-tab').forEach(function(tab) { tab.classList.remove('active'); });
   document.querySelectorAll('.system-tab-content').forEach(function(content) { content.classList.remove('active'); });
@@ -1381,6 +1500,11 @@ document.addEventListener('DOMContentLoaded', function() {
   renderTable(mockUsers, 'userTableBody', renderUserRow, currentUserPage, mockUsers.length);
   renderPagination('userPagination', currentUserPage, mockUsers.length);
   renderTable(mockRoles, 'roleTableBody', renderRoleRow, currentRolePage, mockRoles.length);
+
+  // 权限矩阵渲染（PC-B-054）
+  renderPermMatrix();
+  var permSel = document.getElementById('permRoleSelect');
+  if (permSel) permSel.addEventListener('change', renderPermMatrix);
   renderPagination('rolePagination', currentRolePage, mockRoles.length);
   renderTable(mockDicts, 'dictTableBody', renderDictRow, currentDictPage, mockDicts.length);
   renderPagination('dictPagination', currentDictPage, mockDicts.length);

@@ -1,10 +1,10 @@
-var vrHotspotsData = {
+﻿﻿var vrHotspotsData = {
     scenes: [
         {
             id: "scene_main",
             name: "园区主入口",
-            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
-            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
+            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
+            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
             yaw: 180,
             pitch: 0,
             hfov: 100,
@@ -64,8 +64,8 @@ var vrHotspotsData = {
         {
             id: "scene_b",
             name: "B区全景",
-            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
-            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
+            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
+            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
             yaw: 0,
             pitch: 0,
             hfov: 100,
@@ -115,8 +115,8 @@ var vrHotspotsData = {
         {
             id: "scene_c",
             name: "C区全景",
-            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
-            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-09-20T10-52-24.png",
+            image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
+            preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
             yaw: 0,
             pitch: 0,
             hfov: 100,

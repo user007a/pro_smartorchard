@@ -24,6 +24,7 @@
     .search-input { flex: 1; height: 100%; font-size: var(--font-base); border: none; outline: none; background: transparent; }
     .fault-item { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: var(--space-3); cursor: pointer; transition: all var(--transition-fast); }
     .fault-item:active { background: var(--gray-100); }
+    .fault-item.active { background: var(--primary-50); border-color: var(--primary); }
     .fault-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); }
     .fault-title { font-size: var(--font-base); font-weight: 600; color: var(--text); }
     .fault-tag { padding: var(--space-1) var(--space-2); border-radius: var(--radius-lg); font-size: var(--font-xs); font-weight: 500; }
@@ -59,7 +60,7 @@
           <circle cx="11" cy="11" r="8"/>
           <path d="M21 21l-4.35-4.35"/>
         </svg>
-        <input type="text" class="search-input" placeholder="搜索故障问题...">
+        <input type="text" class="search-input" id="faultSearch" placeholder="搜索故障问题..." oninput="filterFaults(this.value)">
       </div>
 
       <div class="card">
@@ -207,10 +208,43 @@
 
     function showDetail(id) {
       const items = document.querySelectorAll('.fault-item');
-      items.forEach(item => {
+      const targetIndex = Number(id) - 1;
+      items.forEach((item, index) => {
         const guide = item.querySelector('.guide-box');
-        guide.style.display = guide.style.display === 'none' ? 'block' : 'none';
+        if (index === targetIndex) {
+          // 只切换被点击的这一条：再次点击同一项可收起
+          const willOpen = guide.style.display === 'none' || guide.style.display === '';
+          guide.style.display = willOpen ? 'block' : 'none';
+          item.classList.toggle('active', willOpen);
+        } else {
+          // 其余条目自动收起
+          guide.style.display = 'none';
+          item.classList.remove('active');
+        }
       });
+    }
+
+    /* 关键词搜索：按故障标题 + 描述过滤 */
+    function filterFaults(kw) {
+      const key = String(kw || '').trim().toLowerCase();
+      let visible = 0;
+      document.querySelectorAll('.fault-item').forEach(item => {
+        const text = item.textContent.toLowerCase();
+        const match = !key || text.indexOf(key) !== -1;
+        item.style.display = match ? '' : 'none';
+        if (match) visible++;
+      });
+      const empty = document.getElementById('faultEmpty');
+      const box = document.querySelector('.content .card');
+      if (!empty && box) {
+        const div = document.createElement('div');
+        div.id = 'faultEmpty';
+        div.style.cssText = 'display:none;padding:32px 0;text-align:center;color:var(--text-light);font-size:14px;';
+        div.textContent = '未找到相关故障，试试其他关键词';
+        box.appendChild(div);
+      }
+      const tip = document.getElementById('faultEmpty');
+      if (tip) tip.style.display = visible ? 'none' : 'block';
     }
   </script>
 </body>

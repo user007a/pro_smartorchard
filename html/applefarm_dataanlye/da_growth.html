@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>智慧果园 · 物候生长大屏</title>
+<style>
+/* ============================================================
+   智慧果园物候生长大屏 — 深色单屏 (1920×1080, 自包含)
+   字阶（7 档）：40 北极星 / 28 关键指标 / 24 指标 / 18 数据 / 16 标题 / 13 正文 / 12 辅助
+   风格与 da_dashboard.html 完全一致（surface / line / brand 变量同源）
+   ============================================================ */
+:root{
+  --surface-0:#060D1F;     /* 舞台底 */
+  --surface-1:#0B1830;     /* 卡片面 */
+  --surface-2:#12234A;     /* 卡片抬升 / 悬停 */
+  --line:rgba(110,170,255,.18);
+  --line-strong:rgba(110,170,255,.34);
+  --text-1:#E8F2FF;        /* 主文字 15.6:1 */
+  --text-2:#9DB8DC;        /* 次文字 8.7:1  */
+  --text-3:#8AA0BE;        /* 弱文字 6.2:1  */
+  --brand-700:#14549F;
+  --brand-500:#2E8FE8;
+  --brand-400:#38D6FF;
+  --warn:#F2B33D;
+  --risk:#E5564B;
+  --info:#3E8EF0;
+  --cyan:#31C9E8;
+  --font:"PingFang SC","Microsoft YaHei","Noto Sans SC",-apple-system,system-ui,"Segoe UI",sans-serif;
+  --font-hei:"Microsoft YaHei","黑体",SimHei,"Heiti SC","PingFang SC",sans-serif;
+  --num:"DIN Alternate","Bahnschrift","Oswald","Segoe UI",var(--font);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:var(--surface-0);font-family:var(--font);color:var(--text-1);
+  -webkit-font-smoothing:antialiased;overflow:hidden}
+body{display:flex;align-items:center;justify-content:center}
+
+/* 数字统一等宽，避免跨平台字宽跳变与实时刷新抖动 */
+.num,.fact b,.clock,.hstat .num,.hstat .n b,.cdrow .v,.kt b,.gdd-big b,.tl-it .dt,
+.ring-pct,.ax,.bval,.bdev,.metric button em{
+  font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.card-h .t,.bcard .bh,.ring-sub{font-family:var(--font-hei);font-weight:700;letter-spacing:.8px}
+
+/* 缩放舞台：固定 1920×1080，按视口等比缩放，单屏不滚动 */
+.stage{position:fixed;left:50%;top:50%;width:1920px;height:1080px;
+  transform-origin:center center;transform:translate(-50%,-50%);
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(62,142,240,.12), transparent 60%),
+    radial-gradient(900px 600px at 100% 110%, rgba(49,201,232,.07), transparent 55%),
+    var(--surface-0);
+  padding:22px 26px;display:flex;flex-direction:column;gap:14px}
+.stage::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(62,142,240,.06),transparent 18%)}
+
+/* ===================== 顶部常驻条 ===================== */
+.topbar{height:66px;flex:0 0 66px;display:flex;align-items:center;gap:22px;
+  background:var(--surface-1);border:1px solid var(--line);border-radius:16px;
+  padding:0 22px;position:relative;overflow:hidden}
+.topbar::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:linear-gradient(180deg,var(--brand-500),var(--brand-700))}
+.brand{display:flex;align-items:center;gap:14px}
+.brand .logo{width:42px;height:42px;flex:none}
+.brand h1{font-family:var(--font-hei);font-size:25px;font-weight:800;letter-spacing:1.5px;line-height:1.1}
+.brand .sub{font-size:12px;color:var(--text-3);letter-spacing:3px;text-transform:uppercase}
+.facts{display:flex;align-items:center;gap:22px;flex:1;flex-wrap:nowrap;overflow:hidden}
+.fact{display:flex;align-items:baseline;gap:7px;white-space:nowrap}
+.fact b{font-size:24px;color:var(--brand-500);font-weight:700}
+.fact span{font-size:14px;color:var(--text-2)}
+.topright{display:flex;align-items:center;gap:14px;flex:none}
+.mini-stat{font-size:12px;color:var(--text-3);white-space:nowrap}
+.mini-stat b{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:14px;color:var(--text-2);font-weight:600}
+.clock{font-size:16px;color:var(--text-1);text-align:right;line-height:1.15}
+.clock small{display:block;font-size:12px;color:var(--text-3);font-family:var(--font)}
+.topright a{color:var(--text-2);text-decoration:none;font-size:14px;padding:7px 13px;border-radius:30px;
+  border:1px solid var(--line);background:rgba(255,255,255,.02);transition:.2s}
+.topright a:hover{color:#fff;border-color:var(--brand-500);background:rgba(62,142,240,.15)}
+.switcher{position:relative;display:inline-flex;align-items:center}
+.switcher::after{content:"▼";position:absolute;right:13px;font-size:8px;color:var(--text-3);pointer-events:none}
+#screenSwitcher{font-family:var(--font);font-size:14px;color:var(--text-2);
+  background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:30px;
+  padding:7px 28px 7px 13px;cursor:pointer;transition:.2s;appearance:none;-webkit-appearance:none}
+#screenSwitcher:hover{color:#fff;border-color:var(--brand-500);background:rgba(62,142,240,.15)}
+#screenSwitcher option{background:var(--surface-1);color:var(--text-1)}
+
+/* ===================== 北极星指标带 ===================== */
+.hero{flex:0 0 96px;height:96px;display:flex;gap:12px;align-items:stretch}
+.hstat{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;
+  background:linear-gradient(180deg,var(--surface-2),var(--surface-1));
+  border:1px solid var(--line);border-radius:14px;padding:8px 14px;min-width:0}
+/* 北极星：当前物候期 */
+.hstat.north{flex:0 0 320px;background:linear-gradient(135deg,rgba(46,143,232,.14),var(--surface-1) 62%);
+  border-color:rgba(96,165,250,.35)}
+.hstat.north .num{font-size:40px;font-weight:700;color:var(--brand-400);line-height:1;letter-spacing:-1px}
+.hstat.north .num small{font-size:16px;color:var(--brand-400);opacity:.75;font-family:var(--font);letter-spacing:0}
+.hstat.north .lab{font-size:12px;color:var(--text-3);margin-top:7px;white-space:nowrap}
+/* 关键指标 */
+.hstat.kpi{flex:1 1 0}
+.hstat.kpi .n{font-size:28px;font-weight:700;line-height:1;color:var(--text-1)}
+.hstat.kpi .n small{font-size:14px;color:var(--text-2);font-family:var(--font);margin-left:1px}
+.hstat.kpi .l{font-size:12px;color:var(--text-3);margin-top:6px;white-space:nowrap}
+.hstat.kpi.cyan .n{color:var(--cyan)}
+.hstat.kpi.good .n{color:var(--brand-400)}
+
+/* ===================== 主区三栏 ===================== */
+.main{flex:1;min-height:0;display:grid;grid-template-columns:472px 1fr 472px;gap:18px}
+.col{display:flex;flex-direction:column;gap:14px;min-height:0}
+.card{background:var(--surface-1);border:1px solid var(--line);
+  border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;min-height:0;position:relative;overflow:hidden;
+  transition:background .2s ease,border-color .2s ease,transform .2s ease}
+.card:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-2px)}
+.card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex:none;gap:10px}
+.card-h .t{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:700;letter-spacing:.5px}
+.card-h .t i{width:4px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--brand-500),var(--brand-700))}
+.card-h .meta{font-size:12px;color:var(--text-3);text-align:right;white-space:nowrap}
+.card-h .meta b{color:var(--text-1);font-family:var(--num);font-variant-numeric:tabular-nums;font-size:13px}
+.stamp{display:block;font-size:12px;color:var(--text-3);font-family:var(--font);letter-spacing:0}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text-2);flex:none;margin-bottom:8px}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend em{width:15px;height:3px;border-radius:2px;display:inline-block}
+
+#L1{flex:0 0 250px}
+#L2{flex:1 1 auto}
+#C1{flex:1 1 auto}
+#C2{flex:0 0 130px}
+#R1{flex:1 1 auto}
+#R2{flex:0 0 264px}
+
+/* ---------- 年物候日历时间轴 ---------- */
+.tl-wrap{position:relative}
+.tl-months{display:grid;grid-template-columns:repeat(12,1fr);font-size:11px;color:var(--text-3);text-align:center;margin-bottom:6px}
+.tl-track{position:relative;height:30px;border-radius:9px;background:rgba(255,255,255,.05);
+  border:1px solid var(--line);overflow:hidden}
+.tl-seg{position:absolute;top:0;bottom:0;display:grid;place-items:center;
+  font-size:11px;font-weight:700;color:#bfdcff;border-right:1px solid rgba(6,13,31,.65)}
+.tl-seg:last-child{border-right:0}
+.tl-seg.on{background:linear-gradient(180deg,var(--brand-400),var(--brand-500));color:#041226;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+.tl-now{position:absolute;left:77.1%;top:20px;bottom:-4px;width:0;
+  border-left:2px dashed var(--brand-400);z-index:3}
+.tl-list{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:auto}
+.tl-it{display:flex;align-items:center;gap:7px;font-size:12px;padding:5px 8px;border-radius:8px;
+  background:rgba(255,255,255,.025);border:1px solid var(--line)}
+.tl-it em{width:8px;height:8px;border-radius:3px;flex:none}
+.tl-it .nm{color:var(--text-2);font-weight:600;white-space:nowrap}
+.tl-it .dt{margin-left:auto;color:var(--text-3);font-size:11px;white-space:nowrap}
+.tl-it.on{border-color:rgba(56,214,255,.45);background:rgba(56,214,255,.08)}
+.tl-it.on .nm{color:var(--brand-400)}
+
+/* ---------- 病虫害风险热力 ---------- */
+.heat{flex:1;min-height:0;position:relative;border-radius:14px;overflow:hidden;
+  background:radial-gradient(120% 120% at 50% 30%, #0a1f3d, #061226);border:1px solid var(--line)}
+.heat svg{width:100%;height:100%;display:block}
+.heat .plot polygon{transition:fill .4s}
+.heat text{font-family:var(--font);pointer-events:none;fill:#fff;font-weight:600;
+  paint-order:stroke;stroke:rgba(4,12,28,.9);stroke-width:8px;stroke-linejoin:round}
+.heat .pid{font-size:32px}
+.heat .prk{font-size:26px;fill:rgba(234,255,240,.88)}
+.heat-boundary{fill:none;stroke:rgba(110,190,255,.5);stroke-width:4;stroke-dasharray:14 14}
+.water{fill:rgba(74,159,224,.22);stroke:rgba(74,159,224,.5);stroke-width:3}
+.heat-legend{position:absolute;left:12px;bottom:10px;display:flex;gap:14px;background:rgba(5,13,31,.82);
+  border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:12px}
+.heat-legend span{display:flex;align-items:center;gap:6px;color:var(--text-2)}
+.heat-legend em{width:11px;height:11px;border-radius:3px;display:inline-block}
+.heat-pests{position:absolute;right:12px;top:10px;display:flex;gap:6px}
+.heat-pests i{font-style:normal;font-size:11px;color:var(--text-2);background:rgba(5,13,31,.82);
+  border:1px solid var(--line);border-radius:20px;padding:3px 9px}
+
+/* ---------- 生长曲线 ---------- */
+.chart{flex:1;min-height:0;width:100%;display:block}
+.grid{stroke:rgba(110,170,255,.12);stroke-width:1}
+.axis{stroke:rgba(110,170,255,.34);stroke-width:1.2}
+.ax{font-size:12px;fill:var(--text-3)}
+.ylab{font-size:12px;fill:var(--text-3)}
+
+/* ---------- 指标切换 ---------- */
+.metric{display:flex;gap:10px;flex:1;align-items:stretch}
+.metric button{flex:1;font-family:var(--font);color:var(--text-2);background:rgba(255,255,255,.03);
+  border:1px solid var(--line);border-radius:12px;padding:8px;cursor:pointer;transition:.2s;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.metric button:hover{border-color:var(--line-strong);color:var(--text-1)}
+.metric button.on{color:#041226;background:var(--brand-400);border-color:transparent}
+.metric button b{font-size:15px;font-weight:600}
+.metric button em{font-style:normal;font-size:12px;opacity:.85}
+.metric button.on em{opacity:.75}
+
+/* ---------- 产量预估 vs 实采 ---------- */
+.bars{flex:1;min-height:0;width:100%;display:block}
+.bval{font-size:12px;font-weight:700}
+.bdev{font-size:11px}
+.bname{font-size:12px;fill:var(--text-2);font-family:var(--font)}
+.bnote{flex:none;margin-top:8px;font-size:12px;color:var(--text-2);background:rgba(255,255,255,.03);
+  border-left:3px solid var(--brand-500);border-radius:8px;padding:6px 10px;line-height:1.5}
+.bnote b{color:var(--brand-400);font-family:var(--num);font-variant-numeric:tabular-nums}
+.bnote em{color:var(--warn);font-style:normal}
+
+/* ---------- 物候期进度 ---------- */
+.prog{display:flex;gap:16px;flex:1;min-height:0;align-items:center}
+.ring{width:150px;height:150px;flex:none}
+.ring-pct{font-size:28px;font-weight:700;fill:var(--brand-400)}
+.ring-sub{font-size:11px;fill:var(--text-3)}
+.prog-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px;justify-content:center}
+.pbar{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:10px;
+  background:rgba(255,255,255,.025);border:1px solid var(--line)}
+.pbar .row{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--text-3)}
+.pbar .row b{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:16px;color:var(--brand-500)}
+.pbar .track{height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden}
+.pbar .track i{display:block;height:100%;background:linear-gradient(90deg,var(--brand-500),var(--brand-400))}
+.cdrow{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-radius:9px;
+  background:rgba(255,255,255,.025);border:1px solid var(--line);border-left:3px solid var(--line-strong);font-size:13px}
+.cdrow .k{color:var(--text-2)}
+.cdrow .v{font-size:16px;font-weight:700;color:var(--brand-500)}
+.cdrow .v small{font-family:var(--font);font-size:11px;color:var(--text-3);font-weight:400}
+.cdrow .v.ok{color:var(--cyan)}
+.cdrow .v.over{color:var(--risk);font-size:13px}
+
+/* ===================== 底部支撑条 ===================== */
+.bottom{flex:0 0 196px;height:196px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+.bcard{background:var(--surface-1);border:1px solid var(--line);
+  border-radius:16px;padding:14px 18px;display:flex;flex-direction:column;min-height:0;
+  transition:background .2s ease,border-color .2s ease,transform .2s ease}
+.bcard:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-2px)}
+.bcard .bh{font-size:16px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex:none}
+.bcard .bh i{width:4px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--cyan),var(--brand-500))}
+.bcard .bh span{margin-left:auto;font-size:12px;color:var(--text-3);font-weight:400;font-family:var(--font)}
+
+.gdd{display:flex;gap:16px;flex:1;min-height:0;align-items:center}
+.gdd-l{flex:none;width:146px}
+.gdd-big{display:flex;align-items:baseline;gap:4px}
+.gdd-big b{font-size:30px;font-weight:700;color:var(--brand-400);line-height:1;letter-spacing:-1px}
+.gdd-big small{font-size:12px;color:var(--text-3)}
+.gdd-sub{font-size:12px;color:var(--text-3);margin-top:8px;line-height:1.7}
+.gdd-sub b{color:var(--cyan);font-family:var(--num);font-variant-numeric:tabular-nums}
+.gdd-svg{flex:1;height:100%;min-height:0;display:block}
+
+.kt{display:flex;flex-direction:column;flex:1;min-height:0}
+.kt .kr{display:grid;grid-template-columns:1.35fr 1fr .9fr .8fr;align-items:center;
+  padding:6px 10px;font-size:12px;border-bottom:1px solid var(--line)}
+.kt .kr:last-child{border-bottom:0}
+.kt .kh{color:var(--text-3);background:rgba(255,255,255,.03);border-radius:8px;font-weight:400}
+.kt .kn{color:var(--text-2)}
+.kt b{font-size:15px;font-weight:700;color:var(--text-1)}
+.kt .up{color:var(--cyan)}
+.kt .dn{color:var(--text-2)}
+.kt .kd{color:var(--text-3);font-size:12px}
+.kt .ok{color:var(--brand-400)}
+.kt .warn{color:var(--warn)}
+.kt .nor{color:var(--text-2)}
+
+.advice{display:flex;flex-direction:column;gap:8px;flex:1;justify-content:center;min-height:0}
+.ad{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:var(--text-2);line-height:1.5;
+  background:rgba(255,255,255,.03);border-left:3px solid var(--brand-500);border-radius:9px;padding:8px 10px}
+.ad i{color:var(--brand-500);font-style:normal;font-weight:700;flex:none}
+.ad b{color:var(--text-1)}
+.ad.warn{border-left-color:var(--warn)}
+.ad.warn i,.ad.warn b{color:var(--warn)}
+.ad.cy{border-left-color:var(--cyan);background:rgba(49,201,232,.07)}
+.ad.cy i{color:var(--cyan)}
+.ad.cy b{color:var(--cyan)}
+
+/* ===================== 无障碍 ===================== */
+:focus-visible{outline:2px solid var(--brand-400);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important}
+}
+
+/* ===================== 状态：加载 / 骨架 ===================== */
+.sk{color:transparent!important;position:relative;pointer-events:none}
+.sk>*{visibility:hidden}
+.sk::after{content:"";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:.85em;
+  border-radius:4px;background:rgba(255,255,255,.10);animation:skp 1.4s ease-in-out infinite}
+@keyframes skp{0%,100%{opacity:.35}50%{opacity:.8}}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <!-- ============ 顶部常驻条 ============ -->
+  <div class="topbar">
+    <div class="brand">
+      <img class="logo" src="../common/images/brand_logo.png" alt="" aria-hidden="true">
+      <div>
+        <h1>智慧果园 · 物候生长大屏</h1>
+        <div class="sub">Phenology &amp; Growth Dashboard</div>
+      </div>
+    </div>
+    <div class="facts">
+      <div class="fact"><b>膨大期/着色期</b></div>
+      <div class="fact"><b>28</b><span>天 · 距采收</span></div>
+      <div class="fact"><b>12</b><span>块 · 监测地块</span></div>
+      <div class="fact"><b>3</b><span>套 · 生长模型</span></div>
+    </div>
+    <div class="topright">
+      <span class="mini-stat">生育期积温 <b>3120 ℃·d</b></span>
+      <div class="clock" role="timer" aria-live="off"><span id="clk">--:--:--</span><small id="dt">2026-10-20 周二</small></div>
+      <a href="../applefarm_backhand/login.html">管理后台</a>
+      <a href="da_index.html">返回门户</a>
+      <span class="switcher">
+        <select id="screenSwitcher" aria-label="切换大屏">
+          <option value="">切换大屏</option>
+          <option value="da_overview.html">果园管理驾驶舱</option>
+          <option value="da_dashboard.html">生产指挥</option>
+          <option value="da_business.html">经营分析</option>
+          <option value="da_trace.html">质量溯源</option>
+          <option value="da_alert.html">智能预警</option>
+          <option value="da_growth.html" selected>物候生长</option>
+          <option value="da_iot.html">设备物联</option>
+          <option value="da_results.html">数字成果</option>
+        </select>
+      </span>
+    </div>
+  </div>
+
+  <!-- ============ 北极星指标带 ============ -->
+  <section class="hero" role="group" aria-label="物候生长核心指标">
+    <div class="hstat north">
+      <div class="num">膨大期<small>/着色期</small></div>
+      <div class="lab">当前物候期 · 自 06-15 始 · 已完成 68%</div>
+    </div>
+    <div class="hstat kpi"><div class="n sk"><b data-live="28" data-amp="0">28</b><small>天</small></div><div class="l">距采收窗口</div></div>
+    <div class="hstat kpi cyan"><div class="n sk"><b data-live="76.2" data-amp=".004">76.2</b><small>mm</small></div><div class="l">平均果实横径</div></div>
+    <div class="hstat kpi good"><div class="n sk"><b data-live="90" data-amp=".010">90</b><small>/100</small></div><div class="l">长势指数</div></div>
+    <div class="hstat kpi"><div class="n sk"><b data-live="3120" data-amp=".003">3120</b><small>℃·d</small></div><div class="l">生育期积温（累计）</div></div>
+    <div class="hstat kpi"><div class="n sk"><b data-live="94" data-amp=".008">94</b><small>%</small></div><div class="l">成熟度预测吻合率</div></div>
+  </section>
+
+  <!-- ============ 主区三栏 ============ -->
+  <div class="main">
+
+    <!-- 左栏 -->
+    <div class="col">
+      <!-- 年物候日历时间轴 -->
+      <div class="card" id="L1">
+        <div class="card-h">
+          <h3 class="t"><i></i>年物候日历时间轴</h3>
+          <div class="meta">当前 <b>膨大期·着色期</b><span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="tl-wrap">
+          <div class="tl-months"><span>1月</span><span>2月</span><span>3月</span><span>4月</span><span>5月</span><span>6月</span><span>7月</span><span>8月</span><span>9月</span><span>10月</span><span>11月</span><span>12月</span></div>
+          <div class="tl-track">
+            <span class="tl-seg" style="left:21.7%;width:5.4%;background:rgba(46,143,232,.34)" title="萌芽期 03-20 ~ 04-10">①</span>
+            <span class="tl-seg" style="left:27.1%;width:7.1%;background:rgba(49,201,232,.30)" title="花期 04-10 ~ 05-05">②</span>
+            <span class="tl-seg" style="left:34.2%;width:5.0%;background:rgba(56,214,255,.26)" title="坐果期 05-05 ~ 05-20">③</span>
+            <span class="tl-seg" style="left:39.2%;width:6.7%;background:rgba(62,142,240,.34)" title="幼果期 05-20 ~ 06-15">④</span>
+            <span class="tl-seg on" style="left:45.8%;width:31.3%" title="膨大期·着色期 06-15 ~ 10-10（当前）">⑤</span>
+            <span class="tl-seg" style="left:77.1%;width:7.1%;background:rgba(242,179,61,.30)" title="成熟期 10-10 ~ 11-05">⑥</span>
+          </div>
+          <div class="tl-now" aria-hidden="true"></div>
+        </div>
+        <div class="tl-list">
+          <div class="tl-it"><em style="background:#2E8FE8"></em><span class="nm">① 萌芽期</span><span class="dt">03-20~04-10</span></div>
+          <div class="tl-it"><em style="background:#31C9E8"></em><span class="nm">② 花期</span><span class="dt">04-10~05-05</span></div>
+          <div class="tl-it"><em style="background:#38D6FF"></em><span class="nm">③ 坐果期</span><span class="dt">05-05~05-20</span></div>
+          <div class="tl-it"><em style="background:#3E8EF0"></em><span class="nm">④ 幼果期</span><span class="dt">05-20~06-15</span></div>
+          <div class="tl-it on"><em style="background:#38D6FF"></em><span class="nm">⑤ 膨大期·着色期</span><span class="dt">06-15~10-10</span></div>
+          <div class="tl-it"><em style="background:#F2B33D"></em><span class="nm">⑥ 成熟期</span><span class="dt">10-10~11-05</span></div>
+        </div>
+      </div>
+
+      <!-- 病虫害风险热力 -->
+      <div class="card" id="L2">
+        <div class="card-h">
+          <h3 class="t"><i></i>病虫害风险热力</h3>
+          <div class="meta">12 地块 · 风险着色<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="heat">
+          <svg id="heatSvg" viewBox="0 0 900 720" preserveAspectRatio="xMidYMid meet"
+            role="img" aria-label="示范基地 12 地块病虫风险热力图，按低、中、高三级风险着色"></svg>
+          <div class="heat-pests" aria-hidden="true"><i>锈病</i><i>蚜虫</i><i>轮纹病</i><i>红蜘蛛</i></div>
+          <div class="heat-legend">
+            <span><em style="background:#2bd46e"></em>低风险 8</span>
+            <span><em style="background:#f5b53d"></em>中风险 3</span>
+            <span><em style="background:#ff5d63"></em>高风险 1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 中栏 -->
+    <div class="col">
+      <!-- 各地块生长曲线对比 -->
+      <div class="card" id="C1">
+        <div class="card-h">
+          <h3 class="t"><i></i>各地块生长曲线对比</h3>
+          <div class="meta" id="chartMeta">果实横径 mm · 近 12 周<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="legend">
+          <span><em style="background:#38D6FF"></em>1号东 · 富士</span>
+          <span><em style="background:#3E8EF0"></em>2号北 · 王林</span>
+          <span><em style="background:#31C9E8"></em>3号西 · 花牛</span>
+          <span><em style="background:#F2B33D"></em>1号南 · 富士</span>
+        </div>
+        <svg class="chart" id="growthSvg" viewBox="0 0 852 399" role="img"
+          aria-label="4 个代表地块近 12 周果实横径生长曲线对比折线图"></svg>
+      </div>
+
+      <!-- 指标切换 -->
+      <div class="card" id="C2">
+        <div class="card-h">
+          <h3 class="t"><i></i>监测指标切换</h3>
+          <div class="meta">影响上方曲线口径</div>
+        </div>
+        <div class="metric" id="metricBtns" role="group" aria-label="生长指标切换">
+          <button type="button" data-metric="diameter" class="on" aria-pressed="true"><b>果实横径</b><em>mm · 当前 76.2</em></button>
+          <button type="button" data-metric="height" aria-pressed="false"><b>株高</b><em>cm · 当前 240</em></button>
+          <button type="button" data-metric="shoot" aria-pressed="false"><b>新梢长度</b><em>cm · 当前 60</em></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右栏 -->
+    <div class="col">
+      <!-- 产量预估 vs 实采 -->
+      <div class="card" id="R1">
+        <div class="card-h">
+          <h3 class="t"><i></i>产量预估 vs 实采</h3>
+          <div class="meta">单位 吨 · 5 基地<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="legend">
+          <span><em style="background:#2E8FE8"></em>本季模型预估</span>
+          <span><em style="background:#31C9E8"></em>上年度实测</span>
+        </div>
+        <svg class="bars" id="yieldSvg" viewBox="0 0 436 267" role="img"
+          aria-label="麦积、秦州、秦安、甘谷、武山 5 基地本季模型预估与上年度实测产量分组柱状图"></svg>
+        <div class="bnote">平均偏差率 <b>2.6%</b>，最大偏差为 <em>秦安 +7.2%</em>，模型整体贴合实采。</div>
+      </div>
+
+      <!-- 物候期进度 -->
+      <div class="card" id="R2">
+        <div class="card-h">
+          <h3 class="t"><i></i>物候期进度</h3>
+          <div class="meta">锚点 06-15 → 10-10<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="prog">
+          <svg class="ring" viewBox="0 0 140 140" role="img" aria-label="膨大期·着色期完成度 68%">
+            <circle cx="70" cy="70" r="54" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="12"/>
+            <circle cx="70" cy="70" r="54" fill="none" stroke="#38D6FF" stroke-width="12" stroke-linecap="round"
+              pathLength="100" stroke-dasharray="68 32" transform="rotate(-90 70 70)"/>
+            <text class="ring-pct" x="70" y="66" text-anchor="middle">68%</text>
+            <text class="ring-sub" x="70" y="86" text-anchor="middle">膨大期·着色期</text>
+          </svg>
+          <div class="prog-info">
+            <div class="pbar">
+              <div class="row"><span>本世代完成度</span><b>68<small style="font-family:var(--font);font-size:12px;color:var(--text-3)">%</small></b></div>
+              <div class="track"><i style="width:68%"></i></div>
+            </div>
+            <div class="cdrow"><span class="k">着色完成日</span><b class="v ok">12 <small>天</small></b></div>
+            <div class="cdrow"><span class="k">采收窗口开启</span><b class="v">28 <small>天</small></b></div>
+            <div class="cdrow"><span class="k">套袋结束</span><b class="v over">已过期</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 底部支撑条 ============ -->
+  <div class="bottom">
+    <div class="bcard">
+      <h3 class="bh"><i></i>生育期积温趋势<span>近 12 周 · 累计</span></h3>
+      <div class="gdd">
+        <div class="gdd-l">
+          <div class="gdd-big"><b data-live="3120" data-amp=".003">3120</b><small>℃·d</small></div>
+          <div class="gdd-sub">周均 <b>+62</b> ℃·d<br>较常年同期 <b>偏高 4%</b></div>
+        </div>
+        <svg class="gdd-svg" id="gddSvg" viewBox="0 0 420 120" preserveAspectRatio="none" role="img"
+          aria-label="近 12 周生育期积温累计趋势折线图"></svg>
+      </div>
+    </div>
+    <div class="bcard">
+      <h3 class="bh"><i></i>关键生长指标<span>园区均值 · 近 7 日</span></h3>
+      <div class="kt">
+        <div class="kr kh"><span>指标</span><span>当前值</span><span>环比</span><span>评价</span></div>
+        <div class="kr"><span class="kn">平均单果重</span><b><span data-live="268" data-amp=".004">268</span> g</b><span class="kd up">↑ +6.4%</span><span class="kd ok">良好</span></div>
+        <div class="kr"><span class="kn">可溶性固形物</span><b><span data-live="12.8" data-amp=".006">12.8</span> %</b><span class="kd up">↑ +0.6</span><span class="kd ok">达标</span></div>
+        <div class="kr"><span class="kn">着色度</span><b><span data-live="46" data-amp=".012">46</span> %</b><span class="kd up">↑ +9.2%</span><span class="kd warn">偏慢</span></div>
+        <div class="kr"><span class="kn">叶绿素 SPAD</span><b><span data-live="42.6" data-amp=".005">42.6</span></b><span class="kd dn">↓ -1.2</span><span class="kd nor">正常</span></div>
+      </div>
+    </div>
+    <div class="bcard">
+      <h3 class="bh"><i></i>模型建议<span>物候决策 · 未来 7 天</span></h3>
+      <div class="advice">
+        <div class="ad cy"><i>①</i><div>未来 7 天昼夜温差 <b>10-12℃</b>，利于着色，建议继续<b>控水</b>、适度摘叶透光。</div></div>
+        <div class="ad warn"><i>②</i><div><b>北 1 地块</b>锈病风险上升，建议<b>预防性喷药</b>，避开午间高温施药。</div></div>
+        <div class="ad"><i>③</i><div>着色度 <b>46%</b> 略慢于计划，建议叶面补钾 <b>0.3%</b> 并摘除遮光叶。</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- 缩放适配（单屏不滚动） ---------- */
+(function(){
+  var s=document.getElementById('stage');
+  function fit(){var k=Math.min(innerWidth/1920,innerHeight/1080);s.style.transform='translate(-50%,-50%) scale('+k+')';}
+  addEventListener('resize',fit);fit();
+})();
+
+/* ---------- 千分位 ---------- */
+function fmtNum(n){return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+
+/* ---------- 数据时间戳：所有 [data-stamp] 统一填充 ---------- */
+function stampAll(){
+  var d=new Date(),p=function(n){return ('0'+n).slice(-2);};
+  var t=p(d.getHours())+':'+p(d.getMinutes());
+  [].forEach.call(document.querySelectorAll('[data-stamp]'),function(e){e.textContent='更新 '+t;});
+}
+stampAll();
+
+/* ---------- 加载态：骨架屏演示（接入真实接口后由数据到达驱动移除） ---------- */
+(function(){
+  var SKELETON_MS=500;
+  var nodes=[].slice.call(document.querySelectorAll('.sk'));
+  setTimeout(function(){nodes.forEach(function(n){n.classList.remove('sk');});},SKELETON_MS);
+})();
+
+/* ---------- 时钟（aria-live=off，避免读屏持续播报） ---------- */
+(function(){
+  var w=['周日','周一','周二','周三','周四','周五','周六'];
+  function t(){var d=new Date();
+    var p=function(n){return ('0'+n).slice(-2);};
+    document.getElementById('clk').textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+    document.getElementById('dt').textContent=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+w[d.getDay()];
+  }
+  t();setInterval(t,1000);
+})();
+
+/* ---------- 切换大屏 ---------- */
+(function(){
+  var sel=document.getElementById('screenSwitcher');
+  sel.addEventListener('change',function(){
+    if(sel.value && sel.value!=='da_growth.html') location.href=sel.value;
+  });
+})();
+
+/* ---------- 病虫风险热力：复用 12 地块坐标（SVG 900×720） ---------- */
+(function(){
+  var NS='http://www.w3.org/2000/svg',svg=document.getElementById('heatSvg');
+  function el(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+  var PLOTS=[
+    {id:'A1',pts:[[258,58],[448,46],[452,182],[300,190],[256,172]],name:'1号东',risk:'h'},
+    {id:'A2',pts:[[462,44],[652,52],[656,184],[466,188]],          name:'2号东',risk:'h'},
+    {id:'A3',pts:[[666,50],[702,44],[794,184],[700,190],[662,180]],name:'3号东',risk:'w'},
+    {id:'A4',pts:[[714,46],[888,52],[894,186],[800,182],[708,120]],name:'4号东',risk:'h'},
+    {id:'B1',pts:[[254,206],[446,200],[450,376],[300,384],[254,360]],name:'1号北',risk:'h'},
+    {id:'B2',pts:[[460,198],[648,204],[652,380],[464,382]],        name:'2号北',risk:'w'},
+    {id:'B3',pts:[[660,204],[772,200],[776,378],[664,380]],        name:'3号北',risk:'h'},
+    {id:'B4',pts:[[788,210],[892,206],[896,378],[790,374]],        name:'4号北',risk:'w'},
+    {id:'C1',pts:[[256,398],[448,392],[452,552],[270,560],[256,530]],name:'1号西',risk:'h'},
+    {id:'C2',pts:[[462,392],[650,396],[654,556],[466,558]],        name:'2号西',risk:'h'},
+    {id:'C3',pts:[[664,396],[888,390],[892,556],[672,560]],        name:'3号西',risk:'r'},
+    {id:'D1',pts:[[258,578],[632,566],[640,684],[300,692],[262,640]],name:'1号南',risk:'h'}
+  ];
+  var FILL={h:'rgba(43,212,110,.26)',w:'rgba(242,179,61,.30)',r:'rgba(229,86,75,.28)'};
+  var STROKE={h:'#2bd46e',w:'#f5b53d',r:'#ff5d63'};
+  var TXT={h:'低风险',w:'中风险',r:'高风险'};
+  svg.appendChild(el('polygon',{points:'238,30 892,34 896,688 430,704 210,652 182,470 228,290 214,130',class:'heat-boundary'}));
+  svg.appendChild(el('ellipse',{cx:186,cy:606,rx:38,ry:24,class:'water'}));
+  PLOTS.forEach(function(p){
+    var c=[0,0];p.pts.forEach(function(q){c[0]+=q[0];c[1]+=q[1];});
+    c=[c[0]/p.pts.length,c[1]/p.pts.length];
+    var g=el('g',{class:'plot'});
+    g.appendChild(el('polygon',{points:p.pts.map(function(q){return q[0]+','+q[1];}).join(' '),
+      fill:FILL[p.risk],stroke:STROKE[p.risk],'stroke-width':5,'stroke-linejoin':'round'}));
+    var t1=el('text',{x:c[0],y:c[1]-14,'text-anchor':'middle',class:'pid'});t1.textContent=p.id+' '+p.name;
+    var t2=el('text',{x:c[0],y:c[1]+28,'text-anchor':'middle',class:'prk'});t2.textContent=TXT[p.risk];
+    g.appendChild(t1);g.appendChild(t2);
+    svg.appendChild(g);
+  });
+})();
+
+/* ---------- 各地块生长曲线对比（多折线，可切换指标） ---------- */
+(function(){
+  var NS='http://www.w3.org/2000/svg';
+  var WEEKS=['-11','-10','-9','-8','-7','-6','-5','-4','-3','-2','-1','本周'];
+  var GCOL=['#38D6FF','#3E8EF0','#31C9E8','#F2B33D'];
+  var METRICS={
+    diameter:{unit:'mm',ylab:'果实横径',lo:40,hi:85,ticks:[40,50,60,70,80],s:[
+      [48.1,50.6,52.8,55.1,57.9,60.4,63.2,66.0,68.7,71.3,73.9,76.2],
+      [46.3,48.4,50.9,53.2,55.8,58.6,61.1,63.7,66.4,69.0,71.9,74.5],
+      [50.2,52.9,55.4,58.0,60.7,63.5,66.2,69.0,71.8,74.4,76.6,78.6],
+      [47.4,49.8,52.1,54.6,57.2,59.9,62.5,65.2,67.9,70.5,73.0,75.4]],
+      meta:'果实横径 mm · 近 12 周'},
+    height:{unit:'cm',ylab:'株高',lo:190,hi:260,ticks:[200,220,240,260],s:[
+      [204,207,210,213,216,219,222,226,229,232,236,240],
+      [199,202,205,208,211,214,217,220,223,226,229,232],
+      [212,215,218,221,224,227,230,233,236,239,242,245],
+      [207,210,213,216,219,222,225,228,231,234,237,240]],
+      meta:'株高 cm · 近 12 周'},
+    shoot:{unit:'cm',ylab:'新梢长度',lo:10,hi:70,ticks:[10,30,50,70],s:[
+      [26,30,34,38,42,45,48,51,54,56,58,60],
+      [24,28,32,36,40,43,46,49,52,54,56,58],
+      [30,34,38,42,46,49,52,55,58,60,62,64],
+      [27,31,35,39,43,46,49,52,55,57,59,61]],
+      meta:'新梢长度 cm · 近 12 周'}
+  };
+  var svg=document.getElementById('growthSvg');
+  var W=852,H=399,ML=56,MR=18,MT=14,MB=36;
+  function draw(key){
+    var cfg=METRICS[key];
+    function X(i){return ML+(W-ML-MR)*i/(WEEKS.length-1);}
+    function Y(v){return MT+(H-MT-MB)*(1-(v-cfg.lo)/(cfg.hi-cfg.lo));}
+    var h='';
+    cfg.ticks.forEach(function(t){
+      var y=Y(t).toFixed(1);
+      h+='<line class="grid" x1="'+ML+'" y1="'+y+'" x2="'+(W-MR)+'" y2="'+y+'"/>';
+      h+='<text class="ax" x="'+(ML-12)+'" y="'+(+y+4)+'" text-anchor="end">'+t+'</text>';
+    });
+    WEEKS.forEach(function(w,i){
+      h+='<text class="ax" x="'+X(i).toFixed(1)+'" y="'+(H-MB+22)+'" text-anchor="middle">'+w+'</text>';
+    });
+    h+='<line class="axis" x1="'+ML+'" y1="'+MT+'" x2="'+ML+'" y2="'+(H-MB)+'"/>';
+    h+='<line class="axis" x1="'+ML+'" y1="'+(H-MB)+'" x2="'+(W-MR)+'" y2="'+(H-MB)+'"/>';
+    var cy=(MT+H-MB)/2;
+    h+='<text class="ax ylab" x="14" y="'+cy+'" text-anchor="middle" transform="rotate(-90 14 '+cy+')">'+cfg.ylab+' ('+cfg.unit+')</text>';
+    cfg.s.forEach(function(arr,k){
+      var pts=arr.map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1);}).join(' ');
+      h+='<polyline points="'+pts+'" fill="none" stroke="'+GCOL[k]+'" stroke-width="2.4" '+
+         'stroke-linejoin="round" stroke-linecap="round"/>';
+      var li=arr.length-1;
+      h+='<circle cx="'+X(li).toFixed(1)+'" cy="'+Y(arr[li]).toFixed(1)+'" r="3.6" fill="'+GCOL[k]+'"/>';
+    });
+    svg.innerHTML=h;
+    document.getElementById('chartMeta').firstChild.textContent=cfg.meta+' · ';
+    svg.setAttribute('aria-label','4 个代表地块近 12 周'+cfg.ylab+'生长曲线对比折线图');
+  }
+  var btns=[].slice.call(document.querySelectorAll('#metricBtns button'));
+  btns.forEach(function(b){
+    b.addEventListener('click',function(){
+      btns.forEach(function(x){
+        var on=x===b;
+        x.classList.toggle('on',on);x.setAttribute('aria-pressed',on?'true':'false');
+      });
+      draw(b.getAttribute('data-metric'));
+    });
+  });
+  draw('diameter');
+})();
+
+/* ---------- 产量预估 vs 实采（分组柱状图 + 偏差率） ---------- */
+(function(){
+  var NS='http://www.w3.org/2000/svg',svg=document.getElementById('yieldSvg');
+  function el(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+  var DATA=[['麦积',4680,4510],['秦州',3920,4010],['秦安',3410,3180],['甘谷',2760,2690],['武山',2150,2240]];
+  var W=436,H=267,ML=44,MR=10,MT=12,MB=46,HI=5000;
+  function Y(v){return MT+(H-MT-MB)*(1-v/HI);}
+  [0,1000,2000,3000,4000,5000].forEach(function(t){
+    var y=(Y(t)).toFixed(1);
+    svg.appendChild(el('line',{class:'grid',x1:ML,y1:y,x2:W-MR,y2:y}));
+    var tx=el('text',{class:'ax',x:ML-10,y:(+y+4),'text-anchor':'end'});tx.textContent=fmtNum(t);
+    svg.appendChild(tx);
+  });
+  svg.appendChild(el('line',{class:'axis',x1:ML,y1:MT,x2:ML,y2:H-MB}));
+  svg.appendChild(el('line',{class:'axis',x1:ML,y1:H-MB,x2:W-MR,y2:H-MB}));
+
+  var gw=(W-ML-MR)/DATA.length, bw=26, gap=4;
+  DATA.forEach(function(d,i){
+    var cx=ML+gw*(i+0.5), x1=cx-(bw+gap/2), x2=cx+gap/2;
+    var est=d[1],act=d[2];
+    svg.appendChild(el('rect',{x:x1,y:Y(est),width:bw,height:(H-MB-Y(est)),rx:3,fill:'#2E8FE8'}));
+    svg.appendChild(el('rect',{x:x2,y:Y(act),width:bw,height:(H-MB-Y(act)),rx:3,fill:'#31C9E8'}));
+    var v1=el('text',{class:'bval',x:x1+bw/2,y:Y(est)-6,'text-anchor':'middle',fill:'#8fbdf5'});v1.textContent=est;
+    var v2=el('text',{class:'bval',x:x2+bw/2,y:Y(act)-6,'text-anchor':'middle',fill:'#67dced'});v2.textContent=act;
+    svg.appendChild(v1);svg.appendChild(v2);
+    var nm=el('text',{class:'bname',x:cx,y:H-MB+16,'text-anchor':'middle'});nm.textContent=d[0];
+    svg.appendChild(nm);
+    var dev=(est-act)/act*100;
+    var dv=el('text',{class:'bdev',x:cx,y:H-MB+33,'text-anchor':'middle',
+      fill:Math.abs(dev)>=5?'#E5564B':Math.abs(dev)>=3?'#F2B33D':'#9DB8DC'});
+    dv.textContent=(dev>=0?'+':'')+dev.toFixed(1)+'%';
+    svg.appendChild(dv);
+  });
+})();
+
+/* ---------- 近 12 周生育期积温趋势 ---------- */
+(function(){
+  var NS='http://www.w3.org/2000/svg',svg=document.getElementById('gddSvg');
+  function el(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+  var V=[1810,1930,2060,2190,2320,2450,2590,2730,2860,2970,3060,3120];
+  var W=420,H=120,P=8,LO=1750,HI=3250;
+  var pts=V.map(function(v,i){
+    var x=P+(W-2*P)*i/(V.length-1);
+    var y=H-P-(H-2*P)*(v-LO)/(HI-LO);
+    return [x,y];
+  });
+  var line=pts.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' ');
+  svg.appendChild(el('path',{d:'M'+pts[0][0].toFixed(1)+','+(H-P)+' L'+line.split(' ').join(' L')+' L'+pts[pts.length-1][0].toFixed(1)+','+(H-P)+' Z',
+    fill:'rgba(56,214,255,.10)',stroke:'none'}));
+  svg.appendChild(el('polyline',{points:line,fill:'none',stroke:'#38D6FF','stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+  svg.appendChild(el('circle',{cx:pts[pts.length-1][0].toFixed(1),cy:pts[pts.length-1][1].toFixed(1),r:3.6,fill:'#38D6FF'}));
+})();
+
+/* ---------- 关键数据：每 30 秒刷新（时间戳 + 轻微数字波动） ---------- */
+(function(){
+  var reduceMotion=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var nodes=[].slice.call(document.querySelectorAll('[data-live]'));
+  nodes.forEach(function(e){
+    var raw=e.getAttribute('data-live');
+    e.__dec=(raw.split('.')[1]||'').length;   /* 按原始数据保留小数位，避免刷新后失真 */
+    e.__suf=e.getAttribute('data-suffix')||'';
+    e.__amp=+(e.getAttribute('data-amp')||0.015);
+    e.__base=parseFloat(raw);
+  });
+  function jitter(){
+    nodes.forEach(function(e){
+      var v=e.__base*(1+(Math.random()*2-1)*e.__amp);
+      e.textContent=(e.__dec?v.toFixed(e.__dec):fmtNum(Math.round(v)))+e.__suf;
+    });
+    stampAll();
+  }
+  if(!reduceMotion) setInterval(jitter,30000);
+})();
+</script>
+</body>
+<script src="js/shared/mock-growth.js"></script>
+<script src="js/shared/dashboards-mock.js"></script>
+</html>

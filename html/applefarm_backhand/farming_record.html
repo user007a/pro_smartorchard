@@ -18,6 +18,13 @@
     transform:translateY(-2px);
     box-shadow:var(--shadow-md);
   }
+  /* 追溯按钮 / 移动端来源标记 */
+  .action-btn.trace { background:#f0f5ff; color:#2f54eb; }
+  .action-btn.trace:hover { background:#d6e4ff; }
+  .source-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; line-height:1.6; background:#e6f4ff; color:#0958d9; margin-left:4px; vertical-align:middle; }
+  .trace-link { color:var(--primary-500); text-decoration:none; font-weight:500; }
+  .trace-link:hover { text-decoration:underline; }
+  .trace-code { font-family:Consolas,Monaco,monospace; font-size:12px; color:var(--text-secondary); }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -60,16 +67,16 @@
           <div class="search-bar">
             <select class="search-select" id="baseSelect">
               <option value="">选择基地</option>
-              <option value="ytqx">天水麦积区基地</option>
-              <option value="whrc">天水荣成基地</option>
-              <option value="qdlx">青岛莱西基地</option>
-              <option value="zy">招远基地</option>
-              <option value="pl">麦积区阁基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水秦州基地">天水秦州基地</option>
+              <option value="青岛莱西基地">青岛莱西基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水甘谷基地">天水甘谷基地</option>
             </select>
             <select class="search-select" id="statusSelect" style="min-width:120px;">
               <option value="">全部状态</option>
               <option value="pending">待审核</option>
-              <option value="ongoing">进行中</option>
+              <option value="executing">进行中</option>
               <option value="completed">已完成</option>
               <option value="rejected">已退回</option>
             </select>
@@ -81,10 +88,16 @@
               <option value="irrigation">灌溉</option>
               <option value="other">其他</option>
             </select>
+            <select class="search-select" id="materialTypeSelect" style="min-width:120px;">
+              <option value="">农资类型</option>
+              <option value="fertilizer">肥料</option>
+              <option value="pesticide">农药</option>
+              <option value="tool">工具</option>
+            </select>
             <input type="date" class="search-input" id="startDate" placeholder="开始日期">
             <span class="date-separator">至</span>
             <input type="date" class="search-input" id="endDate" placeholder="结束日期">
-            <input type="text" class="search-input" placeholder="搜索记录内容..." id="searchInput">
+            <input type="text" class="search-input" placeholder="搜索地块/内容/操作人..." id="searchInput">
             
           <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="handleSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
           </div>
@@ -153,13 +166,13 @@
         <form id="form-add-record" class="modal-form">
           <div class="form-group">
             <label>所属基地</label>
-            <select class="form-control">
+            <select class="form-control" id="add-base">
               <option value="">请选择基地</option>
-              <option value="ytqx">天水麦积区基地</option>
-              <option value="whrc">天水荣成基地</option>
-              <option value="qdlx">青岛莱西基地</option>
-              <option value="zy">招远基地</option>
-              <option value="pl">麦积区阁基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水秦州基地">天水秦州基地</option>
+              <option value="青岛莱西基地">青岛莱西基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水甘谷基地">天水甘谷基地</option>
             </select>
           </div>
           <div class="form-group">
@@ -193,7 +206,7 @@
           </div>
           <div class="form-group">
             <label>农事类型</label>
-            <select class="form-control">
+            <select class="form-control" id="add-type">
               <option value="">请选择类型</option>
               <option value="fertilizer">施肥</option>
               <option value="pesticide">喷药</option>
@@ -231,11 +244,11 @@
           </div>
           <div class="form-group">
             <label>执行日期</label>
-            <input type="date" class="form-control">
+            <input type="date" class="form-control" id="add-date">
           </div>
           <div class="form-group">
             <label>执行内容</label>
-            <textarea class="form-control" rows="3" placeholder="请输入执行内容"></textarea>
+            <textarea class="form-control" rows="3" placeholder="请输入执行内容" id="add-content"></textarea>
           </div>
         </form>
       </div>
@@ -320,6 +333,10 @@
               <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">执行日期</div>
               <div id="detail-date" style="font-weight:600;">2026-09-05</div>
             </div>
+            <div id="detail-extra-wrap" style="display:none; padding:12px; background:var(--gray-50); border-radius:8px; grid-column: 1 / -1;">
+              <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">现场信息</div>
+              <div id="detail-extra" style="font-weight:600; word-break:break-all;"></div>
+            </div>
           </div>
           <div style="margin-top:16px; padding:12px; background:var(--gray-50); border-radius:8px;">
             <div style="font-size:12px; color:var(--text-tertiary); margin-bottom:4px;">执行内容</div>
@@ -349,11 +366,11 @@
           <div class="form-group">
             <label>所属基地</label>
             <select class="form-control" id="edit-base">
-              <option value="ytqx" selected>天水麦积区基地</option>
-              <option value="whrc">天水荣成基地</option>
-              <option value="qdlx">青岛莱西基地</option>
-              <option value="zy">招远基地</option>
-              <option value="pl">麦积区阁基地</option>
+              <option value="天水麦积区基地" selected>天水麦积区基地</option>
+              <option value="天水秦州基地">天水秦州基地</option>
+              <option value="青岛莱西基地">青岛莱西基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水甘谷基地">天水甘谷基地</option>
             </select>
           </div>
           <div class="form-group">
@@ -480,27 +497,73 @@
     </div>
   </div>
 
+  <!-- 记录关联追溯模态框 -->
+  <div id="modal-trace" class="modal-overlay">
+    <div class="modal-box" style="max-width:640px;">
+      <div class="modal-header">
+        <h3 class="modal-title">记录关联追溯</h3>
+        <button class="modal-close">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4L12 12M12 4L4 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom:16px; display:flex; align-items:center; gap:8px;">
+          <span style="font-size:12px; color:var(--text-tertiary);">记录编号</span>
+          <span id="trace-id" style="font-weight:600; font-size:15px;">REC-001</span>
+        </div>
+        <div id="trace-body"></div>
+        <div style="margin-top:16px; display:flex; gap:12px;">
+          <a class="jg-btn" href="trace_batch.html" target="_blank" style="text-decoration:none;">查看批次追溯</a>
+          <a class="jg-btn" href="trace_query.html" target="_blank" style="text-decoration:none;">追溯查询</a>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="jg-btn" onclick="Modal.hide('modal-trace')">关闭</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- 引入交互脚本 -->
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-bridge.js"></script>
 <script>
 // 当前页面数据
 var currentRecordId = '';
 
-// 搜索功能
-function handleSearch() {
-  var keyword = document.getElementById('searchInput').value.trim();
-  Toast.info('搜索功能已触发，关键词: ' + keyword);
-}
-
-// 显示详情
+// 搜索功能（实际实现见下方；此处保留占位以兼容可能的旧引用）
 function showDetail(id) {
   currentRecordId = id;
-  const rec = mockData.find(function(r){ return r.id === id; }) || {};
+  const pool = (typeof allRecords !== 'undefined' && allRecords.length) ? allRecords : mockData;
+  const rec = pool.find(function(r){ return r.id === id; }) || {};
   document.getElementById('detail-id').textContent = id;
-  const exEl = document.getElementById('detail-executor');
-  if (exEl) exEl.textContent = rec.executor || '-';
+  const setTxt = function(elId, val) {
+    var el = document.getElementById(elId);
+    if (el) el.textContent = (val === undefined || val === null || val === '') ? '-' : val;
+  };
+  setTxt('detail-base', rec.base);
+  setTxt('detail-plot', rec.plot);
+  setTxt('detail-type', rec.typeName);
+  setTxt('detail-executor', rec.executor);
+  setTxt('detail-date', rec.date ? (rec.time ? rec.date + ' ' + rec.time : rec.date) : '');
+  // 移动端现场记录附带备注与定位，便于追溯来源
+  var wrapEl = document.getElementById('detail-extra-wrap');
+  var extraEl = document.getElementById('detail-extra');
+  if (wrapEl && extraEl) {
+    if (rec.source === 'mobile') {
+      var parts = [];
+      if (rec.remark) parts.push('备注：' + rec.remark);
+      if (rec.gps) parts.push('定位：' + MobileBridge.formatGps(rec.gps));
+      if (rec.hasPhoto) parts.push('含现场照片');
+      extraEl.textContent = parts.length ? parts.join(' · ') : '移动端现场记录';
+      wrapEl.style.display = 'block';
+    } else {
+      wrapEl.style.display = 'none';
+    }
+  }
   Modal.show('modal-detail');
 }
 
@@ -508,26 +571,26 @@ function showDetail(id) {
 const mockData = [
   { id: 'REC-001', base: '天水麦积区基地', plot: 'D-001', type: 'fertilizer', typeName: '施肥', executor: '惠加宁', date: '2026-09-05', status: 'completed' },
   { id: 'REC-002', base: '天水麦积区基地', plot: 'D-002', type: 'tool', typeName: '修剪', executor: '黄忠坚', date: '2026-09-15', status: 'completed' },
-  { id: 'REC-003', base: '天水荣成基地', plot: 'D-004', type: 'pesticide', typeName: '喷药', executor: '徐水应', date: '2026-09-03', status: 'pending' },
-  { id: 'REC-004', base: '天水荣成基地', plot: 'D-005', type: 'pesticide', typeName: '病虫害防治', executor: '朱泉龙', date: '2026-09-08', status: 'executing' },
+  { id: 'REC-003', base: '天水秦州基地', plot: 'D-004', type: 'pesticide', typeName: '喷药', executor: '徐水应', date: '2026-09-03', status: 'pending' },
+  { id: 'REC-004', base: '天水秦州基地', plot: 'D-005', type: 'pesticide', typeName: '病虫害防治', executor: '朱泉龙', date: '2026-09-08', status: 'executing' },
   { id: 'REC-005', base: '青岛莱西基地', plot: 'D-006', type: 'irrigation', typeName: '灌溉', executor: '陈小忠', date: '2026-09-10', status: 'completed' },
   { id: 'REC-006', base: '天水麦积区基地', plot: 'D-003', type: 'tool', typeName: '疏花疏果', executor: '廖春亮', date: '2026-09-12', status: 'rejected' },
-  { id: 'REC-007', base: '天水荣成基地', plot: 'D-007', type: 'fertilizer', typeName: '施肥', executor: '李建明', date: '2026-09-15', status: 'completed' },
+  { id: 'REC-007', base: '天水秦州基地', plot: 'D-007', type: 'fertilizer', typeName: '施肥', executor: '李建明', date: '2026-09-15', status: 'completed' },
   { id: 'REC-008', base: '青岛莱西基地', plot: 'D-008', type: 'tool', typeName: '套袋', executor: '李根', date: '2026-09-20', status: 'completed' },
   { id: 'REC-009', base: '招远基地', plot: 'D-009', type: 'pesticide', typeName: '病虫害防治', executor: '张才孙', date: '2026-09-18', status: 'pending' },
-  { id: 'REC-010', base: '麦积区阁基地', plot: 'D-010', type: 'irrigation', typeName: '灌溉', executor: '刘全国', date: '2026-09-01', status: 'completed' },
+  { id: 'REC-010', base: '天水甘谷基地', plot: 'D-010', type: 'irrigation', typeName: '灌溉', executor: '刘全国', date: '2026-09-01', status: 'completed' },
   { id: 'REC-011', base: '天水麦积区基地', plot: 'D-011', type: 'tool', typeName: '修剪', executor: '毛定卫', date: '2026-09-05', status: 'completed' },
-  { id: 'REC-012', base: '天水荣成基地', plot: 'D-012', type: 'fertilizer', typeName: '追肥', executor: '叶三东', date: '2026-09-10', status: 'completed' },
+  { id: 'REC-012', base: '天水秦州基地', plot: 'D-012', type: 'fertilizer', typeName: '追肥', executor: '叶三东', date: '2026-09-10', status: 'completed' },
   { id: 'REC-013', base: '青岛莱西基地', plot: 'D-013', type: 'pesticide', typeName: '喷药', executor: '周才贵', date: '2026-09-15', status: 'completed' },
   { id: 'REC-014', base: '招远基地', plot: 'D-014', type: 'irrigation', typeName: '灌溉', executor: '程名高', date: '2026-09-20', status: 'completed' },
-  { id: 'REC-015', base: '麦积区阁基地', plot: 'D-015', type: 'tool', typeName: '套袋', executor: '邓小华', date: '2026-09-19', status: 'completed' },
+  { id: 'REC-015', base: '天水甘谷基地', plot: 'D-015', type: 'tool', typeName: '套袋', executor: '邓小华', date: '2026-09-19', status: 'completed' },
   { id: 'REC-016', base: '天水麦积区基地', plot: 'D-016', type: 'fertilizer', typeName: '施肥', executor: '周成友', date: '2026-09-01', status: 'completed' },
-  { id: 'REC-017', base: '天水荣成基地', plot: 'D-017', type: 'pesticide', typeName: '病虫害防治', executor: '危红卫', date: '2026-09-05', status: 'completed' },
+  { id: 'REC-017', base: '天水秦州基地', plot: 'D-017', type: 'pesticide', typeName: '病虫害防治', executor: '危红卫', date: '2026-09-05', status: 'completed' },
   { id: 'REC-018', base: '青岛莱西基地', plot: 'D-018', type: 'tool', typeName: '修剪', executor: '方超', date: '2026-09-10', status: 'completed' },
   { id: 'REC-019', base: '招远基地', plot: 'D-019', type: 'irrigation', typeName: '灌溉', executor: '曹红英', date: '2026-09-15', status: 'completed' },
-  { id: 'REC-020', base: '麦积区阁基地', plot: 'D-020', type: 'fertilizer', typeName: '追肥', executor: '崔新根', date: '2026-09-20', status: 'completed' },
+  { id: 'REC-020', base: '天水甘谷基地', plot: 'D-020', type: 'fertilizer', typeName: '追肥', executor: '崔新根', date: '2026-09-20', status: 'completed' },
   { id: 'REC-021', base: '天水麦积区基地', plot: 'D-021', type: 'pesticide', typeName: '喷药', executor: '惠加宁', date: '2026-09-20', status: 'completed' },
-  { id: 'REC-022', base: '天水荣成基地', plot: 'D-022', type: 'tool', typeName: '疏花疏果', executor: '黄忠坚', date: '2026-09-21', status: 'completed' },
+  { id: 'REC-022', base: '天水秦州基地', plot: 'D-022', type: 'tool', typeName: '疏花疏果', executor: '黄忠坚', date: '2026-09-21', status: 'completed' },
   { id: 'REC-023', base: '青岛莱西基地', plot: 'D-023', type: 'irrigation', typeName: '灌溉', executor: '徐水应', date: '2026-09-05', status: 'completed' }
 ];
 
@@ -567,12 +630,12 @@ function getActionButtons(item) {
 function renderRow(item, index) {
   return `<tr>
     <td>${index + 1}</td>
-    <td><strong>${item.id}</strong></td>
+    <td><strong>${item.id}</strong>${item.source === 'mobile' ? '<span class="source-badge">移动端</span>' : ''}</td>
     <td>${item.base}</td>
     <td>${item.plot}</td>
     <td><span class="type-tag ${item.type}">${item.typeName}</span></td>
     <td>${item.executor}</td>
-    <td>${item.date}</td>
+    <td>${item.date}${item.time ? ' ' + item.time : ''}</td>
     <td>${getStatusTag(item.status)}</td>
     <td>${getActionButtons(item)}</td>
   </tr>`;
@@ -585,8 +648,14 @@ function handleSearch() {
   var type = document.getElementById('typeSelect').value;
   var status = document.getElementById('statusSelect').value;
 
-  var filteredData = mockData.filter(item => {
-    if (keyword && !item.id.includes(keyword)) return false;
+  var source = (typeof allRecords !== 'undefined') ? allRecords : mockData;
+  var filteredData = source.filter(item => {
+    var hit = !keyword
+      || String(item.id).includes(keyword)
+      || String(item.executor || '').includes(keyword)
+      || String(item.plot || '').includes(keyword)
+      || String(item.remark || '').includes(keyword);   // 移动端现场记录备注
+    if (!hit) return false;
     if (base && !item.base.includes(base)) return false;
     if (type && item.type !== type) return false;
     if (status && item.status !== status) return false;
@@ -594,13 +663,15 @@ function handleSearch() {
   });
 
   Pagination.updateData(filteredData);
-  Toast.info('找到 ' + filteredData.length + ' 条记录');
+  if (typeof Toast !== 'undefined') {
+    Toast.show('找到 ' + filteredData.length + ' 条记录', 'info');
+  }
 }
 
 // 显示编辑
 function showEdit(id) {
   currentRecordId = id;
-  const rec = mockData.find(function(r){ return r.id === id; }) || {};
+  const rec = (typeof allRecords !== 'undefined' ? allRecords : mockData).find(function(r){ return r.id === id; }) || {};
   const sel = document.getElementById('edit-executor');
   if (sel && rec.executor) {
     const opts = sel.options;
@@ -656,16 +727,31 @@ function exportRecord(format) {
   Modal.hide('modal-export');
 }
 
+// 全部记录 = PC 端基础数据 + 移动端现场作业数据（FLOW-004 跨端闭环）
+var allRecords = [];
+
 // 初始化分页
 document.addEventListener('DOMContentLoaded', function() {
+  var mobileRecords = (typeof MobileBridge !== 'undefined') ? MobileBridge.farmingRecords() : [];
+  // 移动端现场记录优先展示（按执行日期倒序），保证新提交记录在首页可见
+  allRecords = mobileRecords.concat(mockData).sort(function(a, b) {
+    var ad = (a.date || '') + (a.time || '');
+    var bd = (b.date || '') + (b.time || '');
+    return bd < ad ? -1 : (bd > ad ? 1 : 0);
+  });
+
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
-    data: mockData,
+    data: allRecords,
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderRow
   });
+
+  if (mobileRecords.length > 0 && typeof Toast !== 'undefined') {
+    Toast.show('已加载移动端现场记录 ' + mobileRecords.length + ' 条', 'info');
+  }
 });
 </script>
 

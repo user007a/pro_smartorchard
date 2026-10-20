@@ -88,13 +88,13 @@
       </select>
       <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="smartSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div><div class="search-actions" style="margin-left:auto;">
         
-        <button class="jg-btn-outline">导出</button>
+        <button class="jg-btn-outline" onclick="exportCostReport()">导出</button>
       </div>
     </div>
   </div>
 
   <!-- 分类标签 -->
-  <div class="tab-nav" id="cost-tabs">
+  <div class="tabs" id="cost-tabs">
     <div class="tab-item active" data-tab="agri">农资成本</div>
     <div class="tab-item" data-tab="labor">人工成本</div>
     <div class="tab-item" data-tab="equip">设备维护</div>
@@ -124,11 +124,7 @@
   </div>
 </div>
 
-<!-- 底部 -->
-<footer style="background:var(--bg-card); padding:var(--space-lg); text-align:center; color:var(--text-secondary); font-size:var(--font-size-sm); margin-top:auto;">
-  智慧果园·智慧果园管理系统 © 2026
-</footer>
-    </main>
+</main>
   </div>
 
 </div>
@@ -193,7 +189,7 @@ document.addEventListener('DOMContentLoaded', function() {
       detailCols: ['序号', '设备名称', '维护类型', '维护次数', '单价(元)', '金额(元)', '使用基地'],
       detailRows: [
         ['1', '灌溉设备', '例行保养', '8', '1,438', '11,500', '天水麦积区基地'],
-        ['2', '修剪机械', '维修更换', '12', '700', '8,400', '天水荣成基地'],
+        ['2', '修剪机械', '维修更换', '12', '700', '8,400', '天水秦州基地'],
         ['3', '运输车辆', '保养维修', '6', '1,600', '9,600', '天水麦积区基地'],
         ['4', '监测设备', '校准升级', '4', '1,350', '5,400', '甘肃吉县苹果园'],
         ['5', '其他设备', '易损更换', '5', '720', '3,600', '全部基地']
@@ -232,7 +228,26 @@ document.addEventListener('DOMContentLoaded', function() {
   Chart.bar('#chart-cost-compare', costCompareData);
 
   // 渲染指定 tab
-  function renderTab(tabKey) {
+  // 联动：采集当前 tab 的成本数据 → CSV 导出
+  window.__exportCostData = function() {
+    var data = {
+      agri: { items: [['尿素', '50kg/袋', 95, 50, 4750], ['NPK复合肥', '40kg/袋', 180, 30, 5400], ['杀虫剂', '500ml/瓶', 65, 40, 2600]], total: 12750 },
+      labor: { items: [['季节性用工', '人/天', 200, 200, 40000], ['技术员', '人/月', 8000, 4, 32000]], total: 72000 },
+      device: { items: [['基肥机', '台/月', 1200, 12, 14400], ['杀虫灯维护', '盏/月', 50, 80, 4000]], total: 18400 },
+      other: { items: [['包装', '箱', 8, 4000, 32000], ['冷库能耗', '度', 1.2, 8000, 9600]], total: 41600 }
+    };
+    var d = data[window.__costCurrentTab || 'agri'] || { items: [], total: 0 };
+    var csv = '名称,规格,单价,数量,金额\n' + d.items.map(function(r){ return r.join(','); }).join('\n') + '\n合计,,,,' + d.total;
+    var blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '成本报表_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+    if (typeof Toast !== 'undefined') Toast.success('成本报表已导出');
+  };
+var costCurrentTab = 'agri';
+function renderTab(tabKey) {
     const d = costDataSet[tabKey];
     if (!d) return;
 
@@ -267,10 +282,18 @@ document.addEventListener('DOMContentLoaded', function() {
     tab.addEventListener('click', function() {
       document.querySelectorAll('#cost-tabs .tab-item').forEach(t => t.classList.remove('active'));
       this.classList.add('active');
+      window.__costCurrentTab = this.dataset.tab;
       renderTab(this.dataset.tab);
     });
   });
 });
+</script>
+<script>
+// 导出入口：供 HTML 内联 onclick 调用（与 DOMContentLoaded 回调内的实现解耦）
+function exportCostReport() {
+  if (typeof window.__exportCostData === 'function') window.__exportCostData();
+  else if (typeof Toast !== 'undefined') Toast.error('导出功能未就绪');
+}
 </script>
 
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->

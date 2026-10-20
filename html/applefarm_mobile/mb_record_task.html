@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <script src="js/mobile-store.js"></script>
   <style>
     /* Step Bar */
     .step-bar {
@@ -454,6 +455,12 @@
       </div>
     </div>
 
+    <!-- 离线同步状态栏（F-282） -->
+    <div id="syncBar"></div>
+
+    <!-- 真实拍照：移动端调用摄像头 -->
+    <input type="file" id="photoInput" accept="image/*" capture="environment" hidden>
+
     <!-- Step 1: Photo -->
     <div class="content" id="stepContent1">
       <div class="card">
@@ -683,7 +690,7 @@
         <div class="confirm-list">
           <div class="confirm-item">
             <div class="confirm-label">农事照片</div>
-            <div class="confirm-value">已上传 1 张</div>
+            <div class="confirm-value" id="confirmPhoto">未拍摄</div>
           </div>
           <div class="confirm-item">
             <div class="confirm-label">地块位置</div>
@@ -695,7 +702,7 @@
           </div>
           <div class="confirm-item">
             <div class="confirm-label">GPS定位</div>
-            <div class="confirm-value">北纬36.5°，东经117.8°</div>
+            <div class="confirm-value" id="confirmGps">定位中…</div>
           </div>
         </div>
       </div>
@@ -746,13 +753,68 @@
     var currentStep = 1;
     var selectedPlot = '';
     var selectedTaskType = '';
+    var photoData = null;      // 照片 dataURL（压缩后）
+    var gpsPoint = null;       // 采集到的定位
 
     function goBack() { window.history.back(); }
 
+    /* ---------- 定位采集（F-243） ---------- */
+    function captureGps() {
+      MobileStore.geolocate().then(function (p) {
+        gpsPoint = p;
+        var label = '北纬' + p.lat.toFixed(4) + '°，东经' + p.lng.toFixed(4) + '°';
+        document.getElementById('confirmGps').textContent =
+          label + (p.degraded ? '（' + p.message + '）' : '');
+      });
+    }
+
+    /* ---------- 真实拍照 ---------- */
     function takePhoto() {
-      document.getElementById('photoUpload').classList.add('has-photo');
-      document.getElementById('previewImg').src = 'https://neeko-copilot.bytedance.net/api/text2image?prompt=apple%20orchard%20farming%20scene%20with%20farmer%20working&image_size=landscape_4_3';
-      document.getElementById('previewImg').style.display = 'block';
+      document.getElementById('photoInput').click();
+    }
+
+    function onPhotoPicked(input) {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      if (!file.type || file.type.indexOf('image/') !== 0) {
+        MobileStore.toast('请选择图片文件', 'warning');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        compressImage(e.target.result, function (dataUrl) {
+          photoData = dataUrl;
+          var area = document.getElementById('photoUpload');
+          area.classList.add('has-photo');
+          var img = document.getElementById('previewImg');
+          img.src = dataUrl;
+          img.style.display = 'block';
+          document.getElementById('confirmPhoto').textContent = '已拍摄 1 张';
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+
+    /** 压缩到最大边 1280，避免 localStorage 配额溢出 */
+    function compressImage(dataUrl, cb) {
+      var img = new Image();
+      img.onload = function () {
+        var MAX = 1280;
+        var w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          var ratio = Math.min(MAX / w, MAX / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        var canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        try { cb(canvas.toDataURL('image/jpeg', 0.7)); }
+        catch (err) { cb(dataUrl); }
+      };
+      img.onerror = function () { cb(dataUrl); };
+      img.src = dataUrl;
     }
 
     function selectPlot(plot) {
@@ -786,14 +848,14 @@
 
     function nextStep() {
       if (currentStep === 1) {
-        if (!document.getElementById('photoUpload').classList.contains('has-photo')) {
-          alert('请先拍摄现场照片');
+        if (!photoData) {
+          MobileStore.toast('请先拍摄现场照片', 'warning');
           return;
         }
         currentStep = 2;
       } else if (currentStep === 2) {
         if (!selectedPlot || !selectedTaskType) {
-          alert('请选择地块和农事类型');
+          MobileStore.toast('请选择地块和农事类型', 'warning');
           return;
         }
         currentStep = 3;
@@ -819,19 +881,44 @@
       });
     }
 
+    /**
+     * 提交农事记录。
+     * 无论在线与否都先写入共享存储（PC 端 farming_record 可读），
+     * 再入同步队列：在线则立即上传并即刻移除，离线则留队列待网络恢复。
+     */
     function submitTask() {
-      if (navigator.onLine) {
-        document.getElementById('successModal').classList.add('show');
-      } else {
-        localStorage.setItem('pendingRecord', JSON.stringify({
-          plot: selectedPlot,
-          taskType: selectedTaskType,
-          remark: document.getElementById('remarkInput').value,
-          timestamp: Date.now(),
-          status: 'pending'
-        }));
-        document.getElementById('offlineModal').classList.add('show');
+      if (!selectedPlot || !selectedTaskType) {
+        MobileStore.toast('信息不完整，请返回补充', 'warning');
+        return;
       }
+
+      var record = {
+        id: 'farm_' + Date.now(),
+        plot: selectedPlot,
+        taskType: selectedTaskType,
+        remark: document.getElementById('remarkInput').value || '',
+        photo: photoData,
+        gps: gpsPoint,
+        operator: '张建国',
+        source: 'mobile',
+        status: 'pending_sync',
+        createTime: new Date().toISOString()
+      };
+
+      // 1) 写入共享农事记录，PC 端立即可见
+      MobileStore.push(MobileStore.KEYS.farming, record);
+
+      // 2) 入离线同步队列
+      MobileStore.enqueue({
+        id: 'q_' + record.id,
+        type: 'farming_record',
+        refId: record.id,
+        payload: record
+      });
+
+      var online = MobileStore.isOnline();
+      document.getElementById('successModal').classList.toggle('show', online);
+      document.getElementById('offlineModal').classList.toggle('show', !online);
     }
 
     function closeModal() {
@@ -843,6 +930,12 @@
       document.getElementById('offlineModal').classList.remove('show');
       window.location.href = 'mb_service.html';
     }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      document.getElementById('photoInput').addEventListener('change', function () { onPhotoPicked(this); });
+      MobileStore.renderSyncBar(document.getElementById('syncBar'));
+      captureGps();
+    });
   </script>
 </body>
 </html>

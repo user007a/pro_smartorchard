@@ -80,7 +80,7 @@
       </select>
       <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="smartSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div><div class="search-actions" style="margin-left:auto;">
         
-        <button class="jg-btn-outline">导出</button>
+        <button class="jg-btn-outline" onclick="exportRevenueReport()">导出</button>
       </div>
     </div>
   </div>
@@ -110,7 +110,7 @@
   </div>
 
   <!-- 分类标签 -->
-  <div class="tab-nav" id="revenue-tabs">
+  <div class="tabs" id="revenue-tabs">
     <div class="tab-item active" data-tab="trend">收入趋势</div>
     <div class="tab-item" data-tab="struct">收入构成</div>
     <div class="tab-item" data-tab="customer">客户分析</div>
@@ -134,11 +134,7 @@
   </div>
 </div>
 
-<!-- 底部 -->
-<footer style="background:var(--bg-card); padding:var(--space-lg); text-align:center; color:var(--text-secondary); font-size:var(--font-size-sm); margin-top:auto;">
-  智慧果园·智慧果园管理系统 © 2026
-</footer>
-    </main>
+</main>
   </div>
 
 </div>
@@ -271,7 +267,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
 
+  window.__exportRevenueData = function() {
+    var data = {
+      adopt: { items: [['幸福树-001', '麦积区基地 A区', 1888, 12, 22656]], total: 22656 },
+      wholesale: { items: [['批发订单-A', '华东区', 148200, 1, 148200]], total: 148200 },
+      retail: { items: [['H5商城订单', '天水', 62000, 8, 62000]], total: 62000 },
+      pick: { items: [['观光采摘', '国庆假期', 38000, 200, 38000]], total: 38000 },
+      other: { items: [['品牌授权', '山东', 18500, 1, 18500]], total: 18500 }
+    };
+    var d = data[window.__revCurrentTab || 'adopt'] || { items: [], total: 0 };
+    var csv = '项目,范围,单价,数量,金额\n' + d.items.map(function(r){ return r.join(','); }).join('\n') + '\n合计,,,,' + d.total;
+    var blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '营收报表_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+    if (typeof Toast !== 'undefined') Toast.success('营收报表已导出');
+  };
+  var revCurrentTab = 'adopt';
   function renderTab(tabKey) {
+    revCurrentTab = tabKey;
+    window.__revCurrentTab = tabKey;
     const d = revenueDataSet[tabKey];
     if (!d) return;
 
@@ -304,10 +321,18 @@ document.addEventListener('DOMContentLoaded', function() {
     tab.addEventListener('click', function() {
       document.querySelectorAll('#revenue-tabs .tab-item').forEach(t => t.classList.remove('active'));
       this.classList.add('active');
+      window.__revCurrentTab = this.dataset.tab;
       renderTab(this.dataset.tab);
     });
   });
 });
+</script>
+<script>
+// 导出入口：供 HTML 内联 onclick 调用（与 DOMContentLoaded 回调内的实现解耦）
+function exportRevenueReport() {
+  if (typeof window.__exportRevenueData === 'function') window.__exportRevenueData();
+  else if (typeof Toast !== 'undefined') Toast.error('导出功能未就绪');
+}
 </script>
 
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->

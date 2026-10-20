@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <!-- 共享数据层 -->
+  <script src="js/mobile-store.js"></script>
   <style>
     /* 页面特定变量 - 金色系（证书专用） */
     :root {
@@ -436,13 +438,13 @@
                 此证书郑重证明
               </div>
               <div class="cert-text">
-                <span class="cert-highlight">张三</span> 已成功认养
+                <span class="cert-highlight" id="certAdopter">张三</span> 已成功认养
               </div>
               <div class="cert-text" style="font-size: var(--font-lg);">
-                <span class="cert-highlight">花牛苹果 #A025</span>
+                <span class="cert-highlight" id="certTreeNo">花牛苹果 #A025</span>
               </div>
               <div class="cert-text">
-                认养期限：<span class="cert-highlight">2026.09.15 - 2027.03.14</span>
+                认养期限：<span class="cert-highlight" id="certPeriod">2026.09.15 - 2027.03.14</span>
               </div>
               
               <div class="cert-divider"></div>
@@ -462,40 +464,40 @@
             <div class="cert-info">
               <div class="info-row">
                 <div class="info-label">认养编号</div>
-                <div class="info-value">AD20260315001</div>
+                <div class="info-value" id="certNo">AD20260315001</div>
               </div>
               <div class="info-row">
                 <div class="info-label">认养人</div>
-                <div class="info-value">张三</div>
+                <div class="info-value" id="certInfoAdopter">张三</div>
               </div>
               <div class="info-row">
                 <div class="info-label">品种</div>
-                <div class="info-value">花牛苹果</div>
+                <div class="info-value" id="certVariety">花牛苹果</div>
               </div>
               <div class="info-row">
                 <div class="info-label">预估产量</div>
-                <div class="info-value">约80斤</div>
+                <div class="info-value" id="certYield">约80斤</div>
               </div>
               <div class="info-row">
                 <div class="info-label">认养基地</div>
-                <div class="info-value">麦积区基地 A区 3号地块</div>
+                <div class="info-value" id="certBase">麦积区基地 A区 3号地块</div>
               </div>
             </div>
             
             <div class="cert-footer">
               <div class="cert-date">
                 <div class="cert-date-label">发证日期</div>
-                <div class="cert-date-value">2026年09月15日</div>
+                <div class="cert-date-value" id="certDate">2026年09月15日</div>
               </div>
               <div class="cert-seal">
                 <span class="seal-icon">🌳</span>
                 <span class="seal-text">智慧果园</span>
               </div>
               <div class="cert-qr">
-                <div class="qr-placeholder">
-                  <span class="qr-icon">📱</span>
+                <div class="qr-placeholder" style="padding: 3px;">
+                  <canvas id="certQr" width="150" height="150" style="width: 54px; height: 54px; display: block;"></canvas>
                 </div>
-                <div class="qr-text">扫码查看详情</div>
+                <div class="qr-text">识别码 · 演示</div>
               </div>
             </div>
           </div>
@@ -590,22 +592,259 @@
     function goBack() {
       window.history.back();
     }
-    
+
+    function certData() {
+      var g = function (id) { var el = document.getElementById(id); return el ? el.textContent.trim() : ''; };
+      return {
+        no: g('certNo'),
+        adopter: g('certAdopter'),
+        treeNo: g('certTreeNo'),
+        period: g('certPeriod'),
+        variety: g('certVariety'),
+        yield: g('certYield'),
+        base: g('certBase'),
+        date: g('certDate')
+      };
+    }
+
+    /* 确定性伪随机：同一识别码每次生成相同图案 */
+    function seededRand(seed) {
+      var h = 2166136261 >>> 0;
+      for (var i = 0; i < String(seed).length; i++) {
+        h ^= String(seed).charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+      return function () {
+        h ^= h << 13; h >>>= 0;
+        h ^= h >> 17;
+        h ^= h << 5; h >>>= 0;
+        return h / 4294967296;
+      };
+    }
+
+    // 用 canvas 绘制确定性识别码点阵（演示用，非标准二维码）
+    function drawCodeMatrix(canvas, seed) {
+      var ctx = canvas.getContext('2d');
+      var size = canvas.width;
+      var N = 21;
+      var quiet = 2;
+      var cell = size / (N + quiet * 2);
+      ctx.clearRect(0, 0, size, size);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = '#1a1a1a';
+
+      var rand = seededRand(seed || 'seed');
+      var grid = [];
+      for (var y = 0; y < N; y++) {
+        grid[y] = [];
+        for (var x = 0; x < N; x++) grid[y][x] = rand() < 0.45 ? 1 : 0;
+      }
+      function finder(ox, oy) {
+        for (var fy = 0; fy < 7; fy++) {
+          for (var fx = 0; fx < 7; fx++) {
+            var edge = (fy === 0 || fy === 6 || fx === 0 || fx === 6);
+            var core = (fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4);
+            grid[oy + fy][ox + fx] = (edge || core) ? 1 : 0;
+          }
+        }
+      }
+      finder(0, 0);
+      finder(N - 7, 0);
+      finder(0, N - 7);
+
+      for (var yy = 0; yy < N; yy++) {
+        for (var xx = 0; xx < N; xx++) {
+          if (grid[yy][xx]) {
+            ctx.fillRect((xx + quiet) * cell, (yy + quiet) * cell, Math.ceil(cell), Math.ceil(cell));
+          }
+        }
+      }
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    // 将证书区自绘为图片（无第三方库时的降级实现）
+    function renderCertificateImage() {
+      var d = certData();
+      var W = 750, H = 1080;
+      var cv = document.createElement('canvas');
+      cv.width = W; cv.height = H;
+      var ctx = cv.getContext('2d');
+      var GOLD = '#d4af37', GOLD_DARK = '#b8962e', INK = '#333333', SUB = '#777777';
+      var FONT = '"PingFang SC","Microsoft YaHei",sans-serif';
+
+      var bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, '#ffffff');
+      bg.addColorStop(1, '#fefcf5');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.fillStyle = GOLD;
+      ctx.fillRect(0, 0, W, 12);
+
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 4;
+      ctx.strokeRect(28, 40, W - 56, H - 80);
+
+      ctx.setLineDash([6, 6]); ctx.strokeStyle = GOLD; ctx.lineWidth = 2;
+      ctx.strokeRect(52, 64, W - 104, H - 128);
+      ctx.setLineDash([]);
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      var cx = W / 2;
+
+      ctx.fillStyle = GOLD_DARK;
+      ctx.font = 'bold 46px ' + FONT;
+      ctx.fillText('苹果树认养证书', cx, 150);
+      ctx.fillStyle = SUB;
+      ctx.font = '16px ' + FONT;
+      ctx.fillText('ADOPTION CERTIFICATE', cx, 190);
+
+      ctx.fillStyle = SUB;
+      ctx.font = '24px ' + FONT;
+      ctx.fillText('此证书郑重证明', cx, 268);
+      ctx.fillStyle = INK;
+      ctx.font = '28px ' + FONT;
+      ctx.fillText(d.adopter + ' 已成功认养', cx, 312);
+      ctx.fillStyle = GOLD_DARK;
+      ctx.font = 'bold 36px ' + FONT;
+      ctx.fillText(d.treeNo, cx, 366);
+      ctx.fillStyle = INK;
+      ctx.font = '24px ' + FONT;
+      ctx.fillText('认养期限：' + d.period, cx, 410);
+
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(cx - 40, 448); ctx.lineTo(cx + 40, 448); ctx.stroke();
+
+      ctx.fillStyle = SUB;
+      ctx.font = '20px ' + FONT;
+      ctx.fillText('认养期间，您将享有果树产出、采摘体验、实时监控等专属权益', cx, 482);
+
+      var boxX = 120, boxY = 530, boxW = W - 240, boxH = 300;
+      ctx.fillStyle = '#fef9e7';
+      ctx.strokeStyle = 'rgba(212,175,55,0.4)';
+      ctx.lineWidth = 1;
+      roundRect(ctx, boxX, boxY, boxW, boxH, 12);
+      ctx.fill(); ctx.stroke();
+
+      var rows = [
+        ['认养编号', d.no],
+        ['认养人', d.adopter],
+        ['品种', d.variety],
+        ['预估产量', d.yield],
+        ['认养基地', d.base]
+      ];
+      rows.forEach(function (r, i) {
+        var y = boxY + 42 + i * 54;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = SUB;
+        ctx.font = '20px ' + FONT;
+        ctx.fillText(r[0], boxX + 32, y);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = INK;
+        ctx.font = '22px ' + FONT;
+        ctx.fillText(r[1], boxX + boxW - 32, y);
+        if (i < rows.length - 1) {
+          ctx.strokeStyle = 'rgba(212,175,55,0.3)'; ctx.lineWidth = 1;
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath(); ctx.moveTo(boxX + 24, y + 22); ctx.lineTo(boxX + boxW - 24, y + 22); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      });
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = SUB;
+      ctx.font = '18px ' + FONT;
+      ctx.fillText('发证日期', 120, H - 170);
+      ctx.fillStyle = INK;
+      ctx.font = '22px ' + FONT;
+      ctx.fillText(d.date, 120, H - 138);
+
+      var sealX = cx - 20, sealY = H - 150, sealR = 44;
+      ctx.beginPath(); ctx.arc(sealX, sealY, sealR, 0, Math.PI * 2);
+      ctx.fillStyle = '#fef9e7'; ctx.fill();
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = GOLD_DARK;
+      ctx.font = 'bold 20px ' + FONT;
+      ctx.textAlign = 'center';
+      ctx.fillText('智慧果园', sealX, sealY);
+
+      var qx = W - 200, qy = H - 210, qs = 120;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(qx, qy, qs, qs);
+      var tmp = document.createElement('canvas');
+      tmp.width = 150; tmp.height = 150;
+      drawCodeMatrix(tmp, d.no);
+      ctx.drawImage(tmp, qx, qy, qs, qs);
+      ctx.strokeStyle = '#dddddd'; ctx.lineWidth = 1; ctx.strokeRect(qx, qy, qs, qs);
+      ctx.fillStyle = SUB;
+      ctx.font = '14px ' + FONT;
+      ctx.fillText('识别码 · 演示', qx + qs / 2, qy + qs + 18);
+
+      return cv;
+    }
+
+    function triggerDownload(canvas, filename) {
+      function done(url) {
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        if (window.MobileStore) MobileStore.toast('证书已保存到本地', 'success');
+      }
+      if (canvas.toBlob) {
+        canvas.toBlob(function (blob) {
+          if (!blob) {
+            if (window.MobileStore) MobileStore.toast('证书导出失败，请重试', 'error');
+            return;
+          }
+          var url = URL.createObjectURL(blob);
+          done(url);
+          setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+        }, 'image/png');
+      } else {
+        done(canvas.toDataURL('image/png'));
+      }
+    }
+
+    function saveToAlbum() {
+      try {
+        var cv = renderCertificateImage();
+        triggerDownload(cv, '认养证书_' + (certData().no || Date.now()) + '.png');
+      } catch (e) {
+        if (window.MobileStore) MobileStore.toast('证书导出失败：' + (e && e.message ? e.message : '未知错误'), 'error');
+      }
+    }
+
     function shareCertificate() {
       if (navigator.share) {
         navigator.share({
           title: '我的认养证书',
           text: '我认养了一棵花牛苹果树，快来看看吧！',
           url: window.location.href
-        });
-      } else {
-        alert('分享功能');
+        }).catch(function () { /* 用户取消分享 */ });
+      } else if (window.MobileStore) {
+        MobileStore.toast('当前环境不支持系统分享，可点击“保存图片”下载证书', 'info');
       }
     }
-    
-    function saveToAlbum() {
-      alert('保存证书图片到相册');
-    }
+
+    // 初始化识别码图形（依据认养编号确定性生成）
+    (function () {
+      var c = document.getElementById('certQr');
+      var noEl = document.getElementById('certNo');
+      if (c && noEl) drawCodeMatrix(c, noEl.textContent.trim());
+    })();
   </script>
 </body>
 </html>

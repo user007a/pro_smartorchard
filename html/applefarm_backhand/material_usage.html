@@ -689,11 +689,26 @@ function selectExportFormat(format) {
 function confirmExport() {
   const format = document.querySelector('input[name="exportFormat"]:checked').value;
   const range = document.querySelector('input[name="exportRange"]:checked').value;
-  
+
   let dataToExport = range === 'all' ? filteredData : filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  
-  alert(`正在导出${dataToExport.length}条记录，格式：${format.toUpperCase()}...\n\n导出成功！`);
+
+  // 真实导出 CSV，含最早上市日期（基于安全间隔期计算）
+  const csv = '记录ID,农资名,使用日期,用量,操作人,安全间隔期(天),最早上市日期\n' + dataToExport.map(function(u){
+    var used = u.usedDate || u.date || '';
+    var interval = parseInt(u.safetyInterval || u.interval || 0);
+    var earliest = (used && interval > 0) ? new Date(new Date(used).getTime() + interval * 86400000).toISOString().slice(0,10) : '-';
+    return [u.id, u.name, used, u.amount || '', u.operator || '', interval, earliest].join(',');
+  }).join('\n');
+  const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `农资使用记录_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   closeExportModal();
+  if (typeof Toast !== 'undefined') Toast.success('已导出 ' + dataToExport.length + ' 条记录');
 }
 
 function viewDetail(id) {

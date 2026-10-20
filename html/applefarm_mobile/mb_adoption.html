@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <!-- 共享数据层（toast 轻提示） -->
+  <script src="js/mobile-store.js"></script>
   <style>
     /* Stats */
     .stats-row {
@@ -345,6 +347,12 @@
       box-shadow: var(--shadow-sm);
     }
 
+    .order-result {
+      font-size: var(--font-xs);
+      color: var(--text-secondary);
+      margin-bottom: var(--space-3);
+    }
+
     /* Empty State */
     .empty-state {
       text-align: center;
@@ -376,6 +384,17 @@
       color: var(--text-secondary);
     }
 
+    /* 摄像头权限引导弹窗 */
+    .cam-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 9999; display: none; align-items: center; justify-content: center; padding: 20px; }
+    .cam-overlay.show { display: flex; }
+    .cam-panel { background: var(--bg-white); border-radius: var(--radius-xl); width: 100%; max-width: 360px; padding: var(--space-4); }
+    .cam-title { font-size: var(--font-md); font-weight: 600; color: var(--text); margin-bottom: var(--space-3); }
+    .cam-stage { width: 100%; height: 200px; border-radius: var(--radius-lg); background: var(--gray-100); display: flex; align-items: center; justify-content: center; overflow: hidden; margin-bottom: var(--space-3); }
+    .cam-stage-icon { font-size: 40px; color: var(--text-light); }
+    .cam-stage video { width: 100%; height: 100%; object-fit: cover; }
+    .cam-tip { font-size: var(--font-sm); color: var(--text-secondary); line-height: 1.6; margin-bottom: var(--space-3); }
+    .cam-actions { display: flex; gap: var(--space-2); }
+
   </style>
 </head>
 <body>
@@ -397,16 +416,16 @@
           <div class="stat-label">认养果树</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value">5</div>
+          <div class="stat-value" id="statPending">1</div>
           <div class="stat-label">待确认订单</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value">3</div>
+          <div class="stat-value" id="statShipping">1</div>
           <div class="stat-label">待发货</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value">2</div>
-          <div class="stat-label">采摘预约</div>
+          <div class="stat-value" id="statReady">1</div>
+          <div class="stat-label">待采摘</div>
         </div>
       </div>
     </div>
@@ -470,14 +489,28 @@
       <!-- 订单管理 -->
       <div class="section-title">订单管理</div>
       <div class="filter-tabs">
-        <div class="filter-tab active" onclick="filterOrders('all')">全部</div>
-        <div class="filter-tab" onclick="filterOrders('pending')">待确认</div>
-        <div class="filter-tab" onclick="filterOrders('shipping')">待发货</div>
-        <div class="filter-tab" onclick="filterOrders('completed')">已完成</div>
+        <div class="filter-tab active" data-filter="all" onclick="filterOrders('all')">全部</div>
+        <div class="filter-tab" data-filter="pending" onclick="filterOrders('pending')">待确认</div>
+        <div class="filter-tab" data-filter="shipping" onclick="filterOrders('shipping')">待发货</div>
+        <div class="filter-tab" data-filter="ready" onclick="filterOrders('ready')">待采摘</div>
+        <div class="filter-tab" data-filter="completed" onclick="filterOrders('completed')">已完成</div>
+      </div>
+      <div class="order-result" id="orderResult">共 3 条订单</div>
+      <div class="empty-state" id="orderEmpty" style="display:none;">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/>
+            <path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>
+            <path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>
+          </svg>
+        </div>
+        <div class="empty-title">暂无订单</div>
+        <div class="empty-desc">当前筛选条件下暂无订单记录</div>
       </div>
 
       <!-- 订单卡片 -->
-      <div class="order-card">
+      <div id="orderList">
+      <div class="order-card" data-status="pending" data-order="AD20260614001">
         <div class="order-header">
           <div class="order-info">
             <div class="order-id">订单号：AD20260614001</div>
@@ -522,7 +555,7 @@
         </div>
       </div>
 
-      <div class="order-card">
+      <div class="order-card" data-status="shipping" data-order="AD20260613002">
         <div class="order-header">
           <div class="order-info">
             <div class="order-id">订单号：AD20260613002</div>
@@ -570,7 +603,7 @@
         </div>
       </div>
 
-      <div class="order-card">
+      <div class="order-card" data-status="ready" data-order="AD20260612003">
         <div class="order-header">
           <div class="order-info">
             <div class="order-id">订单号：AD20260612003</div>
@@ -613,6 +646,7 @@
             确认采摘
           </button>
         </div>
+      </div>
       </div>
 
       <!-- 已认养果树 -->
@@ -707,6 +741,21 @@
       </div>
     </div>
 
+    <div class="cam-overlay" id="camOverlay" onclick="closeCameraSetting()">
+      <div class="cam-panel" onclick="event.stopPropagation()">
+        <div class="cam-title">开放果树实景</div>
+        <div class="cam-stage" id="camStage">
+          <span class="cam-stage-icon" id="camPlaceholder">📷</span>
+          <video id="camVideo" autoplay playsinline muted style="display:none;"></video>
+        </div>
+        <div class="cam-tip" id="camTip">正在请求摄像头权限…</div>
+        <div class="cam-actions">
+          <button class="order-btn secondary" type="button" onclick="closeCameraSetting()">取消</button>
+          <button class="order-btn primary" type="button" onclick="openCameraSetting()">开启摄像头</button>
+        </div>
+      </div>
+    </div>
+
     <div class="tab-bar">
       <div class="tab-item" onclick="navigateTo('mb_home.html')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -756,7 +805,8 @@
     }
 
     function refreshData() {
-      window.location.reload();
+      renderStats();
+      filterOrders(document.querySelector('.filter-tab.active') ? document.querySelector('.filter-tab.active').dataset.filter : 'all');
     }
 
     // 认养设置功能
@@ -776,18 +826,79 @@
       window.location.href = 'mb_adoption_farming.html';
     }
 
+    // 开放果树实景：调用摄像头做权限引导，不再跳转到认养浏览页
+    var camStream = null;
+
     function openCameraSetting() {
-      window.location.href = 'mb_adoption_browse.html';
+      var overlay = document.getElementById('camOverlay');
+      var video = document.getElementById('camVideo');
+      var placeholder = document.getElementById('camPlaceholder');
+      var tip = document.getElementById('camTip');
+      overlay.classList.add('show');
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        video.style.display = 'none';
+        placeholder.style.display = 'block';
+        tip.textContent = '当前环境无法调用摄像头，请在设备“设置 - 应用权限”中开启摄像头权限后重试。';
+        return;
+      }
+      tip.textContent = '正在请求摄像头权限…';
+      navigator.mediaDevices.getUserMedia({ video: true }).then(function (stream) {
+        if (camStream) { camStream.getTracks().forEach(function (t) { t.stop(); }); }
+        camStream = stream;
+        video.srcObject = stream;
+        video.style.display = 'block';
+        placeholder.style.display = 'none';
+        tip.textContent = '摄像头已开启，实景画面预览中。';
+      }).catch(function () {
+        video.style.display = 'none';
+        placeholder.style.display = 'block';
+        tip.textContent = '摄像头权限未开启。请允许浏览器访问摄像头后，点击“开启摄像头”重试。';
+      });
     }
 
-    // 订单管理功能
-    function filterOrders(type) {
-      var tabs = document.querySelectorAll('.filter-tab');
-      tabs.forEach(function(tab) {
-        tab.classList.remove('active');
-      });
-      event.target.classList.add('active');
+    function closeCameraSetting() {
+      if (camStream) {
+        camStream.getTracks().forEach(function (t) { t.stop(); });
+        camStream = null;
+      }
+      var video = document.getElementById('camVideo');
+      video.srcObject = null;
+      video.style.display = 'none';
+      document.getElementById('camPlaceholder').style.display = 'block';
+      document.getElementById('camOverlay').classList.remove('show');
     }
+
+    // 订单管理功能：按订单状态真实过滤列表
+    function countByStatus(status) {
+      return document.querySelectorAll('#orderList .order-card[data-status="' + status + '"]').length;
+    }
+
+    function renderStats() {
+      var map = { statPending: 'pending', statShipping: 'shipping', statReady: 'ready' };
+      Object.keys(map).forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = countByStatus(map[id]);
+      });
+    }
+
+    function filterOrders(type) {
+      document.querySelectorAll('.filter-tab').forEach(function (tab) {
+        tab.classList.toggle('active', tab.dataset.filter === type);
+      });
+      var shown = 0;
+      document.querySelectorAll('#orderList .order-card').forEach(function (card) {
+        var match = (type === 'all') || card.dataset.status === type;
+        card.style.display = match ? '' : 'none';
+        if (match) shown++;
+      });
+      document.getElementById('orderEmpty').style.display = shown ? 'none' : 'block';
+      document.getElementById('orderResult').textContent = '共 ' + shown + ' 条订单';
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      refreshData();
+    });
 
     function viewOrderDetail(orderId) {
       window.location.href = 'mb_adoption_detail.html?orderId=' + orderId;
@@ -815,11 +926,31 @@
     }
 
     function shipOrder(orderId) {
-      alert('确认发货：' + orderId + '\n请填写物流单号');
-    }
-
-    function confirmHarvest(orderId) {
-      alert('确认采摘预约：' + orderId + '\n将安排采摘准备工作');
+      var input = window.prompt('请输入物流单号（确认发货 ' + orderId + '）：');
+      if (input === null) return;
+      var tracking = String(input).trim();
+      if (!tracking) { MobileStore.toast('物流单号不能为空', 'warning'); return; }
+      var list = [];
+      try { list = JSON.parse(localStorage.getItem('h5_sales_orders') || '[]'); } catch (e) { list = []; }
+      var exist = list.some(function(s) { return s.orderNo === orderId; });
+      if (!exist) {
+        list.push({
+          orderNo: orderId,
+          tracking: tracking,
+          company: '顺丰速运',
+          shippedAt: new Date().toISOString(),
+          source: 'mobile_adoption'
+        });
+        localStorage.setItem('h5_sales_orders', JSON.stringify(list));
+      }
+      var card = document.querySelector('#orderList .order-card[data-order="' + orderId + '"]');
+      if (card) {
+        card.dataset.status = 'shipping';
+        var tag = card.querySelector('.order-status');
+        if (tag) { tag.textContent = '已发货'; tag.className = 'order-status shipping'; }
+      }
+      MobileStore.toast('已发货，物流单号：' + tracking, 'success');
+      refreshData();
     }
   </script>
 </body>

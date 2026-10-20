@@ -9,9 +9,10 @@
     <link rel="stylesheet" href="css/mobile-design-system.css">
     <!-- 图标库 -->
     <script src="../applefarm_backhand/icons/icons.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- CDN 资源使用 defer，避免离线/内网环境阻塞首屏渲染（下方有加载失败降级） -->
+    <script defer src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" media="print" onload="this.media='all'">
     <script src="../common/js/vr-hotspots.js"></script>
     <script src="../common/js/api-mock.js"></script>
     <style>
@@ -290,6 +291,33 @@
             font-size: 12px;
             z-index: 100;
         }
+        /* 轻提示 */
+        .vr-toast {
+            position: fixed;
+            left: 50%;
+            bottom: 96px;
+            transform: translate(-50%, 12px);
+            max-width: 80vw;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.78);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+            opacity: 0;
+            transition: opacity 0.24s ease, transform 0.24s ease;
+            z-index: 2000;
+            pointer-events: none;
+            text-align: center;
+        }
+        .vr-toast.show { opacity: 1; transform: translate(-50%, 0); }
+        .vr-toast-success { background: #389e0d; }
+        .vr-toast-warning { background: #d48806; }
+        .vr-toast-error   { background: #cf1322; }
+        @media (prefers-reduced-motion: reduce) {
+            .vr-toast { transition: opacity 0.01ms; }
+        }
     </style>
 </head>
 <body>
@@ -306,8 +334,11 @@
             <div class="header-btn" onclick="toggleAutoRotate()">
                 <i class="fas fa-refresh"></i>
             </div>
-            <div class="header-btn" onclick="viewer.reset()">
+            <div class="header-btn" onclick="resetView()" title="复位视角">
                 <i class="fas fa-home"></i>
+            </div>
+            <div class="header-btn" id="gyroBtn" onclick="toggleGyro()" title="陀螺仪环顾">
+                <i class="fas fa-mobile-alt"></i>
             </div>
         </div>
     </div>
@@ -340,44 +371,68 @@
         <div class="control-ring">
             <div class="ring-bg"></div>
             <div class="ring-center">移动</div>
-            <div class="ring-btn up" onclick="viewer.setPitch(viewer.getPitch() + 12)">
+            <div class="ring-btn up" onclick="adjustPitch(12)">
                 <i class="fas fa-chevron-up"></i>
             </div>
-            <div class="ring-btn down" onclick="viewer.setPitch(viewer.getPitch() - 12)">
+            <div class="ring-btn down" onclick="adjustPitch(-12)">
                 <i class="fas fa-chevron-down"></i>
             </div>
-            <div class="ring-btn left" onclick="viewer.setYaw(viewer.getYaw() - 15)">
+            <div class="ring-btn left" onclick="adjustYaw(-15)">
                 <i class="fas fa-chevron-left"></i>
             </div>
-            <div class="ring-btn right" onclick="viewer.setYaw(viewer.getYaw() + 15)">
+            <div class="ring-btn right" onclick="adjustYaw(15)">
                 <i class="fas fa-chevron-right"></i>
             </div>
         </div>
     </div>
     
     <div class="zoom-controls">
-        <div class="zoom-btn" onclick="viewer.setHfov(viewer.getHfov() + 8)">
+        <div class="zoom-btn" onclick="adjustHfov(8)">
             <i class="fas fa-plus"></i>
         </div>
-        <div class="zoom-btn" onclick="viewer.setHfov(viewer.getHfov() - 8)">
+        <div class="zoom-btn" onclick="adjustHfov(-8)">
             <i class="fas fa-minus"></i>
         </div>
     </div>
     
-    <script src="../common/js/vr-hotspots.js"></script>
     <script>
         var viewer;
         var currentSceneId = 'scene_main';
         var isAutoRotating = false;
+
+        /** 轻提示（该页未引入设计系统，故自带样式） */
+        function vrToast(msg, type) {
+            var cls = type === 'success' ? 'success' : type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info';
+            var box = document.createElement('div');
+            box.className = 'vr-toast vr-toast-' + cls;
+            box.textContent = msg;
+            box.setAttribute('role', 'status');
+            document.body.appendChild(box);
+            requestAnimationFrame(function () { box.classList.add('show'); });
+            setTimeout(function () {
+                box.classList.remove('show');
+                setTimeout(function () { if (box.parentNode) box.parentNode.removeChild(box); }, 260);
+            }, 2000);
+        }
         
         function initViewer(sceneId) {
             var sceneData = vrHotspotsData.getSceneById(sceneId);
             if (!sceneData) return;
-            
+
             if (viewer) {
                 viewer.destroy();
             }
-            
+
+            // 全景库（CDN）不可用时给出明确提示，避免整页因 pannellum 未定义而崩溃
+            if (typeof pannellum === 'undefined') {
+                document.getElementById('panorama').innerHTML =
+                    '<div style="display:flex;align-items:center;justify-content:center;height:100%;' +
+                    'color:#fff;background:#1a1a1a;text-align:center;padding:24px;line-height:1.8;">' +
+                    '全景组件加载失败<br><span style="font-size:13px;opacity:.75;">请检查网络后刷新页面</span></div>';
+                showLibraryMissing();
+                return;
+            }
+
             var config = {
                 type: 'equirectangular',
                 panorama: sceneData.image,
@@ -392,8 +447,8 @@
                 compass: false,
                 hotSpots: []
             };
-            
-            sceneData.hotspots.forEach(function(hotspot) {
+
+            (sceneData.hotspots || []).forEach(function(hotspot) {
                 var hotspotConfig = {
                     pitch: hotspot.pitch,
                     yaw: hotspot.yaw,
@@ -458,6 +513,10 @@
         }
         
         function toggleAutoRotate() {
+            if (!viewer) {
+                vrToast('全景尚未加载完成', 'warning');
+                return;
+            }
             if (isAutoRotating) {
                 viewer.stopAutoRotate();
             } else {
@@ -466,8 +525,122 @@
             isAutoRotating = !isAutoRotating;
         }
         
+        /** 全景库缺失时收起所有依赖 viewer 的控件，避免点击报错 */
+        function showLibraryMissing() {
+            document.querySelectorAll('.bottom-controls, .zoom-controls, .scene-tabs')
+                .forEach(function(el) { el.style.display = 'none'; });
+        }
+
+        function resetView() {
+            if (viewer) viewer.reset();
+        }
+
+        function adjustPitch(delta) {
+            if (viewer) viewer.setPitch(viewer.getPitch() + delta);
+        }
+
+        function adjustYaw(delta) {
+            if (viewer) viewer.setYaw(viewer.getYaw() + delta);
+        }
+
+        function adjustHfov(delta) {
+            if (viewer) viewer.setHfov(viewer.getHfov() + delta);
+        }
+
         function goBack() {
             window.location.href = 'mb_home.html';
+        }
+
+        /* ---------- 陀螺仪环顾（F-285） ---------- */
+        var gyroOn = false;
+        var gyroBase = null;       // 开启瞬间的基准，避免画面跳变
+        var smoothYaw = null;
+        var smoothPitch = null;
+
+        function screenAngle() {
+            if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+            if (typeof window.orientation === 'number') return window.orientation;
+            return 0;
+        }
+
+        function toggleGyro() {
+            if (gyroOn) {
+                stopGyro();
+                return;
+            }
+            if (!window.DeviceOrientationEvent) {
+                vrToast('当前设备/浏览器不支持陀螺仪', 'warning');
+                return;
+            }
+            // iOS 13+ 需要显式授权
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(function (state) {
+                    if (state === 'granted') startGyro();
+                    else vrToast('未授予动作与方向权限，无法使用陀螺仪', 'warning');
+                }).catch(function () {
+                    vrToast('陀螺仪授权失败', 'error');
+                });
+            } else {
+                startGyro();
+            }
+        }
+
+        function startGyro() {
+            if (!viewer) return;
+            if (isAutoRotating) { viewer.stopAutoRotate(); isAutoRotating = false; }
+            gyroOn = true;
+            gyroBase = null;
+            smoothYaw = null;
+            smoothPitch = null;
+            window.addEventListener('deviceorientation', onDeviceOrientation, true);
+            document.getElementById('gyroBtn').classList.add('active');
+            // 陀螺仪开启时锁定拖拽，避免手势冲突
+            if (viewer.setDraggable) viewer.setDraggable(false);
+        }
+
+        function stopGyro() {
+            gyroOn = false;
+            window.removeEventListener('deviceorientation', onDeviceOrientation, true);
+            document.getElementById('gyroBtn').classList.remove('active');
+            if (viewer && viewer.setDraggable) viewer.setDraggable(true);
+        }
+
+        function onDeviceOrientation(e) {
+            if (!gyroOn || !viewer) return;
+            if (e.alpha === null || e.alpha === undefined) return;   // 设备无方向传感器
+            var sa = screenAngle();
+            var landscape = (sa === 90 || sa === -90 || sa === 270);
+            var alpha = e.alpha;
+            var deviceYaw = (alpha + sa + 360) % 360;
+            // 竖屏用 beta（前后倾）作为俯仰；横屏时 beta/gamma 语义互换
+            var devicePitch = landscape ? (e.gamma || 0) : (e.beta || 0);
+
+            if (!gyroBase) {
+                gyroBase = {
+                    yaw: deviceYaw,
+                    pitch: devicePitch,
+                    viewerYaw: viewer.getYaw(),
+                    viewerPitch: viewer.getPitch()
+                };
+                return;
+            }
+
+            // 转动手机 → 视线反向偏移
+            var targetYaw = gyroBase.viewerYaw - angleDiff(deviceYaw, gyroBase.yaw);
+            var targetPitch = gyroBase.viewerPitch + (devicePitch - gyroBase.pitch);
+
+            smoothYaw = smoothYaw === null ? targetYaw : smoothYaw + (targetYaw - smoothYaw) * 0.35;
+            smoothPitch = smoothPitch === null ? targetPitch : smoothPitch + (targetPitch - smoothPitch) * 0.35;
+            viewer.setYaw(smoothYaw);
+            viewer.setPitch(Math.max(-90, Math.min(90, smoothPitch)));
+        }
+
+        /** 处理 0/360 环绕的最短角差 */
+        function angleDiff(a, b) {
+            var d = (a - b) % 360;
+            if (d > 180) d -= 360;
+            if (d < -180) d += 360;
+            return d;
         }
         
         document.querySelectorAll('.scene-tab').forEach(function(tab) {

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -142,63 +142,11 @@
   <div class="mb-app">
     <div class="favorites-section">
       <div class="favorites-header">
-        <span class="favorites-count">共收藏 3 件商品</span>
+        <span class="favorites-count" id="favCount">共收藏 0 件商品</span>
         <span class="favorites-edit" onclick="toggleEditMode()">编辑</span>
       </div>
 
-      <!-- 收藏商品 1 -->
-      <div class="favorite-card" onclick="goToProduct('redFuji')">
-        <div class="favorite-img">
-          <img src="images/thumb_red_hanging.jpg" alt="花牛苹果">
-        </div>
-        <div class="favorite-info">
-          <div class="favorite-name">花牛苹果 5斤装</div>
-          <div class="favorite-desc">脆甜多汁 · 新鲜采摘</div>
-          <div class="favorite-bottom">
-            <span class="favorite-price">¥68</span>
-            <span class="favorite-date">收藏于 2026.09.10</span>
-          </div>
-        </div>
-        <div class="favorite-delete" onclick="removeFavorite(event, 1)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </div>
-      </div>
-
-      <!-- 收藏商品 2 -->
-      <div class="favorite-card" onclick="goToProduct('giftBox')">
-        <div class="favorite-img">
-          <img src="images/thumb_giftbox.jpg" alt="精品礼盒">
-        </div>
-        <div class="favorite-info">
-          <div class="favorite-name">精品礼盒装 8斤</div>
-          <div class="favorite-desc">送礼佳品 · 品质保证</div>
-          <div class="favorite-bottom">
-            <span class="favorite-price">¥168</span>
-            <span class="favorite-date">收藏于 2026.09.08</span>
-          </div>
-        </div>
-        <div class="favorite-delete" onclick="removeFavorite(event, 2)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </div>
-      </div>
-
-      <!-- 收藏商品 3 -->
-      <div class="favorite-card" onclick="goToProduct('adopt3yr')">
-        <div class="favorite-img">
-          <img src="images/thumb_picked.jpg" alt="认养套餐">
-        </div>
-        <div class="favorite-info">
-          <div class="favorite-name">认养果树3年套餐</div>
-          <div class="favorite-desc">专属果树 · 全程溯源</div>
-          <div class="favorite-bottom">
-            <span class="favorite-price">¥1,888</span>
-            <span class="favorite-date">收藏于 2026.09.01</span>
-          </div>
-        </div>
-        <div class="favorite-delete" onclick="removeFavorite(event, 3)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </div>
-      </div>
+      <div id="favoriteList"></div>
     </div>
 
     <!-- 底部导航 -->
@@ -226,13 +174,58 @@
     function navigateTo(page) { window.location.href = page; }
 
     function goToProduct(productId) {
-      window.location.href = 'h5_store.html?product=' + productId;
+      window.location.href = 'h5_store.html?product=' + encodeURIComponent(productId);
+    }
+
+    /* 首次访问时初始化演示收藏数据，保证收藏页与会员中心统计一致 */
+    function seedFavorites() {
+      if (localStorage.getItem('h5_favorites')) return;
+      localStorage.setItem('h5_favorites', JSON.stringify([
+        { id: 'redFuji', name: '花牛苹果 5斤装', desc: '脆甜多汁 · 新鲜采摘', price: 68, img: 'images/thumb_red_hanging.jpg', date: '2026.09.10' },
+        { id: 'giftBox', name: '精品礼盒装 8斤', desc: '送礼佳品 · 品质保证', price: 168, img: 'images/thumb_giftbox.jpg', date: '2026.09.08' },
+        { id: 'adopt3yr', name: '认养果树3年套餐', desc: '专属果树 · 全程溯源', price: 1888, img: 'images/thumb_picked.jpg', date: '2026.09.01' }
+      ]));
+    }
+
+    function readFavorites() {
+      try { return JSON.parse(localStorage.getItem('h5_favorites') || '[]'); }
+      catch (e) { return []; }
+    }
+
+    function renderFavorites() {
+      seedFavorites();
+      var list = readFavorites();
+      var box = document.getElementById('favoriteList');
+      var countEl = document.getElementById('favCount');
+      if (countEl) countEl.textContent = '共收藏 ' + list.length + ' 件商品';
+      if (!list.length) {
+        box.innerHTML = '<div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21.2l7.7-7.7 1.1-1a5.5 5.5 0 0 0 0-7.9z"/></svg></div>' +
+          '<div class="empty-title">暂无收藏</div><div class="empty-desc">去商城挑选喜欢的商品吧</div>';
+        return;
+      }
+      box.innerHTML = list.map(function(it, idx) {
+        return '<div class="favorite-card" onclick="goToProduct(\'' + it.id + '\')">' +
+          '<div class="favorite-img"><img src="' + (it.img || 'images/thumb_redfuji.jpg') + '" alt="' + (it.name || '') + '"></div>' +
+          '<div class="favorite-info">' +
+          '<div class="favorite-name">' + (it.name || '商品') + '</div>' +
+          '<div class="favorite-desc">' + (it.desc || '') + '</div>' +
+          '<div class="favorite-bottom"><span class="favorite-price">¥' + (Number(it.price) || 0) + '</span>' +
+          '<span class="favorite-date">收藏于 ' + (it.date || '-') + '</span></div></div>' +
+          '<div class="favorite-delete" onclick="removeFavorite(event, \'' + it.id + '\')">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div></div>';
+      }).join('');
     }
 
     function removeFavorite(event, id) {
       event.stopPropagation();
+      if (!confirm('确定要取消收藏该商品吗？')) return;
+      var next = readFavorites().filter(function(x) { return x.id !== id; });
+      localStorage.setItem('h5_favorites', JSON.stringify(next));
+      renderFavorites();
       showToast('已取消收藏');
     }
+
+    renderFavorites();
 
     function toggleEditMode() {
       showToast('进入编辑模式');

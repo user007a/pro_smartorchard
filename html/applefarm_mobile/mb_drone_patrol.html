@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <script src="js/mobile-store.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html { font-size: 16px; }
@@ -96,7 +97,24 @@
     .history-date { font-size: var(--font-xs); color: var(--text-light); margin-top: var(--space-2); }
     .history-stats { display: flex; gap: var(--space-4); margin-top: var(--space-3); font-size: var(--font-xs); color: var(--text-secondary); }
     .history-stat-value { font-weight: var(--font-semibold); color: var(--text); }
-    
+
+    /* 暂停 / 返航状态 */
+    .status-tag.paused { background: var(--warning-bg); color: var(--warning); }
+    .status-tag.returned { background: var(--info-bg); color: var(--info); }
+    .control-btn.resume { background: linear-gradient(135deg, var(--success), var(--primary-600)); color: var(--bg-white); }
+    .control-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* 视频演示标识 */
+    .demo-badge { position: absolute; top: var(--space-2); left: var(--space-2); background: var(--warning); color: var(--bg-white); padding: 3px var(--space-2); border-radius: var(--radius-md); font-size: var(--font-xs); font-weight: var(--font-semibold); }
+    .video-frame::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 3px); pointer-events: none; }
+
+    /* 异常已处理状态 */
+    .abnormal-status.ignored { background: var(--gray-100); color: var(--text-light); }
+    .abnormal-status.confirmed { background: var(--success-bg); color: var(--success); }
+    .abnormal-card.done { opacity: 0.72; }
+    .abnormal-card.done .btn-confirm,
+    .abnormal-card.done .btn-ignore { display: none; }
+    .abnormal-done-tip { font-size: var(--font-xs); color: var(--text-light); }
   </style>
 </head>
 <body>
@@ -117,12 +135,12 @@
     <div class="task-status-card">
       <div class="task-status-header">
         <div class="task-name">TASK-001 · 航线-A001</div>
-        <span class="status-tag running">进行中</span>
+        <span class="status-tag running" id="taskStatus">进行中</span>
       </div>
       <div class="task-progress-bar">
-        <div class="task-progress-fill" style="width: 65%"></div>
+        <div class="task-progress-fill" id="taskProgressFill" style="width: 65%"></div>
       </div>
-      <div class="task-progress-text">已完成 65% · 预计剩余 4分32秒</div>
+      <div class="task-progress-text" id="taskProgressText">已完成 65% · 预计剩余 4分32秒</div>
     </div>
     
     <!-- 实时监控 -->
@@ -192,6 +210,7 @@
       <!-- 视频画面 -->
       <div class="video-container">
         <div class="video-frame">
+          <div class="demo-badge">模拟画面 · 演示</div>
           <div class="video-placeholder">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="5 3 19 12 5 21 5 3"/>
@@ -202,7 +221,7 @@
             <svg viewBox="0 0 24 24" fill="currentColor">
               <circle cx="12" cy="12" r="10"/>
             </svg>
-            <span>直播中</span>
+            <span>演示中</span>
           </div>
         </div>
       </div>
@@ -211,7 +230,7 @@
     <!-- 控制按钮 -->
     <div class="control-section">
       <div class="control-buttons">
-        <button class="control-btn pause" onclick="pauseFlight()">⏸️ 暂停</button>
+        <button class="control-btn pause" id="pauseBtn" onclick="pauseFlight()">⏸️ 暂停</button>
         <button class="control-btn return" onclick="returnFlight()">🔙 返航</button>
       </div>
     </div>
@@ -220,10 +239,10 @@
     <div class="abnormal-section">
       <div class="section-title">
         <span class="section-dot"></span>
-        识别异常 <span style="font-size:12px;font-weight:400;color:#999;">(2条待确认)</span>
+        识别异常 <span id="abnormalPending" style="font-size:12px;font-weight:400;color:#999;">(2条待确认)</span>
       </div>
       
-      <div class="abnormal-card">
+      <div class="abnormal-card" data-id="A-003" data-plot="地块A-003" data-type="病虫害异常">
         <div class="abnormal-header">
           <div class="abnormal-title">
             <span class="abnormal-dot pest"></span>
@@ -233,18 +252,18 @@
         </div>
         <div class="abnormal-meta">
           <span>地块A-003</span>
-          <span class="abnormal-confidence">置信度: 92%</span>
+          <span class="abnormal-confidence">置信度：92%</span>
         </div>
         <div class="abnormal-footer">
           <span style="font-size:12px;color:#666;">2026-09-15 09:32</span>
           <div style="display:flex;gap:8px;">
-            <button class="btn-ignore" onclick="ignoreAbnormal()">标记误报</button>
-            <button class="btn-confirm" onclick="confirmAbnormal()">确认异常</button>
+            <button class="btn-ignore" onclick="ignoreAbnormal(this)">标记误报</button>
+            <button class="btn-confirm" onclick="confirmAbnormal(this)">确认异常</button>
           </div>
         </div>
       </div>
       
-      <div class="abnormal-card">
+      <div class="abnormal-card" data-id="A-005" data-plot="地块A-005" data-type="病虫害异常">
         <div class="abnormal-header">
           <div class="abnormal-title">
             <span class="abnormal-dot pest"></span>
@@ -254,13 +273,13 @@
         </div>
         <div class="abnormal-meta">
           <span>地块A-005</span>
-          <span class="abnormal-confidence">置信度: 87%</span>
+          <span class="abnormal-confidence">置信度：87%</span>
         </div>
         <div class="abnormal-footer">
           <span style="font-size:12px;color:#666;">2026-09-15 09:45</span>
           <div style="display:flex;gap:8px;">
-            <button class="btn-ignore" onclick="ignoreAbnormal()">标记误报</button>
-            <button class="btn-confirm" onclick="confirmAbnormal()">确认异常</button>
+            <button class="btn-ignore" onclick="ignoreAbnormal(this)">标记误报</button>
+            <button class="btn-confirm" onclick="confirmAbnormal(this)">确认异常</button>
           </div>
         </div>
       </div>
@@ -280,9 +299,9 @@
         </div>
         <div class="history-date">2026-09-14 10:00</div>
         <div class="history-stats">
-          <span>航线: <span class="history-stat-value">航线-A001</span></span>
-          <span>覆盖: <span class="history-stat-value">240亩</span></span>
-          <span>异常: <span class="history-stat-value">3条</span></span>
+          <span>航线：<span class="history-stat-value">航线-A001</span></span>
+          <span>覆盖：<span class="history-stat-value">240亩</span></span>
+          <span>异常：<span class="history-stat-value">3条</span></span>
         </div>
       </div>
       
@@ -293,9 +312,9 @@
         </div>
         <div class="history-date">2026-09-13 14:00</div>
         <div class="history-stats">
-          <span>航线: <span class="history-stat-value">航线-B001</span></span>
-          <span>覆盖: <span class="history-stat-value">300亩</span></span>
-          <span>异常: <span class="history-stat-value">1条</span></span>
+          <span>航线：<span class="history-stat-value">航线-B001</span></span>
+          <span>覆盖：<span class="history-stat-value">300亩</span></span>
+          <span>异常：<span class="history-stat-value">1条</span></span>
         </div>
       </div>
     </div>
@@ -344,31 +363,162 @@
   </div>
   
   <script>
+    var EVENTS_KEY = 'smartorchard_drone_events';
+    var ABNORMAL_KEY = 'smartorchard_drone_abnormal';
+
+    // 巡检任务运行态：进度、暂停、返航
+    var patrol = { progress: 65, paused: false, returned: false, timer: null };
+    var TOTAL_REMAIN_SEC = 778; // 100% 对应约 13 分钟
+
     function goBack() {
       window.history.back();
     }
-    
+
     function navigateTo(page) {
       window.location.href = page;
     }
-    
-    function pauseFlight() {
-      alert('暂停飞行功能开发中');
+
+    function fmtRemain(progress) {
+      var sec = Math.max(0, Math.round(TOTAL_REMAIN_SEC * (100 - progress) / 100));
+      var m = Math.floor(sec / 60);
+      var s = sec % 60;
+      return m + '分' + (s < 10 ? '0' + s : s) + '秒';
     }
-    
-    function returnFlight() {
-      if (confirm('确定要让无人机返航吗？')) {
-        alert('返航指令已发送');
+
+    function renderTask() {
+      document.getElementById('taskProgressFill').style.width = patrol.progress + '%';
+      var tag = document.getElementById('taskStatus');
+      tag.className = 'status-tag ' + (patrol.returned ? 'returned' : (patrol.paused ? 'paused' : 'running'));
+      tag.textContent = patrol.returned ? '已返航' : (patrol.paused ? '已暂停' : '进行中');
+
+      var text = document.getElementById('taskProgressText');
+      if (patrol.returned) {
+        text.textContent = '已返回起点 · 本次巡检结束';
+      } else if (patrol.progress >= 100) {
+        text.textContent = '已完成 100% · 巡检任务完成';
+      } else if (patrol.paused) {
+        text.textContent = '已完成 ' + patrol.progress + '% · 已暂停';
+      } else {
+        text.textContent = '已完成 ' + patrol.progress + '% · 预计剩余 ' + fmtRemain(patrol.progress);
       }
     }
-    
-    function ignoreAbnormal() {
-      alert('已标记为误报');
+
+    function startPatrolTimer() {
+      if (patrol.timer) return;
+      patrol.timer = setInterval(function () {
+        if (patrol.paused || patrol.returned) return;
+        if (patrol.progress >= 100) {
+          stopPatrolTimer();
+          MobileStore.toast('本次巡检任务已完成', 'success');
+          renderTask();
+          return;
+        }
+        patrol.progress += 1;
+        renderTask();
+      }, 1200);
     }
-    
-    function confirmAbnormal() {
-      alert('已确认异常，将生成处理任务');
+
+    function stopPatrolTimer() {
+      if (patrol.timer) {
+        clearInterval(patrol.timer);
+        patrol.timer = null;
+      }
     }
+
+    function pauseFlight() {
+      if (patrol.returned) {
+        MobileStore.toast('无人机已返航，无法继续巡检', 'warning');
+        return;
+      }
+      patrol.paused = !patrol.paused;
+      var btn = document.getElementById('pauseBtn');
+      if (patrol.paused) {
+        btn.textContent = '▶️ 继续';
+        btn.className = 'control-btn resume';
+        MobileStore.toast('巡检已暂停', 'warning');
+        MobileStore.push(EVENTS_KEY, { type: 'pause', taskId: 'TASK-001', progress: patrol.progress, text: '暂停巡检' });
+      } else {
+        btn.textContent = '⏸️ 暂停';
+        btn.className = 'control-btn pause';
+        MobileStore.toast('巡检已恢复', 'success');
+        MobileStore.push(EVENTS_KEY, { type: 'resume', taskId: 'TASK-001', progress: patrol.progress, text: '恢复巡检' });
+      }
+      renderTask();
+    }
+
+    function returnFlight() {
+      if (patrol.returned) {
+        MobileStore.toast('无人机当前已在起点，无需返航', 'info');
+        return;
+      }
+      if (!MobileStore.confirm('确定要让无人机返航吗？返航后本次巡检将结束。')) return;
+      patrol.returned = true;
+      patrol.paused = false;
+      stopPatrolTimer();
+
+      // 无人机标记回到起点航点位置
+      var drone = document.querySelector('.drone-marker');
+      if (drone) {
+        drone.style.top = '100px';
+        drone.style.left = '50px';
+      }
+      var btn = document.getElementById('pauseBtn');
+      btn.textContent = '⏸️ 暂停';
+      btn.className = 'control-btn pause';
+      btn.disabled = true;
+
+      renderTask();
+      MobileStore.push(EVENTS_KEY, { type: 'return', taskId: 'TASK-001', progress: patrol.progress, text: '一键返航' });
+      MobileStore.toast('返航指令已发送，无人机正在返回起点', 'info');
+    }
+
+    function markAbnormal(btn, tipText, statusText, statusClass, decision) {
+      var card = btn.closest('.abnormal-card');
+      if (!card || card.classList.contains('done')) return;
+      card.classList.add('done');
+
+      var status = card.querySelector('.abnormal-status');
+      status.className = 'abnormal-status ' + statusClass;
+      status.textContent = statusText;
+
+      var footer = card.querySelector('.abnormal-footer');
+      var tip = document.createElement('span');
+      tip.className = 'abnormal-done-tip';
+      tip.textContent = tipText;
+      footer.replaceChild(tip, footer.lastElementChild);
+
+      MobileStore.push(ABNORMAL_KEY, {
+        id: card.getAttribute('data-id'),
+        plot: card.getAttribute('data-plot'),
+        type: card.getAttribute('data-type'),
+        decision: decision,
+        decisionText: statusText
+      });
+      updateAbnormalPending();
+
+      if (decision === 'ignore') {
+        MobileStore.toast('已标记为误报，该异常已忽略', 'info');
+      } else {
+        MobileStore.toast('已确认异常，已进入处理中', 'success');
+      }
+    }
+
+    function ignoreAbnormal(btn) {
+      markAbnormal(btn, '已忽略 · 不计入巡检结果', '已忽略', 'ignored', 'ignore');
+    }
+
+    function confirmAbnormal(btn) {
+      markAbnormal(btn, '已确认 · 处理中', '已确认 · 处理中', 'confirmed', 'confirm');
+    }
+
+    function updateAbnormalPending() {
+      var pending = document.querySelectorAll('.abnormal-card:not(.done)').length;
+      document.getElementById('abnormalPending').textContent = '(' + pending + '条待确认)';
+    }
+
+    renderTask();
+    updateAbnormalPending();
+    startPatrolTimer();
   </script>
 </body>
 </html>

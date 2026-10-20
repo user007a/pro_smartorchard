@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>智慧果园 · 企业管理驾驶舱</title>
+<style>
+/* ============================================================
+   智慧果园 · 企业管理驾驶舱（对外参观展示）— 深色单屏 (1920×1080, 自包含)
+   视觉完全沿用 da_dashboard.html：同一套色板 / 卡片 / 北极星带 / 三栏 / 底部支撑条
+   ============================================================ */
+:root{
+  --surface-0:#060D1F;     /* 舞台底 */
+  --surface-1:#0B1830;     /* 卡片面 */
+  --surface-2:#12234A;     /* 卡片抬升 / 悬停 */
+  --line:rgba(110,170,255,.18);
+  --line-strong:rgba(110,170,255,.34);
+  --text-1:#E8F2FF;        /* 主文字 */
+  --text-2:#9DB8DC;        /* 次文字 */
+  --text-3:#8AA0BE;        /* 弱文字 */
+  --brand-700:#14549F;
+  --brand-500:#2E8FE8;
+  --brand-400:#38D6FF;
+  --warn:#F2B33D;
+  --risk:#E5564B;
+  --ok:#2bd46e;
+  --info:#3E8EF0;
+  --cyan:#31C9E8;
+  --font:"PingFang SC","Microsoft YaHei","Noto Sans SC",-apple-system,system-ui,"Segoe UI",sans-serif;
+  --font-hei:"Microsoft YaHei","黑体",SimHei,"Heiti SC","PingFang SC",sans-serif;
+  --num:"DIN Alternate","Bahnschrift","Oswald","Segoe UI",var(--font);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:var(--surface-0);font-family:var(--font);color:var(--text-1);
+  -webkit-font-smoothing:antialiased;overflow:hidden}
+body{display:flex;align-items:center;justify-content:center}
+
+/* 数字统一等宽，避免跨平台字宽跳变与刷新抖动 */
+.fact b,.hstat .n,.hstat .num,.hstat.dim .t b,.clock,.mini,.prof .cnt,.ops .v,
+.cstat .v,.biz .v,.cert .y,.tl .y,.ring .rc,.legend .lv,.foot .v{
+  font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.card-h .t,.card-h .t,.bcard .bh,.sub-t{font-family:var(--font-hei);font-weight:700;letter-spacing:.8px}
+
+/* 缩放舞台：固定 1920×1080，按视口等比缩放，单屏不滚动 */
+.stage{position:fixed;left:50%;top:50%;width:1920px;height:1080px;
+  transform-origin:center center;transform:translate(-50%,-50%);
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(62,142,240,.12), transparent 60%),
+    radial-gradient(900px 600px at 100% 110%, rgba(49,201,232,.07), transparent 55%),
+    var(--surface-0);
+  padding:22px 26px;display:flex;flex-direction:column;gap:14px}
+.stage::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(62,142,240,.06),transparent 18%)}
+
+/* ===================== 顶部常驻条 ===================== */
+.topbar{height:66px;flex:0 0 66px;display:flex;align-items:center;gap:20px;
+  background:var(--surface-1);border:1px solid var(--line);border-radius:16px;
+  padding:0 22px;position:relative;overflow:visible;z-index:40}
+.topbar::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:16px 0 0 16px;
+  background:linear-gradient(180deg,var(--brand-500),var(--brand-700))}
+.brand{display:flex;align-items:center;gap:14px;flex:none}
+.brand .logo{width:42px;height:42px;flex:none}
+.brand h1{font-family:var(--font-hei);font-size:25px;font-weight:800;letter-spacing:1.5px;line-height:1.1}
+.brand .sub{font-size:12px;color:var(--text-3);letter-spacing:3px;text-transform:uppercase}
+.facts{display:flex;align-items:center;gap:14px;flex:1;flex-wrap:nowrap;overflow:hidden}
+.fact{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.fact b{font-size:23px;color:var(--brand-500);font-weight:700}
+.fact span{font-size:13px;color:var(--text-2)}
+.topright{display:flex;align-items:center;gap:12px;flex:none}
+.mini{font-size:12px;color:var(--text-3);white-space:nowrap}
+.mini b{font-size:14px;color:var(--text-2);font-weight:600}
+.clock{font-size:16px;color:var(--text-1);text-align:right;line-height:1.15}
+.clock small{display:block;font-size:12px;color:var(--text-3);font-family:var(--font)}
+.topright a,.dd-btn{color:var(--text-2);text-decoration:none;font-size:14px;padding:7px 13px;border-radius:30px;
+  border:1px solid var(--line);background:rgba(255,255,255,.02);transition:.2s;cursor:pointer;
+  font-family:var(--font);white-space:nowrap}
+.topright a:hover,.dd-btn:hover{color:#fff;border-color:var(--brand-500);background:rgba(62,142,240,.15)}
+.dd{position:relative;flex:none}
+.dd-btn{display:flex;align-items:center;gap:6px}
+.dd-btn .car{font-size:10px;opacity:.8}
+.dd-menu{display:none;position:absolute;right:0;top:calc(100% + 10px);width:216px;padding:8px;
+  background:rgba(8,18,38,.97);border:1px solid var(--line-strong);border-radius:14px;
+  box-shadow:0 18px 44px rgba(0,0,0,.55);flex-direction:column;gap:3px}
+.dd.open .dd-menu{display:flex}
+.dd-menu a{display:block;padding:8px 12px;border-radius:9px;color:var(--text-2);font-size:14px;
+  border:1px solid transparent;text-decoration:none;transition:.16s}
+.dd-menu a:hover{color:#fff;background:rgba(62,142,240,.18);border-color:rgba(96,165,250,.35)}
+.dd-menu .sep{height:1px;background:var(--line);margin:4px 6px}
+.dd-menu .hd{font-size:11px;color:var(--text-3);letter-spacing:1.5px;padding:2px 12px 4px}
+
+/* ===================== 北极星指标带 ===================== */
+.hero{flex:0 0 96px;height:96px;display:flex;gap:12px;align-items:stretch}
+.hstat{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;
+  background:linear-gradient(180deg,var(--surface-2),var(--surface-1));
+  border:1px solid var(--line);border-radius:14px;padding:8px 14px;min-width:0}
+.hstat.north{flex:0 0 196px;background:linear-gradient(135deg,rgba(46,143,232,.16),var(--surface-1) 62%);
+  border-color:rgba(96,165,250,.35)}
+.hstat.north .num{font-size:42px;font-weight:700;color:var(--brand-400);line-height:1;letter-spacing:-1px}
+.hstat.north .num small{font-size:15px;color:var(--text-3);font-family:var(--font);letter-spacing:0}
+.hstat.north .lab{font-size:12px;color:var(--text-3);margin-top:6px;white-space:nowrap}
+.hstat.kpi{flex:1 1 0;padding:8px 10px}
+.hstat.kpi .n{font-size:29px;font-weight:700;line-height:1;color:var(--text-1)}
+.hstat.kpi .n small{font-size:14px;color:var(--text-2);font-family:var(--font)}
+.hstat.kpi .l{font-size:12px;color:var(--text-3);margin-top:5px;white-space:nowrap}
+.hstat.kpi .s{font-size:11px;color:var(--text-3);margin-top:3px;white-space:nowrap;opacity:.85}
+.hstat.kpi.ok .n{color:var(--ok)}
+
+/* ===================== 主区三栏 ===================== */
+.main{flex:1;min-height:0;display:grid;grid-template-columns:472px 1fr 472px;gap:18px}
+.col{display:flex;flex-direction:column;gap:14px;min-height:0}
+.card{background:var(--surface-1);border:1px solid var(--line);
+  border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;min-height:0;position:relative;overflow:hidden;
+  transition:background .2s ease,border-color .2s ease,transform .2s ease}
+.card:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-2px)}
+.card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex:none;gap:10px}
+.card-h .t{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:700;letter-spacing:.5px}
+.card-h .t i{width:4px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--brand-500),var(--brand-700))}
+.card-h .meta{font-size:12px;color:var(--text-3);text-align:right;white-space:nowrap}
+.card-h .meta b{color:var(--text-1);font-size:14px}
+
+/* ---------- 列高预算（main 高 = 662 = 1080-44-66-96-170-3*14） ----------
+   左列 272 + 190 + 172 + 28 = 662 ；右列 210 + 232 + 192 + 28 = 662 */
+#L1{flex:0 0 272px}
+#L1 .body{display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1;min-height:0}
+.sub-t{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);margin-bottom:9px}
+.sub-t em{width:3px;height:12px;border-radius:2px;background:var(--cyan);font-style:normal}
+.sub-t span{margin-left:auto;font-size:11px;color:var(--text-3);font-family:var(--font);letter-spacing:0}
+
+/* 基本信息 */
+#L1 .body>div{min-width:0;overflow:hidden}
+.prof{display:flex;gap:9px;align-items:center;padding-bottom:6px;margin-bottom:6px;
+  border-bottom:1px dashed var(--line)}
+.prof .lg{width:40px;height:40px;flex:none;border-radius:11px;background:rgba(62,142,240,.14);
+  border:1px solid rgba(96,165,250,.32);display:grid;place-items:center;overflow:hidden}
+.prof .lg img{width:100%;height:100%;object-fit:contain}
+.prof .nm{font-family:var(--font-hei);font-size:13px;font-weight:700;line-height:1.3;color:var(--text-1)}
+.prof .tagline{font-size:10px;color:var(--brand-400);margin-top:2px;letter-spacing:.2px}
+.kv{display:flex;align-items:baseline;gap:6px;padding:2px 0;font-size:11.5px;color:var(--text-3);line-height:1.3}
+.kv .k{flex:none;width:50px}
+.kv .v{color:var(--text-1);font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kv .v em{font-style:normal;color:var(--brand-400)}
+.vision{margin-top:auto;display:flex;align-items:center;gap:7px;padding:5px 10px;border-radius:9px;
+  background:linear-gradient(90deg,rgba(56,214,255,.14),rgba(46,143,232,.06));
+  border:1px solid rgba(56,214,255,.26);font-family:var(--font-hei);font-size:12px;font-weight:700;
+  letter-spacing:1.5px;color:var(--brand-400)}
+
+/* 业务结构（5 项紧凑排布，总高 ≈ 5×32 + 4×3 = 172） */
+.biz{display:flex;flex-direction:column;gap:3px;flex:1;min-height:0;overflow:hidden}
+.bz{display:flex;align-items:center;gap:8px;padding:2px 8px;border-radius:10px;
+  background:rgba(255,255,255,.025);border:1px solid var(--line);transition:.2s}
+.bz:hover{background:rgba(62,142,240,.14);border-color:rgba(96,165,250,.34)}
+.bz .ic{width:22px;height:22px;flex:none;border-radius:7px;display:grid;place-items:center;
+  background:rgba(62,142,240,.15);color:var(--brand-400)}
+.bz .ic svg{width:14px;height:14px}
+.bz .tx{flex:1;min-width:0}
+.bz .tx b{display:block;font-size:12.5px;font-weight:600;letter-spacing:.5px;line-height:1.05}
+.bz .tx span{display:block;font-size:10.5px;color:var(--text-3);line-height:1.05;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- L2a 资质证书（12 项 = 4 列 × 3 行，列宽 minmax(0,1fr) 防止撑破） ---------- */
+#L2a{flex:0 0 176px}
+#L2b{flex:0 0 186px}
+.cert-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(3,1fr);gap:5px;flex:1;min-height:0}
+.cert{display:flex;flex-direction:column;justify-content:center;gap:0;padding:1px 6px;border-radius:9px;
+  background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));
+  border:1px solid var(--line);border-left:3px solid var(--brand-500);transition:.2s}
+.cert:hover{background:rgba(62,142,240,.14);border-color:var(--line-strong);border-left-color:var(--brand-400)}
+.cert .cn{font-size:11.5px;font-weight:600;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cert .cr{display:flex;align-items:center;gap:5px}
+.cert .y{font-size:10.5px;color:var(--text-3)}
+.cert .st{font-size:9.5px;padding:0 5px;border-radius:5px;line-height:13px;background:rgba(43,212,110,.14);color:var(--ok)}
+.cert.gold{border-left-color:var(--warn)}
+.cert.gold .st{background:rgba(242,179,61,.14);color:var(--warn)}
+
+/* ---------- L2b 发展历程（固定像素节奏：年 20 / 轴 top 51） ---------- */
+.tl{flex:1;min-height:0;position:relative;padding-top:18px;overflow:hidden}
+.tl .axis{position:absolute;left:2%;right:2%;top:43px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,rgba(46,143,232,.15),var(--brand-500) 18%,var(--brand-400) 82%,rgba(46,143,232,.15))}
+.tl .nodes{position:relative;display:grid;grid-template-columns:repeat(6,1fr);width:100%;gap:4px}
+.tl .nd{display:flex;flex-direction:column;align-items:center;text-align:center;position:relative}
+.tl .nd .y{height:20px;line-height:20px;font-size:15px;font-weight:700;color:var(--text-1)}
+.tl .nd.now .y{color:var(--brand-400)}
+.tl .nd .dot{width:12px;height:12px;flex:none;border-radius:50%;background:var(--surface-1);margin-bottom:8px;
+  border:3px solid var(--brand-500);box-shadow:0 0 0 4px rgba(46,143,232,.12);z-index:2}
+.tl .nd.now .dot{border-color:var(--brand-400);box-shadow:0 0 0 5px rgba(56,214,255,.18)}
+.tl .nd .d{font-size:11px;color:var(--text-2);line-height:1.3;padding:0 2px}
+.tl .nd .tag{display:inline-block;font-size:10px;padding:0 7px;line-height:15px;border-radius:20px;
+  margin-bottom:4px;background:rgba(62,142,240,.16);color:var(--brand-400)}
+.tl .nd.now .tag{background:rgba(56,214,255,.18);color:#BFF0FF}
+
+/* ===================== 中栏 基地分布 ===================== */
+#C1{flex:1}
+.map-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex:none}
+.map-head .t{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;letter-spacing:.5px}
+.map-head .t i{width:4px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--brand-500),var(--brand-700))}
+.map-head .t small{font-size:12px;color:var(--text-3);font-weight:400}
+.map-legend{position:absolute;left:14px;bottom:12px;display:flex;gap:14px;background:rgba(5,13,31,.84);
+  border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:11.5px}
+.map-legend span{display:flex;align-items:center;gap:6px;color:var(--text-2)}
+.map-legend em{width:11px;height:11px;border-radius:50%;display:inline-block}
+.map-wrap{flex:1;min-height:0;position:relative;border-radius:14px;overflow:hidden;
+  background:radial-gradient(120% 120% at 50% 30%, #0a1f3d, #061226);border:1px solid var(--line)}
+.map-wrap svg{width:100%;height:100%;display:block}
+.bd{fill:rgba(46,143,232,.16);stroke:rgba(110,190,255,.55);stroke-width:1.6}
+.bd.main{fill:rgba(56,214,255,.20);stroke:rgba(56,214,255,.85);stroke-width:2.4}
+.river{fill:none;stroke:rgba(74,159,224,.55);stroke-width:2.4;stroke-linecap:round}
+.road{fill:none;stroke:rgba(150,180,215,.24);stroke-width:1.4;stroke-dasharray:7 6}
+.city{fill:rgba(232,242,255,.85)}
+.bnode circle.hit{fill:transparent;cursor:pointer}
+.bnode:hover .halo{opacity:.55}
+.bnode .halo{fill:rgba(56,214,255,.22);opacity:0;transition:.25s}
+.bnode text{font-family:var(--font);fill:#fff;font-weight:700;paint-order:stroke;
+  stroke:rgba(4,12,28,.92);stroke-width:3.2px;stroke-linejoin:round}
+.bnode .bn{font-size:12.5px}
+.bnode .ba{font-size:11px;fill:rgba(210,235,255,.9)}
+.bnode .star{font-size:11px;fill:#FFD979;stroke:none;font-family:var(--font)}
+
+/* 中央统计条（叠在地图上） */
+.cstat{position:absolute;left:50%;top:12px;transform:translateX(-50%);display:flex;gap:0;align-items:stretch;
+  background:rgba(5,13,31,.82);border:1px solid var(--line-strong);border-radius:12px;padding:8px 4px;
+  backdrop-filter:blur(2px)}
+.cstat .it{padding:0 18px;text-align:center;position:relative}
+.cstat .it + .it::before{content:"";position:absolute;left:0;top:12%;bottom:12%;width:1px;background:var(--line)}
+.cstat .v{font-size:22px;font-weight:700;color:var(--text-1);line-height:1.15}
+.cstat .v small{font-size:12px;color:var(--text-2);font-family:var(--font);margin-left:2px}
+.cstat .v b{color:var(--ok);font-size:16px;margin-left:4px;font-weight:700}
+.cstat .l{font-size:11.5px;color:var(--text-3);margin-top:2px;white-space:nowrap}
+.ring-mini{position:absolute;right:14px;bottom:12px;width:118px;background:rgba(5,13,31,.84);
+  border:1px solid var(--line);border-radius:12px;padding:8px 10px 6px;text-align:center}
+.ring-mini .rl{font-size:11px;color:var(--text-3);margin-bottom:2px}
+
+/* 中栏底部双环（环 + 双列图例，避免 8 行单列撑破 111px） */
+.cwrap{flex:0 0 150px;display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;min-height:0}
+.cbox{background:rgba(255,255,255,.022);border:1px solid var(--line);border-radius:13px;
+  padding:8px 12px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.cbox .bh{font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:7px;margin-bottom:4px;font-family:var(--font-hei)}
+.cbox .bh i{width:3px;height:12px;border-radius:2px;background:linear-gradient(180deg,var(--cyan),var(--brand-500))}
+.cbox .bh span{margin-left:auto;font-size:11px;color:var(--text-3);font-family:var(--font);font-weight:400}
+.cbox .bd2{flex:1;display:flex;align-items:center;gap:10px;min-height:0;overflow:hidden}
+.cbox .bd2>div:first-child{flex:none}
+/* 环形图 */
+.ring{flex:none;display:block}
+.ring .rc{font-size:20px;font-weight:700;fill:var(--text-1)}
+.ring .rs{font-size:10px;fill:var(--text-3)}
+.legend{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:1px 10px;
+  align-content:center;overflow:hidden}
+.legend.one{grid-template-columns:1fr;gap:3px}
+.legend .li{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-2);white-space:nowrap;min-width:0}
+.legend .em{width:9px;height:9px;border-radius:3px;flex:none}
+.legend .ln{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.legend .lv{font-size:11.5px;font-weight:700;color:var(--text-1);flex:none}
+.legend .lp{font-size:10.5px;color:var(--text-3);width:34px;text-align:right;flex:none}
+
+/* ===================== 右栏 ===================== */
+/* ---------- 右栏（列高 662 = 210 + 232 + 192 + 28 gaps） ---------- */
+/* R1 人员规模 */
+#R1{flex:0 0 210px}
+#R2{flex:0 0 232px}
+#R3{flex:1 1 auto}
+.r1-body{flex:1;display:grid;grid-template-columns:1.12fr 1fr;gap:14px;min-height:0}
+.hcnt{display:flex;align-items:baseline;gap:8px;padding-bottom:6px;margin-bottom:6px;border-bottom:1px dashed var(--line)}
+.hcnt .v{font-size:32px;font-weight:700;color:var(--brand-400);line-height:1}
+.hcnt .v small{font-size:13px;color:var(--text-2);font-family:var(--font);margin-left:3px}
+.hcnt .l{font-size:12px;color:var(--text-3)}
+.ops{display:flex;flex-direction:column;gap:5px}
+.op{display:flex;align-items:center;gap:8px;font-size:12px}
+.op .on{flex:none;width:32px;color:var(--text-2)}
+.op .track{flex:1;height:9px;border-radius:5px;background:rgba(255,255,255,.07);overflow:hidden}
+.op .track i{display:block;height:100%;border-radius:5px}
+.op .cnt{font-size:12.5px;font-weight:700;color:var(--text-1);flex:none;width:30px;text-align:right}
+.op .pc{font-size:11px;color:var(--text-3);flex:none;width:38px;text-align:right}
+.experts{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-content:start}
+.ex{display:flex;flex-direction:column;justify-content:center;gap:1px;padding:5px 7px;border-radius:9px;
+  background:rgba(255,255,255,.025);border:1px solid var(--line);border-top:2px solid var(--brand-400)}
+.ex .nm{font-size:12.5px;font-weight:700;font-family:var(--font-hei);letter-spacing:.5px;line-height:1.2}
+.ex .ti{font-size:10px;color:var(--text-3);line-height:1.25}
+
+/* R2 经营成果摘要 */
+.biz5{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;flex:none}
+.biz{background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:11px;
+  padding:6px 5px;text-align:center}
+.biz .v{font-size:20px;font-weight:700;line-height:1.1;color:var(--text-1)}
+.biz .v small{font-size:11px;color:var(--text-2);font-family:var(--font);margin-left:1px}
+.biz .l{font-size:11px;color:var(--text-3);margin-top:2px;white-space:nowrap}
+.biz .v.up{color:var(--ok)}
+.biz .v.up small{color:var(--ok)}
+.biz.hi .v{color:var(--brand-400)}
+.chart-box{flex:1;min-height:0;display:flex;flex-direction:column;margin-top:9px}
+.chart-box .ct{display:flex;align-items:baseline;gap:8px;font-size:12px;color:var(--text-3);margin-bottom:2px}
+.chart-box .ct b{font-family:var(--num);font-size:14px;color:var(--ok)}
+.chart-box>div{flex:1;min-height:0;display:flex}
+.chart-box svg{width:100%;height:100%;display:block}
+
+/* R3 生产规模 */
+/* R3 生产规模（列高 192：头 40 + 体 152） */
+.r3-body{flex:1;display:grid;grid-template-columns:68px minmax(0,1fr) minmax(0,1.05fr);gap:10px;align-items:stretch;min-height:0}
+#R3 .r3-body>div{min-width:0;min-height:0;overflow:hidden}
+.prod{display:flex;flex-direction:column;justify-content:center;gap:3px;text-align:center;overflow:hidden;
+  background:linear-gradient(180deg,rgba(56,214,255,.10),rgba(255,255,255,.02));
+  border:1px solid rgba(56,214,255,.24);border-radius:12px;padding:5px 4px}
+.prod .v{font-size:20px;font-weight:700;color:var(--brand-400);line-height:1}
+.prod .v small{font-size:11px;color:var(--text-2);font-family:var(--font);margin-left:2px}
+.prod .l{font-size:10.5px;color:var(--text-3)}
+.prod .x{font-size:10px;color:var(--text-3);line-height:1.3;border-top:1px dashed var(--line);padding-top:4px}
+.prod .x b{color:var(--text-2);font-family:var(--num)}
+.line-box{display:flex;flex-direction:column;min-height:0}
+.line-box .ct{display:flex;align-items:baseline;gap:8px;font-size:11.5px;color:var(--text-3);margin-bottom:2px}
+.line-box .ct b{font-family:var(--num);font-size:13px;color:var(--brand-400)}
+.line-box>div{flex:1;min-height:0;display:flex}
+.line-box svg{width:100%;height:100%;display:block}
+.axis-t{font-size:10.5px;fill:var(--text-3);font-family:var(--num)}
+.grid-l{stroke:rgba(110,170,255,.13);stroke-width:1}
+.vlabel{font-size:10.5px;fill:var(--text-2);font-family:var(--num)}
+
+/* ===================== 底部支撑条 ===================== */
+.bottom{flex:0 0 170px;height:170px;display:grid;grid-template-columns:1fr 1.3fr 1.15fr;gap:18px}
+.bcard{background:var(--surface-1);border:1px solid var(--line);
+  border-radius:16px;padding:13px 18px;display:flex;flex-direction:column;min-height:0;
+  transition:background .2s ease,border-color .2s ease,transform .2s ease}
+.bcard:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-2px)}
+.bcard .bh{font-size:16px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.bcard .bh i{width:4px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--cyan),var(--brand-500))}
+.bcard .bh span{margin-left:auto;font-size:12px;color:var(--text-3);font-weight:400}
+
+/* 经营成果简表 */
+.ftable{flex:1;display:flex;flex-direction:column;justify-content:center;gap:4px;min-height:0;overflow:hidden}
+.ftable .r{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-2);
+  padding:2px 9px;border-radius:9px;background:rgba(255,255,255,.022);border-left:2px solid var(--line-strong)}
+.ftable .r .n{flex:1;white-space:nowrap}
+.ftable .r .v{font-size:15px;font-weight:700;color:var(--text-1);white-space:nowrap}
+.ftable .r .v small{font-size:11px;color:var(--text-2);font-family:var(--font);margin-left:1px}
+.ftable .r .d{font-size:11.5px;font-weight:700;flex:none;white-space:nowrap}
+.ftable .r .d.up{color:var(--ok)}
+.ftable .r .d.dn{color:var(--risk)}
+/* 基地分布小图 */
+.mini-map{flex:1;min-height:0;display:flex;align-items:center;gap:12px;overflow:hidden}
+.mini-map svg{flex:1;min-width:0;height:100%;display:block}
+.mrank{height:100%;display:flex;flex-direction:column;justify-content:center;gap:4px;width:126px;flex:none;overflow:hidden}
+.mbase{fill:rgba(46,143,232,.26);stroke:rgba(110,190,255,.7);stroke-width:1.4}
+.mbase.hot{fill:rgba(56,214,255,.38);stroke:#38D6FF;stroke-width:2}
+.mtext{font-size:10.5px;fill:#dbeaff;font-weight:600;paint-order:stroke;stroke:rgba(4,12,28,.9);stroke-width:2.6px;stroke-linejoin:round}
+.mrank .r{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-2)}
+.mrank .r i{width:7px;height:7px;border-radius:2px;flex:none}
+.mrank .r .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrank .r .v{font-family:var(--num);font-weight:700;color:var(--text-1);font-size:12.5px}
+/* 企业大事记 */
+.events{flex:1;display:flex;flex-direction:column;justify-content:space-between;gap:2px;min-height:0}
+.ev{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--text-2);padding:2px 0;min-height:0}
+.ev .dt{font-family:var(--num);font-size:11.5px;color:var(--brand-500);flex:none;width:62px;
+  background:rgba(62,142,240,.14);border-radius:6px;text-align:center;padding:1px 0;white-space:nowrap}
+.ev .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev.hot .tx{color:var(--text-1);font-weight:600}
+.ev.hot .dt{background:rgba(56,214,255,.2);color:var(--brand-400)}
+
+/* ===================== 无障碍 ===================== */
+:focus-visible{outline:2px solid var(--brand-400);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <!-- ============ 顶部常驻条 ============ -->
+  <div class="topbar">
+    <div class="brand">
+      <img class="logo" src="../common/images/brand_logo.png" alt="" aria-hidden="true">
+      <div>
+        <h1>智慧果园 · 企业管理驾驶舱</h1>
+        <div class="sub">Apple Enterprise Management Cockpit</div>
+      </div>
+    </div>
+    <div class="facts">
+      <div class="fact"><b>8</b><span>基地</span></div>
+      <div class="fact"><b>126</b><span>地块</span></div>
+      <div class="fact"><b>2450</b><span>亩 · 总面积</span></div>
+      <div class="fact"><b>5</b><span>类主栽品种</span></div>
+      <div class="fact"><b>286</b><span>在职员工</span></div>
+      <div class="fact"><b>300+</b><span>服务农户 / 合作社</span></div>
+    </div>
+    <div class="topright">
+      <span class="mini-stat" data-stamp>数据更新 --:--</span>
+      <div class="clock" role="timer" aria-live="off"><span id="clk">--:--:--</span><small id="dt">2026-10-20 周二</small></div>
+      <a href="../applefarm_backhand/login.html">管理后台</a>
+      <a href="da_index.html">返回大屏门户</a>
+      <div class="dd" id="dd">
+        <button type="button" class="dd-btn" id="ddBtn" aria-haspopup="true" aria-expanded="false">切换大屏 <span class="car">▼</span></button>
+        <nav class="dd-menu" id="ddMenu" aria-label="切换大屏">
+          <div class="hd">数据大屏 · 8 屏互通</div>
+          <a href="da_dashboard.html">生产指挥驾驶舱</a>
+          <a href="da_business.html">经营分析大屏</a>
+          <a href="da_trace.html">质量溯源大屏</a>
+          <a href="da_alert.html">智能预警大屏</a>
+          <a href="da_growth.html">物候生长大屏</a>
+          <a href="da_iot.html">设备物联大屏</a>
+          <a href="da_results.html">数字成果大屏</a>
+          <div class="sep"></div>
+          <a href="da_index.html">大屏门户总览</a>
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 北极星 KPI 带（8 块） ============ -->
+  <section class="hero" role="group" aria-label="果园核心指标">
+    <div class="hstat north">
+      <div class="num">10<small>年</small></div>
+      <div class="lab">创立至今 · 深耕苹果产业</div>
+    </div>
+    <div class="hstat kpi"><div class="n">8<small>个</small></div><div class="l">基地数量</div><div class="s">甘东南 · 天水全域</div></div>
+    <div class="hstat kpi"><div class="n">2450<small>亩</small></div><div class="l">经营总面积</div><div class="s">核心区 1650 亩</div></div>
+    <div class="hstat kpi"><div class="n">126<small>块</small></div><div class="l">地块总数</div><div class="s">均块 19.4 亩</div></div>
+    <div class="hstat kpi"><div class="n">5<small>类</small></div><div class="l">主栽品种</div><div class="s">富士 · 王林 · 花牛 · 红星 · 国光</div></div>
+    <div class="hstat kpi"><div class="n">12<small>项</small></div><div class="l">认证证书</div><div class="s">有机 / GAP / ISO 等</div></div>
+    <div class="hstat kpi"><div class="n">300<small>+</small></div><div class="l">服务农户 / 合作社</div><div class="s">技术托管面积 1.2 万亩</div></div>
+    <div class="hstat kpi ok"><div class="n">2512<small>万</small></div><div class="l">全年总产值</div><div class="s">同比 +12.6%</div></div>
+  </section>
+
+  <!-- ============ 主区三栏 ============ -->
+  <div class="main">
+
+    <!-- ---------- 左栏 ---------- -->
+    <div class="col">
+
+      <!-- L1 企业基本信息 + 业务结构 -->
+      <div class="card" id="L1">
+        <div class="card-h">
+          <h3 class="t"><i></i>企业画像与业务结构</h3>
+          <div class="meta">国家级苹果现代农业产业园</div>
+        </div>
+        <div class="body">
+          <!-- L1a 基本信息 -->
+          <div>
+            <div class="sub-t"><em></em>基本信息</div>
+            <div class="prof">
+              <div class="lg"><img src="../common/images/brand_logo.png" alt="企业标识"></div>
+              <div>
+                <div class="nm">甘肃数农智果<br>农业科技股份有限公司</div>
+                <div class="tagline">Gansu Digital Orchard Agriculture</div>
+              </div>
+            </div>
+            <div class="kv"><span class="k">企业名称</span><span class="v">甘肃数农智果农业科技股份有限公司</span></div>
+            <div class="kv"><span class="k">地理位置</span><span class="v">甘肃 · 天水 · <em>麦积区</em></span></div>
+            <div class="kv"><span class="k">创立时间</span><span class="v">2015 年</span></div>
+            <div class="kv"><span class="k">核心定位</span><span class="v">国家级苹果现代农业产业园</span></div>
+            <div class="vision">数字赋能 · 绿色兴农</div>
+          </div>
+          <!-- L1b 业务结构 -->
+          <div style="display:flex;flex-direction:column;min-height:0">
+            <div class="sub-t"><em></em>五大业务板块<span>全链贯通</span></div>
+            <div class="biz">
+              <div class="bz"><div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12"/><path d="M12 12c0-3.3 2.7-6 6-6 0 3.3-2.7 6-6 6z"/><path d="M12 16c0-2.8-2.2-5-5-5 0 2.8 2.2 5 5 5z"/><path d="M7 22h10"/></svg></div>
+                <div class="tx"><b>智慧种植</b><span>水肥一体化 · 无人农机</span></div></div>
+              <div class="bz"><div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-3.6 8-10V5l-8-3-8 3v7c0 6.4 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
+                <div class="tx"><b>质量溯源</b><span>区块链一果一码存证</span></div></div>
+              <div class="bz"><div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1z"/></svg></div>
+                <div class="tx"><b>认养营销</b><span>企业 / 家庭果园 · 直播电商</span></div></div>
+              <div class="bz"><div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L4.2 18A2 2 0 0 0 6 21h12a2 2 0 0 0 1.8-3L14 9.5V3"/><path d="M7 15h10"/></svg></div>
+                <div class="tx"><b>农资服务</b><span>统一配供 · 土壤配方</span></div></div>
+              <div class="bz"><div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.6a1 1 0 0 0-.8-1l-2.2-.6"/><circle cx="7" cy="18" r="2"/><path d="M9 9h3"/></svg></div>
+                <div class="tx"><b>冷链物流</b><span>预冷分选 · 24h 直发</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- L2a 资质证书 -->
+      <div class="card" id="L2a">
+        <div class="card-h">
+          <h3 class="t"><i></i>资质证书</h3>
+          <div class="meta">持证 <b>12</b> 项 · 有效期跟踪中</div>
+        </div>
+        <div class="cert-grid">
+          <div class="cert"><div class="cn">有机产品认证</div><div class="cr"><span class="y">2015</span><span class="st">有效</span></div></div>
+          <div class="cert"><div class="cn">绿色食品认证</div><div class="cr"><span class="y">2016</span><span class="st">有效</span></div></div>
+          <div class="cert"><div class="cn">HACCP 体系</div><div class="cr"><span class="y">2017</span><span class="st">有效</span></div></div>
+          <div class="cert"><div class="cn">农产品地理标志</div><div class="cr"><span class="y">2017</span><span class="st">有效</span></div></div>
+          <div class="cert"><div class="cn">ISO9001 体系</div><div class="cr"><span class="y">2018</span><span class="st">有效</span></div></div>
+          <div class="cert gold"><div class="cn">国家重点龙头企业</div><div class="cr"><span class="y">2019</span><span class="st">有效</span></div></div>
+          <div class="cert"><div class="cn">GAP 认证</div><div class="cr"><span class="y">2019</span><span class="st">有效</span></div></div>
+          <div class="cert"><div class="cn">国家绿色食品标志</div><div class="cr"><span class="y">2020</span><span class="st">有效</span></div></div>
+          <div class="cert"><div class="cn">HACCP 加工认证</div><div class="cr"><span class="y">2021</span><span class="st">有效</span></div></div>
+          <div class="cert"><div class="cn">出口质量备案</div><div class="cr"><span class="y">2022</span><span class="st">有效</span></div></div>
+          <div class="cert"><div class="cn">区块链溯源试点</div><div class="cr"><span class="y">2024</span><span class="st">有效</span></div></div>
+          <div class="cert gold"><div class="cn">GAP 2.0 升级</div><div class="cr"><span class="y">2025</span><span class="st">有效</span></div></div>
+        </div>
+      </div>
+
+      <!-- L2b 发展历程 -->
+      <div class="card" id="L2b">
+        <div class="card-h">
+          <h3 class="t"><i></i>发展历程</h3>
+          <div class="meta">2015 建园 → <b>2026</b> 数据大屏升级</div>
+        </div>
+        <div class="tl">
+          <div class="axis"></div>
+          <div class="nodes">
+            <div class="nd"><div class="y">2015</div><div class="dot"></div><div class="d">麦积基地建园<br>开启苹果产业化</div></div>
+            <div class="nd"><div class="y">2016</div><div class="dot"></div><div class="d">数字化启动<br>水肥一体化</div></div>
+            <div class="nd"><div class="y">2018</div><div class="dot"></div><div class="d">区块链溯源<br>首批一果一码</div></div>
+            <div class="nd"><div class="y">2020</div><div class="dot"></div><div class="d">认养业务上线<br>订单破千</div></div>
+            <div class="nd"><div class="y">2022</div><div class="dot"></div><div class="d">获批国家级<br>苹果现代农业产业园</div></div>
+            <div class="nd now"><div class="y">2026</div><div class="dot"></div><div class="tag">当前</div><div class="d">数据大屏升级<br>八屏互通</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- 中栏 基地分布与地块情况 ---------- -->
+    <div class="card" id="C1">
+      <div class="map-head">
+        <h2 class="t"><i></i>基地分布与地块情况<small>甘东南 · 天水全域 8 大基地 · 126 个地块</small></h2>
+        <div class="meta">总面积 <b>2450</b> 亩 · 地块健康率 <b>77.8%</b></div>
+      </div>
+
+      <div class="map-wrap">
+        <svg id="map" viewBox="0 0 880 396" preserveAspectRatio="xMidYMid meet"
+          role="img" aria-label="天水全域八大基地分布示意图，标注麦积、秦州、秦安、甘谷、张川、清水、陇西、武山基地的面积与地块数">
+          <defs>
+            <linearGradient id="bg1" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#0d2650" stop-opacity=".55"/>
+              <stop offset="100%" stop-color="#071630" stop-opacity=".2"/>
+            </linearGradient>
+          </defs>
+          <!-- 天水市域示意边界 -->
+          <path class="bd main" d="M96,86 L250,58 L392,66 L512,44 L648,72 L782,104 L812,196 L780,286 L664,330 L528,348 L406,334 L288,346 L170,312 L86,242 L62,152 Z"/>
+          <!-- 县域分区 -->
+          <path class="bd" d="M250,58 L262,178 L170,312 L96,86 Z"/>
+          <path class="bd" d="M392,66 L378,182 L262,178 Z"/>
+          <path class="bd" d="M512,44 L506,176 L378,182 Z"/>
+          <path class="bd" d="M648,72 L620,190 L506,176 Z"/>
+          <path class="bd" d="M782,104 L736,206 L620,190 Z"/>
+          <path class="bd" d="M170,312 L288,346 L292,236 L262,178 Z"/>
+          <path class="bd" d="M288,346 L406,334 L400,230 L292,236 Z"/>
+          <path class="bd" d="M406,334 L528,348 L520,236 L400,230 Z"/>
+          <!-- 水系 / 路网 -->
+          <path class="river" d="M92,206 C220,190 340,214 460,204 C580,194 700,214 806,198"/>
+          <path class="river" d="M300,74 C312,150 300,240 314,338" opacity=".5"/>
+          <path class="road" d="M110,120 C280,160 430,120 610,164 C700,186 760,170 800,150"/>
+          <path class="road" d="M170,300 C330,268 520,272 730,306"/>
+          <path class="road" d="M250,70 C268,190 266,250 292,340"/>
+          <!-- 城市点 -->
+          <g>
+            <rect class="city" x="368" y="186" width="8" height="8" rx="1.5"/>
+            <text x="382" y="194" font-size="12" fill="#DCEBFF" font-weight="600">天水市区</text>
+            <rect class="city" x="252" y="164" width="7" height="7" rx="1.5"/>
+            <text x="264" y="172" font-size="11" fill="#AFCBEE">秦安</text>
+            <rect class="city" x="112" y="98" width="7" height="7" rx="1.5"/>
+            <text x="124" y="106" font-size="11" fill="#AFCBEE">张家川</text>
+          </g>
+          <!-- 指北针 / 比例尺 -->
+          <g transform="translate(828,340)" opacity=".8">
+            <path d="M0,-26 L7,0 L0,-7 L-7,0 Z" fill="#8AA0BE"/>
+            <text x="0" y="16" text-anchor="middle" font-size="11" fill="#8AA0BE">N</text>
+          </g>
+          <g transform="translate(60,368)" opacity=".7">
+            <path d="M0,0 H96 M0,-5 V5 M48,-4 V4 M96,-5 V5" stroke="#8AA0BE" stroke-width="1.4" fill="none"/>
+            <text x="0" y="-8" font-size="10" fill="#8AA0BE">0</text>
+            <text x="90" y="-8" font-size="10" fill="#8AA0BE" text-anchor="end">20km</text>
+          </g>
+        </svg>
+
+        <!-- 中央统计 -->
+        <div class="cstat">
+          <div class="it"><div class="v">126<small>块</small></div><div class="l">地块数量</div></div>
+          <div class="it"><div class="v">2450<small>亩</small></div><div class="l">地块总亩数</div></div>
+          <div class="it"><div class="v">19.4<small>亩/块</small></div><div class="l">平均地块面积</div></div>
+          <div class="it"><div class="v">77.8<small>%</small><b>+3.2</b></div><div class="l">地块健康占比</div></div>
+        </div>
+
+        <!-- 健康占比迷你环 -->
+        <div class="ring-mini">
+          <div class="rl">地块健康占比</div>
+          <div id="ringHealth"></div>
+        </div>
+
+        <div class="map-legend">
+          <span><em style="background:#38D6FF"></em>主基地（麦积）</span>
+          <span><em style="background:rgba(46,143,232,.75)"></em>重点基地</span>
+          <span><em style="background:rgba(110,190,255,.45)"></em>协同基地</span>
+          <span><em style="background:rgba(74,159,224,.6)"></em>水系</span>
+        </div>
+      </div>
+
+      <!-- 底部双环 -->
+      <div class="cwrap">
+        <div class="cbox">
+          <div class="bh"><i></i>地块分布（按基地）<span>合计 126 块 / 2450 亩</span></div>
+          <div class="bd2">
+            <div id="ringBase"></div>
+            <div class="legend" id="legBase"></div>
+          </div>
+        </div>
+        <div class="cbox">
+          <div class="bh"><i></i>地块健康分布（按状态）<span>健康率 77.8%</span></div>
+          <div class="bd2">
+            <div id="ringHealth2"></div>
+            <div class="legend one" id="legHealth"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- 右栏 ---------- -->
+    <div class="col">
+
+      <!-- R1 人员规模 -->
+      <div class="card" id="R1">
+        <div class="card-h">
+          <h3 class="t"><i></i>人员规模</h3>
+          <div class="meta">在职 <b>286</b> 人 · 技术型占比 21.0%</div>
+        </div>
+        <div class="r1-body">
+          <div>
+            <div class="hcnt"><span class="v">286<small>人</small></span><span class="l">总员工规模</span></div>
+            <div class="ops" id="opsStaff"></div>
+          </div>
+          <div>
+            <div class="sub-t"><em></em>专家团队核心成员</div>
+            <div class="experts">
+              <div class="ex"><div class="nm">王振海</div><div class="ti">首席科学家 · 国家苹果产业技术体系</div></div>
+              <div class="ex"><div class="nm">李建国</div><div class="ti">首席农艺师 · 水肥与树体管理</div></div>
+              <div class="ex"><div class="nm">陈思远</div><div class="ti">溯源架构师 · 区块链技术负责人</div></div>
+              <div class="ex"><div class="nm">马丽娟</div><div class="ti">数字农业推广总监 · 产业运营</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- R2 经营成果摘要 -->
+      <div class="card" id="R2">
+        <div class="card-h">
+          <h3 class="t"><i></i>经营成果摘要</h3>
+          <div class="meta">2026 年度 · 同比口径</div>
+        </div>
+        <div class="biz5">
+          <div class="biz hi"><div class="v">2512<small>万</small></div><div class="l">本年度总产值</div></div>
+          <div class="biz"><div class="v up">+12.6<small>%</small></div><div class="l">产值同比</div></div>
+          <div class="biz"><div class="v">18.5<small>%</small></div><div class="l">净利率</div></div>
+          <div class="biz"><div class="v">3260<small>单</small></div><div class="l">认养订单</div></div>
+          <div class="biz"><div class="v">78<small>%</small></div><div class="l">认养续费率</div></div>
+        </div>
+        <div class="chart-box">
+          <div class="ct">近 5 年产值增长<b>+59.0%</b><span style="margin-left:auto">单位：万元</span></div>
+          <div id="chartValue"></div>
+        </div>
+      </div>
+
+      <!-- R3 生产规模 -->
+      <div class="card" id="R3">
+        <div class="card-h">
+          <h3 class="t"><i></i>生产规模</h3>
+          <div class="meta">年产量 <b>3260</b> 吨 · 5 类主栽品种</div>
+        </div>
+        <div class="r3-body">
+          <div class="prod">
+            <div class="v">3260<small>吨</small></div>
+            <div class="l">2026 年产量</div>
+            <div class="x">亩均 <b>1.33</b> 吨<br>产值 <b>7705</b> 元/吨</div>
+          </div>
+          <div style="display:flex;flex-direction:column;min-height:0">
+            <div class="sub-t" style="margin-bottom:4px"><em></em>主栽品种产量构成</div>
+            <div style="flex:1;display:flex;align-items:center;gap:8px;min-height:0">
+              <div id="ringVar"></div>
+              <div class="legend one" id="legVar"></div>
+            </div>
+          </div>
+          <div class="line-box">
+            <div class="ct">近 5 年产量增长<b>+49.5%</b></div>
+            <div id="chartYield"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 底部支撑条 ============ -->
+  <div class="bottom">
+    <div class="bcard">
+      <h3 class="bh"><i></i>经营成果简表<span>2026 年度</span></h3>
+      <div class="ftable">
+        <div class="r"><span class="n">总产值</span><span class="v">2512<small>万元</small></span><span class="d up">同比 +12.6%</span></div>
+        <div class="r"><span class="n">净利润</span><span class="v">465<small>万元</small></span><span class="d up">同比 +18.2%</span></div>
+        <div class="r"><span class="n">认养营收</span><span class="v">918<small>万元</small></span><span class="d up">同比 +24.5%</span></div>
+        <div class="r"><span class="n">环比（Q4/Q3）</span><span class="v">+6.8<small>%</small></span><span class="d up">↑ 稳健</span></div>
+      </div>
+    </div>
+    <div class="bcard">
+      <h3 class="bh"><i></i>基地分布示意<span>8 大基地 · 2450 亩</span></h3>
+      <div class="mini-map">
+        <svg viewBox="0 0 300 104" preserveAspectRatio="xMidYMid meet" role="img"
+          aria-label="八大基地面积分布示意柱状图，按亩数排序">
+          <g id="miniBars"></g>
+        </svg>
+        <div class="mrank" id="rankBase"></div>
+      </div>
+    </div>
+    <div class="bcard">
+      <h3 class="bh"><i></i>企业大事记<span>最近 5 条</span></h3>
+      <div class="events">
+        <div class="ev hot"><span class="dt">2026-09</span><span class="tx">数据大屏升级，八大驾驶舱全线互通</span></div>
+        <div class="ev"><span class="dt">2026-08</span><span class="tx">区块链存证突破 10 万批次</span></div>
+        <div class="ev"><span class="dt">2026-07</span><span class="tx">果园认养业务上线一周年</span></div>
+        <div class="ev"><span class="dt">2026-06</span><span class="tx">苹果现代农业产业园二期投产</span></div>
+        <div class="ev"><span class="dt">2026-05</span><span class="tx">央视《乡村振兴》栏目专题报道</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- 缩放适配（单屏不滚动） ---------- */
+(function(){
+  var s=document.getElementById('stage');
+  function fit(){var k=Math.min(innerWidth/1920,innerHeight/1080);s.style.transform='translate(-50%,-50%) scale('+k+')';}
+  addEventListener('resize',fit);fit();
+})();
+
+/* ---------- 时钟（aria-live=off，避免读屏持续播报） ---------- */
+(function(){
+  var w=['周日','周一','周二','周三','周四','周五','周六'];
+  function t(){var d=new Date();
+    var p=function(n){return ('0'+n).slice(-2);};
+    document.getElementById('clk').textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+    document.getElementById('dt').textContent=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+w[d.getDay()];
+  }
+  t();setInterval(t,1000);
+})();
+
+/* ---------- 关键数据 30 秒自动刷新（时间戳） ---------- */
+(function(){
+  var p=function(n){return ('0'+n).slice(-2);};
+  function tick(){
+    var d=new Date(),t=p(d.getHours())+':'+p(d.getMinutes());
+    [].forEach.call(document.querySelectorAll('[data-stamp]'),function(e){e.textContent='数据更新 '+t;});
+  }
+  tick();setInterval(tick,30000);
+})();
+
+/* ---------- 切换大屏下拉 ---------- */
+(function(){
+  var dd=document.getElementById('dd'),btn=document.getElementById('ddBtn');
+  btn.addEventListener('click',function(e){
+    e.stopPropagation();
+    var open=dd.classList.toggle('open');
+    btn.setAttribute('aria-expanded',open?'true':'false');
+  });
+  document.addEventListener('click',function(){dd.classList.remove('open');btn.setAttribute('aria-expanded','false');});
+  dd.addEventListener('keydown',function(e){if(e.key==='Escape'){dd.classList.remove('open');btn.focus();}});
+})();
+
+/* ============================================================
+   Mock 数据（数值自洽：地块 126 = 8 基地之和；人员 286 = 四角色之和；
+   品种产量构成合计 100%；产值同比 +12.6% = 2512 / 2231 - 1）
+   ============================================================ */
+var BASES=[
+  {id:'MJ',name:'麦积基地',area:520,plots:32,x:300,y:150,star:1},
+  {id:'QZ',name:'秦州基地',area:430,plots:24,x:424,y:196,star:0},
+  {id:'QA',name:'秦安基地',area:380,plots:21,x:216,y:214,star:0},
+  {id:'GG',name:'甘谷基地',area:310,plots:17,x:136,y:250,star:0},
+  {id:'ZC',name:'张川基地',area:240,plots:13,x:120,y:140,star:0},
+  {id:'QS',name:'清水基地',area:190,plots:10,x:576,y:120,star:0},
+  {id:'LX',name:'陇西基地',area:220,plots:6, x:722,y:164,star:0},
+  {id:'WS',name:'武山基地',area:160,plots:3, x:474,y:288,star:0}
+];
+var STAFF=[{k:'管理',v:18,c:'#38D6FF'},{k:'技术',v:42,c:'#2E8FE8'},
+           {k:'作业',v:198,c:'#31C9E8'},{k:'销售',v:28,c:'#4E7FD6'}];
+var PLOT_HEALTH=[{k:'健康',v:98,c:'#2bd46e'},{k:'预警',v:21,c:'#F2B33D'},{k:'风险',v:7,c:'#E5564B'}];
+var VARIETIES=[{k:'富士',v:1826,p:56,c:'#38D6FF'},{k:'王林',v:587,p:18,c:'#2E8FE8'},
+               {k:'花牛',v:456,p:14,c:'#31C9E8'},{k:'红星',v:261,p:8,c:'#4E7FD6'},
+               {k:'其他',v:130,p:4,c:'#8AA0BE'}];
+var VALUE5=[['2022',1580],['2023',1795],['2024',2040],['2025',2231],['2026',2512]];
+var YIELD5=[['2022',2180],['2023',2460],['2024',2790],['2025',3010],['2026',3260]];
+var BCOL=['#38D6FF','#2E8FE8','#31C9E8','#4E7FD6','#6E8ED0','#8AA0BE','#A8BBD4','#C6D4E6'];
+
+var NS='http://www.w3.org/2000/svg';
+function mk(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+function pct(a,b){return (a/b*100);}
+function fx(n,d){return n.toFixed(d===undefined?1:d);}
+
+/* ---------- 环形图 ----------
+   on：数值总和 或 预先算好的百分比数组（与 segs 等长） */
+function ring(host,segs,size,ct,cs,on){
+  var R=size/2-13,W=size/5.6,C=2*Math.PI*R,acc=0,sv='';
+  var isArr=Object.prototype.toString.call(on)==='[object Array]';
+  var pctArr=segs.map(function(s,i){
+    return s.p!==undefined?s.p:(isArr?on[i]:pct(s.v,on));
+  });
+  segs.forEach(function(s,i){
+    var p=pctArr[i],len=C*p/100,gap=p>3?2.2:0;
+    sv+='<circle cx="'+(size/2)+'" cy="'+(size/2)+'" r="'+R+'" fill="none" stroke="'+s.c+
+        '" stroke-width="'+W+'" stroke-dasharray="'+(len-gap).toFixed(2)+' '+(C-len+gap).toFixed(2)+
+        '" stroke-dashoffset="'+(-acc).toFixed(2)+'" transform="rotate(-90 '+(size/2)+' '+(size/2)+')"/>';
+    acc+=len;
+  });
+  sv+='<text class="rc" x="'+(size/2)+'" y="'+(size/2+4)+'" text-anchor="middle">'+ct+'</text>'+
+      '<text class="rs" x="'+(size/2)+'" y="'+(size/2+20)+'" text-anchor="middle">'+cs+'</text>';
+  host.innerHTML='<svg class="ring" width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+
+    '" role="img" aria-label="'+cs+' '+ct+'，'+segs.map(function(s,i){return s.k+pctArr[i].toFixed(1)+'%';}).join('、')+'">'+sv+'</svg>';
+}
+function legend(host,segs,total,unit,pArr){
+  host.innerHTML=segs.map(function(s,i){
+    var p=pArr?pArr[i]:pct(s.v,total);
+    return '<div class="li"><span class="em" style="background:'+s.c+'"></span>'+
+      '<span class="ln">'+s.k+'</span>'+
+      '<span class="lv">'+(unit==='亩'?fx(s.v,0):s.v)+'</span>'+
+      '<span class="lp">'+p.toFixed(1)+'%</span></div>';
+  }).join('');
+}
+
+/* ---------- 基地节点（叠加在示意地图上） ---------- */
+(function(){
+  var map=document.getElementById('map');
+  BASES.forEach(function(b,i){
+    var r=8+Math.round(b.area/22);
+    var g=mk('g',{class:'bnode',tabindex:'0',role:'img',
+      'aria-label':b.name+'，'+b.area+'亩，'+b.plots+'个地块'+(b.star?'，主基地':'')});
+    g.appendChild(mk('circle',{class:'halo',cx:b.x,cy:b.y,r:r+9}));
+    g.appendChild(mk('circle',{cx:b.x,cy:b.y,r:r,fill:b.star?'rgba(56,214,255,.30)':'rgba(46,143,232,.24)',
+      stroke:b.star?'#38D6FF':BCOL[i],'stroke-width':b.star?2.6:1.8}));
+    g.appendChild(mk('circle',{cx:b.x,cy:b.y,r:2.6,fill:b.star?'#38D6FF':BCOL[i]}));
+    var right=b.x<560;
+    var t1=mk('text',{class:'bn',x:b.x+(right?r+8:-(r+8)),y:b.y+1,'text-anchor':right?'start':'end'});
+    t1.textContent=b.name;
+    var t2=mk('text',{class:'ba',x:b.x+(right?r+8:-(r+8)),y:b.y+15,'text-anchor':right?'start':'end'});
+    t2.textContent=b.area+'亩 · '+b.plots+'块';
+    g.appendChild(t1);g.appendChild(t2);
+    if(b.star){
+      var s=mk('text',{class:'star',x:b.x+(right?r+8:-(r+8)),y:b.y-12,'text-anchor':right?'start':'end'});
+      s.textContent='★ 主基地';g.appendChild(s);
+    }
+    map.appendChild(g);
+  });
+})();
+
+/* ---------- 中栏双环 ---------- */
+(function(){
+  var bp=BASES.map(function(b,i){return {k:b.name,v:b.plots,c:BCOL[i]};});
+  var bpSum=bp.reduce(function(a,b){return a+b.v;},0);
+  ring(document.getElementById('ringBase'),bp,104,'126','地块总数',bpSum);
+  legend(document.getElementById('legBase'),bp,bpSum,'块');
+
+  var hsum=PLOT_HEALTH.reduce(function(a,b){return a+b.v;},0);
+  ring(document.getElementById('ringHealth'),[PLOT_HEALTH[0],PLOT_HEALTH[1],PLOT_HEALTH[2]],104,
+       '77.8%','健康占比',[pct(PLOT_HEALTH[0].v,hsum),pct(PLOT_HEALTH[1].v,hsum),pct(PLOT_HEALTH[2].v,hsum)]);
+  ring(document.getElementById('ringHealth2'),[PLOT_HEALTH[0],PLOT_HEALTH[1],PLOT_HEALTH[2]],104,
+       '77.8%','地块健康率',[pct(PLOT_HEALTH[0].v,hsum),pct(PLOT_HEALTH[1].v,hsum),pct(PLOT_HEALTH[2].v,hsum)]);
+  legend(document.getElementById('legHealth'),PLOT_HEALTH,hsum,'块',
+         [pct(PLOT_HEALTH[0].v,hsum),pct(PLOT_HEALTH[1].v,hsum),pct(PLOT_HEALTH[2].v,hsum)]);
+})();
+
+/* ---------- 迷你健康环（地图内） ---------- */
+(function(){
+  var hsum=PLOT_HEALTH.reduce(function(a,b){return a+b.v;},0);
+  var host=document.getElementById('ringHealth');
+  var R=34,W=9,size=84,C=2*Math.PI*R,acc=0,sv='';
+  PLOT_HEALTH.forEach(function(s){
+    var p=pct(s.v,hsum),len=C*p/100,gap=1.8;
+    sv+='<circle cx="42" cy="42" r="'+R+'" fill="none" stroke="'+s.c+'" stroke-width="'+W+
+        '" stroke-dasharray="'+(len-gap).toFixed(2)+' '+(C-len+gap).toFixed(2)+'" stroke-dashoffset="'+(-acc).toFixed(2)+
+        '" transform="rotate(-90 42 42)"/>';
+    acc+=len;
+  });
+  sv+='<text class="rc" x="42" y="40" text-anchor="middle" style="font-size:16px">77.8%</text>'+
+      '<text class="rs" x="42" y="53" text-anchor="middle">健康 98 块</text>';
+  host.innerHTML='<svg width="84" height="84" viewBox="0 0 84 84" role="img" aria-label="地块健康占比 77.8%，健康 98 块、预警 21 块、风险 7 块">'+sv+'</svg>';
+})();
+
+/* ---------- 人员角色条 ---------- */
+(function(){
+  var host=document.getElementById('opsStaff'),total=286;
+  host.innerHTML=STAFF.map(function(s){
+    return '<div class="op"><span class="on">'+s.k+'</span>'+
+      '<span class="track"><i style="width:'+pct(s.v,total).toFixed(1)+'%;background:'+s.c+'"></i></span>'+
+      '<span class="cnt">'+s.v+'</span>'+
+      '<span class="pc">'+pct(s.v,total).toFixed(1)+'%</span></div>';
+  }).join('');
+})();
+
+/* ---------- 近 5 年产值柱状图 ---------- */
+(function(){
+  var host=document.getElementById('chartValue');
+  var W=400,H=96,padL=6,padB=16,padT=16,padR=6;
+  var max=2800,step=(max-0)/4;
+  var iw=W-padL-padR,ih=H-padT-padB;
+  var n=VALUE5.length,gap=14,bw=(iw-gap*(n-1))/n,sv='';
+  for(var g=0;g<=4;g++){
+    var y=padT+ih-(ih*g/4);
+    sv+='<line class="grid-l" x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'"/>';
+    sv+='<text class="axis-t" x="'+padL+'" y="'+(y-3).toFixed(1)+'" text-anchor="start">'+Math.round(step*g)+'</text>';
+  }
+  VALUE5.forEach(function(d,i){
+    var x=padL+i*(bw+gap),h=ih*d[1]/max,y=padT+ih-h;
+    var isLast=i===n-1;
+    sv+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+
+        '" rx="4" fill="'+(isLast?'url(#gb)':'rgba(46,143,232,.42)')+'" stroke="'+(isLast?'#38D6FF':'rgba(96,165,250,.6)')+'" stroke-width="1.2"/>';
+    sv+='<text class="vlabel" x="'+(x+bw/2).toFixed(1)+'" y="'+(y-5).toFixed(1)+'" text-anchor="middle" '+
+        'style="fill:'+(isLast?'#38D6FF':'#9DB8DC')+'">'+d[1]+'</text>';
+    sv+='<text class="axis-t" x="'+(x+bw/2).toFixed(1)+'" y="'+(H-3)+'" text-anchor="middle">'+d[0]+'</text>';
+  });
+  host.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" role="img" aria-label="近5年产值增长柱状图：2022年1580万元、2023年1795万元、2024年2040万元、2025年2231万元、2026年2512万元">'+
+    '<defs><linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(56,214,255,.85)"/>'+
+    '<stop offset="100%" stop-color="rgba(46,143,232,.30)"/></linearGradient></defs>'+sv+'</svg>';
+})();
+
+/* ---------- 近 5 年产量折线 ---------- */
+(function(){
+  var host=document.getElementById('chartYield');
+  var W=210,H=150,padL=30,padB=18,padT=14,padR=8;
+  var min=1800,max=3400;
+  var iw=W-padL-padR,ih=H-padT-padB,n=YIELD5.length;
+  var sx=function(i){return padL+iw*i/(n-1);};
+  var sy=function(v){return padT+ih-ih*(v-min)/(max-min);};
+  var sv='';
+  [2000,2400,2800,3200].forEach(function(v){
+    var y=sy(v);
+    sv+='<line class="grid-l" x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'"/>';
+    sv+='<text class="axis-t" x="'+(padL-5)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end">'+v+'</text>';
+  });
+  var pts=YIELD5.map(function(d,i){return sx(i).toFixed(1)+','+sy(d[1]).toFixed(1);});
+  var areaPts=padL+','+(padT+ih)+' '+pts.join(' ')+' '+(W-padR)+','+(padT+ih);
+  sv+='<polygon points="'+areaPts+'" fill="rgba(56,214,255,.12)"/>';
+  sv+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#38D6FF" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>';
+  YIELD5.forEach(function(d,i){
+    var last=i===n-1;
+    sv+='<circle cx="'+sx(i).toFixed(1)+'" cy="'+sy(d[1]).toFixed(1)+'" r="'+(last?4:3)+'" fill="'+(last?'#38D6FF':'#0B1830')+
+        '" stroke="#38D6FF" stroke-width="2"/>';
+    sv+='<text class="axis-t" x="'+sx(i).toFixed(1)+'" y="'+(H-4)+'" text-anchor="middle">'+d[0].slice(2)+'</text>';
+    if(last) sv+='<text class="vlabel" x="'+(sx(i)-2).toFixed(1)+'" y="'+(sy(d[1])-9).toFixed(1)+'" text-anchor="end" style="fill:#38D6FF;font-weight:700">'+d[1]+'</text>';
+  });
+  host.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet" role="img" aria-label="近5年产量增长折线图：2022年2180吨、2023年2460吨、2024年2790吨、2025年3010吨、2026年3260吨">'+sv+'</svg>';
+})();
+
+/* ---------- 主栽品种产量构成 ---------- */
+(function(){
+  var segs=VARIETIES.map(function(v){return {k:v.k,v:v.v,c:v.c,p:v.p};});
+  var vSum=segs.reduce(function(a,b){return a+b.v;},0);
+  ring(document.getElementById('ringVar'),segs,104,'3260','吨 · 合计');
+  legend(document.getElementById('legVar'),segs,vSum,'吨',segs.map(function(s){return s.p;}));
+})();
+
+/* ---------- 底部：基地分布小图 + 排行 ---------- */
+(function(){
+  var host=document.getElementById('miniBars');
+  var W=300,H=104,n=BASES.length,padB=16,ih=H-padB,gap=5;
+  var bw=(W-gap*(n-1))/n,max=560;
+  var sorted=BASES.slice().sort(function(a,b){return b.area-a.area;});
+  var sv='';
+  BASES.forEach(function(b,i){
+    var h=ih*b.area/max,x=i*(bw+gap),hot=b.star?1:0;
+    sv+='<rect class="'+(hot?'mbase hot':'mbase')+'" x="'+x.toFixed(1)+'" y="'+(ih-h+7).toFixed(1)+
+        '" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3"/>';
+    sv+='<text class="mtext" x="'+(x+bw/2).toFixed(1)+'" y="'+(ih-h+1).toFixed(1)+'" text-anchor="middle" style="font-size:9.5px">'+b.area+'</text>';
+    sv+='<text class="mtext" x="'+(x+bw/2).toFixed(1)+'" y="'+(ih+13)+'" text-anchor="middle" style="font-size:9px;fill:#9DB8DC">'+b.name.replace('基地','')+'</text>';
+  });
+  host.innerHTML=sv;
+  document.getElementById('rankBase').innerHTML=sorted.slice(0,6).map(function(b){
+    var i=BASES.indexOf(b);
+    return '<div class="r"><i style="background:'+(b.star?'#38D6FF':BCOL[i])+'"></i>'+
+      '<span class="n">'+b.name+'</span><span class="v">'+b.area+'</span></div>';
+  }).join('');
+})();
+</script>
+</body>
+<script src="js/shared/mock-overview.js"></script>
+<script src="js/shared/dashboards-mock.js"></script>
+</html>

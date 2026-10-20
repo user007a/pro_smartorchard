@@ -323,11 +323,7 @@
   </div>
 </div>
 
-<!-- 底部 -->
-<footer style="background:var(--bg-card); padding:var(--space-lg); text-align:center; color:var(--text-secondary); font-size:var(--font-size-sm); margin-top:auto;">
-  智慧果园·智慧果园管理系统 © 2026
-</footer>
-    </main>
+</main>
   </div>
 
 </div>
@@ -477,6 +473,31 @@ function closeModal() {
   document.getElementById('detail-modal').classList.remove('show');
 }
 
+// 报表采集联动：从 enterprise / 订单 / 农资使用 综合计算（PC-B-051）
+function loadReportData() {
+  var farmIncome = 2512; // 万元（与 enterprise_info 一致）
+  var orders = (JSON.parse(localStorage.getItem('h5_orders') || '[]')).length;
+  var adoptIncome = (JSON.parse(localStorage.getItem('snzg_adoption_income') || '[]')).reduce(function(s,a){ return s + (a.amount || 0); }, 0);
+  var total = farmIncome + adoptIncome;
+  var elTotal = document.getElementById('reportTotal');
+  if (elTotal) elTotal.textContent = total.toFixed(2) + ' 万元';
+  var elOrders = document.getElementById('reportOrders');
+  if (elOrders) elOrders.textContent = orders + ' 笔';
+}
+function exportReport(format) {
+  // 联动采集：导出汇总 CSV
+  var farms = JSON.parse(localStorage.getItem('snzg_adoption_income') || '[]');
+  var orders = JSON.parse(localStorage.getItem('h5_orders') || '[]');
+  var csv = '类型,数量,金额\n企业产值(万元),1,2512\n认养收入笔数,' + farms.length + ',' + farms.reduce(function(s,a){return s+(a.amount||0)},0) + '\n订单笔数,' + orders.length + ',' + orders.reduce(function(s,o){return s+(o.total||0)},0);
+  var blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `报表总览_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  if (typeof Toast !== 'undefined') Toast.success('报表已导出（' + format + '）');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   // 收入趋势数据（全年）
   const revenueTrendData = {
@@ -511,6 +532,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }]
   };
   Chart.bar('#chart-revenue-bar', revenueBarData);
+
+  // 联动采集 + 报表初始化
+  loadReportData();
 
   // 点击遮罩层关闭弹窗
   document.getElementById('detail-modal').addEventListener('click', function(e) {

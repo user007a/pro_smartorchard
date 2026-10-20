@@ -18,6 +18,24 @@
     transform:translateY(-2px);
     box-shadow:var(--shadow-md);
   }
+  /* 已延期计划行高亮 */
+  tr.row-delayed td { background:#fff1f0; }
+  tr.row-delayed:hover td { background:#ffe7e6; }
+  /* 模型推荐提示条 */
+  .prefill-banner {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:10px 16px;
+    margin-bottom:16px;
+    border-radius:8px;
+    background:var(--info-bg, #e6f4ff);
+    border:1px solid var(--info-border, #bae0ff);
+    color:var(--text-primary);
+    font-size:13px;
+  }
+  .prefill-banner .prefill-text { font-weight:500; }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -51,6 +69,11 @@
     <!-- 主内容区 -->
     <main class="main-content">
       <div class="content-wrapper">
+        <!-- 模型推荐提示条（来自生长模型/物候期模型） -->
+        <div class="prefill-banner" id="prefillBanner" style="display:none;">
+          <span class="prefill-text" id="prefillText">来自模型推荐（生长模型/物候期模型）</span>
+          <button class="jg-btn jg-btn-primary" onclick="adoptPrefill()">采纳</button>
+        </div>
         
         <!-- 统计卡片区 -->
         <!-- 统计卡条已按统一规范移除 (原class=patrol-stats) -->
@@ -60,16 +83,18 @@
           <div class="search-bar">
             <select class="search-select" id="baseSelect">
               <option value="">选择基地</option>
-              <option value="ytqx">天水麦积区基地</option>
-              <option value="whrc">天水荣成基地</option>
-              <option value="qdlx">青岛莱西基地</option>
-              <option value="zy">招远基地</option>
-              <option value="pl">麦积区阁基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水秦州区基地">天水秦州区基地</option>
+              <option value="天水甘谷县基地">天水甘谷县基地</option>
+              <option value="天水秦安县基地">天水秦安县基地</option>
+              <option value="天水清水县基地">天水清水县基地</option>
+              <option value="天水武山县基地">天水武山县基地</option>
+              <option value="天水张家川县基地">天水张家川县基地</option>
             </select>
             <select class="search-select" id="statusSelect">
               <option value="">全部状态</option>
               <option value="pending">待执行</option>
-              <option value="ongoing">执行中</option>
+              <option value="executing">执行中</option>
               <option value="completed">已完成</option>
               <option value="delayed">已延期</option>
             </select>
@@ -77,8 +102,12 @@
               <option value="">全部类型</option>
               <option value="fertilizer">施肥</option>
               <option value="pesticide">喷药</option>
-              <option value="tool">修剪</option>
               <option value="irrigation">灌溉</option>
+              <option value="pruning">修剪</option>
+              <option value="thinning">疏花疏果</option>
+              <option value="bagging">套袋</option>
+              <option value="weeding">除草</option>
+              <option value="harvest">采收</option>
               <option value="other">其他</option>
             </select>
             <input type="date" class="search-input" id="startDate" placeholder="开始日期">
@@ -153,27 +182,31 @@
         <form id="form-add-plan" class="modal-form">
           <div class="form-group">
             <label>计划名称</label>
-            <input type="text" class="form-control" placeholder="请输入计划名称">
+            <input type="text" class="form-control" id="add-name" placeholder="请输入计划名称">
           </div>
           <div class="form-group">
             <label>所属基地</label>
-            <select class="form-control">
+            <select class="form-control" id="add-base">
               <option value="">请选择基地</option>
-              <option value="ytqx">天水麦积区基地</option>
-              <option value="whrc">天水荣成基地</option>
-              <option value="qdlx">青岛莱西基地</option>
-              <option value="zy">招远基地</option>
-              <option value="pl">麦积区阁基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水秦州基地">天水秦州基地</option>
+              <option value="青岛莱西基地">青岛莱西基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水甘谷基地">天水甘谷基地</option>
             </select>
           </div>
           <div class="form-group">
             <label>计划类型</label>
-            <select class="form-control">
+            <select class="form-control" id="add-type">
               <option value="">请选择类型</option>
               <option value="fertilizer">施肥</option>
               <option value="pesticide">喷药</option>
-              <option value="tool">修剪</option>
               <option value="irrigation">灌溉</option>
+              <option value="pruning">修剪</option>
+              <option value="thinning">疏花疏果</option>
+              <option value="bagging">套袋</option>
+              <option value="weeding">除草</option>
+              <option value="harvest">采收</option>
               <option value="other">其他</option>
             </select>
           </div>
@@ -206,15 +239,15 @@
           </div>
           <div class="form-group">
             <label>开始时间</label>
-            <input type="date" class="form-control">
+            <input type="date" class="form-control" id="add-start">
           </div>
           <div class="form-group">
             <label>结束时间</label>
-            <input type="date" class="form-control">
+            <input type="date" class="form-control" id="add-end">
           </div>
           <div class="form-group">
             <label>计划描述</label>
-            <textarea class="form-control" rows="3" placeholder="请输入计划描述"></textarea>
+            <textarea class="form-control" rows="3" id="add-desc" placeholder="请输入计划描述"></textarea>
           </div>
         </form>
       </div>
@@ -332,11 +365,11 @@
           <div class="form-group">
             <label>所属基地</label>
             <select class="form-control" id="edit-base">
-              <option value="ytqx" selected>天水麦积区基地</option>
-              <option value="whrc">天水荣成基地</option>
-              <option value="qdlx">青岛莱西基地</option>
-              <option value="zy">招远基地</option>
-              <option value="pl">麦积区阁基地</option>
+              <option value="天水麦积区基地" selected>天水麦积区基地</option>
+              <option value="天水秦州基地">天水秦州基地</option>
+              <option value="青岛莱西基地">青岛莱西基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水甘谷基地">天水甘谷基地</option>
             </select>
           </div>
           <div class="form-group">
@@ -344,8 +377,12 @@
             <select class="form-control" id="edit-type">
               <option value="fertilizer" selected>施肥</option>
               <option value="pesticide">喷药</option>
-              <option value="tool">修剪</option>
               <option value="irrigation">灌溉</option>
+              <option value="pruning">修剪</option>
+              <option value="thinning">疏花疏果</option>
+              <option value="bagging">套袋</option>
+              <option value="weeding">除草</option>
+              <option value="harvest">采收</option>
               <option value="other">其他</option>
             </select>
           </div>
@@ -429,26 +466,26 @@
 // Mock数据 - 23条农事计划
 const mockData = [
   { id: 1, name: '春季施肥计划', base: '天水麦积区基地', type: 'fertilizer', typeName: '施肥', startDate: '2026-03-01', endDate: '2026-03-15', manager: '惠加宁', status: 'completed' },
-  { id: 2, name: '春季修剪计划', base: '天水麦积区基地', type: 'tool', typeName: '修剪', startDate: '2026-03-10', endDate: '2026-03-25', manager: '黄忠坚', status: 'completed' },
-  { id: 3, name: '病虫害防治计划', base: '天水荣成基地', type: 'pesticide', typeName: '喷药', startDate: '2026-09-01', endDate: '2026-09-10', manager: '徐水应', status: 'completed' },
-  { id: 4, name: '疏花疏果计划', base: '青岛莱西基地', type: 'tool', typeName: '疏花疏果', startDate: '2026-04-15', endDate: '2026-05-01', manager: '朱泉龙', status: 'completed' },
+  { id: 2, name: '春季修剪计划', base: '天水麦积区基地', type: 'pruning', typeName: '修剪', startDate: '2026-03-10', endDate: '2026-03-25', manager: '黄忠坚', status: 'completed' },
+  { id: 3, name: '病虫害防治计划', base: '天水秦州基地', type: 'pesticide', typeName: '喷药', startDate: '2026-09-01', endDate: '2026-09-10', manager: '徐水应', status: 'completed' },
+  { id: 4, name: '疏花疏果计划', base: '青岛莱西基地', type: 'thinning', typeName: '疏花疏果', startDate: '2026-04-15', endDate: '2026-05-01', manager: '朱泉龙', status: 'completed' },
   { id: 5, name: '夏季追肥计划', base: '天水麦积区基地', type: 'fertilizer', typeName: '施肥', startDate: '2026-06-01', endDate: '2026-06-10', manager: '陈小忠', status: 'completed' },
-  { id: 6, name: '灌溉计划', base: '天水荣成基地', type: 'irrigation', typeName: '灌溉', startDate: '2026-07-15', endDate: '2026-07-20', manager: '廖春亮', status: 'completed' },
-  { id: 7, name: '套袋计划', base: '青岛莱西基地', type: 'tool', typeName: '套袋', startDate: '2026-06-15', endDate: '2026-06-30', manager: '李建明', status: 'completed' },
-  { id: 8, name: '夏季修剪计划', base: '招远基地', type: 'tool', typeName: '修剪', startDate: '2026-07-15', endDate: '2026-07-30', manager: '李根', status: 'completed' },
-  { id: 9, name: '病虫害防治计划', base: '麦积区阁基地', type: 'pesticide', typeName: '喷药', startDate: '2026-09-05', endDate: '2026-09-15', manager: '张才孙', status: 'executing' },
+  { id: 6, name: '灌溉计划', base: '天水秦州基地', type: 'irrigation', typeName: '灌溉', startDate: '2026-07-15', endDate: '2026-07-20', manager: '廖春亮', status: 'completed' },
+  { id: 7, name: '套袋计划', base: '青岛莱西基地', type: 'bagging', typeName: '套袋', startDate: '2026-06-15', endDate: '2026-06-30', manager: '李建明', status: 'completed' },
+  { id: 8, name: '夏季修剪计划', base: '招远基地', type: 'pruning', typeName: '修剪', startDate: '2026-07-15', endDate: '2026-07-30', manager: '李根', status: 'completed' },
+  { id: 9, name: '病虫害防治计划', base: '天水甘谷基地', type: 'pesticide', typeName: '喷药', startDate: '2026-09-05', endDate: '2026-09-15', manager: '张才孙', status: 'executing' },
   { id: 10, name: '秋季施肥计划', base: '天水麦积区基地', type: 'fertilizer', typeName: '施肥', startDate: '2026-09-15', endDate: '2026-09-30', manager: '刘全国', status: 'executing' },
-  { id: 11, name: '采收准备计划', base: '天水荣成基地', type: 'other', typeName: '其他', startDate: '2026-10-01', endDate: '2026-10-10', manager: '毛定卫', status: 'pending' },
-  { id: 12, name: '冬季修剪计划', base: '青岛莱西基地', type: 'tool', typeName: '修剪', startDate: '2026-12-15', endDate: '2027-01-15', manager: '叶三东', status: 'pending' },
+  { id: 11, name: '采收准备计划', base: '天水秦州基地', type: 'harvest', typeName: '采收', startDate: '2026-10-01', endDate: '2026-10-25', manager: '毛定卫', status: 'pending' },
+  { id: 12, name: '冬季修剪计划', base: '青岛莱西基地', type: 'pruning', typeName: '修剪', startDate: '2026-12-15', endDate: '2027-01-15', manager: '叶三东', status: 'pending' },
   { id: 13, name: '清园计划', base: '招远基地', type: 'other', typeName: '其他', startDate: '2026-12-05', endDate: '2026-12-15', manager: '周才贵', status: 'pending' },
-  { id: 14, name: '春季灌溉计划', base: '麦积区阁基地', type: 'irrigation', typeName: '灌溉', startDate: '2026-03-20', endDate: '2026-03-25', manager: '程名高', status: 'completed' },
+  { id: 14, name: '春季灌溉计划', base: '天水甘谷基地', type: 'irrigation', typeName: '灌溉', startDate: '2026-03-20', endDate: '2026-03-25', manager: '程名高', status: 'completed' },
   { id: 15, name: '病虫害防治计划', base: '天水麦积区基地', type: 'pesticide', typeName: '喷药', startDate: '2026-09-15', endDate: '2026-09-20', manager: '邓小华', status: 'executing' },
-  { id: 16, name: '夏季灌溉计划', base: '天水荣成基地', type: 'irrigation', typeName: '灌溉', startDate: '2026-07-20', endDate: '2026-07-25', manager: '周成友', status: 'completed' },
-  { id: 17, name: '套袋计划', base: '招远基地', type: 'tool', typeName: '套袋', startDate: '2026-06-20', endDate: '2026-06-30', manager: '危红卫', status: 'completed' },
+  { id: 16, name: '夏季灌溉计划', base: '天水秦州基地', type: 'irrigation', typeName: '灌溉', startDate: '2026-07-20', endDate: '2026-07-25', manager: '周成友', status: 'completed' },
+  { id: 17, name: '套袋计划', base: '招远基地', type: 'bagging', typeName: '套袋', startDate: '2026-06-20', endDate: '2026-06-30', manager: '危红卫', status: 'completed' },
   { id: 18, name: '病虫害防治计划', base: '青岛莱西基地', type: 'pesticide', typeName: '喷药', startDate: '2026-09-10', endDate: '2026-09-15', manager: '方超', status: 'executing' },
-  { id: 19, name: '秋季病虫害防治', base: '麦积区阁基地', type: 'pesticide', typeName: '喷药', startDate: '2026-09-20', endDate: '2026-09-30', manager: '曹红英', status: 'executing' },
+  { id: 19, name: '秋季病虫害防治', base: '天水甘谷基地', type: 'pesticide', typeName: '喷药', startDate: '2026-09-20', endDate: '2026-09-30', manager: '曹红英', status: 'executing' },
   { id: 20, name: '冬季施肥计划', base: '天水麦积区基地', type: 'fertilizer', typeName: '施肥', startDate: '2026-12-10', endDate: '2026-12-20', manager: '崔新根', status: 'pending' },
-  { id: 21, name: '春季病虫害防治', base: '天水荣成基地', type: 'pesticide', typeName: '喷药', startDate: '2026-03-20', endDate: '2026-03-25', manager: '惠加宁', status: 'completed' },
+  { id: 21, name: '春季病虫害防治', base: '天水秦州基地', type: 'pesticide', typeName: '喷药', startDate: '2026-03-20', endDate: '2026-03-25', manager: '惠加宁', status: 'completed' },
   { id: 22, name: '夏季施肥计划', base: '招远基地', type: 'fertilizer', typeName: '施肥', startDate: '2026-06-10', endDate: '2026-06-15', manager: '黄忠坚', status: 'completed' },
   { id: 23, name: '秋季灌溉计划', base: '青岛莱西基地', type: 'irrigation', typeName: '灌溉', startDate: '2026-10-15', endDate: '2026-10-20', manager: '徐水应', status: 'pending' }
 ];
@@ -456,14 +493,34 @@ const mockData = [
 // 当前页面数据
 var currentPlanName = '';
 
+// 类型标签配色（复用现有三色令牌）
+function typeTagClass(type) {
+  if (type === 'fertilizer') return 'fertilizer';
+  if (type === 'pesticide') return 'pesticide';
+  return 'tool';
+}
+
 // 获取状态标签
 function getStatusTag(status) {
   const statusMap = {
     'completed': '<span class="status-tag normal">已完成</span>',
     'executing': '<span class="status-tag done">执行中</span>',
-    'pending': '<span class="status-tag warning">待执行</span>'
+    'pending': '<span class="status-tag warning">待执行</span>',
+    'delayed': '<span class="status-tag danger">已延期</span>'
   };
   return statusMap[status] || statusMap['pending'];
+}
+
+// 按当前日期自动判定延误：结束日期已过且仍为 待执行/执行中 → 已延期
+function applyAutoDelay() {
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  mockData.forEach(function (item) {
+    if (item.status !== 'pending' && item.status !== 'executing') return;
+    if (!item.endDate) return;
+    var end = new Date(item.endDate + 'T00:00:00');
+    if (end.getTime() < today.getTime()) item.status = 'delayed';
+  });
 }
 
 // 获取操作按钮
@@ -491,11 +548,12 @@ function getActionButtons(item) {
 
 // 渲染表格行
 function renderRow(item, index) {
-  return `<tr>
+  var rowAttr = item.status === 'delayed' ? ' class="row-delayed"' : '';
+  return `<tr${rowAttr}>
     <td>${index + 1}</td>
     <td><strong>${item.name}</strong></td>
     <td>${item.base}</td>
-    <td><span class="type-tag ${item.type}">${item.typeName}</span></td>
+    <td><span class="type-tag ${typeTagClass(item.type)}">${item.typeName}</span></td>
     <td>${item.startDate}</td>
     <td>${item.endDate}</td>
     <td>${item.manager}</td>
@@ -506,6 +564,7 @@ function renderRow(item, index) {
 
 // 搜索功能
 function handleSearch() {
+  applyAutoDelay();
   var keyword = document.getElementById('searchInput').value.trim();
   var base = document.getElementById('baseSelect').value;
   var type = document.getElementById('typeSelect').value;
@@ -535,14 +594,56 @@ function handleReset() {
   Toast.info('搜索条件已重置');
 }
 
+// 消费模型预填：来自 model_growth / model_phenology 等模型页的"采纳建议"跳转
+function consumeModelPrefill() {
+  try {
+    var raw = localStorage.getItem('orchard_farming_prefill');
+    if (!raw) return;
+    var pre = JSON.parse(raw);
+    if (!pre || pre.consumed) return;
+    var defaults = {
+      base: pre.base || '',
+      type: pre.type || '',
+      manager: pre.manager || '',
+      desc: pre.desc || '',
+      startDate: pre.startDate || new Date().toISOString().slice(0, 10),
+      endDate: pre.endDate || new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+    };
+    // 仅做表单预填提示用户，不自动提交
+    showEdit(decodeURIComponent((pre.name || ('基于' + (pre.model || '模型') + '的建议'))).replace(/^"|"$/g, ''));
+    selectOption(document.getElementById('edit-base'), defaults.base);
+    selectOption(document.getElementById('edit-type'), defaults.type);
+    selectOption(document.getElementById('edit-manager'), defaults.manager);
+    document.getElementById('edit-start').value = defaults.startDate;
+    document.getElementById('edit-end').value = defaults.endDate;
+    document.getElementById('edit-desc').value = defaults.desc;
+    Toast.info('已从 ' + (pre.model || '模型') + ' 预填建议，请确认后提交');
+    pre.consumed = true;
+    localStorage.setItem('orchard_farming_prefill', JSON.stringify(pre));
+  } catch (e) { /* ignore parse error */ }
+}
+
 // 显示详情
 function showDetail(name) {
   currentPlanName = name;
   const plan = mockData.find(function(p){ return p.name === name; }) || {};
   document.getElementById('detail-name').textContent = name;
-  const mgrEl = document.getElementById('detail-manager');
-  if (mgrEl) mgrEl.textContent = plan.manager || '-';
+  var setText = function(id, val){ var el = document.getElementById(id); if (el) el.textContent = (val === undefined || val === null || val === '') ? '-' : val; };
+  setText('detail-base', plan.base);
+  setText('detail-type', plan.typeName);
+  setText('detail-manager', plan.manager);
+  setText('detail-start', plan.startDate);
+  setText('detail-end', plan.endDate);
+  setText('detail-desc', plan.desc);
   Modal.show('modal-detail');
+}
+
+// 选择下拉项
+function selectOption(sel, value) {
+  if (!sel) return;
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === value) { sel.selectedIndex = i; return; }
+  }
 }
 
 // 显示编辑
@@ -550,13 +651,12 @@ function showEdit(name) {
   currentPlanName = name;
   const plan = mockData.find(function(p){ return p.name === name; }) || {};
   document.getElementById('edit-name').value = name;
-  const mgrSel = document.getElementById('edit-manager');
-  if (mgrSel && plan.manager) {
-    const opts = mgrSel.options;
-    for (let i = 0; i < opts.length; i++) {
-      if (opts[i].value === plan.manager) { opts[i].selected = true; break; }
-    }
-  }
+  selectOption(document.getElementById('edit-base'), plan.base);
+  selectOption(document.getElementById('edit-type'), plan.type);
+  selectOption(document.getElementById('edit-manager'), plan.manager);
+  document.getElementById('edit-start').value = plan.startDate || '';
+  document.getElementById('edit-end').value = plan.endDate || '';
+  document.getElementById('edit-desc').value = plan.desc || '';
   Modal.show('modal-edit');
 }
 
@@ -567,6 +667,10 @@ function showDeleteConfirm(name) {
     title: '删除计划',
     message: '确定要删除计划 "' + name + '" 吗？此操作不可撤销。',
     onConfirm: function() {
+      var idx = mockData.findIndex(function(p){ return p.name === currentPlanName; });
+      if (idx !== -1) mockData.splice(idx, 1);
+      applyAutoDelay();
+      Pagination.updateData(mockData);
       Toast.success('计划 "' + currentPlanName + '" 已删除');
     }
   });
@@ -579,32 +683,161 @@ function showExecute(name) {
   Modal.show('modal-execute');
 }
 
+// 读取模型推荐 prefill（兼容数组/对象两种写入形式）
+function readPrefill() {
+  try {
+    var raw = localStorage.getItem('orchard_farming_prefill');
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.length ? parsed[parsed.length - 1] : null;
+    return parsed;
+  } catch (e) { return null; }
+}
+
+// 中文任务类型 → 计划类型编码
+function mapTaskType(name) {
+  if (!name) return 'other';
+  if (/施肥|追肥|基肥|叶面肥/.test(name)) return 'fertilizer';
+  if (/喷药|打药|病虫害|防治|杀菌|杀虫/.test(name)) return 'pesticide';
+  if (/灌溉|浇水|补水/.test(name)) return 'irrigation';
+  if (/修剪|剪枝/.test(name)) return 'pruning';
+  if (/疏花|疏果/.test(name)) return 'thinning';
+  if (/套袋/.test(name)) return 'bagging';
+  if (/除草|清园/.test(name)) return 'weeding';
+  if (/采收|采摘/.test(name)) return 'harvest';
+  return 'other';
+}
+
+// 识别模型来源
+function prefillSource(p) {
+  var from = '';
+  try { from = new URLSearchParams(location.search).get('from') || ''; } catch (e) { from = ''; }
+  if (from.indexOf('phenology') !== -1) return '物候期模型';
+  if (from.indexOf('growth') !== -1) return '生长模型';
+  if (from.indexOf('pest') !== -1) return '病虫害模型';
+  if (from.indexOf('weather') !== -1) return '气象模型';
+  var title = String(p.title || '') + String(p.source || '');
+  if (title.indexOf('物候') !== -1) return '物候期模型';
+  if (title.indexOf('生长') !== -1) return '生长模型';
+  return '生长模型/物候期模型';
+}
+
+// 预填新建计划弹窗
+function applyPrefill(p) {
+  var today = new Date().toISOString().slice(0, 10);
+  var name = p.name || p.title || '模型推荐计划';
+  document.getElementById('add-name').value = name;
+  document.getElementById('add-base').value = p.base || '';
+  var code = p.type && /^[a-z]+$/.test(p.type) ? p.type : mapTaskType(p.taskType || p.type || name);
+  document.getElementById('add-type').value = code;
+  document.getElementById('add-start').value = p.date || today;
+  document.getElementById('add-end').value = '';
+  var parts = [];
+  if (p.content) parts.push(p.content);
+  if (p.plot) parts.push('地块：' + p.plot);
+  else if (p.plotRange) parts.push('地块范围：' + p.plotRange);
+  document.getElementById('add-desc').value = parts.join('；');
+  return name;
+}
+
+// 采纳模型推荐：清除 localStorage 并隐藏提示条
+function adoptPrefill() {
+  try { localStorage.removeItem('orchard_farming_prefill'); } catch (e) {}
+  var banner = document.getElementById('prefillBanner');
+  if (banner) banner.style.display = 'none';
+  Toast.success('已采纳模型推荐，可继续完善计划');
+}
+
 // 提交新建计划
 function submitAddPlan() {
+  var name = document.getElementById('add-name').value.trim();
+  if (!name) { Toast.warning('请输入计划名称'); return; }
+  var base = document.getElementById('add-base').value;
+  var typeSel = document.getElementById('add-type');
+  var type = typeSel.value || 'other';
+  var typeName = typeSel.options[typeSel.selectedIndex] ? typeSel.options[typeSel.selectedIndex].text : '其他';
+  var start = document.getElementById('add-start').value;
+  var end = document.getElementById('add-end').value;
+  var manager = document.getElementById('add-manager').value;
+  var desc = document.getElementById('add-desc').value;
+
+  var maxId = mockData.reduce(function (m, p) { return p.id > m ? p.id : m; }, 0);
+  mockData.push({
+    id: maxId + 1, name: name, base: base, type: type, typeName: typeName,
+    startDate: start, endDate: end, manager: manager, status: 'pending', desc: desc
+  });
+  try { localStorage.removeItem('orchard_farming_prefill'); } catch (e) {}
+  applyAutoDelay();
+  Pagination.updateData(mockData);
   Toast.success('计划创建成功');
   Modal.hide('modal-add-plan');
 }
 
 // 提交编辑计划
 function submitEditPlan() {
-  Toast.success('计划 "' + currentPlanName + '" 已更新');
+  var plan = mockData.find(function(p){ return p.name === currentPlanName; });
+  if (!plan) { Toast.error('未找到该计划'); return; }
+  var name = document.getElementById('edit-name').value.trim() || plan.name;
+  var typeSel = document.getElementById('edit-type');
+  plan.name = name;
+  plan.base = document.getElementById('edit-base').value;
+  plan.type = typeSel.value || plan.type;
+  plan.typeName = typeSel.options[typeSel.selectedIndex] ? typeSel.options[typeSel.selectedIndex].text : plan.typeName;
+  plan.manager = document.getElementById('edit-manager').value;
+  plan.startDate = document.getElementById('edit-start').value;
+  plan.endDate = document.getElementById('edit-end').value;
+  plan.desc = document.getElementById('edit-desc').value;
+  currentPlanName = name;
+  applyAutoDelay();
+  Pagination.updateData(mockData);
+  Toast.success('计划 "' + name + '" 已更新');
   Modal.hide('modal-edit');
 }
 
 // 执行计划
 function executePlan() {
+  var plan = mockData.find(function(p){ return p.name === currentPlanName; });
+  if (plan) plan.status = 'executing';
+  applyAutoDelay();
+  Pagination.updateData(mockData);
   Toast.success('计划 "' + currentPlanName + '" 已开始执行');
   Modal.hide('modal-execute');
 }
 
-// 导出计划
+// 生成 CSV 并下载
+function downloadCSV(filename, rows) {
+  var csv = rows.map(function (r) {
+    return r.map(function (c) {
+      return '"' + String(c === null || c === undefined ? '' : c).replace(/"/g, '""') + '"';
+    }).join(',');
+  }).join('\r\n');
+  var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+// 导出计划（真实 CSV 下载）
 function exportPlan(format) {
-  Toast.success('计划已导出为' + (format === 'excel' ? 'Excel' : 'PDF') + '格式');
+  var list = (Pagination.filteredData && Pagination.filteredData.length) ? Pagination.filteredData : mockData;
+  var rows = [['序号', '计划名称', '所属基地', '计划类型', '开始时间', '结束时间', '负责人', '状态']];
+  list.forEach(function (item, i) {
+    rows.push([i + 1, item.name, item.base, item.typeName, item.startDate, item.endDate, item.manager, (getStatusTag(item.status).replace(/<[^>]+>/g, ''))]);
+  });
+  downloadCSV('农事计划_' + new Date().toISOString().slice(0, 10) + '.csv', rows);
+  Toast.success('计划已导出为 CSV 文件');
   Modal.hide('modal-export');
 }
 
 // 初始化分页
 document.addEventListener('DOMContentLoaded', function() {
+  applyAutoDelay();
+  consumeModelPrefill();
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
@@ -613,6 +846,18 @@ document.addEventListener('DOMContentLoaded', function() {
     tbodyId: 'dataTableBody',
     renderRow: renderRow
   });
+
+  // AI 模型 → 农事计划 闭环：读取 localStorage 推荐并预填新建弹窗
+  var prefill = readPrefill();
+  if (prefill) {
+    var planName = applyPrefill(prefill);
+    var src = prefillSource(prefill);
+    var textEl = document.getElementById('prefillText');
+    if (textEl) textEl.textContent = '来自模型推荐（' + src + '）：' + planName;
+    var banner = document.getElementById('prefillBanner');
+    if (banner) banner.style.display = 'flex';
+    Modal.show('modal-add-plan');
+  }
 });
 </script>
 

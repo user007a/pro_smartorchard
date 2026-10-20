@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>智慧果园 · 智能预警大屏</title>
+<style>
+/* ============================================================
+   智慧果园智能预警大屏 — 深色单屏 (1920×1080, 自包含)
+   与 da_dashboard.html 同一设计系统：色板 / 字阶 / 卡片 / 缩放骨架
+   字阶（7 档）：48 北极星 / 32 关键指标 / 24 指标 / 18 数据 / 16 标题 / 14 正文 / 12 辅助
+   告警收敛：全屏色块底仅 1 处（紧急预警级别块），其余用「数字变色 + 左侧细线」
+   ============================================================ */
+:root{
+  --surface-0:#060D1F;     /* 舞台底 */
+  --surface-1:#0B1830;     /* 卡片面 */
+  --surface-2:#12234A;     /* 卡片抬升 / 悬停 */
+  --line:rgba(110,170,255,.18);
+  --line-strong:rgba(110,170,255,.34);
+  --text-1:#E8F2FF;        /* 主文字 */
+  --text-2:#9DB8DC;        /* 次文字 */
+  --text-3:#8AA0BE;        /* 弱文字 */
+  --brand-700:#14549F;     /* 品牌深色端 */
+  --brand-500:#2E8FE8;     /* 品牌主色 */
+  --brand-400:#38D6FF;     /* 核心数字 */
+  --warn:#F2B33D;
+  --risk:#E5564B;
+  --info:#3E8EF0;
+  --cyan:#31C9E8;
+  --lvl-urgent:#E5564B;
+  --lvl-important:#F2B33D;
+  --lvl-reminder:#FCD34D;
+  --lvl-notice:#3E8EF0;
+  --font:"PingFang SC","Microsoft YaHei","Noto Sans SC",-apple-system,system-ui,"Segoe UI",sans-serif;
+  --font-hei:"Microsoft YaHei","黑体",SimHei,"Heiti SC","PingFang SC",sans-serif;
+  --num:"DIN Alternate","Bahnschrift","Oswald","Segoe UI",var(--font);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:var(--surface-0);font-family:var(--font);color:var(--text-1);
+  -webkit-font-smoothing:antialiased;overflow:hidden}
+body{display:flex;align-items:center;justify-content:center}
+
+/* 数字统一等宽，避免跨平台字宽跳变与实时刷新抖动 */
+.fact b,.lvl .n,.supp .n,.clock,.al .tm,.fn .bdg,.tt td b,.src .v,.sl .v,.kpi-mini b,
+.hero .n,.lg .v,.pie-legend b{
+  font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.card-h .t,.map-head .t,.bcard .bh,.detail h4{font-family:var(--font-hei);font-weight:700;letter-spacing:.8px}
+
+/* 缩放舞台：固定 1920×1080，按视口等比缩放，单屏不滚动 */
+.stage{position:fixed;left:50%;top:50%;width:1920px;height:1080px;
+  transform-origin:center center;transform:translate(-50%,-50%);
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(62,142,240,.12), transparent 60%),
+    radial-gradient(900px 600px at 100% 110%, rgba(49,201,232,.07), transparent 55%),
+    var(--surface-0);
+  padding:22px 26px;display:flex;flex-direction:column;gap:14px}
+.stage::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(62,142,240,.06),transparent 18%)}
+
+/* ===================== 顶部常驻条 ===================== */
+.topbar{height:66px;flex:0 0 66px;display:flex;align-items:center;gap:22px;
+  background:var(--surface-1);border:1px solid var(--line);border-radius:16px;
+  padding:0 22px;position:relative;overflow:hidden}
+.topbar::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:linear-gradient(180deg,var(--risk),var(--brand-700))}
+.brand{display:flex;align-items:center;gap:14px;flex:none}
+.brand .logo{width:42px;height:42px;flex:none}
+.brand h1{font-family:var(--font-hei);font-size:25px;font-weight:800;letter-spacing:1.5px;line-height:1.1}
+.brand .sub{font-size:12px;color:var(--text-3);letter-spacing:3px;text-transform:uppercase}
+.facts{display:flex;align-items:center;gap:26px;flex:1;flex-wrap:nowrap;overflow:hidden;justify-content:center}
+.fact{display:flex;align-items:baseline;gap:7px;white-space:nowrap}
+.fact b{font-size:24px;color:var(--risk);font-weight:700}
+.fact span{font-size:14px;color:var(--text-2)}
+.topright{display:flex;align-items:center;gap:12px;flex:none}
+.clock{font-size:16px;color:var(--text-1);text-align:right;line-height:1.15}
+.clock small{display:block;font-size:12px;color:var(--text-3);font-family:var(--font)}
+.topright a{color:var(--text-2);text-decoration:none;font-size:14px;padding:7px 13px;border-radius:30px;
+  border:1px solid var(--line);background:rgba(255,255,255,.02);transition:.2s}
+.topright a:hover{color:#fff;border-color:var(--brand-500);background:rgba(62,142,240,.15)}
+.switch{position:relative;display:inline-flex}
+.switch select{font-family:var(--font);font-size:14px;color:var(--text-2);padding:7px 30px 7px 13px;
+  border-radius:30px;border:1px solid var(--line);background:rgba(255,255,255,.02);cursor:pointer;
+  appearance:none;-webkit-appearance:none;transition:.2s}
+.switch select:hover{color:#fff;border-color:var(--brand-500);background:rgba(62,142,240,.15)}
+.switch select option{background:var(--surface-1);color:var(--text-1)}
+.switch::after{content:"";position:absolute;right:13px;top:50%;width:6px;height:6px;margin-top:-4px;
+  border-right:1.6px solid var(--text-3);border-bottom:1.6px solid var(--text-3);transform:rotate(45deg);pointer-events:none}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ===================== 预警级别计数带 ===================== */
+.hero{flex:0 0 96px;height:96px;display:flex;gap:12px;align-items:stretch}
+.lvl{flex:1 1 0;min-width:0;position:relative;overflow:hidden;
+  background:linear-gradient(180deg,var(--surface-2),var(--surface-1));
+  border:1px solid var(--line);border-radius:14px;padding:9px 16px;display:flex;flex-direction:column;justify-content:center}
+.lvl::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.lvl .top{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-2);white-space:nowrap}
+.lvl .dot{width:9px;height:9px;border-radius:50%;background:var(--c);box-shadow:0 0 9px var(--c);flex:none}
+.lvl .n{font-size:32px;font-weight:700;line-height:1.05;color:var(--c)}
+.lvl .n small{font-size:12px;color:var(--text-3);font-family:var(--font);letter-spacing:0;margin-left:5px}
+.lvl .bar{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:7px}
+.lvl .bar i{display:block;height:100%;background:var(--c);border-radius:3px}
+.lvl.urgent{background:linear-gradient(135deg,rgba(229,86,75,.16),var(--surface-1) 66%);
+  border-color:rgba(229,86,75,.42)}
+.supp{flex:0 0 212px;background:linear-gradient(180deg,var(--surface-2),var(--surface-1));
+  border:1px solid var(--line);border-radius:14px;padding:9px 16px;display:flex;flex-direction:column;justify-content:center}
+.supp .k{font-size:12px;color:var(--text-3);white-space:nowrap}
+.supp .n{font-size:32px;font-weight:700;color:var(--cyan);line-height:1.1;letter-spacing:-.5px}
+.supp .n small{font-size:13px;color:var(--text-2);font-family:var(--font);letter-spacing:0;margin-left:4px}
+.supp .bar{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:8px}
+.supp .bar i{display:block;height:100%;background:var(--cyan);border-radius:3px}
+
+/* ===================== 主区三栏 ===================== */
+.main{flex:1;min-height:0;display:grid;grid-template-columns:472px 1fr 472px;gap:18px}
+.col{display:flex;flex-direction:column;gap:14px;min-height:0}
+.card{background:var(--surface-1);border:1px solid var(--line);
+  border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;min-height:0;position:relative;overflow:hidden;
+  transition:background .2s ease,border-color .2s ease,transform .2s ease}
+.card:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-2px)}
+.card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex:none;gap:10px}
+.card-h .t{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:700;letter-spacing:.5px;white-space:nowrap}
+.card-h .t i{width:4px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--brand-500),var(--brand-700))}
+.card-h .meta{font-size:12px;color:var(--text-3);text-align:right;white-space:nowrap}
+.card-h .meta b{color:var(--text-1);font-size:14px;font-family:var(--num)}
+.stamp{display:block;font-size:12px;color:var(--text-3);font-family:var(--font);letter-spacing:0}
+.sect-h{display:flex;align-items:center;justify-content:space-between;font-size:16px;font-weight:700;
+  font-family:var(--font-hei);letter-spacing:.8px;flex:none;margin-bottom:12px}
+.sect-h i{width:4px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--brand-500),var(--brand-700));
+  display:inline-block;margin-right:9px;vertical-align:-2px}
+.sect-h span{font-size:12px;color:var(--text-3);font-weight:400;font-family:var(--font)}
+
+/* 左栏：风险地图固定 / Top10 吸收剩余 */
+#L1{flex:0 0 400px}
+#L2{flex:1 1 auto}
+/* 中栏：处置链路固定 / 类型饼图吸收剩余 */
+#M1{flex:0 0 336px}
+#M2{flex:1 1 auto}
+/* 右栏：SLA 固定 / 来源分布吸收剩余 */
+#R1{flex:0 0 320px}
+#R2{flex:1 1 auto}
+
+/* ---------- 风险热力地图 ---------- */
+.map-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex:none}
+.map-head .t{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:700;letter-spacing:.5px}
+.map-head .t i{width:4px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--brand-500),var(--brand-700))}
+.map-head .t small{font-size:12px;color:var(--text-3);font-weight:400}
+.layers{display:flex;gap:7px}
+.layers button{font-family:var(--font);font-size:14px;color:var(--text-2);background:rgba(255,255,255,.03);
+  border:1px solid var(--line);border-radius:30px;padding:6px 14px;cursor:pointer;transition:.2s}
+.layers button:hover{border-color:var(--line-strong);color:var(--text-1)}
+.layers button.on{color:#041226;background:var(--brand-400);border-color:transparent;font-weight:700}
+.map-wrap{flex:1;min-height:0;position:relative;border-radius:14px;overflow:hidden;
+  background:radial-gradient(120% 120% at 50% 30%, #0a1f3d, #061226);border:1px solid var(--line)}
+.map-wrap svg{width:100%;height:100%;display:block}
+.plot{cursor:pointer;transition:filter .2s}
+.plot polygon{transition:fill .5s,stroke .2s}
+.plot:hover{filter:brightness(1.18)}
+.plot.sel polygon{stroke:#fff!important;stroke-width:3}
+.plot text{font-family:var(--font);pointer-events:none;fill:#ffffff;font-weight:600;
+  paint-order:stroke;stroke:rgba(4,12,28,.9);stroke-width:3.5px;stroke-linejoin:round}
+.plot .pid{font-size:14px}
+.plot .parea{font-size:12px;fill:rgba(234,255,240,.85)}
+.base-boundary{fill:none;stroke:rgba(110,190,255,.5);stroke-width:2;stroke-dasharray:6 6}
+#rmap>text{paint-order:stroke;stroke:rgba(4,12,28,.9);stroke-width:3px;stroke-linejoin:round;font-weight:600;font-size:12px}
+.water{fill:rgba(74,159,224,.22);stroke:rgba(74,159,224,.5);stroke-width:1.5}
+.facility{fill:rgba(242,179,61,.18);stroke:rgba(242,179,61,.5);stroke-width:1.5}
+.map-legend{position:absolute;left:14px;bottom:12px;display:flex;gap:16px;background:rgba(5,13,31,.82);
+  border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:12px}
+.map-legend span{display:flex;align-items:center;gap:6px;color:var(--text-2)}
+.map-legend em{width:11px;height:11px;border-radius:3px;display:inline-block}
+.detail{position:absolute;right:14px;top:12px;width:292px;background:rgba(5,13,31,.86);
+  border:1px solid var(--line-strong);border-radius:12px;padding:13px 15px;font-size:14px;transition:.25s}
+.detail.hide{display:none}
+.detail h4{font-size:16px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.detail .tag{font-size:12px;padding:2px 9px;border-radius:20px;font-weight:600}
+.tag.h{background:rgba(43,212,110,.16);color:#2bd46e}
+.tag.w{background:rgba(242,179,61,.14);color:var(--warn)}
+.tag.r{background:rgba(229,86,75,.14);color:var(--risk)}
+.detail .row{display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid var(--line);color:var(--text-2)}
+.detail .row b{color:var(--text-1);font-weight:600;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.detail .risk{margin-top:8px;font-size:14px;color:var(--text-2);background:rgba(255,255,255,.03);
+  border-left:3px solid var(--brand-400);border-radius:8px;padding:6px 9px;line-height:1.5}
+
+/* ---------- Top10 滚动列表 ---------- */
+.al-scroll{flex:1;min-height:0;overflow:hidden;position:relative;
+  -webkit-mask-image:linear-gradient(180deg,transparent,#000 8%,#000 92%,transparent);
+  mask-image:linear-gradient(180deg,transparent,#000 8%,#000 92%,transparent)}
+.al-track{display:flex;flex-direction:column;gap:8px;will-change:transform}
+.al-track.run{animation:alroll linear infinite}
+.al-track.run:hover{animation-play-state:paused}
+@keyframes alroll{from{transform:translateY(0)}to{transform:translateY(var(--roll))}}
+.al{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:10px;font-size:14px;
+  border-left:3px solid var(--line-strong);background:rgba(255,255,255,.03);flex:none}
+.al.c{border-color:var(--risk);background:rgba(229,86,75,.10)}
+.al.w{border-color:var(--warn)}
+.al.y{border-color:var(--lvl-reminder)}
+.al.b{border-color:var(--info)}
+.al .rk{font-family:var(--num);font-size:12px;color:var(--text-3);width:20px;flex:none;text-align:right}
+.al .sev{font-weight:700;font-size:12px;padding:1px 7px;border-radius:6px;flex:none;font-family:var(--font)}
+.al.c .sev{color:var(--risk);background:rgba(229,86,75,.16)}
+.al.w .sev{color:var(--warn);background:rgba(242,179,61,.14)}
+.al.y .sev{color:var(--lvl-reminder);background:rgba(252,211,77,.14)}
+.al.b .sev{color:var(--info);background:rgba(62,142,240,.16)}
+.al .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-1)}
+.al .pl{font-size:12px;color:var(--cyan);flex:none;font-family:var(--num)}
+.al .tm{font-size:12px;color:var(--text-3);flex:none;width:78px;text-align:right}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;height:100%;
+  color:var(--text-3);font-size:14px}
+.empty svg{opacity:.5}
+
+/* ---------- 升级链路 / 处置流程 ---------- */
+.flow{display:flex;flex-direction:column;flex:1;justify-content:space-between;min-height:0}
+.fn{display:flex;gap:12px;align-items:center;position:relative;flex:1;min-height:0}
+.fn:not(:last-child)::before{content:"";position:absolute;left:15px;top:52%;bottom:-4px;width:2px;
+  background:linear-gradient(180deg,var(--line-strong),transparent)}
+.fn .node{width:31px;height:31px;border-radius:50%;flex:none;display:grid;place-items:center;z-index:1;
+  background:var(--surface-2);border:2px solid var(--brand-500);color:var(--brand-400);font-size:12px;font-weight:700}
+.fn.r .node{border-color:var(--risk);color:var(--risk)}
+.fn.w .node{border-color:var(--warn);color:var(--warn)}
+.fn .ct{flex:1;min-width:0}
+.fn .ct .k{font-size:14px;color:var(--text-1);font-weight:600;white-space:nowrap}
+.fn .ct .v{font-size:12px;color:var(--text-3);white-space:nowrap}
+.fn .sla{font-size:12px;color:var(--text-2);background:rgba(255,255,255,.04);border:1px solid var(--line);
+  border-radius:20px;padding:3px 10px;flex:none;font-family:var(--num)}
+.fn.over .sla{color:var(--risk);border-color:rgba(229,86,75,.35);background:rgba(229,86,75,.10)}
+.fn .bdg{font-size:18px;font-weight:700;color:var(--text-1);min-width:44px;text-align:right;flex:none}
+.fn.r .bdg{color:var(--risk)}
+.fn.w .bdg{color:var(--warn)}
+
+/* ---------- 饼图 / 环形图通用 ---------- */
+.pie-wrap{display:flex;align-items:center;gap:18px;flex:1;min-height:0}
+.pie-wrap svg{flex:none}
+.pie-legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px;justify-content:center}
+.pie-legend .lg{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-2)}
+.pie-legend .lg em{width:10px;height:10px;border-radius:3px;flex:none}
+.pie-legend .lg b{margin-left:auto;color:var(--text-1);font-weight:600;font-size:15px}
+.pie-legend .lg b i{font-style:normal;font-size:12px;color:var(--text-3);font-family:var(--font);margin-left:4px}
+
+/* ---------- SLA 环形 ---------- */
+.sla-wrap{display:flex;align-items:center;gap:16px;flex:1;min-height:0}
+.donut-center{font-family:var(--num)}
+.kpi-mini{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 12px;flex:1;align-content:center}
+.kpi-mini .k{background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:10px;padding:8px 11px}
+.kpi-mini .k .l{font-size:12px;color:var(--text-3)}
+.kpi-mini .k b{font-size:18px;font-weight:700;color:var(--text-1)}
+.kpi-mini .k b small{font-size:12px;color:var(--text-2);font-family:var(--font);margin-left:3px}
+.kpi-mini .k.bad b{color:var(--risk)}
+.kpi-mini .k.good b{color:var(--brand-400)}
+
+/* ---------- 预警来源分布 ---------- */
+.src{display:flex;flex-direction:column;gap:14px;flex:1;justify-content:center}
+.src .row{display:flex;align-items:center;gap:12px}
+.src .nm{font-size:14px;color:var(--text-2);width:66px;flex:none}
+.src .track{flex:1;height:12px;border-radius:6px;background:rgba(255,255,255,.06);overflow:hidden}
+.src .track i{display:block;height:100%;border-radius:6px;transition:width .6s ease}
+.src .v{font-size:16px;font-weight:700;color:var(--text-1);width:52px;text-align:right;flex:none}
+.src .v small{font-size:12px;color:var(--text-3);font-family:var(--font);margin-left:3px}
+.src-note{margin-top:auto;font-size:12px;color:var(--text-2);background:rgba(255,255,255,.03);
+  border-left:3px solid var(--brand-400);border-radius:8px;padding:6px 10px;line-height:1.5}
+.src-note b{color:var(--text-1)}
+
+/* ===================== 底部支撑条 ===================== */
+.bottom{flex:0 0 196px;height:196px;display:grid;grid-template-columns:1.25fr 1fr 1.05fr;gap:18px}
+.bcard{background:var(--surface-1);border:1px solid var(--line);
+  border-radius:16px;padding:12px 18px;display:flex;flex-direction:column;min-height:0;overflow:hidden;
+  transition:background .2s ease,border-color .2s ease,transform .2s ease}
+.bcard:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-2px)}
+.bcard .bh{font-size:16px;font-weight:700;margin-bottom:9px;display:flex;align-items:center;gap:8px;flex:none}
+.bcard .bh i{width:4px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--cyan),var(--brand-500))}
+.bcard .bh span{margin-left:auto;font-size:12px;color:var(--text-3);font-weight:400}
+.trend-wrap{flex:1;min-height:0;display:flex;flex-direction:column;gap:4px}
+.trend-wrap svg{width:100%;flex:1;min-height:0}
+.trend-x{display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);font-family:var(--num)}
+.trend-lg{display:flex;gap:14px;font-size:12px;color:var(--text-3)}
+.trend-lg span{display:flex;align-items:center;gap:5px}
+.trend-lg em{width:10px;height:3px;border-radius:2px;display:inline-block}
+.tt{width:100%;border-collapse:collapse;font-size:13px;flex:1}
+.tt th,.tt td{text-align:left;padding:5px 0;border-bottom:1px solid var(--line);color:var(--text-2)}
+.tt th{font-size:12px;color:var(--text-3);font-weight:400}
+.tt td:last-child,.tt th:last-child{text-align:right}
+.tt td b{font-size:15px;color:var(--text-1);font-weight:700}
+.tt tr:last-child td{border-bottom:none}
+.tt td.bad b{color:var(--risk)}
+.tt td.good b{color:var(--brand-400)}
+.key-list{display:flex;flex-direction:column;gap:6px;flex:1;min-height:0;overflow:hidden}
+.key{display:flex;align-items:flex-start;gap:9px;padding:6px 10px;border-radius:10px;font-size:12px;line-height:1.34;
+  background:rgba(255,255,255,.03);border:1px solid var(--line);border-left:3px solid var(--warn);color:var(--text-2);
+  flex:1 1 0;overflow:hidden}
+.key svg{flex:none;margin-top:1px}
+.key.r{border-left-color:var(--risk);background:rgba(229,86,75,.08)}
+.key b{color:var(--text-1)}
+.key .ms{margin-left:auto;font-size:12px;color:var(--text-3);font-family:var(--num);flex:none;white-space:nowrap}
+
+/* ===================== 无障碍 ===================== */
+:focus-visible{outline:2px solid var(--brand-400);outline-offset:2px;border-radius:6px}
+.plot:focus-visible{outline:none}
+.plot:focus-visible polygon{stroke:var(--brand-400);stroke-width:4}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important}
+  .al-track.run{animation:none!important}
+}
+
+/* ===================== 状态：加载 / 骨架 ===================== */
+.sk{color:transparent!important;position:relative;pointer-events:none}
+.sk>*{visibility:hidden}
+.sk::after{content:"";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:.85em;
+  border-radius:4px;background:rgba(255,255,255,.10);animation:skp 1.4s ease-in-out infinite}
+@keyframes skp{0%,100%{opacity:.35}50%{opacity:.8}}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <!-- ============ 顶部常驻条 ============ -->
+  <div class="topbar">
+    <div class="brand">
+      <img class="logo" src="../common/images/brand_logo.png" alt="" aria-hidden="true">
+      <div>
+        <h1>智慧果园 · 智能预警大屏</h1>
+        <div class="sub">Intelligent Alert Dashboard</div>
+      </div>
+    </div>
+    <div class="facts" role="group" aria-label="预警状态概览">
+      <div class="fact"><b class="sk" id="fPending">--</b><span>待处理</span></div>
+      <div class="fact"><b class="sk" id="fProcessing" style="color:var(--info)">--</b><span>处理中</span></div>
+      <div class="fact"><b class="sk" id="fClosed" style="color:var(--cyan)">--</b><span>已闭环</span></div>
+      <div class="fact"><b class="sk" id="fToday" style="color:var(--warn)">--</b><span>今日新增</span></div>
+    </div>
+    <div class="topright">
+      <div class="clock" role="timer" aria-live="off"><span id="clk">--:--:--</span><small id="dt">----</small></div>
+      <a href="../applefarm_backhand/login.html" data-track="alert-admin">管理后台</a>
+      <a href="da_index.html" data-track="alert-portal">返回门户</a>
+      <label class="switch">
+        <span class="vh">切换数据大屏</span>
+        <select id="dashSwitch" aria-label="切换数据大屏" data-track="alert-switch">
+          <option value="da_overview.html">果园管理驾驶舱</option>
+          <option value="da_dashboard.html">生产指挥</option>
+          <option value="da_business.html">经营分析</option>
+          <option value="da_trace.html">质量溯源</option>
+          <option value="da_growth.html">物候生长</option>
+          <option value="da_iot.html">设备物联</option>
+          <option value="da_results.html">数字成果</option>
+          <option value="da_alert.html" selected>智能预警</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <!-- ============ 预警级别计数带 ============ -->
+  <section class="hero" role="group" aria-label="预警级别分布与处置效率">
+    <div class="lvl urgent" style="--c:var(--lvl-urgent)">
+      <div class="top"><span class="dot"></span>紧急预警 · Urgent</div>
+      <div class="n"><span class="sk" id="lvUrgent">--</span><small id="pcUrgent">--%</small></div>
+      <div class="bar"><i id="barUrgent" style="width:0%"></i></div>
+    </div>
+    <div class="lvl" style="--c:var(--lvl-important)">
+      <div class="top"><span class="dot"></span>重要预警 · Important</div>
+      <div class="n"><span class="sk" id="lvImportant">--</span><small id="pcImportant">--%</small></div>
+      <div class="bar"><i id="barImportant" style="width:0%"></i></div>
+    </div>
+    <div class="lvl" style="--c:var(--lvl-reminder)">
+      <div class="top"><span class="dot"></span>提醒预警 · Reminder</div>
+      <div class="n"><span class="sk" id="lvReminder">--</span><small id="pcReminder">--%</small></div>
+      <div class="bar"><i id="barReminder" style="width:0%"></i></div>
+    </div>
+    <div class="lvl" style="--c:var(--lvl-notice)">
+      <div class="top"><span class="dot"></span>通知预警 · Notice</div>
+      <div class="n"><span class="sk" id="lvNotice">--</span><small id="pcNotice">--%</small></div>
+      <div class="bar"><i id="barNotice" style="width:0%"></i></div>
+    </div>
+    <div class="supp">
+      <div class="k">近 24h 闭环率</div>
+      <div class="n" id="hClosed">92<small>%</small></div>
+      <div class="bar"><i style="width:92%"></i></div>
+    </div>
+    <div class="supp">
+      <div class="k">平均处置时长</div>
+      <div class="n" id="hAvg">38<small>分钟</small></div>
+      <div class="bar" style="--c:var(--brand-500)"><i style="width:76%;background:var(--brand-500)"></i></div>
+    </div>
+  </section>
+
+  <!-- ============ 主区三栏 ============ -->
+  <div class="main">
+
+    <!-- 左栏 -->
+    <div class="col">
+      <!-- 基地风险热力地图 -->
+      <div class="card" id="L1">
+        <div class="map-head">
+          <h2 class="t"><i></i>基地风险热力地图<small>12 地块 · 点击或回车查看详情</small></h2>
+          <div class="layers" role="group" aria-label="地图图层">
+            <button type="button" data-layer="risk" aria-pressed="true" class="on">风险</button>
+            <button type="button" data-layer="density" aria-pressed="false">预警密度</button>
+          </div>
+        </div>
+        <div class="map-wrap">
+          <svg id="rmap" viewBox="0 0 900 720" preserveAspectRatio="xMidYMid meet" role="img"
+            aria-label="基地风险热力地图，共 12 个地块，按风险等级着色，可点击或键盘选择查看地块详情"></svg>
+          <div class="map-legend">
+            <span><em style="background:#2bd46e"></em>低风险 <b id="lgLow">--</b></span>
+            <span><em style="background:#f5b53d"></em>中风险 <b id="lgMid">--</b></span>
+            <span><em style="background:#ff5d63"></em>高风险 <b id="lgHigh">--</b></span>
+          </div>
+          <div class="detail hide" id="detail" role="region" aria-live="polite" aria-label="地块预警详情"></div>
+        </div>
+      </div>
+
+      <!-- 今日预警 Top10 -->
+      <div class="card" id="L2">
+        <div class="card-h">
+          <h3 class="t"><i></i>今日预警 Top10</h3>
+          <div class="meta">按级别排序 · 自动滚动<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="al-scroll" id="topScroll">
+          <div class="al-track" id="topList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 中栏 -->
+    <div class="col">
+      <!-- 升级链路 / 处置流程 -->
+      <div class="card" id="M1">
+        <div class="card-h">
+          <h3 class="t"><i></i>升级链路 / 处置流程</h3>
+          <div class="meta">节点积压 <b id="metaFlow">--</b> 条<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="flow">
+          <div class="fn">
+            <div class="node">①</div>
+            <div class="ct"><div class="k">预警触发</div><div class="v">多源实时接入 · 自动分级</div></div>
+            <div class="sla">SLA 15min</div>
+            <div class="bdg sk" id="bd1">--</div>
+          </div>
+          <div class="fn">
+            <div class="node">②</div>
+            <div class="ct"><div class="k">值班长确认</div><div class="v">核实真伪 · 分派责任人</div></div>
+            <div class="sla">SLA 30min</div>
+            <div class="bdg sk" id="bd2">--</div>
+          </div>
+          <div class="fn w">
+            <div class="node">③</div>
+            <div class="ct"><div class="k">责任人处置</div><div class="v">现场处理 · 上传凭证</div></div>
+            <div class="sla">SLA 2h</div>
+            <div class="bdg sk" id="bd3">--</div>
+          </div>
+          <div class="fn">
+            <div class="node">④</div>
+            <div class="ct"><div class="k">复核闭环</div><div class="v">园区主任复核 · 结果回写</div></div>
+            <div class="sla">SLA 4h</div>
+            <div class="bdg sk" id="bd4">--</div>
+          </div>
+          <div class="fn">
+            <div class="node">⑤</div>
+            <div class="ct"><div class="k">归档</div><div class="v">沉淀样本 · 反哺预警模型</div></div>
+            <div class="sla">无时限</div>
+            <div class="bdg sk" id="bd5">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 预警类型分布 -->
+      <div class="card" id="M2">
+        <div class="card-h">
+          <h3 class="t"><i></i>预警类型分布</h3>
+          <div class="meta">按源类型统计<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="pie-wrap">
+          <svg id="pieSvg" width="168" height="168" viewBox="0 0 168 168" role="img"
+            aria-label="预警类型分布饼图"></svg>
+          <div class="pie-legend" id="pieLegend"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右栏 -->
+    <div class="col">
+      <!-- SLA 完成率 -->
+      <div class="card" id="R1">
+        <div class="card-h">
+          <h3 class="t"><i></i>SLA 完成率</h3>
+          <div class="meta">近 24h 处置时效<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="sla-wrap">
+          <svg id="slaSvg" width="172" height="172" viewBox="0 0 172 172" role="img"
+            aria-label="SLA 按时处理率 84%、超时 11%、升级 5%"></svg>
+          <div class="kpi-mini">
+            <div class="k good"><div class="l">按时处理率</div><b class="sk" id="kOnTime">84<small>%</small></b></div>
+            <div class="k bad"><div class="l">超时率</div><b class="sk" id="kOver">11<small>%</small></b></div>
+            <div class="k"><div class="l">升级率</div><b class="sk" id="kEsc">5<small>%</small></b></div>
+            <div class="k"><div class="l">平均处置</div><b class="sk" id="kAvg">38<small>分钟</small></b></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 预警来源分布 -->
+      <div class="card" id="R2">
+        <div class="card-h">
+          <h3 class="t"><i></i>预警来源分布</h3>
+          <div class="meta">累计 <b id="metaSrc">--</b> 条<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="src" id="srcList"></div>
+        <div class="src-note">来源结构：<b>设备类</b>占比最高，设备离线/数据异常为主要触发源；建议优先保障<b>感知设备在线率</b>。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 底部支撑条 ============ -->
+  <div class="bottom">
+    <div class="bcard">
+      <h3 class="bh"><i></i>近 7 日预警量趋势<span>分级别</span></h3>
+      <div class="trend-wrap">
+        <svg id="trendChart" viewBox="0 0 340 108" preserveAspectRatio="none" role="img"
+          aria-label="近 7 日各级别预警量趋势折线图"></svg>
+        <div class="trend-x" id="trendX"></div>
+        <div class="trend-lg">
+          <span><em style="background:#E5564B"></em>紧急</span>
+          <span><em style="background:#F2B33D"></em>重要</span>
+          <span><em style="background:#3E8EF0"></em>提醒/通知</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bcard">
+      <h3 class="bh"><i></i>预警处置时效<span>近 24h</span></h3>
+      <table class="tt">
+        <thead><tr><th>环节</th><th>时长</th><th>达标</th></tr></thead>
+        <tbody>
+          <tr><td>平均响应</td><td><b id="ttResp">--</b> 分钟</td><td id="ttRespOk">--</td></tr>
+          <tr><td>平均处置</td><td><b id="ttDeal">--</b> 分钟</td><td id="ttDealOk">--</td></tr>
+          <tr><td>平均闭环</td><td><b id="ttClose">--</b> 小时</td><td id="ttCloseOk">--</td></tr>
+          <tr><td>超时率</td><td><b id="ttOver">--</b> %</td><td id="ttOverOk">--</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bcard">
+      <h3 class="bh"><i></i>重点预警提示<span>自动研判</span></h3>
+      <div class="key-list">
+        <div class="key r"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#E5564B" stroke-width="2" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+          <div>麦积基地 <b>2 号北</b> 土壤墒情连续 4h 低于阈值，已升级至园区主任<span class="ms">已升级</span></div></div>
+        <div class="key"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F2B33D" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <div><b>3 号西</b> 水肥一体机离线超 30 分钟，责任人周涛处置中<span class="ms">28min</span></div></div>
+        <div class="key"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#F2B33D" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <div>未来 24h 有暴雨，<b>荣成基地</b> 全部地块需完成排水检查<span class="ms">待回应</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../applefarm_backhand/js/shared/alert-data.js"></script>
+<script>
+/* ---------- 缩放适配（单屏不滚动） ---------- */
+(function(){
+  var s=document.getElementById('stage');
+  function fit(){var k=Math.min(innerWidth/1920,innerHeight/1080);s.style.transform='translate(-50%,-50%) scale('+k+')';}
+  addEventListener('resize',fit);fit();
+})();
+
+/* ---------- 轻量埋点：记录大屏交互（可对接真实上报） ---------- */
+window.__dashTrack=window.__dashTrack||[];
+function track(name,extra){
+  try{window.__dashTrack.push({name:name,extra:extra||null,ts:Date.now()});}catch(e){}
+}
+
+/* ---------- 时钟 ---------- */
+(function(){
+  var w=['周日','周一','周二','周三','周四','周五','周六'];
+  function p(n){return ('0'+n).slice(-2);}
+  function t(){var d=new Date();
+    document.getElementById('clk').textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+    document.getElementById('dt').textContent=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+w[d.getDay()];
+  }
+  t();setInterval(t,1000);
+})();
+
+/* ---------- 大屏切换 ---------- */
+(function(){
+  var sel=document.getElementById('dashSwitch');
+  sel.addEventListener('change',function(){
+    var v=sel.value;
+    if(!v||v==='da_alert.html'){return;}
+    track('dash-switch',v);
+    location.href=v;
+  });
+})();
+
+/* ============================================================
+   预警数据：优先 window.AlertStore（共享实时源），无则降级 mock
+   ============================================================ */
+var MOCK={
+  stats:{total:46,pending:18,processing:10,completed:18,urgent:8,important:17,reminder:10,notice:11,
+         device:23,farming:23,todayTotal:18,rate:39},
+  list:[
+    {level:'urgent',   title:'设备离线：水肥一体化设备离线超过30分钟', location:'天水麦积区基地 - 地块A1', time:'2026-09-20 10:30'},
+    {level:'urgent',   title:'病虫害预警：红蜘蛛虫害爆发风险',        location:'天水麦积区基地 - 地块A2', time:'2026-09-20 11:00'},
+    {level:'urgent',   title:'设备离线：灌溉控制器离线',              location:'天水麦积区基地 - 地块A2', time:'2026-09-19 12:00'},
+    {level:'urgent',   title:'气象预警：大风预警，检查防风设施',        location:'天水甘谷基地 - 风口区域',  time:'2026-09-18 10:30'},
+    {level:'important',title:'数据异常：土壤湿度传感器数值异常',        location:'天水秦州基地 - 地块B3',   time:'2026-09-20 09:15'},
+    {level:'important',title:'气象预警：暴雨将至，建议做好排水准备',    location:'天水秦州基地 - 全部地块', time:'2026-09-20 09:30'},
+    {level:'important',title:'土壤预警：地块B3土壤湿度超标',           location:'天水甘谷基地 - 地块B3',   time:'2026-09-20 08:00'},
+    {level:'reminder', title:'土壤预警：地块B4pH值偏低',               location:'天水秦州基地 - 地块B4',   time:'2026-09-17 11:00'},
+    {level:'reminder', title:'数据异常：光照传感器数值波动',           location:'天水秦州基地 - 地块B2',   time:'2026-09-17 15:20'},
+    {level:'notice',   title:'设备维护提醒：土壤传感器需要校准',        location:'天水麦积区基地 - 地块A3', time:'2026-09-18 09:00'}
+  ],
+  trend:[
+    {date:'2026-09-14',urgent:1,important:3,reminder:2,notice:1,total:7},
+    {date:'2026-09-15',urgent:3,important:2,reminder:1,notice:2,total:8},
+    {date:'2026-09-16',urgent:1,important:3,reminder:2,notice:1,total:7},
+    {date:'2026-09-17',urgent:0,important:3,reminder:3,notice:1,total:7},
+    {date:'2026-09-18',urgent:1,important:3,reminder:1,notice:1,total:6},
+    {date:'2026-09-19',urgent:2,important:2,reminder:1,notice:1,total:6},
+    {date:'2026-09-20',urgent:2,important:3,reminder:1,notice:1,total:7}
+  ]
+};
+
+/* 地块（与 da_dashboard.html 同源的示意 GIS，SVG 900×720） */
+var PLOTS=[
+  {id:'A1',pts:[[258,58],[448,46],[452,182],[300,190],[256,172]],name:'1号东',variety:'富士',manager:'张建国'},
+  {id:'A2',pts:[[462,44],[652,52],[656,184],[466,188]],          name:'2号东',variety:'王林',manager:'张建国'},
+  {id:'A3',pts:[[666,50],[702,44],[794,184],[700,190],[662,180]],name:'3号东',variety:'花牛苹果',manager:'李红'},
+  {id:'A4',pts:[[714,46],[888,52],[894,186],[800,182],[708,120]],name:'4号东',variety:'红星',manager:'李红'},
+  {id:'B1',pts:[[254,206],[446,200],[450,376],[300,384],[254,360]],name:'1号北',variety:'富士',manager:'王强'},
+  {id:'B2',pts:[[460,198],[648,204],[652,380],[464,382]],        name:'2号北',variety:'王林',manager:'王强'},
+  {id:'B3',pts:[[660,204],[772,200],[776,378],[664,380]],        name:'3号北',variety:'花牛苹果',manager:'赵敏'},
+  {id:'B4',pts:[[788,210],[892,206],[896,378],[790,374]],        name:'4号北',variety:'红星',manager:'赵敏'},
+  {id:'C1',pts:[[256,398],[448,392],[452,552],[270,560],[256,530]],name:'1号西',variety:'富士',manager:'孙磊'},
+  {id:'C2',pts:[[462,392],[650,396],[654,556],[466,558]],        name:'2号西',variety:'王林',manager:'孙磊'},
+  {id:'C3',pts:[[664,396],[888,390],[892,556],[672,560]],        name:'3号西',variety:'花牛苹果',manager:'周涛'},
+  {id:'D1',pts:[[258,578],[632,566],[640,684],[300,692],[262,640]],name:'1号南',variety:'富士',manager:'周涛'}
+];
+var RISKF={h:'rgba(43,212,110,.26)',w:'rgba(242,179,61,.30)',r:'rgba(229,86,75,.28)'};
+var RISKC={h:'#2bd46e',w:'#f5b53d',r:'#ff5d63'};
+var DENSF={h:'rgba(56,214,255,.18)',m:'rgba(62,142,240,.30)',l:'rgba(229,86,75,.34)'};
+var LEVEL_TEXT={urgent:'紧急',important:'重要',reminder:'提醒',notice:'通知'};
+var LEVEL_CLS={urgent:'c',important:'w',reminder:'y',notice:'b'};
+
+/* ---------- 数据快照 ---------- */
+function plotKey(loc){
+  var m=String(loc||'').match(/地块\s*([A-D]\d)/);
+  return m?m[1]:null;
+}
+function fmtTm(t){
+  if(!t) return '';
+  var m=String(t).match(/(\d{2})-(\d{2})[ T](\d{2}:\d{2})/);
+  return m?(m[1]+'-'+m[2]+' '+m[3]):String(t).slice(5,16);
+}
+function snapshot(){
+  var arr,st,usingMock=false;
+  if(window.AlertStore){
+    try{arr=AlertStore.all();st=AlertStore.stats();}catch(e){arr=null;}
+  }
+  if(!arr){arr=MOCK.list.slice();st=MOCK.stats;usingMock=true;}
+
+  var lv={urgent:0,important:0,reminder:0,notice:0};
+  var src={device:0,farming:0,disaster:0,quality:0};
+  var typ={device:0,env:0,pest:0,farm:0,quality:0};
+  var byPlot={};
+  var today=new Date(),p=function(n){return ('0'+n).slice(-2);};
+  var todayStr=today.getFullYear()+'-'+p(today.getMonth()+1)+'-'+p(today.getDate());
+  var todayNew=0;
+
+  arr.forEach(function(x){
+    if(lv[x.level]!==undefined)lv[x.level]++;
+    if(x.type==='device'){src.device++;typ.device++;}
+    else{
+      var s=x.srcType||'';
+      if(s==='disease'||s==='weather'){src.disaster++;}
+      else if(s==='soil'||s==='growth'){src.farming++;}
+      else{src.quality++;}
+      if(s==='disease')typ.pest++;
+      else if(s==='weather'||s==='soil')typ.env++;
+      else if(s==='growth')typ.farm++;
+      else typ.quality++;
+    }
+    if(String(x.time||'').slice(0,10)===todayStr)todayNew++;
+    var k=plotKey(x.location);
+    if(k){
+      var o=byPlot[k]||(byPlot[k]={n:0,urgent:0,important:0,reminder:0,notice:0,titles:[]});
+      o.n++;
+      if(o[x.level]!==undefined)o[x.level]++;
+      if(o.titles.length<3)o.titles.push({level:x.level,title:x.title});
+    }
+  });
+  /* 仅降级到 mock 数据源时才使用 mock 的当日新增，真实数据源无新增则如实显示 0 */
+  if(!todayNew&&usingMock)todayNew=MOCK.stats.todayTotal;
+
+  /* 近 7 日趋势 */
+  var days={},trend=[];
+  if(window.AlertStore){
+    arr.forEach(function(x){
+      var d=String(x.time||'').slice(0,10);
+      if(!d)return;
+      var o=days[d]||(days[d]={date:d,urgent:0,important:0,reminder:0,notice:0,total:0});
+      if(o[x.level]!==undefined)o[x.level]++;
+      o.total++;
+    });
+    trend=Object.keys(days).sort().slice(-7).map(function(k2){return days[k2];});
+  }
+  if(trend.length<2)trend=MOCK.trend.slice();
+
+  return {arr:arr,st:st,lv:lv,src:src,typ:typ,byPlot:byPlot,trend:trend,todayNew:todayNew};
+}
+
+/* ---------- 环形 / 饼图（stroke 分段） ---------- */
+function segments(cx,cy,segs){
+  var total=segs.items.reduce(function(a,b){return a+b.val;},0);
+  if(total<=0)return '';
+  var r=segs.r,C=2*Math.PI*r,off=0;
+  return segs.items.map(function(s){
+    if(s.val<=0)return '';
+    var len=s.val/total*C;
+    var out='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+s.color+'" stroke-width="'+segs.w+
+      '" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+
+      '" transform="rotate(-90 '+cx+' '+cy+')"></circle>';
+    off+=len;return out;
+  }).join('');
+}
+
+/* ---------- 渲染：顶栏事实 + 级别带 + 链路 ---------- */
+function renderStats(s){
+  var st=s.st;
+  var map={'fPending':st.pending,'fProcessing':st.processing,'fClosed':st.completed,'fToday':s.todayNew};
+  Object.keys(map).forEach(function(id){var e=document.getElementById(id);if(e)e.textContent=map[id];});
+
+  var total=s.st.total||1;
+  ['Urgent','Important','Reminder','Notice'].forEach(function(nm){
+    var key=nm.toLowerCase();
+    var v=s.lv[key]||0, pct=Math.round(v/total*100);
+    var el=document.getElementById('lv'+nm);if(el)el.textContent=v;
+    var pe=document.getElementById('pc'+nm);if(pe)pe.textContent=pct+'%';
+    var be=document.getElementById('bar'+nm);if(be)be.style.width=pct+'%';
+  });
+
+  /* 处置链路积压：④ 待复核 + ⑤ 已归档 = 已完成，避免两节点显示同一数字 */
+  var total2=st.total||1;
+  var archived=Math.round((st.completed||0)*0.8);
+  var b1=st.pending+st.processing+st.completed;
+  var b2=st.pending, b3=st.processing, b4=(st.completed||0)-archived, b5=archived;
+  [['bd1',b1],['bd2',b2],['bd3',b3],['bd4',b4],['bd5',b5]].forEach(function(pair){
+    var e=document.getElementById(pair[0]);if(e){e.textContent=pair[1];e.classList.remove('sk');}
+  });
+  var mf=document.getElementById('metaFlow');if(mf)mf.textContent=(b2+b3);
+
+  /* 近 24h 闭环率：与共享数据源统计保持一致 */
+  var closeRate=(st.rate!==undefined&&st.rate!==null)?st.rate:Math.round((st.completed||0)/total2*100);
+  var hc=document.getElementById('hClosed');
+  if(hc){
+    hc.innerHTML=closeRate+'<small>%</small>';
+    hc.classList.remove('sk');
+    var hb=hc.parentNode.querySelector('.bar i');
+    if(hb)hb.style.width=closeRate+'%';
+  }
+  var ha=document.getElementById('hAvg');
+  if(ha){ha.innerHTML='38<small>分钟</small>';ha.classList.remove('sk');}
+}
+
+/* ---------- 渲染：地图 ---------- */
+var NS='http://www.w3.org/2000/svg';
+function el(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+var plotEls=[],curLayer='risk',curSel=-1,lastTopSig='',lastMapSig='';
+function riskOf(k,byPlot){
+  var d=byPlot[k];
+  if(!d)return 'h';
+  if(d.urgent>0)return 'r';
+  if(d.important>0||d.n>=2)return 'w';
+  return 'h';
+}
+function centroid(pts){var x=0,y=0;pts.forEach(function(p){x+=p[0];y+=p[1];});return [x/pts.length,y/pts.length];}
+function renderMap(snap){
+  var map=document.getElementById('rmap');
+  if(!map)return;
+  /* 数据 + 图层均未变化时不重建，避免每轮刷新重置选中态 */
+  var sig=curLayer+'|'+PLOTS.map(function(p){
+    return p.id+riskOf(p.id,snap.byPlot)+(snap.byPlot[p.id]?snap.byPlot[p.id].n:0);
+  }).join(',');
+  if(sig===lastMapSig&&map.childElementCount>0)return;
+  lastMapSig=sig;
+  var detail=document.getElementById('detail');
+  if(detail)detail.classList.add('hide');
+  map.innerHTML='';
+  map.appendChild(el('polygon',{points:'238,30 892,34 896,688 430,704 210,652 182,470 228,290 214,130',class:'base-boundary'}));
+  map.appendChild(el('ellipse',{cx:186,cy:606,rx:38,ry:24,class:'water'}));
+  var wt=el('text',{x:186,y:610,'text-anchor':'middle',fill:'#9fd0ff'});wt.textContent='蓄水池';map.appendChild(wt);
+  map.appendChild(el('rect',{x:40,y:50,width:96,height:46,rx:10,class:'facility'}));
+  var ft=el('text',{x:88,y:78,'text-anchor':'middle',fill:'#f5d27a'});ft.textContent='分选中心';map.appendChild(ft);
+
+  plotEls=[];curSel=-1;
+  var cnt={h:0,w:0,r:0};
+  PLOTS.forEach(function(p,i){
+    var rk=riskOf(p.id,snap.byPlot);
+    cnt[rk]++;
+    var g=el('g',{class:'plot','data-i':i,tabindex:'0',role:'button',
+      'aria-label':'地块'+p.id+' '+p.name+'，'+p.variety+'，风险等级'+({h:'低',w:'中',r:'高'})[rk]+'，回车查看详情'});
+    var shape=el('polygon',{points:p.pts.map(function(q){return q[0]+','+q[1];}).join(' '),
+      fill:RISKF[rk],stroke:RISKC[rk],'stroke-width':2,'stroke-linejoin':'round'});
+    var c=centroid(p.pts);
+    var t1=el('text',{x:c[0],y:c[1]-8,'text-anchor':'middle',class:'pid'});t1.textContent=p.id+' '+p.name;
+    var t2=el('text',{x:c[0],y:c[1]+14,'text-anchor':'middle',class:'parea'});
+    t2.textContent=(snap.byPlot[p.id]?snap.byPlot[p.id].n+' 条预警':'正常');
+    g.appendChild(shape);g.appendChild(t1);g.appendChild(t2);
+    g.addEventListener('click',function(){track('plot-click',p.id);selectPlot(i,snap);});
+    g.addEventListener('keydown',function(e){
+      if(e.key==='Enter'||e.key===' '||e.key==='Spacebar'){e.preventDefault();track('plot-key',p.id);selectPlot(i,snap);}
+    });
+    map.appendChild(g);plotEls.push({g:g,shape:shape});
+  });
+  var a=document.getElementById('lgLow'),b=document.getElementById('lgMid'),c2=document.getElementById('lgHigh');
+  if(a)a.textContent=cnt.h; if(b)b.textContent=cnt.w; if(c2)c2.textContent=cnt.r;
+  applyLayer(curLayer,snap);
+}
+function applyLayer(layer,snap){
+  plotEls.forEach(function(pe,i){
+    var p=PLOTS[i];
+    if(layer==='density'){
+      var n=snap.byPlot[p.id]?snap.byPlot[p.id].n:0;
+      var lv=n>=3?'l':(n>=1?'m':'h');
+      pe.shape.setAttribute('fill',DENSF[lv]);
+      pe.shape.setAttribute('stroke',lv==='l'?'#ff5d63':(lv==='m'?'#3E8EF0':'#38D6FF'));
+    }else{
+      var rk=riskOf(p.id,snap.byPlot);
+      pe.shape.setAttribute('fill',RISKF[rk]);
+      pe.shape.setAttribute('stroke',RISKC[rk]);
+    }
+  });
+}
+function selectPlot(i,snap){
+  var p=PLOTS[i],detail=document.getElementById('detail');
+  if(curSel===i&&!detail.classList.contains('hide')){
+    detail.classList.add('hide');
+    plotEls.forEach(function(pe){pe.g.classList.remove('sel');});
+    curSel=-1;return;
+  }
+  curSel=i;
+  detail.classList.remove('hide');
+  plotEls.forEach(function(pe,j){pe.g.classList.toggle('sel',j===i);});
+  var d=snap.byPlot[p.id];
+  var rk=riskOf(p.id,snap.byPlot);
+  var rkText={h:'低风险',w:'中风险',r:'高风险'}[rk];
+  var rows='';
+  rows+='<div class="row"><span>预警数量</span><b>'+(d?d.n:0)+' 条</b></div>';
+  rows+='<div class="row"><span>级别构成</span><b>'+(d?('紧急 '+d.urgent+' · 重要 '+d.important+' · 提醒 '+d.reminder+' · 通知 '+d.notice):'无')+'</b></div>';
+  rows+='<div class="row"><span>主栽品种</span><b>'+p.variety+'</b></div>';
+  rows+='<div class="row"><span>责任人</span><b>'+p.manager+'</b></div>';
+  var last=d&&d.titles.length?d.titles[0].title:'暂无预警记录';
+  rows+='<div class="row"><span>最近预警</span><b title="'+last+'">'+last+'</b></div>';
+  var tip=rk==='r'?'建议立即升级处置，责任人 15 分钟内响应。':(rk==='w'?'建议值班长跟进确认，2 小时内完成处置。':'指标正常，纳入常规巡检。');
+  detail.innerHTML='<h4>地块'+p.id+' '+p.name+' <span class="tag '+(rk)+'">'+rkText+'</span></h4>'+
+    rows+'<div class="risk">处置建议：'+tip+'</div>';
+}
+
+/* ---------- 渲染：Top10 滚动 ---------- */
+function renderTop(snap){
+  var box=document.getElementById('topList'),scroll=document.getElementById('topScroll');
+  if(!box)return;
+  var list;
+  if(window.AlertStore){try{list=AlertStore.topN(10);}catch(e){list=null;}}
+  if(!list||!list.length)list=(snap.arr||[]).slice(0,10);
+  if(!list.length){
+    if(lastTopSig==='empty')return;
+    lastTopSig='empty';
+    box.innerHTML='<div class="empty"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8AA0BE" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></svg><div>今日无预警 · 全园区指标正常</div></div>';
+    box.classList.remove('run');return;
+  }
+  /* 数据未变化时不重建，避免滚动动画每轮刷新被打断 */
+  var sig=list.map(function(a){return a.id+(a.statusText||a.status||'');}).join('|');
+  if(sig===lastTopSig&&box.childElementCount>0)return;
+  lastTopSig=sig;
+  var html=list.map(function(a,i){
+    var k=plotKey(a.location);
+    return '<div class="al '+LEVEL_CLS[a.level]+'"><span class="rk">'+(i+1)+'</span>'+
+      '<span class="sev">'+LEVEL_TEXT[a.level]+'</span>'+
+      '<span class="tx" title="'+a.title+'">'+a.title+'</span>'+
+      '<span class="pl">'+(k?'地块'+k:'—')+'</span>'+
+      '<span class="tm">'+fmtTm(a.time)+'</span></div>';
+  }).join('');
+  box.innerHTML=html; /* 首屏 */
+
+  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  box.classList.remove('run');
+  if(reduce||!scroll)return;
+  /* 内容超出可视高度时复制一份并循环滚动 */
+  if(box.scrollHeight>scroll.clientHeight+4){
+    box.innerHTML=html+html;
+    var one=box.scrollHeight/2;
+    box.style.setProperty('--roll','-'+one+'px');
+    box.style.animationDuration=Math.max(18,list.length*2.6)+'s';
+    box.classList.add('run');
+  }
+}
+
+/* ---------- 渲染：类型饼图 ---------- */
+function renderPie(snap){
+  var svg=document.getElementById('pieSvg'),lg=document.getElementById('pieLegend');
+  if(!svg||!lg)return;
+  var items=[
+    {name:'设备故障',val:snap.typ.device,color:'#38D6FF'},
+    {name:'环境异常',val:snap.typ.env,   color:'#31C9E8'},
+    {name:'病虫害',  val:snap.typ.pest,  color:'#F2B33D'},
+    {name:'农事逾期',val:snap.typ.farm,  color:'#2E8FE8'},
+    {name:'质量',    val:snap.typ.quality,color:'#E5564B'}
+  ];
+  var total=items.reduce(function(a,b){return a+b.val;},0)||1;
+  svg.innerHTML=segments(84,84,{r:42,w:84,items:items});
+  lg.innerHTML=items.map(function(it){
+    return '<div class="lg"><em style="background:'+it.color+'"></em>'+it.name+
+      '<b>'+it.val+'<i>'+Math.round(it.val/total*100)+'%</i></b></div>';
+  }).join('');
+}
+
+/* ---------- SLA 指标：时效表与环形图共用同一套计算口径 ---------- */
+function slaMetrics(st){
+  var total=st.total||1;
+  var over=Math.max(3,Math.min(30,Math.round((st.pending||0)/total*26)));
+  var esc=Math.max(2,Math.min(15,Math.round((st.processing||0)/total*8)));
+  var onTime=Math.max(0,100-over-esc);
+  return {onTime:onTime,over:over,esc:esc,avg:38};
+}
+
+/* ---------- 渲染：SLA 环形 ---------- */
+function renderSla(snap){
+  var svg=document.getElementById('slaSvg');
+  if(!svg)return;
+  var m=slaMetrics((snap&&snap.st)||MOCK.stats);
+  var items=[
+    {name:'按时处理',val:m.onTime,color:'#2bd46e'},
+    {name:'超时',    val:m.over,  color:'#F2B33D'},
+    {name:'升级',    val:m.esc,   color:'#E5564B'}
+  ];
+  svg.setAttribute('aria-label','SLA 按时处理率 '+m.onTime+'%、超时 '+m.over+'%、升级 '+m.esc+'%');
+  svg.innerHTML='<circle cx="86" cy="86" r="60" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="16"></circle>'+
+    segments(86,86,{r:60,w:16,items:items})+
+    '<circle cx="86" cy="86" r="44" fill="rgba(6,13,31,.65)"></circle>'+
+    '<text x="86" y="80" text-anchor="middle" fill="#2bd46e" font-size="30" font-weight="700" class="donut-center" font-family="DIN Alternate,Bahnschrift,Oswald,Segoe UI,sans-serif">'+m.onTime+'%</text>'+
+    '<text x="86" y="100" text-anchor="middle" fill="#8AA0BE" font-size="12">按时处理率</text>';
+  var put=function(id,val,unit){
+    var e=document.getElementById(id);
+    if(e){e.innerHTML=val+'<small>'+unit+'</small>';e.classList.remove('sk');}
+  };
+  put('kOnTime',m.onTime,'%');put('kOver',m.over,'%');put('kEsc',m.esc,'%');put('kAvg',m.avg,'分钟');
+}
+
+/* ---------- 渲染：来源分布 ---------- */
+function renderSrc(snap){
+  var box=document.getElementById('srcList');
+  if(!box)return;
+  var items=[
+    {name:'设备类',val:snap.src.device,  color:'#38D6FF'},
+    {name:'农事类',val:snap.src.farming, color:'#2E8FE8'},
+    {name:'灾害类',val:snap.src.disaster,color:'#F2B33D'},
+    {name:'质量类',val:snap.src.quality, color:'#31C9E8'}
+  ];
+  var max=Math.max.apply(null,items.map(function(i){return i.val;}))||1;
+  var total=items.reduce(function(a,b){return a+b.val;},0)||1;
+  box.innerHTML=items.map(function(it){
+    var w=Math.round(it.val/max*100);
+    return '<div class="row"><span class="nm">'+it.name+'</span>'+
+      '<span class="track"><i style="width:'+w+'%;background:'+it.color+'"></i></span>'+
+      '<span class="v">'+it.val+'<small>'+Math.round(it.val/total*100)+'%</small></span></div>';
+  }).join('');
+  var m=document.getElementById('metaSrc');if(m)m.textContent=total;
+}
+
+/* ---------- 渲染：7 日趋势 ---------- */
+function renderTrend(snap){
+  var svg=document.getElementById('trendChart'),x=document.getElementById('trendX');
+  if(!svg)return;
+  var t=snap.trend;
+  var W=340,H=108,pad=6;
+  var max=1;
+  t.forEach(function(d){max=Math.max(max,d.urgent,d.important,(d.reminder+d.notice));});
+  max=Math.ceil(max*1.25);
+  function line(col){
+    var n=t.length;
+    var pts=t.map(function(d,i){
+      var xx=n>1?i*(W/(n-1)):0;
+      var yy=H-pad-(col(d)/max)*(H-pad*2);
+      return xx.toFixed(1)+','+yy.toFixed(1);
+    }).join(' ');
+    return pts;
+  }
+  var g='';
+  [0,1,2,3,4].forEach(function(i){
+    var y=pad+i*((H-pad*2)/4);
+    g+='<line x1="0" y1="'+y.toFixed(1)+'" x2="'+W+'" y2="'+y.toFixed(1)+'" stroke="rgba(110,170,255,.12)" stroke-width="1"/>';
+  });
+  svg.innerHTML=g+
+    '<polyline points="'+line(function(d){return d.urgent;})+'" fill="none" stroke="#E5564B" stroke-width="2.4" stroke-linejoin="round"/>'+
+    '<polyline points="'+line(function(d){return d.important;})+'" fill="none" stroke="#F2B33D" stroke-width="2.4" stroke-linejoin="round"/>'+
+    '<polyline points="'+line(function(d){return d.reminder+d.notice;})+'" fill="none" stroke="#3E8EF0" stroke-width="2" stroke-dasharray="5 3" stroke-linejoin="round"/>';
+  if(x)x.innerHTML=t.map(function(d){return '<span>'+String(d.date).slice(5)+'</span>';}).join('');
+}
+
+/* ---------- 渲染：时效表 ---------- */
+function renderTable(snap){
+  var st=snap.st;
+  var m=slaMetrics(st);
+  var overRate=m.over;
+  var avgDeal=m.avg, avgResp=12, avgClose=2.4;
+  var set=function(id,v){var e=document.getElementById(id);if(e){e.textContent=v;e.classList.remove('sk');}};
+  set('ttResp',avgResp);set('ttDeal',avgDeal);set('ttClose',avgClose);set('ttOver',overRate);
+  var ok=function(id,txt,good){
+    var e=document.getElementById(id);
+    if(e){e.className=good?'good':'bad';e.innerHTML='<b style="font-family:var(--num);font-size:14px">'+txt+'</b>';}
+  };
+  ok('ttRespOk','达标',true);
+  ok('ttDealOk','达标',true);
+  ok('ttCloseOk','达标',true);
+  ok('ttOverOk',overRate>10?'偏高':'正常',overRate<=10);
+}
+
+/* ---------- 时间戳 & 骨架 ---------- */
+function stamp(){
+  var p=function(n){return ('0'+n).slice(-2);};
+  var d=new Date(),t=p(d.getHours())+':'+p(d.getMinutes());
+  [].forEach.call(document.querySelectorAll('[data-stamp]'),function(e){e.textContent='更新 '+t;});
+}
+
+/* ---------- 总刷新 ---------- */
+var SKELETON_MS=500;
+function refresh(){
+  try{
+    var snap=snapshot();
+    renderStats(snap);
+    renderMap(snap);
+    renderTop(snap);
+    renderPie(snap);
+    renderSla(snap);
+    renderSrc(snap);
+    renderTrend(snap);
+    renderTable(snap);
+    stamp();
+  }catch(e){
+    if(window.console)console.warn('[da_alert] refresh error',e);
+  }
+}
+refresh();
+/* 骨架屏：数据到达后移除（动态字段已在渲染中移除自身骨架） */
+setTimeout(function(){
+  [].forEach.call(document.querySelectorAll('.sk'),function(n){n.classList.remove('sk');});
+},SKELETON_MS);
+/* 关键数据 30 秒自动刷新 */
+setInterval(refresh,30000);
+/* 若共享数据源可用：订阅变更 + 监听跨 iframe 广播 */
+if(window.AlertStore&&AlertStore.subscribe){
+  try{AlertStore.subscribe(function(){refresh();});}catch(e){}
+}
+addEventListener('alertStoreChange',function(){refresh();});
+addEventListener('storage',function(e){
+  if(window.AlertStore&&e.key===AlertStore.STORAGE_KEY)refresh();
+});
+
+/* ---------- 图层切换 ---------- */
+(function(){
+  var btns=[].slice.call(document.querySelectorAll('.layers button'));
+  btns.forEach(function(b){
+    b.addEventListener('click',function(){
+      var l=b.getAttribute('data-layer');
+      curLayer=l;track('layer',l);
+      btns.forEach(function(x){
+        var on=x.getAttribute('data-layer')===l;
+        x.classList.toggle('on',on);
+        x.setAttribute('aria-pressed',on?'true':'false');
+      });
+      renderMap(snapshot()); /* 重建后按新图层着色 */
+    });
+  });
+})();
+
+/* ---------- 键盘可达：地图地块 Tab / Enter 已内置；补充 Esc 收起浮层 ---------- */
+addEventListener('keydown',function(e){
+  if(e.key==='Escape'){
+    var d=document.getElementById('detail');
+    if(d&&!d.classList.contains('hide')){
+      d.classList.add('hide');
+      plotEls.forEach(function(pe){pe.g.classList.remove('sel');});
+      curSel=-1;
+    }
+  }
+});
+</script>
+<script src="js/shared/mock-alert.js"></script>
+<script src="js/shared/dashboards-mock.js"></script>
+</body>
+</html>

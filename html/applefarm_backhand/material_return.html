@@ -884,8 +884,12 @@
       <input type="hidden" id="approveId">
       <p style="color:var(--text-secondary);margin-bottom:16px;">确定要通过该退库申请吗？</p>
       <div class="form-item">
+        <label>审批人 <span style="color:var(--error);">*</span></label>
+        <input type="text" id="approveUser" placeholder="请填写审批人姓名" required>
+      </div>
+      <div class="form-item">
         <label>审核意见</label>
-        <textarea id="approveComment" placeholder="请输入审核意见（可选）"></textarea>
+        <textarea id="approveOpinion" placeholder="请输入审核意见（可选）"></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -1282,7 +1286,8 @@ function closeViewModal() {
 // 打开审核弹窗
 function openApproveModal(id) {
   document.getElementById('approveId').value = id;
-  document.getElementById('approveComment').value = '';
+  document.getElementById('approveUser').value = '';
+  document.getElementById('approveOpinion').value = '';
   approveModal.classList.add('show');
 }
 
@@ -1294,14 +1299,22 @@ function closeApproveModal() {
 // 执行审核
 function doApprove() {
   const id = document.getElementById('approveId').value;
+  const approver = (document.getElementById('approveUser') || {}).value || '';
+  const opinion = (document.getElementById('approveOpinion') || {}).value || '';
+  if (!approver) { alert('请填写审批人'); return; }
   const item = returnData.find(i => i.id === id);
   if (item) {
     // 退库农资退回仓库，库存相应增加
     MaterialStore.applyDelta(item.material, parseInt(item.qty) || 0);
     item.status = 'approved';
     item.statusText = '已审核';
+    item.approval = { approver: approver, opinion: opinion, approvedAt: new Date().toISOString() };
+    // 落库到审计日志
+    var logs = JSON.parse(localStorage.getItem('material_approval_logs') || '[]');
+    logs.unshift({ id: id, approver: approver, opinion: opinion, at: new Date().toISOString() });
+    localStorage.setItem('material_approval_logs', JSON.stringify(logs));
   }
-  alert('审核通过，退库农资已入库');
+  if (typeof Toast !== 'undefined') Toast.success('审核通过，退库农资已入库'); else alert('审核通过，退库农资已入库');
   closeApproveModal();
   search();
 }
@@ -1324,19 +1337,26 @@ function closeRefundModal() {
 // 执行退款
 function doRefund() {
   const id = document.getElementById('refundId').value;
-  const amount = document.getElementById('refundAmount').value;
-  
-  if (!amount || parseFloat(amount) <= 0) {
+  const amount = parseFloat(document.getElementById('refundAmount').value);
+  const reason = (document.getElementById('refundReason') || {}).value || '';
+  const method = (document.getElementById('refundMethod') || {}).value || '原路退回';
+
+  if (!amount || amount <= 0) {
     alert('请输入有效金额');
     return;
   }
-  
+
   const item = returnData.find(i => i.id === id);
   if (item) {
     item.status = 'refunded';
     item.statusText = '已退款';
+    item.refund = { amount: amount, reason: reason, method: method, refundedAt: new Date().toISOString() };
+    // 落库到审计日志
+    var logs = JSON.parse(localStorage.getItem('material_refund_logs') || '[]');
+    logs.unshift({ id: id, amount: amount, reason: reason, method: method, at: new Date().toISOString() });
+    localStorage.setItem('material_refund_logs', JSON.stringify(logs));
   }
-  alert('退款成功');
+  if (typeof Toast !== 'undefined') Toast.success('退款成功：¥' + amount.toFixed(2)); else alert('退款成功：¥' + amount.toFixed(2));
   closeRefundModal();
   search();
 }

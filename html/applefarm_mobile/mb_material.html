@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <!-- 移动端共享数据层 -->
+  <script src="js/mobile-store.js"></script>
   <style>
     /* 页面特定样式 - 使用设计系统变量 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: 66px; }
@@ -181,6 +183,8 @@
 
       <div class="card">
         <div class="card-title">领用记录</div>
+        <div id="myApplyList"></div>
+        <div style="font-size:12px;color:var(--text-light);margin:8px 0 12px;">以下为演示数据</div>
         <div class="record-item">
           <div class="record-header">
             <div class="record-name">氮磷钾复合肥</div>
@@ -274,19 +278,19 @@
       </div>
       <div class="form-group">
         <label class="form-label">领用数量</label>
-        <input type="text" class="form-input" placeholder="请输入数量">
+        <input type="number" class="form-input" id="materialQty" min="1" max="1000" placeholder="请输入数量（1-1000）">
       </div>
       <div class="form-group">
         <label class="form-label">领用地块</label>
-        <select class="form-select">
-          <option>请选择地块</option>
-          <option>1号地块</option>
-          <option>2号地块</option>
+        <select class="form-select" id="materialPlot">
+          <option value="">请选择地块</option>
+          <option value="1号地块">1号地块</option>
+          <option value="2号地块">2号地块</option>
         </select>
       </div>
       <div class="form-group">
         <label class="form-label">备注</label>
-        <input type="text" class="form-input" placeholder="备注信息（选填）">
+        <input type="text" class="form-input" id="materialRemark" placeholder="备注信息（选填）">
       </div>
       <div class="btn-row">
         <button class="btn btn-outline" onclick="closeApplyModal()">取消</button>
@@ -304,8 +308,21 @@
       window.history.back();
     }
 
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function resetApplyForm() {
+      document.getElementById('materialQty').value = '';
+      document.getElementById('materialPlot').value = '';
+      document.getElementById('materialRemark').value = '';
+    }
+
     function openApplyModal(name) {
       document.getElementById('materialName').value = name;
+      resetApplyForm();
       document.getElementById('applyModal').classList.add('show');
     }
 
@@ -313,10 +330,103 @@
       document.getElementById('applyModal').classList.remove('show');
     }
 
-    function submitApply() {
-      alert('申请提交成功！');
-      closeApplyModal();
+    function renderMyApplies() {
+      var box = document.getElementById('myApplyList');
+      var list = MobileStore.list(MobileStore.KEYS.material);
+      if (!list.length) {
+        box.innerHTML = '<div style="text-align:center;color:var(--text-light);font-size:var(--font-sm);padding:12px;">暂无我的申请记录</div>';
+        return;
+      }
+      box.innerHTML = list.map(function (r) {
+        return '<div class="record-item">' +
+          '<div class="record-header">' +
+          '<div class="record-name">' + esc(r.name) + '</div>' +
+          '<span class="record-status pending">审批中</span>' +
+          '</div>' +
+          '<div class="record-info">' +
+          '<span>数量：' + esc(r.qty) + '</span>' +
+          '<span>' + esc(r.time || '') + '</span>' +
+          '</div>' +
+          '<div style="font-size:12px;color:var(--text-light);margin-top:6px;">用途：' + esc(r.plot || '') +
+          (r.remark ? ' · 备注：' + esc(r.remark) : '') + ' · 待审批</div>' +
+          '</div>';
+      }).join('');
     }
+
+    /* 农资库存：与标签领用一致，提交申请即扣减可领库存（库存不足时拦截） */
+    var STOCK_KEY = 'smartorchard_material_stock';
+    var DEFAULT_STOCK = {
+      '氮磷钾复合肥': 520,
+      '生物有机肥': 380,
+      '波尔多液': 120,
+      '磷酸二氢钾': 45,
+      '阿维菌素': 60,
+      '尿素': 280
+    };
+    function readStock() {
+      var s = {};
+      try { s = JSON.parse(localStorage.getItem(STOCK_KEY) || '{}') || {}; } catch (e) { s = {}; }
+      var changed = false;
+      Object.keys(DEFAULT_STOCK).forEach(function(k) {
+        if (typeof s[k] !== 'number') { s[k] = DEFAULT_STOCK[k]; changed = true; }
+      });
+      if (changed) { try { localStorage.setItem(STOCK_KEY, JSON.stringify(s)); } catch (e) {} }
+      return s;
+    }
+    function renderStocks() {
+      var s = readStock();
+      var nodes = document.querySelectorAll('.material-item');
+      Array.prototype.forEach.call(nodes, function(item) {
+        var nameEl = item.querySelector('.material-name');
+        var stockEl = item.querySelector('.material-stock');
+        var btn = item.querySelector('button');
+        if (!nameEl || !stockEl) return;
+        var left = s[nameEl.textContent.trim()];
+        if (typeof left !== 'number') return;
+        stockEl.textContent = '库存：' + left + (/[L]/.test(stockEl.textContent) ? 'L' : 'kg');
+        if (btn) btn.disabled = left <= 0;
+      });
+    }
+
+    function submitApply() {
+      var name = document.getElementById('materialName').value;
+      var qtyRaw = document.getElementById('materialQty').value.trim();
+      var plot = document.getElementById('materialPlot').value;
+      var remark = document.getElementById('materialRemark').value.trim();
+
+      if (!qtyRaw) { MobileStore.toast('请输入领用数量', 'warning'); return; }
+      var qty = Number(qtyRaw);
+      if (!isFinite(qty) || qty <= 0) { MobileStore.toast('领用数量必须是大于 0 的数字', 'error'); return; }
+      if (qty > 1000) { MobileStore.toast('单次领用数量不能超过 1000', 'error'); return; }
+      if (!plot) { MobileStore.toast('请选择领用地块', 'warning'); return; }
+      var stock = readStock();
+      var left = typeof stock[name] === 'number' ? stock[name] : null;
+      if (left === null) { MobileStore.toast('未找到该农资的库存记录', 'error'); return; }
+      if (qty > left) { MobileStore.toast('库存不足，当前仅剩 ' + left, 'error'); return; }
+
+      stock[name] = left - qty;
+      localStorage.setItem(STOCK_KEY, JSON.stringify(stock));
+
+      MobileStore.push(MobileStore.KEYS.material, {
+        name: name,
+        qty: qty,
+        plot: plot,
+        remark: remark,
+        status: 'pending',
+        time: MobileStore.fmtTime(Date.now())
+      });
+
+      closeApplyModal();
+      MobileStore.toast('申请已提交，等待审批', 'success');
+      renderMyApplies();
+      renderStocks();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      renderStocks();
+      renderMyApplies();
+      MobileStore.subscribe(renderMyApplies);
+    });
   </script>
 </body>
 </html>

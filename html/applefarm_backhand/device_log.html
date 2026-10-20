@@ -647,7 +647,20 @@ function hideExportModal() {
 
 function confirmExport() {
   hideExportModal();
-  alert('日志已导出');
+  // 真实导出：将设备日志序列化为 CSV 触发下载
+  var logs = window.deviceLogRecords || [];
+  var csv = '时间,设备,类型,级别,内容\n' + logs.map(function(r){
+    return [r.time, r.device, r.type, r.level, r.content].join(',');
+  }).join('\n');
+  var blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `设备日志_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  if (typeof Toast !== 'undefined') Toast.success('设备日志已导出');
 }
 
 function clearLogs() {
@@ -657,7 +670,12 @@ function clearLogs() {
 
 function confirmClear() {
   hideDeleteModal();
-  alert('日志已清空');
+  // 清空日志：本地缓存清空 + 重新渲染
+  if (window.deviceLogRecords) window.deviceLogRecords.length = 0;
+  if (typeof localStorage !== 'undefined') localStorage.removeItem('device_log_cleared_at');
+  if (typeof renderLogTable === 'function') renderLogTable();
+  else if (typeof Pagination !== 'undefined' && Pagination.updateData) Pagination.updateData([]);
+  if (typeof Toast !== 'undefined') Toast.success('日志已清空');
 }
 
 function hideDeleteModal() {

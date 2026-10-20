@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>智慧果园 · 数据决策指挥中心</title>
+<style>
+/* ============================================================
+   智慧果园数据驾驶舱中心 — 深色单屏 (1920×1080, 自包含)
+   字阶：32 页面标题 / 16 卡片标题 / 14 正文 / 12 辅助
+   入口：4×2 卡片栅格，每卡独立主色（品牌绿 / 品牌蓝 / 琥珀 / 紫罗兰 /
+        风险红 / 青 / 品牌深色 / 亮青），悬浮上移 + 边框加亮
+   ============================================================ */
+:root{
+  --surface-0:#060D1F;     /* 舞台底 */
+  --surface-1:#0B1830;     /* 卡片面 */
+  --surface-2:#12234A;     /* 卡片抬升 / 悬停 */
+  --line:rgba(110,170,255,.18);
+  --line-strong:rgba(110,170,255,.34);
+  --text-1:#E8F2FF;        /* 主文字 */
+  --text-2:#9DB8DC;        /* 次文字 */
+  --text-3:#8AA0BE;        /* 弱文字 */
+  --brand-700:#14549F;     /* 品牌深色端 */
+  --brand-500:#2E8FE8;     /* 品牌主色 */
+  --brand-400:#38D6FF;     /* 亮青 */
+  --warn:#F2B33D;
+  --risk:#E5564B;
+  --ok:#2bd46e;
+  --info:#3E8EF0;
+  --cyan:#31C9E8;
+  --font:"PingFang SC","Microsoft YaHei","Noto Sans SC",-apple-system,system-ui,"Segoe UI",sans-serif;
+  --font-hei:"Microsoft YaHei","黑体",SimHei,"Heiti SC","PingFang SC",sans-serif;
+  --num:"DIN Alternate","Bahnschrift","Oswald","Segoe UI",var(--font);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:var(--surface-0);font-family:var(--font);color:var(--text-1);
+  -webkit-font-smoothing:antialiased;overflow:hidden}
+body{display:flex;align-items:center;justify-content:center}
+
+.fact b,.clock,.idx,.card-num{font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:.5px}
+h1,h2,.card-t{font-family:var(--font-hei);font-weight:700}
+
+/* 缩放舞台：固定 1920×1080，按视口等比缩放，单屏不滚动 */
+.stage{position:fixed;left:50%;top:50%;width:1920px;height:1080px;
+  transform-origin:center center;transform:translate(-50%,-50%);
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(62,142,240,.12), transparent 60%),
+    radial-gradient(900px 600px at 100% 110%, rgba(49,201,232,.07), transparent 55%),
+    var(--surface-0);
+  padding:22px 26px;display:flex;flex-direction:column;gap:14px}
+.stage::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(62,142,240,.06),transparent 18%)}
+
+/* ===================== 顶部常驻条 ===================== */
+.topbar{height:66px;flex:0 0 66px;display:flex;align-items:center;gap:22px;
+  background:var(--surface-1);border:1px solid var(--line);border-radius:16px;
+  padding:0 22px;position:relative;overflow:hidden}
+.topbar::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:linear-gradient(180deg,var(--brand-500),var(--brand-700))}
+.brand{display:flex;align-items:center;gap:14px;flex:none}
+.brand .logo{width:42px;height:42px;flex:none}
+.brand h1{font-size:25px;font-weight:800;letter-spacing:1.5px;line-height:1.1}
+.brand .sub{font-size:12px;color:var(--text-3);letter-spacing:3px;text-transform:uppercase}
+.facts{display:flex;align-items:center;gap:12px;flex:1;flex-wrap:nowrap;overflow:hidden}
+.fact{display:flex;align-items:baseline;gap:7px;white-space:nowrap}
+.fact b{font-size:24px;color:var(--brand-500);font-weight:700}
+.fact span{font-size:14px;color:var(--text-2)}
+.fact.org b{font-size:16px;color:var(--brand-400);font-weight:700;letter-spacing:1px}
+.topright{display:flex;align-items:center;gap:14px;flex:none;margin-left:auto}
+.clock{font-size:16px;color:var(--text-1);text-align:right;line-height:1.15;margin-left:auto;
+  white-space:nowrap}
+.clock .sep{display:inline-block;width:8px}
+.topright a{color:var(--text-2);text-decoration:none;font-size:14px;padding:7px 13px;border-radius:30px;
+  border:1px solid var(--line);background:rgba(255,255,255,.02);transition:.2s}
+.topright a:hover{color:#fff;border-color:var(--brand-500);background:rgba(62,142,240,.15)}
+
+/* ===================== 主区：标题 + 4×2 栅格 ===================== */
+.main{flex:1 1 auto;display:flex;flex-direction:column;gap:16px;min-height:0}
+.page-hd{flex:none;text-align:center}
+.page-hd .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3);
+  letter-spacing:4px;text-transform:uppercase;margin-bottom:10px}
+.page-hd .eyebrow::before,.page-hd .eyebrow::after{content:"";width:34px;height:1px;
+  background:linear-gradient(90deg,transparent,var(--line-strong))}
+.page-hd .eyebrow::after{background:linear-gradient(90deg,var(--line-strong),transparent)}
+.page-hd h2{font-size:32px;font-weight:800;letter-spacing:3px;line-height:1.2;
+  background:linear-gradient(180deg,#fff,var(--brand-400));-webkit-background-clip:text;
+  background-clip:text;color:transparent}
+.page-hd p{font-size:14px;color:var(--text-3);letter-spacing:2px;margin-top:8px}
+
+.grid{flex:1 1 auto;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr);
+  gap:16px;min-height:0}
+
+/* 驾驶舱入口卡片 */
+.card{--a:#2E8FE8;--b:#14549F;
+  display:flex;flex-direction:column;gap:14px;text-decoration:none;color:inherit;
+  background:var(--surface-1);
+  background:linear-gradient(160deg,color-mix(in srgb,var(--a) 12%,var(--surface-1)),var(--surface-1) 58%);
+  border:1px solid var(--line);border-radius:18px;padding:24px 24px 20px;position:relative;overflow:hidden;
+  transition:transform .22s ease,border-color .22s ease,box-shadow .22s ease,background .22s ease}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:linear-gradient(180deg,var(--a),var(--b))}
+.card::after{content:"";position:absolute;right:-46px;top:-46px;width:150px;height:150px;border-radius:50%;
+  background:radial-gradient(circle,color-mix(in srgb,var(--a) 22%,transparent),transparent 70%);
+  pointer-events:none;transition:transform .3s ease}
+.card:hover{transform:translateY(-5px);border-color:var(--a);
+  box-shadow:0 16px 34px rgba(0,0,0,.45),0 0 0 1px color-mix(in srgb,var(--a) 34%,transparent) inset;
+  background:var(--surface-2);
+  background:linear-gradient(160deg,color-mix(in srgb,var(--a) 20%,var(--surface-2)),var(--surface-2) 62%)}
+.card:hover::after{transform:scale(1.18)}
+.card:focus-visible{outline:2px solid var(--a);outline-offset:3px}
+
+.card-top{display:flex;align-items:center;gap:13px;position:relative;z-index:1;flex:none}
+.card-ico{width:52px;height:52px;flex:none;border-radius:13px;display:flex;align-items:center;justify-content:center;
+  color:var(--a);background:color-mix(in srgb,var(--a) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--a) 34%,transparent)}
+.card-ico svg{width:28px;height:28px}
+.card-num{margin-left:auto;font-size:26px;font-weight:700;line-height:1;
+  color:color-mix(in srgb,var(--a) 46%,transparent)}
+
+/* 标题副题组合：flex 1 居中显示，给 CTA 留位 */
+.card-body{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;gap:8px;position:relative;z-index:1;min-height:0}
+.card-t{font-family:var(--font-hei);font-size:22px;font-weight:800;letter-spacing:1.5px;line-height:1.25;
+  color:var(--text-1);text-align:center;position:relative;z-index:1}
+.card-s{font-size:14px;color:var(--text-2);letter-spacing:.8px;line-height:1.6;text-align:center;
+  position:relative;z-index:1}
+
+.card-cta{margin-top:auto;display:flex;align-items:center;justify-content:space-between;
+  font-size:12px;color:var(--text-2);position:relative;z-index:1;flex:none}
+.card-cta .go{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:30px;
+  color:var(--a);border:1px solid color-mix(in srgb,var(--a) 42%,transparent);
+  background:color-mix(in srgb,var(--a) 10%,transparent);transition:.2s}
+.card:hover .card-cta .go{background:color-mix(in srgb,var(--a) 22%,transparent);color:#fff}
+
+/* ===================== 脚注 ===================== */
+.foot{flex:none;text-align:center;font-size:12px;color:var(--text-3);letter-spacing:1.5px}
+.foot b{color:var(--text-2);font-weight:600}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <!-- ============ 顶部常驻条 ============ -->
+  <div class="topbar">
+    <div class="brand">
+      <img class="logo" src="../common/images/brand_logo.png" alt="" aria-hidden="true">
+      <div>
+        <h1>智慧果园 · 数据决策指挥中心</h1>
+        <div class="sub">Apple Data Decision-making and Command Center</div>
+      </div>
+    </div>
+    <div class="topright">
+      <div class="clock" role="timer" aria-live="off"><span id="dt">2026-09-22 周二</span><span class="sep"></span><span id="clk">--:--:--</span></div>
+    </div>
+  </div>
+
+  <!-- ============ 驾驶舱矩阵 ============ -->
+  <section class="main" role="group" aria-label="驾驶舱矩阵">
+    <div class="page-hd">
+      <div class="eyebrow">Dashboard Matrix</div>
+      <h2>数农智果 · 数据决策</h2>
+      <p>请选择需要查看的驾驶舱</p>
+    </div>
+
+    <div class="grid">
+
+      <a class="card" style="--a:#22A84A;--b:#146C31" href="da_overview.html">
+        <div class="card-top">
+          <span class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 21c0-5.2 3-9.4 8-10.4C19.2 16.4 16 19.6 12 21z"/>
+              <path d="M12 21C12 15.6 9 11.6 4 10.2 4.8 16 7.8 19.4 12 21z"/>
+              <path d="M12 21v-6.6"/>
+            </svg>
+          </span>
+          <span class="card-num">01</span>
+        </div>
+        <div class="card-body">
+          <div class="card-t">企业管理驾驶舱</div>
+          <div class="card-s">对外参观展示 · 企业资质 / 发展历程 / 基地分布 / 人员与生产规模</div>
+        </div>
+        <div class="card-cta"><span>Overview Cockpit</span><span class="go">进入 →</span></div>
+      </a>
+
+      <a class="card" style="--a:#2E8FE8;--b:#14549F" href="da_dashboard.html">
+        <div class="card-top">
+          <span class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3.6 18a8.4 8.4 0 1 1 16.8 0"/>
+              <path d="M12 18l4.4-5.6"/>
+              <circle cx="12" cy="18" r="1.5"/>
+            </svg>
+          </span>
+          <span class="card-num">02</span>
+        </div>
+        <div class="card-body">
+          <div class="card-t">生产指挥驾驶舱</div>
+          <div class="card-s">实时生产 · 环境实况 / 农事执行 / 地块地图 / 预警研判</div>
+        </div>
+        <div class="card-cta"><span>Production Command</span><span class="go">进入 →</span></div>
+      </a>
+
+      <a class="card" style="--a:#F2B33D;--b:#B77A18" href="da_business.html">
+        <div class="card-top">
+          <span class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 20h16"/>
+              <rect x="6" y="11" width="3.2" height="6" rx="1"/>
+              <rect x="11.4" y="6.5" width="3.2" height="10.5" rx="1"/>
+              <rect x="16.8" y="13.5" width="3.2" height="3.5" rx="1"/>
+            </svg>
+          </span>
+          <span class="card-num">03</span>
+        </div>
+        <div class="card-body">
+          <div class="card-t">经营分析驾驶舱</div>
+          <div class="card-s">经营成果 / 财务 · 营收趋势 / 成本结构 / 客户与渠道排行</div>
+        </div>
+        <div class="card-cta"><span>Business Analytics</span><span class="go">进入 →</span></div>
+      </a>
+
+      <a class="card" style="--a:#8B5CF6;--b:#5B32C4" href="da_trace.html">
+        <div class="card-top">
+          <span class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="4" width="6" height="6" rx="1.2"/>
+              <rect x="14" y="4" width="6" height="6" rx="1.2"/>
+              <rect x="4" y="14" width="6" height="6" rx="1.2"/>
+              <rect x="14" y="14" width="2.6" height="2.6" rx=".6"/>
+              <path d="M17.6 18.6h2.4M14 20.2h6"/>
+            </svg>
+          </span>
+          <span class="card-num">04</span>
+        </div>
+        <div class="card-body">
+          <div class="card-t">质量溯源驾驶舱</div>
+          <div class="card-s">追溯 / 上链 / 扫码 · 批次流向 / 扫码热力 / 认证证书清单</div>
+        </div>
+        <div class="card-cta"><span>Quality Traceability</span><span class="go">进入 →</span></div>
+      </a>
+
+      <a class="card" style="--a:#E5564B;--b:#8E211A" href="da_alert.html">
+        <div class="card-top">
+          <span class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3.6l9 15.8H3z"/>
+              <path d="M12 9.6v4.2"/>
+              <path d="M12 16.6v.6"/>
+            </svg>
+          </span>
+          <span class="card-num">05</span>
+        </div>
+        <div class="card-body">
+          <div class="card-t">智能预警驾驶舱</div>
+          <div class="card-s">设备 / 农事 / 灾害 · 风险热力 / 今日 Top10 / SLA 闭环率</div>
+        </div>
+        <div class="card-cta"><span>Smart Alert</span><span class="go">进入 →</span></div>
+      </a>
+
+      <a class="card" style="--a:#31C9E8;--b:#12798F" href="da_growth.html">
+        <div class="card-top">
+          <span class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20.5v-6.8"/>
+              <path d="M12 13.7c0-3.2-2.1-5.4-5.3-5.4C6.7 11.5 8.8 13.7 12 13.7z"/>
+              <path d="M12 13.7c0-3.2 2.1-5.4 5.3-5.4C17.3 11.5 15.2 13.7 12 13.7z"/>
+              <path d="M7.2 20.5h9.6"/>
+            </svg>
+          </span>
+          <span class="card-num">06</span>
+        </div>
+        <div class="card-body">
+          <div class="card-t">物候生长驾驶舱</div>
+          <div class="card-s">物候期 / 生长曲线 · 年物候日历 / 地块生长对比 / 产量预估</div>
+        </div>
+        <div class="card-cta"><span>Growth Phenology</span><span class="go">进入 →</span></div>
+      </a>
+
+      <a class="card" style="--a:#14549F;--b:#0A2F63" href="da_iot.html">
+        <div class="card-top">
+          <span class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="7" y="7" width="10" height="10" rx="1.8"/>
+              <rect x="10.2" y="10.2" width="3.6" height="3.6" rx=".8"/>
+              <path d="M10 7V3.8M14 7V3.8M10 20.2V17M14 20.2V17M7 10H3.8M7 14H3.8M20.2 10H17M20.2 14H17"/>
+            </svg>
+          </span>
+          <span class="card-num">07</span>
+        </div>
+        <div class="card-body">
+          <div class="card-t">设备物联驾驶舱</div>
+          <div class="card-s">设备台账 / IoT / 无人机 · 分类明细 / 分布地图 / 实时数据滚动</div>
+        </div>
+        <div class="card-cta"><span>IoT Devices</span><span class="go">进入 →</span></div>
+      </a>
+
+      <a class="card" style="--a:#38D6FF;--b:#1C7FA8" href="da_results.html">
+        <div class="card-top">
+          <span class="card-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="9" r="5.2"/>
+              <path d="M8.4 13.3L7 21.2l5-2.5 5 2.5-1.4-7.9"/>
+            </svg>
+          </span>
+          <span class="card-num">08</span>
+        </div>
+        <div class="card-body">
+          <div class="card-t">数字成果驾驶舱</div>
+          <div class="card-s">数据归集 / 提质增效 / 模型成果 · 人员效率 / 设备归集 / 模型运转</div>
+        </div>
+        <div class="card-cta"><span>Digital Results</span><span class="go">进入 →</span></div>
+      </a>
+
+    </div>
+  </section>
+
+  <!-- ============ 脚注 ============ -->
+  <div class="foot"><b>30 秒</b> 自动刷新 · <b>© 2026 湖南智农数果科技有限公司</b> · <b>数据中心</b></div>
+
+</div>
+
+<script>
+/* ---------- 缩放适配（单屏不滚动） ---------- */
+(function(){
+  var s=document.getElementById('stage');
+  function fit(){var k=Math.min(innerWidth/1920,innerHeight/1080);s.style.transform='translate(-50%,-50%) scale('+k+')';}
+  addEventListener('resize',fit);fit();
+})();
+
+/* ---------- 时钟（aria-live=off，避免读屏持续播报） ---------- */
+(function(){
+  var w=['周日','周一','周二','周三','周四','周五','周六'];
+  function t(){var d=new Date();
+    var p=function(n){return ('0'+n).slice(-2);};
+    document.getElementById('clk').textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+    document.getElementById('dt').textContent=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+w[d.getDay()];
+  }
+  t();setInterval(t,1000);
+})();
+</script>
+<script src="js/shared/mock-index.js"></script>
+<script src="js/shared/dashboards-mock.js"></script>
+</body>
+</html>

@@ -858,13 +858,14 @@
   <script>
     var currentQuantity = 1;
     var currentPrice = 68;
+    var currentProductId = null;
     var productData = {
-      redFuji: { name: '花牛苹果 5斤装', desc: '脆甜多汁 · 新鲜采摘', price: 68, original: 88, img: 'images/thumb_redfuji.jpg' },
-      gala: { name: '花牛苹果 5斤装', desc: '酸甜可口 · 皮薄肉嫩', price: 58, original: 78, img: 'images/thumb_gala.jpg' },
-      giftBox: { name: '精品礼盒装 8斤', desc: '送礼佳品 · 品质保证', price: 168, original: 198, img: 'images/thumb_giftbox.jpg' },
-      adopt3yr: { name: '认养果树3年套餐', desc: '专属果树 · 全程溯源', price: 1888, original: 0, img: 'images/thumb_tree.jpg' },
-      springActivity: { name: '春季果树认养特惠套餐', desc: '认养享8折+有机肥料套装', price: 1510, original: 1888, img: 'images/apple_spring_orchard.jpg' },
-      groupBuy: { name: '花牛苹果拼团 5斤装', desc: '3人成团，立减20元', price: 48, original: 68, img: 'images/apple_groupbuy_boxes.jpg' }
+      redFuji: { name: '花牛苹果 5斤装', desc: '脆甜多汁 · 新鲜采摘', price: 68, original: 88, spec: '5斤装', img: 'images/thumb_redfuji.jpg' },
+      gala: { name: '红富士苹果 5斤装', desc: '酸甜可口 · 皮薄肉嫩', price: 58, original: 78, spec: '5斤装', img: 'images/thumb_gala.jpg' },
+      giftBox: { name: '精品礼盒装 8斤', desc: '送礼佳品 · 品质保证', price: 168, original: 198, spec: '8斤装', img: 'images/thumb_giftbox.jpg' },
+      adopt3yr: { name: '认养果树3年套餐', desc: '专属果树 · 全程溯源', price: 1888, original: 0, spec: '3年套餐', img: 'images/thumb_tree.jpg' },
+      springActivity: { name: '春季果树认养特惠套餐', desc: '认养享8折+有机肥料套装', price: 1510, original: 1888, spec: '特惠套餐', img: 'images/apple_spring_orchard.jpg' },
+      groupBuy: { name: '花牛苹果拼团 5斤装', desc: '3人成团，立减20元', price: 48, original: 68, spec: '5斤装', img: 'images/apple_groupbuy_boxes.jpg' }
     };
 
     // ========== 工具函数 ==========
@@ -902,6 +903,7 @@
     function showProductModal(productId) {
       var product = productData[productId];
       if (!product) return;
+      currentProductId = productId;
       currentPrice = product.price;
       currentQuantity = 1;
       var modalImg = document.getElementById('modalProductImg');
@@ -939,12 +941,40 @@
     function submitOrder() {
       if (!preventDoubleClick('submitOrder', function() {
         var needInvoice = document.getElementById('invoiceToggle').checked;
-        var payment = document.querySelector('.payment-item.selected') ? document.querySelector('.payment-item.selected').onclick.toString().includes('wechat') ? '微信支付' : '支付宝' : '微信支付';
-        showToast('订单提交成功，使用' + payment + (needInvoice ? '，已申请发票' : ''));
+        var sel = document.querySelector('.payment-item.selected');
+        var payment = '微信支付';
+        if (sel && sel.dataset && sel.dataset.method === 'alipay') payment = '支付宝';
+        if (currentProductId) addToCart(currentProductId, currentQuantity);
         closeProductModal();
+        showToast('已加入购物车（' + payment + (needInvoice ? '，已申请发票' : '') + '），请前往购物车结算');
+        setTimeout(function() { window.location.href = 'h5_cart.html'; }, 1200);
       }, 2000)) {
         showToast('订单正在提交中，请稍候...');
       }
+    }
+
+    function readCart() {
+      try { return JSON.parse(localStorage.getItem('h5_cart') || '[]'); }
+      catch (e) { return []; }
+    }
+
+    function addToCart(productId, qty) {
+      var p = productData[productId];
+      if (!p) return;
+      var n = Number(qty) > 0 ? Number(qty) : (productId === currentProductId ? currentQuantity : 1);
+      var list = readCart();
+      var found = null;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === productId) { found = list[i]; break; }
+      }
+      if (found) {
+        found.qty = (Number(found.qty) || 1) + n;
+        found.price = Number(p.price) || found.price;
+      } else {
+        list.push({ id: productId, name: p.name, spec: p.spec || '标准装', desc: p.desc,
+          price: Number(p.price) || 0, qty: n, img: p.img, checked: true });
+      }
+      localStorage.setItem('h5_cart', JSON.stringify(list));
     }
 
     function showToast(message) {

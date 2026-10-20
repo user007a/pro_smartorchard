@@ -327,7 +327,7 @@
       <div class="category-scroll">
         <span class="category-item active">全部</span>
         <span class="category-item">花牛苹果</span>
-        <span class="category-item">花牛苹果</span>
+        <span class="category-item">红富士</span>
         <span class="category-item">金帅</span>
         <span class="category-item">礼盒装</span>
         <span class="category-item">认养套餐</span>
@@ -335,7 +335,7 @@
       </div>
 
       <!-- 轮播图 -->
-      <div class="banner-section">
+      <div class="banner-section" id="activity">
         <div class="banner-img" style="background-image: url('images/apple_orchard_banner.jpg'); background-size: cover; background-position: center;">
           <div class="banner-content">
             <div class="banner-title" style="text-shadow: 0 2px 8px rgba(0,0,0,0.3);">新品上市</div>
@@ -407,11 +407,12 @@
               </div>
             </div>
           </div>
+          <div id="searchEmpty" style="display:none;grid-column:1/-1;padding:32px 0;text-align:center;color:var(--text-tertiary);font-size:13px;">未找到相关商品</div>
         </div>
       </div>
 
       <!-- 果树认养 -->
-      <div class="mb-section">
+      <div class="mb-section" id="adopt">
         <div class="flex justify-between items-center mb-3">
           <div class="mb-section-title" style="margin-bottom:0;"><span class="mb-section-dot"></span>果树认养</div>
           <span class="text-xs text-secondary">查看更多 ›</span>
@@ -548,9 +549,10 @@
     // 商品数据
     var currentQuantity = 1;
     var currentPrice = 68;
+    var currentProductId = null;
     var productData = {
       redFuji: { name: '花牛苹果 5斤装', desc: '脆甜多汁 · 新鲜采摘', price: 68, original: 88, img: 'images/thumb_redfuji.jpg' },
-      gala: { name: '花牛苹果 5斤装', desc: '酸甜可口 · 皮薄肉嫩', price: 58, original: 78, img: 'images/thumb_gala.jpg' },
+      gala: { name: '红富士苹果 5斤装', desc: '酸甜可口 · 皮薄肉嫩', price: 58, original: 78, img: 'images/thumb_gala.jpg' },
       giftBox: { name: '精品礼盒装 8斤', desc: '送礼佳品 · 品质保证', price: 168, original: 198, img: 'images/thumb_giftbox.jpg' },
       adopt3yr: { name: '认养果树3年套餐', desc: '专属果树 · 全程溯源', price: 1888, original: 0, img: 'images/thumb_tree.jpg' },
       adopt1: { name: '花牛苹果认养1棵', desc: '3年认养 · 专属标识', price: 1888, original: 0, img: 'images/thumb_tree.jpg' },
@@ -603,6 +605,7 @@
     function showProductModal(productId) {
       var product = productData[productId];
       if (!product) return;
+      currentProductId = productId;
       currentPrice = product.price;
       currentQuantity = 1;
       var modalImg = document.getElementById('modalProductImg');
@@ -648,12 +651,51 @@
       }
     }
 
-    function addToCart(productId) {
-      if (!preventDoubleClick('addToCart', function() {
-        showToast('已加入购物车');
-      }, 1000)) {
-        showToast('请勿重复操作');
+    function readCart() {
+      try { return JSON.parse(localStorage.getItem('h5_cart') || '[]'); }
+      catch (e) { return []; }
+    }
+    function writeCart(list) {
+      localStorage.setItem('h5_cart', JSON.stringify(list));
+      // 同步底部「购物车」Tab 角标
+      var badge = document.querySelector('[data-cart-badge]');
+      if (badge) {
+        var n = list.reduce(function(s, i) { return s + (Number(i.qty) || 1); }, 0);
+        badge.textContent = n;
+        badge.style.display = n > 0 ? '' : 'none';
       }
+    }
+
+    function addToCart(productId) {
+      var p = productData[productId];
+      if (!p) { showToast('商品不存在'); return; }
+      if (!preventDoubleClick('addToCart', function() {}, 600)) {
+        showToast('请勿重复操作');
+        return;
+      }
+      var qty = (productId === currentProductId ? currentQuantity : 1);
+      var list = readCart();
+      var found = null;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === productId) { found = list[i]; break; }
+      }
+      if (found) {
+        found.qty = (Number(found.qty) || 1) + qty;
+        found.price = Number(p.price) || found.price;
+      } else {
+        list.push({
+          id: productId,
+          name: p.name,
+          spec: '5斤装',
+          desc: p.desc,
+          price: Number(p.price) || 0,
+          qty: qty,
+          img: p.img,
+          checked: true
+        });
+      }
+      writeCart(list);
+      showToast('已加入购物车');
     }
 
     // Toast
@@ -673,10 +715,37 @@
     var searchTimer;
     document.getElementById('searchInput').addEventListener('input', function() {
       clearTimeout(searchTimer);
+      var kw = this.value.trim();
       searchTimer = setTimeout(function() {
-        if (this.value.trim()) showToast('搜索: ' + this.value.trim());
-      }.bind(this), 500);
+        if (kw) filterByKeyword(kw);
+      }, 500);
     });
+
+    /* 按关键字过滤商品（无结果显示空态） */
+    function filterByKeyword(kw) {
+      var grid = document.getElementById('productGrid');
+      if (!grid) return;
+      var cards = Array.prototype.slice.call(grid.querySelectorAll('.product-card'));
+      var hit = 0;
+      cards.forEach(function(card) {
+        var name = (card.querySelector('.product-name') || {}).textContent || '';
+        var desc = (card.querySelector('.product-desc') || {}).textContent || '';
+        var match = !kw || (name + desc).toLowerCase().indexOf(kw.toLowerCase()) >= 0;
+        card.style.display = match ? '' : 'none';
+        if (match) hit++;
+      });
+      var empty = document.getElementById('searchEmpty');
+      if (empty) empty.style.display = hit ? 'none' : 'block';
+      if (!hit) showToast('未找到相关商品：' + kw);
+    }
+
+    /* 支持从收藏页跳转过来时直接打开对应商品（?product=xxx） */
+    (function openFromParam() {
+      var pid = new URLSearchParams(location.search).get('product');
+      if (pid && productData[pid]) {
+        setTimeout(function() { showProductModal(pid); }, 400);
+      }
+    })();
   </script>
 </body>
 </html>

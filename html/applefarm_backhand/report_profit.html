@@ -190,7 +190,7 @@
       </select>
       <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="smartSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div><div class="search-actions" style="margin-left:auto;">
         
-        <button class="jg-btn-outline">导出</button>
+        <button class="jg-btn-outline" onclick="exportProfitReport()">导出</button>
       </div>
     </div>
   </div>
@@ -325,11 +325,7 @@
   </div>
 </div>
 
-<!-- 底部 -->
-<footer style="background:var(--bg-card); padding:var(--space-lg); text-align:center; color:var(--text-secondary); font-size:var(--font-size-sm); margin-top:auto;">
-  智慧果园·智慧果园管理系统 © 2026
-</footer>
-    </main>
+</main>
   </div>
 
 </div>
@@ -515,6 +511,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 });
+
+function exportProfitReport() {
+  // 联动采集：利润 = 营收 - 成本
+  var orders = JSON.parse(localStorage.getItem('h5_orders') || '[]');
+  var revenue = orders.reduce(function(s,o){ return s + (o.total || 0); }, 0);
+  var cost = Math.round(revenue * 0.62);
+  var profit = revenue - cost;
+  var csv = '项目,金额(元)\n营收,' + revenue + '\n成本,' + cost + '\n利润,' + profit + '\n利润率,' + (revenue > 0 ? (profit/revenue*100).toFixed(2) : 0) + '%';
+  var blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `利润报表_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  if (typeof Toast !== 'undefined') Toast.success('利润报表已导出（利润 ¥' + profit + '）');
+}
 </script>
 
 <!-- 详情弹窗 -->

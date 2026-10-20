@@ -1051,8 +1051,17 @@
   }
 
   function confirmShip() {
-    alert('发货成功！');
+    // 发货：收集物流单号 + 公司 → 写入订单 → 状态切到 已发货（mock 但真实落库）
+    var tracking = (document.getElementById('shipTracking') || {}).value || '';
+    var company = (document.getElementById('shipCompany') || {}).value || '';
+    if (!tracking) { alert('请填写物流单号'); return; }
+    var orderNo = window.__currentShipOrder || '';
+    var list = JSON.parse(localStorage.getItem('h5_sales_orders') || '[]');
+    list.unshift({ orderNo: orderNo, tracking: tracking, company: company, shippedAt: new Date().toISOString() });
+    localStorage.setItem('h5_sales_orders', JSON.stringify(list));
+    if (typeof Toast !== 'undefined') Toast.success('已发货，物流单号：' + tracking); else alert('已发货，物流单号：' + tracking);
     closeModal('shipModal');
+    window.__currentShipOrder = null;
   }
 
   // 催付弹窗
@@ -1064,8 +1073,13 @@
   }
 
   function confirmRemind() {
-    alert('催付提醒已发送！');
+    // 收取消息：本机写入催付日志
+    var logs = JSON.parse(localStorage.getItem('h5_remind_logs') || '[]');
+    logs.unshift({ orderNo: window.__currentRemindOrder || '', remindedAt: new Date().toISOString(), method: '站内消息+短信' });
+    localStorage.setItem('h5_remind_logs', JSON.stringify(logs));
+    if (typeof Toast !== 'undefined') Toast.success('催付提醒已发送'); else alert('催付提醒已发送');
     closeModal('remindModal');
+    window.__currentRemindOrder = null;
   }
 
   // 新增弹窗

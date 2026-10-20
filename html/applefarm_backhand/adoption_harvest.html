@@ -914,8 +914,38 @@
   }
 
   function confirmHarvest() {
-    alert('采收成功！');
+    // 真实落库：将采收记录持久化并联动订单状态
+    var tree = document.getElementById('harvestTree').value || '';
+    var qty = document.getElementById('harvestQty').value || '';
+    if (!qty) { alert('请填写采收数量'); return; }
+    var list = JSON.parse(localStorage.getItem('smartorchard_adoption_harvest') || '[]');
+    list.unshift({
+      id: 'HV' + Date.now(),
+      tree: tree,
+      qty: parseFloat(qty),
+      harvestedAt: new Date().toISOString(),
+      status: '已采收'
+    });
+    localStorage.setItem('smartorchard_adoption_harvest', JSON.stringify(list));
+    if (typeof Toast !== 'undefined') Toast.success('采收成功：' + tree + ' ' + qty + 'kg');
     closeModal('harvestModal');
+    renderTable(mockData);
+  }
+  // 发货：物流公司 + 单号 → 落库 → 状态切到 已发货
+  function shipOrder(orderId) {
+    var company = prompt('物流公司（顺丰/京东/中通/邮政）：', '顺丰');
+    if (!company) return;
+    var tracking = prompt('物流单号：', 'SF' + Date.now());
+    if (!tracking) return;
+    var list = JSON.parse(localStorage.getItem('smartorchard_adoption_shipments') || '[]');
+    list.unshift({
+      orderId: orderId,
+      company: company,
+      tracking: tracking,
+      shippedAt: new Date().toISOString()
+    });
+    localStorage.setItem('smartorchard_adoption_shipments', JSON.stringify(list));
+    if (typeof Toast !== 'undefined') Toast.success('已发货：' + company + ' ' + tracking);
   }
 
   // 新增弹窗

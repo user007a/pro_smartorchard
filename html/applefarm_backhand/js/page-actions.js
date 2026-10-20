@@ -46,37 +46,37 @@ const PageActions = (function() {
       { id: 8, name: '樱桃园全景-观景台', group: '樱桃园', image: 'https://images.unsplash.com/photo-1515907007725-a1e3d70c6e73?w=400&h=300&fit=crop' }
     ],
     enterprises: [
-      { id: 'ENT001', code: 'JD-001', name: '天水麦积区基地', address: '甘肃省天水市麦积区市', area: 2800, manager: '惠加宁', phone: '133-0791-2585', status: 'active',
+      { id: 'ENT001', code: 'JD-001', name: '麦积区花牛镇基地', address: '甘肃省天水市麦积区花牛镇', area: 2800, manager: '惠加宁', phone: '133-0791-2585', status: 'active',
         baseImages: [
           'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop',
           'https://images.unsplash.com/photo-1570913149827-d2ac84ab3f9a?w=400&h=300&fit=crop'
         ],
         vrScene: { url: 'https://images.unsplash.com/photo-1584306670957-acf935f5033c?w=400&h=300&fit=crop', name: '苹果园全景-采摘区' } },
-      { id: 'ENT002', code: 'JD-002', name: '天水荣成基地', address: '甘肃省天水市荣成市', area: 1600, manager: '黄忠坚', phone: '139-7941-2180', status: 'active',
+      { id: 'ENT002', code: 'JD-002', name: '秦州区皂郊镇基地', address: '甘肃省天水市秦州区皂郊镇', area: 1600, manager: '黄忠坚', phone: '139-7941-2180', status: 'active',
         baseImages: [
           'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?w=400&h=300&fit=crop'
         ],
         vrScene: { url: 'https://images.unsplash.com/photo-1560493676-04071c5f467b?w=400&h=300&fit=crop', name: '葡萄园全景-藤架区' } },
-      { id: 'ENT003', code: 'JD-003', name: '青岛莱西基地', address: '甘肃省青岛市莱西市', area: 2100, manager: '徐水应', phone: '138-7941-8637', status: 'active' },
-      { id: 'ENT004', code: 'JD-004', name: '龙口南山基地', address: '甘肃省天水市龙口市', area: 1800, manager: '朱泉龙', phone: '182-9645-2648', status: 'inactive' },
-      { id: 'ENT005', code: 'JD-005', name: '麦积区阁基地', address: '甘肃省天水市麦积区区', area: 3200, manager: '陈小忠', phone: '187-7941-7899', status: 'active' },
-      { id: 'ENT006', code: 'JD-006', name: '招远金岭基地', address: '甘肃省天水市招远市', area: 1500, manager: '廖春亮', phone: '137-6767-9075', status: 'disabled' },
-      { id: 'ENT007', code: 'JD-007', name: '天水梨乡基地', address: '甘肃省天水市天水市', area: 2400, manager: '李建明', phone: '139-7043-2567', status: 'active' },
-      { id: 'ENT008', code: 'JD-008', name: '海阳万米海滩基地', address: '甘肃省天水市海阳市', area: 1200, manager: '李根', phone: '130-3058-7809', status: 'inactive' },
-      { id: 'ENT009', code: 'JD-009', name: '牟平养马岛基地', address: '甘肃省天水市牟平区', area: 1900, manager: '张才孙', phone: '150-7942-7679', status: 'active' },
-      { id: 'ENT010', code: 'JD-010', name: '福山张格庄基地', address: '甘肃省天水市福山区', area: 800, manager: '刘全国', phone: '138-7040-9283', status: 'active' },
-      { id: 'ENT011', code: 'JD-011', name: '芝罘岛基地', address: '甘肃省天水市芝罘区', area: 650, manager: '毛定卫', phone: '159-7958-0151', status: 'disabled' },
-      { id: 'ENT012', code: 'JD-012', name: '开发区八角基地', address: '甘肃省天水经济技术开发区', area: 3500, manager: '叶三东', phone: '133-0794-6219', status: 'active' },
-      { id: 'ENT013', code: 'JD-013', name: '高新区科技基地', address: '甘肃省天水高新技术产业开发区', area: 1100, manager: '周才贵', phone: '133-0704-3277', status: 'inactive' },
-      { id: 'ENT014', code: 'JD-014', name: '昆嵛山生态基地', address: '甘肃省天水市昆嵛山国家级自然保护区', area: 4200, manager: '程名高', phone: '138-7941-1631', status: 'active' },
-      { id: 'ENT015', code: 'JD-015', name: '长岛海洋基地', address: '甘肃省天水市长岛县', area: 900, manager: '邓小华', phone: '151-7945-0918', status: 'active' },
-      { id: 'ENT016', code: 'JD-016', name: '日照岚山基地', address: '甘肃省日照市岚山区', area: 2600, manager: '周成友', phone: '134-0794-5529', status: 'active' },
-      { id: 'ENT017', code: 'JD-017', name: '潍坊诸城基地', address: '甘肃省潍坊市诸城市', area: 1700, manager: '危红卫', phone: '138-7045-6916', status: 'inactive' },
-      { id: 'ENT018', code: 'JD-018', name: '临沂沂水基地', address: '甘肃省临沂市沂水县', area: 3100, manager: '方超', phone: '134-3794-2227', status: 'active' },
-      { id: 'ENT019', code: 'JD-019', name: '泰安肥城基地', address: '甘肃省泰安市肥城市', area: 2300, manager: '曹红英', phone: '151-7948-0005', status: 'active' },
-      { id: 'ENT020', code: 'JD-020', name: '济宁曲阜基地', address: '甘肃省济宁市曲阜市', area: 1400, manager: '崔新根', phone: '139-7040-2086', status: 'disabled' },
-      { id: 'ENT021', code: 'JD-021', name: '滨州阳信基地', address: '甘肃省滨州市阳信县', area: 1850, manager: '惠加宁', phone: '133-0791-2585', status: 'active' },
-      { id: 'ENT022', code: 'JD-022', name: '德州乐陵基地', address: '甘肃省德州市乐陵市', area: 2000, manager: '黄忠坚', phone: '139-7941-2180', status: 'active' }
+      { id: 'ENT003', code: 'JD-003', name: '甘谷县磐安镇基地', address: '甘肃省天水市甘谷县磐安镇', area: 2100, manager: '徐水应', phone: '138-7941-8637', status: 'active' },
+      { id: 'ENT004', code: 'JD-004', name: '秦安县叶堡镇基地', address: '甘肃省天水市秦安县叶堡镇', area: 1800, manager: '朱泉龙', phone: '182-9645-2648', status: 'inactive' },
+      { id: 'ENT005', code: 'JD-005', name: '清水县永清镇基地', address: '甘肃省天水市清水县永清镇', area: 3200, manager: '陈小忠', phone: '187-7941-7899', status: 'active' },
+      { id: 'ENT006', code: 'JD-006', name: '武山县洛门镇基地', address: '甘肃省天水市武山县洛门镇', area: 1500, manager: '廖春亮', phone: '137-6767-9075', status: 'disabled' },
+      { id: 'ENT007', code: 'JD-007', name: '张家川县龙山镇基地', address: '甘肃省天水市张家川回族自治县龙山镇', area: 2400, manager: '李建明', phone: '139-7043-2567', status: 'active' },
+      { id: 'ENT008', code: 'JD-008', name: '秦州区太京镇基地', address: '甘肃省天水市秦州区太京镇', area: 1200, manager: '李根', phone: '130-3058-7809', status: 'inactive' },
+      { id: 'ENT009', code: 'JD-009', name: '麦积区马跑泉镇基地', address: '甘肃省天水市麦积区马跑泉镇', area: 1900, manager: '张才孙', phone: '150-7942-7679', status: 'active' },
+      { id: 'ENT010', code: 'JD-010', name: '甘谷县六峰镇基地', address: '甘肃省天水市甘谷县六峰镇', area: 800, manager: '刘全国', phone: '138-7040-9283', status: 'active' },
+      { id: 'ENT011', code: 'JD-011', name: '秦安县兴国镇基地', address: '甘肃省天水市秦安县兴国镇', area: 650, manager: '毛定卫', phone: '159-7958-0151', status: 'disabled' },
+      { id: 'ENT012', code: 'JD-012', name: '清水县红堡镇基地', address: '甘肃省天水市清水县红堡镇', area: 3500, manager: '叶三东', phone: '133-0794-6219', status: 'active' },
+      { id: 'ENT013', code: 'JD-013', name: '武山县城关镇基地', address: '甘肃省天水市武山县城关镇', area: 1100, manager: '周才贵', phone: '133-0704-3277', status: 'inactive' },
+      { id: 'ENT014', code: 'JD-014', name: '张家川县恭门镇基地', address: '甘肃省天水市张家川回族自治县恭门镇', area: 4200, manager: '程名高', phone: '138-7941-1631', status: 'active' },
+      { id: 'ENT015', code: 'JD-015', name: '秦州区牡丹镇基地', address: '甘肃省天水市秦州区牡丹镇', area: 900, manager: '邓小华', phone: '151-7945-0918', status: 'active' },
+      { id: 'ENT016', code: 'JD-016', name: '麦积区中滩镇基地', address: '甘肃省天水市麦积区中滩镇', area: 2600, manager: '周成友', phone: '134-0794-5529', status: 'active' },
+      { id: 'ENT017', code: 'JD-017', name: '甘谷县大像山镇基地', address: '甘肃省天水市甘谷县大像山镇', area: 1700, manager: '危红卫', phone: '138-7045-6916', status: 'inactive' },
+      { id: 'ENT018', code: 'JD-018', name: '秦安县莲花镇基地', address: '甘肃省天水市秦安县莲花镇', area: 3100, manager: '方超', phone: '134-3794-2227', status: 'active' },
+      { id: 'ENT019', code: 'JD-019', name: '清水县白沙镇基地', address: '甘肃省天水市清水县白沙镇', area: 2300, manager: '曹红英', phone: '151-7948-0005', status: 'active' },
+      { id: 'ENT020', code: 'JD-020', name: '武山县滩歌镇基地', address: '甘肃省天水市武山县滩歌镇', area: 1400, manager: '崔新根', phone: '139-7040-2086', status: 'disabled' },
+      { id: 'ENT021', code: 'JD-021', name: '秦州区关子镇基地', address: '甘肃省天水市秦州区关子镇', area: 1850, manager: '惠加宁', phone: '133-0791-2585', status: 'active' },
+      { id: 'ENT022', code: 'JD-022', name: '麦积区元龙镇基地', address: '甘肃省天水市麦积区元龙镇', area: 2000, manager: '黄忠坚', phone: '139-7941-2180', status: 'active' }
     ],
     plots: [
       { id: 'PLOT001', code: 'D-001', name: '东区1号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 85, year: 2018, status: 'normal', manager: '惠加宁',
@@ -677,8 +677,9 @@ const PageActions = (function() {
         fields = [
           { name: 'template', label: '选择模板', type: 'select', options: [
             { value: '花牛苹果合格证', label: '花牛苹果合格证' },
-            { value: '花牛苹果合格证', label: '花牛苹果合格证' },
-            { value: '礼盒装合格证', label: '礼盒装合格证' }
+            { value: '红富士苹果合格证', label: '红富士苹果合格证' },
+            { value: '礼盒装合格证', label: '礼盒装合格证' },
+            { value: '原产地证明合格证', label: '原产地证明合格证' }
           ]},
           { name: 'product', label: '产品名称', type: 'select', options: mockData.products.map(p => ({ value: p, label: p })) },
           { name: 'batch', label: '批次号', type: 'text', required: true },

@@ -330,7 +330,13 @@
 
               <div class="cert-footer">
                 <div style="font-size:var(--font-size-xs); color:var(--text-secondary);">扫描二维码验证真伪</div>
-                <div class="cert-stamp">智慧果园农业科技有限公司</div>
+                <div style="position:relative;">
+                  <canvas id="certStampCanvas" width="140" height="60" style="border:1px dashed var(--border-default);border-radius:6px;cursor:crosshair;background:#fff;" title="电子签章：在白色区域内用鼠标签名"></canvas>
+                  <div style="display:flex;gap:6px;margin-top:6px;">
+                    <button type="button" onclick="clearCertStamp()" style="font-size:11px;padding:2px 8px;background:#fff;border:1px solid var(--border-default);border-radius:4px;cursor:pointer;">清除</button>
+                    <button type="button" onclick="confirmCertStamp()" style="font-size:11px;padding:2px 8px;background:var(--primary);color:#fff;border:none;border-radius:4px;cursor:pointer;">确认签章</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -402,6 +408,59 @@ function syncPreview() {
   const stamp = document.querySelector('.cert-preview .cert-stamp');
   if (stamp) stamp.textContent = '天水花牛苹果（集团）有限责任公司';
 }
+
+// 电子签章：Canvas 鼠标签名 + 转 base64 持久化（PC-B-057）
+(function initCertStamp(){
+  var c = document.getElementById('certStampCanvas');
+  if (!c) return;
+  var ctx = c.getContext('2d');
+  var drawing = false;
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#1f2e1f';
+  ctx.lineCap = 'round';
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  function pos(e) {
+    var rect = c.getBoundingClientRect();
+    var x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    var y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    return { x: x, y: y };
+  }
+  function start(e) {
+    e.preventDefault();
+    drawing = true;
+    var p = pos(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  }
+  function move(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    var p = pos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  }
+  function end(e) {
+    drawing = false;
+  }
+  c.addEventListener('mousedown', start);
+  c.addEventListener('mousemove', move);
+  c.addEventListener('mouseup', end);
+  c.addEventListener('mouseleave', end);
+  c.addEventListener('touchstart', start, { passive: false });
+  c.addEventListener('touchmove', move, { passive: false });
+  c.addEventListener('touchend', end);
+  window.clearCertStamp = function() {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, c.width, c.height);
+  };
+  window.confirmCertStamp = function() {
+    var dataUrl = c.toDataURL('image/png');
+    try { localStorage.setItem('cert_stamp_dataurl', dataUrl); } catch (e) {}
+    if (typeof Toast !== 'undefined') Toast.success('签章已保存');
+    else alert('签章已保存');
+  };
+})();
 
 document.addEventListener('DOMContentLoaded', function() {
   const batchSelect = document.getElementById('certBatch');

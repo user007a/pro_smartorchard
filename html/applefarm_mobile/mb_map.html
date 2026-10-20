@@ -8,11 +8,13 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <!-- 共享数据层（toast 轻提示） -->
+  <script src="js/mobile-store.js"></script>
   <style>
     /* 移除重复的 :root 变量定义，使用设计系统变量 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; padding-bottom: 66px; }
     .map-container { position: relative; height: calc(100vh - 180px); background: #e8eef3; }
-    .map-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, #e8eef3 0%, #d4dde5 100%); }
+    .map-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, #e8eef3 0%, #d4dde5 100%); overflow: hidden; }
     .map-grid { width: 80%; max-width: 280px; aspect-ratio: 1; display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(6, 1fr); gap: var(--space-1); }
     .grid-cell { background: rgba(46, 158, 90, 0.1); border: 1px solid rgba(46, 158, 90, 0.2); border-radius: var(--radius-sm); }
     .grid-cell.plot { background: rgba(46, 158, 90, 0.3); border-color: rgba(46, 158, 90, 0.5); }
@@ -30,6 +32,9 @@
     .zoom-controls { position: absolute; bottom: var(--space-4); right: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
     .zoom-btn { width: 40px; height: 40px; background: rgba(255,255,255,0.95); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: var(--shadow-sm); }
     .zoom-btn svg { width: 20px; height: 20px; color: var(--text); }
+    .zoom-btn.disabled { opacity: 0.45; cursor: not-allowed; }
+    .zoom-level { font-size: var(--font-xs); color: var(--text-secondary); background: rgba(255,255,255,0.95); border-radius: var(--radius-md); padding: 2px var(--space-2); text-align: center; box-shadow: var(--shadow-sm); }
+    .map-frame { width: 100%; height: 100%; border: 0; transform-origin: center center; transition: transform 0.25s ease; will-change: transform; }
     .plot-list { background: var(--bg-white); border-top: 1px solid var(--border); padding: var(--space-3) var(--space-4); }
     .list-title { font-size: var(--font-base); font-weight: 600; color: var(--text); margin-bottom: var(--space-2); }
     .plot-item { display: flex; align-items: center; padding: var(--space-2) 0; border-bottom: 1px solid var(--border-light); cursor: pointer; }
@@ -62,7 +67,7 @@
     </div>
 
     <div class="map-container">
-      <div class="map-placeholder"><iframe src="https://www.openstreetmap.org/export/embed.html?bbox=106.05%2C34.20%2C106.30%2C34.50&layer=mapnik&marker=34.35%2C106.18" style="width:100%;height:100%;border:0;" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="天水市麦积区 红崖村花牛苹果基地地图"></iframe></div>
+      <div class="map-placeholder"><iframe id="mapFrame" class="map-frame" src="https://www.openstreetmap.org/export/embed.html?bbox=106.05%2C34.20%2C106.30%2C34.50&layer=mapnik&marker=34.35%2C106.18" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="天水市麦积区 红崖村花牛苹果基地地图"></iframe></div>
 
       <div class="map-legend">
         <div class="legend-title">图例</div>
@@ -81,13 +86,14 @@
       </div>
 
       <div class="zoom-controls">
-        <div class="zoom-btn">
+        <div class="zoom-level" id="zoomLevel">100%</div>
+        <div class="zoom-btn" id="zoomIn" role="button" aria-label="放大" onclick="zoomIn()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/>
             <line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
         </div>
-        <div class="zoom-btn">
+        <div class="zoom-btn" id="zoomOut" role="button" aria-label="缩小" onclick="zoomOut()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="19" x2="12" y2="5"/>
           </svg>
@@ -173,8 +179,39 @@
       window.location.href = page;
     }
     function openPlotDetail(name) {
-      window.location.href = 'mb_plot.html';
+      window.location.href = 'mb_plot.html' + (name ? ('?plot=' + encodeURIComponent(name)) : '');
     }
+
+    // 地图缩放：控制地图区域缩放级别，到边界禁用并提示
+    var mapZoom = 1;
+    var ZOOM_MIN = 1;
+    var ZOOM_MAX = 3;
+    var ZOOM_STEP = 0.5;
+
+    function applyZoom() {
+      var frame = document.getElementById('mapFrame');
+      frame.style.transform = 'scale(' + mapZoom + ')';
+      document.getElementById('zoomLevel').textContent = Math.round(mapZoom * 100) + '%';
+      document.getElementById('zoomIn').classList.toggle('disabled', mapZoom >= ZOOM_MAX);
+      document.getElementById('zoomOut').classList.toggle('disabled', mapZoom <= ZOOM_MIN);
+    }
+    function zoomIn() {
+      if (mapZoom >= ZOOM_MAX) {
+        if (window.MobileStore) MobileStore.toast('已到最大缩放级别', 'warning');
+        return;
+      }
+      mapZoom = Math.min(ZOOM_MAX, mapZoom + ZOOM_STEP);
+      applyZoom();
+    }
+    function zoomOut() {
+      if (mapZoom <= ZOOM_MIN) {
+        if (window.MobileStore) MobileStore.toast('已到最小缩放级别', 'warning');
+        return;
+      }
+      mapZoom = Math.max(ZOOM_MIN, mapZoom - ZOOM_STEP);
+      applyZoom();
+    }
+    applyZoom();
   </script>
 </body>
 </html>

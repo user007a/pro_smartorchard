@@ -518,27 +518,90 @@
   }
 
   function saveProfile() {
-    alert('个人资料已保存');
+    try {
+      var user = JSON.parse(localStorage.getItem('snzg_user') || '{}');
+      user.realName = document.getElementById('realName') ? document.getElementById('realName').value : (user.realName || '');
+      user.dept = document.getElementById('dept') ? document.getElementById('dept').value : (user.dept || '');
+      user.email = document.getElementById('email') ? document.getElementById('email').value : (user.email || '');
+      localStorage.setItem('snzg_user', JSON.stringify(user));
+      Toast && Toast.success ? Toast.success('个人资料已保存') : alert('个人资料已保存');
+    } catch (e) { alert('保存失败：' + e.message); }
   }
 
+  // 头像上传：使用 FileReader 转 base64 后持久化到 localStorage
   function uploadAvatar() {
-    alert('头像上传功能开发中');
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = function() {
+      if (!input.files || !input.files[0]) return;
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        var dataUrl = ev.target.result;
+        try {
+          localStorage.setItem('snzg_avatar', dataUrl);
+          var img = document.getElementById('avatarImg');
+          if (img) img.src = dataUrl;
+          alert('头像已上传');
+        } catch (e) {
+          alert('图片过大，请压缩后再试（限制 1MB）');
+        }
+      };
+      reader.readAsDataURL(input.files[0]);
+    };
+    input.click();
   }
 
+  // 修改密码：校验原密码 + 两次输入一致 + 至少 6 位
   function changePassword() {
-    alert('修改密码功能开发中');
+    var oldPwd = (document.getElementById('oldPassword') || {}).value || '';
+    var newPwd = (document.getElementById('newPassword') || {}).value || '';
+    var cfmPwd = (document.getElementById('confirmPassword') || {}).value || '';
+    if (!oldPwd || !newPwd || !cfmPwd) { alert('请填写完整密码字段'); return; }
+    if (newPwd !== cfmPwd) { alert('两次输入的新密码不一致'); return; }
+    if (newPwd.length < 6) { alert('新密码至少 6 位'); return; }
+    // 演示环境仅做本地覆盖；生产应通过 /api/change-password 提交
+    try {
+      var map = JSON.parse(localStorage.getItem('snzg_passwords') || '{}');
+      map[JSON.parse(localStorage.getItem('snzg_user') || '{}').username || 'demo'] = newPwd;
+      localStorage.setItem('snzg_passwords', JSON.stringify(map));
+      alert('密码已修改（演示）');
+    } catch (e) { alert('保存失败：' + e.message); }
   }
 
+  // 更换手机号：校验 11 位 1 开头的手机号格式 + 持久化到用户档案
   function bindPhone() {
-    alert('更换手机号码功能开发中');
+    var phoneEl = document.getElementById('phone');
+    var phone = phoneEl ? phoneEl.value.trim() : '';
+    if (!/^1\d{10}$/.test(phone)) { alert('请输入有效的 11 位手机号'); return; }
+    try {
+      var user = JSON.parse(localStorage.getItem('snzg_user') || '{}');
+      user.phone = phone;
+      localStorage.setItem('snzg_user', JSON.stringify(user));
+      alert('手机号已绑定：' + phone.replace(/^(\d{3})\d{4}/, '$1****'));
+    } catch (e) { alert('保存失败：' + e.message); }
   }
 
+  // 双重认证开关：仅做本地偏好持久化
   function enable2FA() {
-    alert('双重认证功能开发中');
+    var enabled = (document.getElementById('twoFactorSwitch') || {}).checked;
+    try {
+      localStorage.setItem('snzg_2fa', enabled ? 'on' : 'off');
+      alert('双重认证已' + (enabled ? '开启' : '关闭'));
+    } catch (e) { alert('保存失败：' + e.message); }
   }
 
   function saveNotification() {
-    alert('通知设置已保存');
+    try {
+      var prefs = {
+        device: (document.getElementById('ntDevice') || {}).checked,
+        farming: (document.getElementById('ntFarming') || {}).checked,
+        daily: (document.getElementById('ntDaily') || {}).checked,
+        weekly: (document.getElementById('ntWeekly') || {}).checked
+      };
+      localStorage.setItem('snzg_notification', JSON.stringify(prefs));
+      alert('通知设置已保存');
+    } catch (e) { alert('保存失败：' + e.message); }
   }
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>

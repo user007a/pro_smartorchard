@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <!-- 共享数据层（持久化 / toast） -->
+  <script src="js/mobile-store.js"></script>
   <style>
     /* 基础样式继承自设计系统 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: 66px; }
@@ -128,39 +130,39 @@
         </div>
         <div class="date-scroll" id="dateScroll">
           <div class="date-item" data-date="2026-09-25" onclick="selectDate(this)">
-            <div class="date-week">周一</div>
+            <div class="date-week">周五</div>
             <div class="date-day">25</div>
             <div class="date-month">9月</div>
           </div>
           <div class="date-item" data-date="2026-09-26" onclick="selectDate(this)">
-            <div class="date-week">周二</div>
+            <div class="date-week">周六</div>
             <div class="date-day">26</div>
             <div class="date-month">9月</div>
           </div>
           <div class="date-item selected" data-date="2026-09-27" onclick="selectDate(this)">
-            <div class="date-week">周三</div>
+            <div class="date-week">周日</div>
             <div class="date-day">27</div>
             <div class="date-month">9月</div>
           </div>
           <div class="date-item" data-date="2026-09-28" onclick="selectDate(this)">
-            <div class="date-week">周四</div>
+            <div class="date-week">周一</div>
             <div class="date-day">28</div>
             <div class="date-month">9月</div>
           </div>
           <div class="date-item" data-date="2026-09-29" onclick="selectDate(this)">
-            <div class="date-week">周五</div>
+            <div class="date-week">周二</div>
             <div class="date-day">29</div>
             <div class="date-month">9月</div>
           </div>
           <div class="date-item" data-date="2026-09-30" onclick="selectDate(this)">
-            <div class="date-week">周六</div>
+            <div class="date-week">周三</div>
             <div class="date-day">30</div>
             <div class="date-month">9月</div>
           </div>
-          <div class="date-item" data-date="2026-09-30" onclick="selectDate(this)">
-            <div class="date-week">周日</div>
-            <div class="date-day">31</div>
-            <div class="date-month">9月</div>
+          <div class="date-item" data-date="2026-10-01" onclick="selectDate(this)">
+            <div class="date-week">周四</div>
+            <div class="date-day">1</div>
+            <div class="date-month">10月</div>
           </div>
         </div>
       </div>
@@ -254,7 +256,7 @@
         </div>
         <div class="summary-row">
           <div class="summary-label">预约日期</div>
-          <div class="summary-value" id="summaryDate">2026-09-27 周三</div>
+          <div class="summary-value" id="summaryDate">2026-09-27 周日</div>
         </div>
         <div class="summary-row">
           <div class="summary-label">预约时段</div>
@@ -285,7 +287,7 @@
             </svg>
           </div>
           <div class="success-title">预约成功</div>
-          <div class="success-desc">您已成功预约2026年09月27日 14:00的采摘体验，请准时到达基地。</div>
+          <div class="success-desc" id="successDesc">您已成功预约2026年09月27日 14:00的采摘体验，请准时到达基地。</div>
           <button class="success-btn" onclick="closeSuccess()">完成</button>
         </div>
       </div>
@@ -297,6 +299,7 @@
     let selectedTime = '14:00 - 16:00';
     let peopleCount = 2;
     let harvestMethod = 'pickup';
+    updateSummary();
     
     function goBack() {
       window.history.back();
@@ -350,6 +353,24 @@
     }
     
     function submitReservation() {
+      var timeStart = selectedTime.split('-')[0].trim();
+      var d = selectedDate.split('-');
+      var dateText = d[0] + '年' + d[1] + '月' + d[2] + '日';
+      document.getElementById('successDesc').textContent =
+        '您已成功预约' + dateText + ' ' + timeStart + '的采摘体验，请准时到达基地。';
+      if (window.MobileStore) {
+        // 持久化预约，存入的日期即选中项 data-date（与界面显示严格一致）
+        MobileStore.push('smartorchard_harvest_reservations', {
+          treeId: 'G012',
+          treeName: '花牛苹果 #G012',
+          date: selectedDate,
+          time: selectedTime,
+          people: peopleCount,
+          method: harvestMethod === 'pickup' ? '现场采摘' : '冷链配送',
+          status: 'pending'
+        });
+        MobileStore.toast('采摘预约已提交', 'success');
+      }
       document.getElementById('successModal').classList.add('show');
     }
     

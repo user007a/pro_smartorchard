@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <script src="js/mobile-store.js"></script>
   <style>
     /* 页面特定样式 - 使用设计系统变量 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: 66px; }
@@ -21,7 +22,7 @@
     .header-back svg { width: 18px; height: 18px; }
     .map-container { width: 100%; height: 400px; background: linear-gradient(135deg, var(--primary-50) 0%, var(--primary-200) 100%); border-radius: var(--radius-lg); position: relative; overflow: hidden; margin-bottom: var(--space-4); border: 2px solid var(--primary-50); }
     .map-grid { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: linear-gradient(rgba(46, 158, 90, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(46, 158, 90, 0.1) 1px, transparent 1px); background-size: 40px 40px; }
-    .plot-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair; }
+    .plot-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
     .point-marker { position: absolute; width: 16px; height: 16px; background: var(--primary); border: 3px solid var(--bg-white); border-radius: 50%; transform: translate(-50%, -50%); cursor: pointer; z-index: 10; box-shadow: 0 2px 8px rgba(46, 158, 90, 0.4); }
     .point-marker.remove { background: var(--error); }
     .action-bar { display: flex; gap: var(--space-3); margin-bottom: var(--space-4); }
@@ -195,6 +196,9 @@
     let isClosed = false;
     let canvas, ctx;
     let selectedType = 'apple';
+    let drawing = false;        // 手指是否正在勾画
+    let trace = [];             // 手绘原始轨迹
+    let lastTracePt = null;     // 采样去重用的上一个点
 
     function navigateTo(page) {
       window.location.href = page;
@@ -210,9 +214,14 @@
       canvas.width = container.offsetWidth;
       canvas.height = container.offsetHeight;
       ctx = canvas.getContext('2d');
-      
+
+      // 桌面：点击落点；移动端：手指勾画（F-238）
       canvas.addEventListener('click', handleCanvasClick);
-      
+      canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+      canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+      canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+      canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
       document.querySelectorAll('.radio-item').forEach(item => {
         item.addEventListener('click', () => {
           document.querySelectorAll('.radio-item').forEach(i => i.classList.remove('active'));
@@ -222,13 +231,77 @@
       });
     }
 
-    function handleCanvasClick(e) {
+    /** 取触点/鼠标相对画布坐标 */
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+      return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+    }
+
+    function handleTouchStart(e) {
       if (isClosed) return;
-      
+      e.preventDefault();
+      drawing = true;
+      trace = [];
+      const p = getPos(e);
+      lastTracePt = p;
+      trace.push(p);
+      render();
+    }
+
+    function handleTouchMove(e) {
+      if (!drawing || isClosed) return;
+      e.preventDefault();
+      const p = getPos(e);
+      // 3px 去抖，避免轨迹点过密
+      if (lastTracePt && Math.hypot(p.x - lastTracePt.x, p.y - lastTracePt.y) < 3) return;
+      trace.push(p);
+      lastTracePt = p;
+      render();
+    }
+
+    function handleTouchEnd(e) {
+      if (!drawing) return;
+      e.preventDefault();
+      drawing = false;
+
+      // 手绘轨迹抽稀成多边形顶点
+      const simplified = simplifyTrace(trace, 28);
+      trace = [];
+      lastTracePt = null;
+
+      if (simplified.length >= 3) {
+        points = simplified;
+      } else if (simplified.length === 1 && points.length === 0) {
+        // 轻触一次视为单点
+        points = simplified;
+      }
+      updatePointCount();
+      updateMarkers();
+      render();
+    }
+
+    /** 按最小间距抽稀轨迹，保留首尾点 */
+    function simplifyTrace(arr, minDist) {
+      if (arr.length <= 2) return arr.slice();
+      const out = [arr[0]];
+      for (let i = 1; i < arr.length - 1; i++) {
+        const prev = out[out.length - 1];
+        if (Math.hypot(arr[i].x - prev.x, arr[i].y - prev.y) >= minDist) out.push(arr[i]);
+      }
+      const last = arr[arr.length - 1];
+      const prev = out[out.length - 1];
+      if (Math.hypot(last.x - prev.x, last.y - prev.y) > 6) out.push(last);
+      return out;
+    }
+
+    function handleCanvasClick(e) {
+      if (isClosed || drawing) return;
+
       const rect = canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      
+
       points.push({ x, y });
       updatePointCount();
       render();
@@ -261,6 +334,8 @@
     function updateMarkers() {
       const container = document.getElementById('pointsContainer');
       container.innerHTML = '';
+      // 顶点过多时不再逐个标注，避免遮挡图形（手绘地块常见）
+      if (points.length > 24) return;
       points.forEach((point, index) => {
         createPointMarker(point.x, point.y, index);
       });
@@ -290,13 +365,14 @@
 
     function closePolygon() {
       if (points.length < 3) {
-        alert('请至少添加3个点');
+        MobileStore.toast('请至少绘制 3 个点', 'warning');
         return;
       }
       isClosed = true;
       calculateArea();
       document.getElementById('saveBtn').disabled = false;
       render();
+      MobileStore.toast('地块已闭合，可保存', 'success');
     }
 
     function render() {
@@ -319,6 +395,20 @@
         ctx.strokeStyle = isClosed ? 'rgba(46, 158, 90, 1)' : 'rgba(46, 158, 90, 0.8)';
         ctx.lineWidth = 3;
         ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+
+      // 勾画中的实时轨迹（松手后才转为多边形顶点）
+      if (trace.length > 1) {
+        ctx.beginPath();
+        ctx.moveTo(trace[0].x, trace[0].y);
+        for (let i = 1; i < trace.length; i++) {
+          ctx.lineTo(trace[i].x, trace[i].y);
+        }
+        ctx.strokeStyle = 'rgba(46, 158, 90, 0.55)';
+        ctx.lineWidth = 4;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
         ctx.stroke();
       }
     }
@@ -348,33 +438,33 @@
     }
 
     function savePlot() {
-      const name = document.getElementById('plotName').value;
+      const name = document.getElementById('plotName').value.trim();
       const remark = document.getElementById('plotRemark').value;
-      
+
       if (!name) {
-        alert('请输入地块名称');
+        MobileStore.toast('请输入地块名称', 'warning');
         return;
       }
-      
+
       if (!isClosed || points.length < 3) {
-        alert('请先完成地块绘制');
+        MobileStore.toast('请先完成地块绘制并闭合', 'warning');
         return;
       }
-      
+
       const plot = {
-        id: Date.now(),
+        id: 'plot_' + Date.now(),
         name,
         type: selectedType,
         area: parseFloat(document.getElementById('areaValue').textContent),
         points,
         remark,
+        source: 'mobile',
         createTime: new Date().toISOString()
       };
-      
-      const plots = JSON.parse(localStorage.getItem('plots') || '[]');
-      plots.push(plot);
-      localStorage.setItem('plots', JSON.stringify(plots));
-      
+
+      // 写入共享地块库，mb_plot.html 与 PC 端地块管理均可见
+      MobileStore.push(MobileStore.KEYS.plots, plot);
+
       openModal('保存成功');
     }
 

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <script src="js/mobile-store.js"></script>
   <style>
     /* ========== 页面专属样式（仅保留设计系统未覆盖的部分） ========== */
     
@@ -393,18 +394,24 @@
     <!-- 状态统计 -->
     <div class="patrol-stats">
       <div class="patrol-stats-item">
-        <div class="patrol-stats-value">3</div>
+        <div class="patrol-stats-value" id="statTotal">3</div>
         <div class="patrol-stats-label">总打卡点</div>
       </div>
       <div class="patrol-stats-item">
-        <div class="patrol-stats-value">1</div>
+        <div class="patrol-stats-value" id="statDone">1</div>
         <div class="patrol-stats-label">已完成</div>
       </div>
       <div class="patrol-stats-item">
-        <div class="patrol-stats-value">2</div>
+        <div class="patrol-stats-value" id="statPending">2</div>
         <div class="patrol-stats-label">待打卡</div>
       </div>
     </div>
+
+    <!-- 离线同步状态栏（F-282） -->
+    <div id="syncBar"></div>
+
+    <!-- 异常照片：真实拍摄 -->
+    <input type="file" id="reportPhotoInput" accept="image/*" capture="environment" hidden>
 
     <!-- 地图区域 -->
     <div class="map-area">
@@ -421,7 +428,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"/>
         </svg>
-        <div class="checkpoint-label">B1区 (50m)</div>
+        <div class="checkpoint-label" id="markerB1">B1区</div>
       </div>
       <div class="checkpoint-marker" style="top: 70%; left: 75%;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -430,7 +437,7 @@
         <div class="checkpoint-label">C1区</div>
       </div>
       <!-- 用户位置标记 -->
-      <div class="user-marker" style="top: 45%; left: 48%;">
+      <div class="user-marker" style="top: 45%; left: 48%;" id="userMarker">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/>
           <circle cx="12" cy="10" r="3"/>
@@ -446,8 +453,8 @@
             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8m6-2v8m6-8l2 8m-6 4l2-8h8l2 8M3 20l6-6m6 6l6-6"/>
           </svg>
         </div>
-        <div class="checkin-title">到达打卡点</div>
-        <div class="checkin-desc">您已到达 B1区 打卡点，距离50米范围内</div>
+        <div class="checkin-title" id="checkinTitle">到达打卡点</div>
+        <div class="checkin-desc" id="checkinDesc">正在获取位置…</div>
         <button class="checkin-btn" onclick="checkin()">一键打卡</button>
       </div>
     </div>
@@ -455,8 +462,8 @@
     <!-- 打卡列表 -->
     <div class="mb-section">
       <div class="mb-section-title"><span class="mb-section-dot"></span>巡园路线</div>
-      <div class="mb-list">
-        <div class="mb-list-item checkpoint-item">
+      <div class="mb-list" id="checkpointList">
+        <div class="mb-list-item checkpoint-item" data-cp="A1" data-status="done">
           <div class="checkpoint-status done">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="20 6 9 17 4 12"/>
@@ -464,10 +471,10 @@
           </div>
           <div class="mb-list-content">
             <div class="mb-list-title">A1区 - 主入口</div>
-            <div class="checkpoint-distance">已完成 · 打卡时间：09:15</div>
+            <div class="checkpoint-distance" id="distA1">已完成 · 打卡时间：09:15</div>
           </div>
         </div>
-        <div class="mb-list-item checkpoint-item">
+        <div class="mb-list-item checkpoint-item" data-cp="B1" data-status="current">
           <div class="checkpoint-status current">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"/>
@@ -475,11 +482,11 @@
           </div>
           <div class="mb-list-content">
             <div class="mb-list-title">B1区 - 果园中部</div>
-            <div class="checkpoint-distance">距离50米，请前往打卡</div>
+            <div class="checkpoint-distance" id="distB1">定位中…</div>
           </div>
           <div class="checkpoint-time">当前</div>
         </div>
-        <div class="mb-list-item checkpoint-item">
+        <div class="mb-list-item checkpoint-item" data-cp="C1" data-status="pending">
           <div class="checkpoint-status pending">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"/>
@@ -487,7 +494,7 @@
           </div>
           <div class="mb-list-content">
             <div class="mb-list-title">C1区 - 仓库附近</div>
-            <div class="checkpoint-distance">待打卡 · 预计15分钟</div>
+            <div class="checkpoint-distance" id="distC1">定位中…</div>
           </div>
         </div>
       </div>
@@ -606,35 +613,203 @@
 
   <script>
     var reportType = '';
+    var reportPhoto = null;
 
+    /* ---------- 打卡点（果园坐标系，单位：经纬度） ---------- */
+    var CHECKPOINTS = [
+      { id: 'A1', name: 'A1区 - 主入口',   lat: 34.34900, lng: 106.18000, status: 'done',    time: '09:15' },
+      { id: 'B1', name: 'B1区 - 果园中部', lat: 34.35200, lng: 106.18365, status: 'pending', time: '' },
+      { id: 'C1', name: 'C1区 - 仓库附近', lat: 34.35500, lng: 106.18600, status: 'pending', time: '' }
+    ];
+    var NEAR_THRESHOLD = 100;   // 米，进入该范围视为"到达打卡点"
+    var currentPos = null;      // 当前定位
+    var tracker = null;         // 轨迹采集句柄
+    var trackPoints = [];       // 本次巡园轨迹
+    var popupCp = null;         // 打卡弹窗对应的打卡点
+    var popupShown = {};        // 已弹过窗的打卡点，避免重复打扰
+
+    /* ---------- 距离计算（Haversine） ---------- */
+    function distanceMeters(lat1, lng1, lat2, lng2) {
+      var R = 6371000;
+      var toRad = function (d) { return d * Math.PI / 180; };
+      var dLat = toRad(lat2 - lat1);
+      var dLng = toRad(lng2 - lng1);
+      var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      return Math.round(2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
+    function fmtDist(m) {
+      return m >= 1000 ? (m / 1000).toFixed(1) + '公里' : m + '米';
+    }
+
+    /* ---------- 定位与轨迹采集（F-244） ---------- */
+    function startTracking() {
+      tracker = MobileStore.track({
+        onPoint: function (pt) {
+          if (!pt.ok) {
+            document.getElementById('distB1').textContent = '定位失败：' + (pt.message || '信号弱');
+            return;
+          }
+          currentPos = pt;
+          trackPoints = tracker.points.filter(function (p) { return p.ok; });
+          refreshDistances();
+          maybeAutoPopup();
+        }
+      });
+      // 首次定位兜底：watchPosition 未在 3 秒内回调时用单次定位
+      setTimeout(function () {
+        if (!currentPos) {
+          MobileStore.geolocate().then(function (p) {
+            if (currentPos) return;   // 实时定位已到达
+            currentPos = { ok: true, lat: p.lat, lng: p.lng, accuracy: p.accuracy, at: new Date().toISOString() };
+            refreshDistances();
+            maybeAutoPopup();
+          });
+        }
+      }, 3000);
+    }
+
+    function refreshDistances() {
+      if (!currentPos) return;
+      CHECKPOINTS.forEach(function (cp) {
+        var el = document.getElementById('dist' + cp.id);
+        if (!el) return;
+        var d = distanceMeters(currentPos.lat, currentPos.lng, cp.lat, cp.lng);
+        cp._dist = d;
+        if (cp.status === 'done') {
+          el.textContent = '已完成 · 打卡时间：' + cp.time;
+        } else if (d <= NEAR_THRESHOLD) {
+          el.textContent = '距离' + fmtDist(d) + '，已进入打卡范围';
+        } else {
+          el.textContent = '距离' + fmtDist(d) + '，请前往打卡';
+        }
+      });
+      var ml = document.getElementById('markerB1');
+      var b1 = CHECKPOINTS[1];
+      if (ml && b1._dist !== undefined) ml.textContent = b1.status === 'done' ? 'B1区 ✓' : 'B1区 (' + fmtDist(b1._dist) + ')';
+      // 真实定位时同步移动用户标记的位置（按相对距离近似映射，仅作视觉反馈）
+      var um = document.getElementById('userMarker');
+      if (um && currentPos) {
+        var d0 = b1._dist === undefined ? 0 : b1._dist;
+        var left = Math.max(8, Math.min(88, 48 + (d0 / 12)));
+        var top = Math.max(8, Math.min(88, 45 + (d0 / 20)));
+        um.style.left = left + '%';
+        um.style.top = top + '%';
+      }
+    }
+
+    /** 仅当一个「待打卡」点在阈值内时自动弹窗，且同一打卡点只弹一次 */
+    function maybeAutoPopup() {
+      if (!currentPos) return;
+      var target = null;
+      CHECKPOINTS.forEach(function (cp) {
+        if (cp.status !== 'pending') return;
+        if (cp._dist === undefined) return;
+        if (cp._dist <= NEAR_THRESHOLD && !target) target = cp;
+      });
+      if (!target || popupShown[target.id]) return;
+      popupShown[target.id] = true;
+      openCheckinPopup(target);
+    }
+
+    function openCheckinPopup(cp) {
+      popupCp = cp;
+      document.getElementById('checkinTitle').textContent = '到达打卡点';
+      document.getElementById('checkinDesc').textContent =
+        '您已到达 ' + cp.id + '区 打卡点，距离' + fmtDist(cp._dist || 0) + '，在 ' + NEAR_THRESHOLD + ' 米范围内';
+      document.getElementById('checkinPopup').classList.add('show');
+      MobileStore.toast('已进入 ' + cp.id + '区 打卡范围', 'info');
+    }
+
+    /* ---------- 打卡 ---------- */
+    function checkin() {
+      var cp = popupCp;
+      document.getElementById('checkinPopup').classList.remove('show');
+      if (!cp) return;
+      var now = MobileStore.fmtTime(Date.now());
+      cp.status = 'done';
+      cp.time = now.slice(11);   // HH:mm
+
+      // 写入共享巡查记录，PC 端与大屏均可读到
+      var rec = {
+        id: 'patrol_' + cp.id + '_' + Date.now(),
+        checkpointId: cp.id,
+        checkpointName: cp.name,
+        lat: currentPos ? currentPos.lat : null,
+        lng: currentPos ? currentPos.lng : null,
+        accuracy: currentPos ? currentPos.accuracy : null,
+        checkinTime: new Date().toISOString(),
+        operator: '张建国',
+        source: 'mobile',
+        distance: cp._dist || 0,
+        track: trackPoints.slice()
+      };
+      MobileStore.push(MobileStore.KEYS.patrol, rec);
+
+      // 入离线同步队列
+      MobileStore.enqueue({ id: 'q_' + rec.id, type: 'patrol_checkin', refId: rec.id, payload: rec });
+
+      renderCheckpoints();
+      MobileStore.toast('打卡成功，已记录当前位置', 'success');
+    }
+
+    /* ---------- 渲染打卡点状态 ---------- */
+    function renderCheckpoints() {
+      var done = 0;
+      CHECKPOINTS.forEach(function (cp) {
+        if (cp.status === 'done') done++;
+        var item = document.querySelector('.checkpoint-item[data-cp="' + cp.id + '"]');
+        if (!item) return;
+        item.setAttribute('data-status', cp.status === 'done' ? 'done' : (cp.id === nextPendingId() ? 'current' : 'pending'));
+        var badge = item.querySelector('.checkpoint-status');
+        if (badge) badge.className = 'checkpoint-status ' + (cp.status === 'done' ? 'done' : (cp.id === nextPendingId() ? 'current' : 'pending'));
+        var timeEl = item.querySelector('.checkpoint-time');
+        if (cp.status === 'done' && !timeEl) {
+          timeEl = document.createElement('div');
+          timeEl.className = 'checkpoint-time';
+          item.appendChild(timeEl);
+        }
+        if (timeEl) timeEl.textContent = cp.status === 'done' ? cp.time : (cp.id === nextPendingId() ? '当前' : '');
+      });
+      document.getElementById('statTotal').textContent = CHECKPOINTS.length;
+      document.getElementById('statDone').textContent = done;
+      document.getElementById('statPending').textContent = CHECKPOINTS.length - done;
+      refreshDistances();
+    }
+
+    function nextPendingId() {
+      for (var i = 0; i < CHECKPOINTS.length; i++) {
+        if (CHECKPOINTS[i].status === 'pending') return CHECKPOINTS[i].id;
+      }
+      return null;
+    }
+
+    function pendingCount() {
+      return CHECKPOINTS.filter(function (c) { return c.status === 'pending'; }).length;
+    }
+
+    /* ---------- 离开确认（按真实未打卡数） ---------- */
     function goBack() {
-      var pendingCount = 2;
-      if (pendingCount > 0) {
+      if (pendingCount() > 0) {
         document.getElementById('leaveModal').classList.add('show');
       } else {
         window.history.back();
       }
     }
-    
+
     function cancelLeave() {
       document.getElementById('leaveModal').classList.remove('show');
     }
-    
+
     function confirmLeave() {
       document.getElementById('leaveModal').classList.remove('show');
+      if (tracker) tracker.stop();
       window.history.back();
     }
 
-    // 模拟到达打卡点触发弹窗
-    setTimeout(function() {
-      document.getElementById('checkinPopup').classList.add('show');
-    }, 2000);
-
-    function checkin() {
-      document.getElementById('checkinPopup').classList.remove('show');
-      alert('打卡成功！已记录当前位置');
-    }
-
+    /* ---------- 异常上报 ---------- */
     function openReportModal() {
       document.getElementById('reportModal').classList.add('show');
     }
@@ -644,13 +819,29 @@
     }
 
     function uploadPhoto() {
-      document.getElementById('reportPhoto').classList.add('has-photo');
+      document.getElementById('reportPhotoInput').click();
+    }
+
+    function onReportPhotoPicked(input) {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      if (!file.type || file.type.indexOf('image/') !== 0) {
+        MobileStore.toast('请选择图片文件', 'warning');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        reportPhoto = e.target.result;
+        document.getElementById('reportPhoto').classList.add('has-photo');
+        document.getElementById('reportPhoto').style.backgroundImage = 'url(' + e.target.result + ')';
+        document.getElementById('reportPhoto').style.backgroundSize = 'cover';
+      };
+      reader.readAsDataURL(file);
     }
 
     function selectReportType(type) {
       reportType = type;
-      var items = document.querySelectorAll('.type-item');
-      items.forEach(function(item) {
+      document.querySelectorAll('.type-item').forEach(function (item) {
         item.classList.remove('active');
         if (item.querySelector('.type-name').textContent === type) {
           item.classList.add('active');
@@ -659,26 +850,69 @@
     }
 
     function submitReport() {
-      if (!document.getElementById('reportPhoto').classList.contains('has-photo')) {
-        alert('请先拍摄异常照片');
+      if (!reportPhoto) {
+        MobileStore.toast('请先拍摄异常照片', 'warning');
         return;
       }
       if (!reportType) {
-        alert('请选择异常类型');
+        MobileStore.toast('请选择异常类型', 'warning');
         return;
       }
+      var rec = {
+        id: 'patrolrep_' + Date.now(),
+        type: reportType,
+        remark: document.getElementById('reportRemark').value || '',
+        photo: reportPhoto,
+        lat: currentPos ? currentPos.lat : null,
+        lng: currentPos ? currentPos.lng : null,
+        reportTime: new Date().toISOString(),
+        operator: '张建国',
+        status: '待处理',
+        source: 'mobile'
+      };
+      MobileStore.push(MobileStore.KEYS.patrol, Object.assign({ kind: 'abnormal' }, rec));
+      MobileStore.enqueue({ id: 'q_' + rec.id, type: 'patrol_abnormal', refId: rec.id, payload: rec });
+
       closeReportModal();
       document.getElementById('successModal').classList.add('show');
+      MobileStore.toast('异常已上报', 'success');
     }
 
     function closeSuccessModal() {
       document.getElementById('successModal').classList.remove('show');
     }
 
-    // 页面关闭时提示未完成打卡
-    window.addEventListener('beforeunload', function(e) {
+    /* ---------- 初始化 ---------- */
+    document.addEventListener('DOMContentLoaded', function () {
+      MobileStore.renderSyncBar(document.getElementById('syncBar'));
+      document.getElementById('reportPhotoInput').addEventListener('change', function () { onReportPhotoPicked(this); });
+
+      // 点击路线中的待打卡点可手动打卡（超出范围时二次确认）
+      document.querySelectorAll('.checkpoint-item').forEach(function (item) {
+        item.style.cursor = 'pointer';
+        item.addEventListener('click', function () {
+          var id = item.getAttribute('data-cp');
+          var cp = null;
+          CHECKPOINTS.forEach(function (c) { if (c.id === id) cp = c; });
+          if (!cp || cp.status === 'done') return;
+          if (cp._dist !== undefined && cp._dist > NEAR_THRESHOLD) {
+            if (!MobileStore.confirm('当前距离 ' + cp.id + '区 ' + fmtDist(cp._dist) +
+                '，已超出打卡范围。仍要打卡吗？（将记录当前实际位置）')) return;
+          }
+          popupCp = cp;
+          checkin();
+        });
+      });
+
+      renderCheckpoints();
+      startTracking();
+    });
+
+    // 页面关闭时提示未完成打卡（按真实剩余数量）
+    window.addEventListener('beforeunload', function (e) {
+      if (pendingCount() <= 0) return;
       e.preventDefault();
-      e.returnValue = '您还有2个打卡点未完成，确定要退出吗？';
+      e.returnValue = '您还有' + pendingCount() + '个打卡点未完成，确定要退出吗？';
       return e.returnValue;
     });
   </script>

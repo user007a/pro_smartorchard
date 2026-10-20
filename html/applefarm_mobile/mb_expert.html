@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <!-- 移动端共享数据层 -->
+  <script src="js/mobile-store.js"></script>
   <style>
     /* Content */
     .content { padding: var(--space-4); padding-bottom: 80px; }
@@ -291,6 +293,7 @@
 
       <div class="card">
         <div class="card-title">我的提问</div>
+        <div id="myQuestionList"></div>
         <div class="question-item">
           <div class="question-header">
             <div class="question-title">苹果树叶片发黄怎么办？</div>
@@ -358,11 +361,11 @@
       <div class="modal-title">发起提问</div>
       <div class="form-group">
         <label class="form-label">问题标题</label>
-        <input type="text" class="form-input" placeholder="请输入问题标题">
+        <input type="text" class="form-input" id="questionTitle" maxlength="40" placeholder="请输入问题标题">
       </div>
       <div class="form-group">
         <label class="form-label">问题描述</label>
-        <textarea class="form-textarea" placeholder="请详细描述您的问题..."></textarea>
+        <textarea class="form-textarea" id="questionDesc" maxlength="500" placeholder="请详细描述您的问题..."></textarea>
       </div>
       <div class="btn-row">
         <button class="btn btn-outline" onclick="closeAskModal()">取消</button>
@@ -372,6 +375,8 @@
   </div>
 
   <script>
+    var QUESTION_KEY = 'smartorchard_expert_questions';
+
     function navigateTo(page) {
       window.location.href = page;
     }
@@ -380,7 +385,15 @@
       window.history.back();
     }
 
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
     function openAskModal() {
+      document.getElementById('questionTitle').value = '';
+      document.getElementById('questionDesc').value = '';
       document.getElementById('askModal').classList.add('show');
     }
 
@@ -388,10 +401,47 @@
       document.getElementById('askModal').classList.remove('show');
     }
 
-    function submitQuestion() {
-      alert('提问提交成功！');
-      closeAskModal();
+    function renderQuestions() {
+      var box = document.getElementById('myQuestionList');
+      var list = MobileStore.list(QUESTION_KEY);
+      if (!list.length) { box.innerHTML = ''; return; }
+      box.innerHTML = list.map(function (q) {
+        return '<div class="question-item">' +
+          '<div class="question-header">' +
+          '<div class="question-title">' + esc(q.title) + '</div>' +
+          '<span class="question-status pending">待回复</span>' +
+          '</div>' +
+          '<div class="question-content">' + esc(q.desc) + '</div>' +
+          '<div style="font-size:var(--font-xs);color:var(--text-light);">' + esc(q.time || '') + '</div>' +
+          '</div>';
+      }).join('');
     }
+
+    function submitQuestion() {
+      var title = document.getElementById('questionTitle').value.trim();
+      var desc = document.getElementById('questionDesc').value.trim();
+
+      if (!title) { MobileStore.toast('请输入问题标题', 'warning'); return; }
+      if (title.length < 2) { MobileStore.toast('问题标题至少 2 个字', 'warning'); return; }
+      if (!desc) { MobileStore.toast('请输入问题描述', 'warning'); return; }
+      if (desc.length < 5) { MobileStore.toast('问题描述至少 5 个字', 'warning'); return; }
+
+      MobileStore.push(QUESTION_KEY, {
+        title: title,
+        desc: desc,
+        status: 'pending',
+        time: MobileStore.fmtTime(Date.now())
+      });
+
+      closeAskModal();
+      MobileStore.toast('提问已提交，专家将尽快回复', 'success');
+      renderQuestions();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      renderQuestions();
+      MobileStore.subscribe(renderQuestions);
+    });
   </script>
 </body>
 </html>

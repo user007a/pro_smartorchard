@@ -91,94 +91,16 @@
 
     <!-- 订单标签 -->
     <div class="order-tabs">
-      <div class="order-tab active">全部</div>
-      <div class="order-tab">待付款</div>
-      <div class="order-tab">待发货</div>
-      <div class="order-tab">待收货</div>
-      <div class="order-tab">已完成</div>
+      <div class="order-tab active" data-tab="全部">全部</div>
+      <div class="order-tab" data-tab="待付款">待付款</div>
+      <div class="order-tab" data-tab="待发货">待发货</div>
+      <div class="order-tab" data-tab="待收货">待收货</div>
+      <div class="order-tab" data-tab="已完成">已完成</div>
+      <div class="order-tab" data-tab="已取消">已取消</div>
     </div>
 
-    <!-- 订单列表 -->
-    <div class="order-card">
-      <div class="order-header">
-        <span class="order-no">SN20260614001</span>
-        <span class="mb-tag warning">待发货</span>
-      </div>
-      <div class="order-items">
-        <div class="order-item-img"><img src="images/thumb_apple5kg.jpg" alt="花牛苹果"></div>
-        <div class="order-info">
-          <div class="order-name">花牛苹果 5斤装</div>
-          <div class="order-spec">脆甜多汁 · 新鲜采摘 × 1</div>
-        </div>
-      </div>
-      <div class="order-footer">
-        <div class="order-total">共1件 合计 <strong>¥68</strong></div>
-        <div class="order-actions">
-          <button class="mb-btn mb-btn-sm mb-btn-secondary">查看详情</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="order-card">
-      <div class="order-header">
-        <span class="order-no">SN20260612003</span>
-        <span class="mb-tag success">已完成</span>
-      </div>
-      <div class="order-items">
-        <div class="order-item-img"><img src="images/thumb_giftbox.jpg" alt="精品礼盒"></div>
-        <div class="order-info">
-          <div class="order-name">精品礼盒装 8斤</div>
-          <div class="order-spec">送礼佳品 · 品质保证 × 1</div>
-        </div>
-      </div>
-      <div class="order-footer">
-        <div class="order-total">共1件 合计 <strong>¥168</strong></div>
-        <div class="order-actions">
-          <button class="mb-btn mb-btn-sm mb-btn-secondary">再次购买</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="order-card">
-      <div class="order-header">
-        <span class="order-no">SN20260610005</span>
-        <span class="mb-tag info">待收货</span>
-      </div>
-      <div class="order-items">
-        <div class="order-item-img"><img src="images/thumb_picked.jpg" alt="认养套餐"></div>
-        <div class="order-info">
-          <div class="order-name">认养果树3年套餐</div>
-          <div class="order-spec">专属果树 · 全程溯源 × 1</div>
-        </div>
-      </div>
-      <div class="order-footer">
-        <div class="order-total">共1件 合计 <strong>¥1,888</strong></div>
-        <div class="order-actions">
-          <button class="mb-btn mb-btn-sm mb-btn-secondary">查看物流</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="order-card">
-      <div class="order-header">
-        <span class="order-no">SN20260608002</span>
-        <span class="mb-tag error">待付款</span>
-      </div>
-      <div class="order-items">
-        <div class="order-item-img"><img src="images/thumb_red_hanging.jpg" alt="花牛苹果"></div>
-        <div class="order-info">
-          <div class="order-name">花牛苹果 5斤装</div>
-          <div class="order-spec">酸甜可口 · 皮薄肉嫩 × 2</div>
-        </div>
-      </div>
-      <div class="order-footer">
-        <div class="order-total">共2件 合计 <strong>¥116</strong></div>
-        <div class="order-actions">
-          <button class="mb-btn mb-btn-sm mb-btn-secondary">取消</button>
-          <button class="mb-btn mb-btn-sm mb-btn-primary">去付款</button>
-        </div>
-      </div>
-    </div>
+    <!-- 订单列表（由 JS 动态渲染读取 localStorage 'h5_orders'） -->
+    <div id="orderList"></div>
 
     <!-- 底部导航 -->
     <nav class="mb-tab-bar">
@@ -204,13 +126,155 @@
   <script>
     function navigateTo(page) { window.location.href = page; }
 
+    // 订单状态枚举与样式映射
+    var STATUS_TABS = ['全部', '待付款', '待发货', '待收货', '已完成', '已取消'];
+    var TAG_CLASS = { '待付款': 'warning', '待发货': 'info', '待收货': 'info', '已完成': 'success', '已取消': 'default' };
+
+    var currentTab = '全部';
+    var focusOrderNo = (new URLSearchParams(location.search)).get('focus') || '';
+
+    function readOrders() {
+      try { return JSON.parse(localStorage.getItem('h5_orders') || '[]'); } catch (e) { return []; }
+    }
+
+    function statusOf(order) {
+      // 从 PC sales_order confirmShip 落库后推断状态
+      var shipped = false;
+      try {
+        shipped = JSON.parse(localStorage.getItem('h5_sales_orders') || '[]').some(function(s){
+          return s.orderNo === order.no || s.orderNo === order.id;
+        });
+      } catch (e) { shipped = false; }
+      if (order.status === '已取消') return '已取消';
+      if (shipped && order.status === '待发货') return '待收货';
+      return order.status || '待付款';
+    }
+
+    function actionButtons(order) {
+      var code = statusOf(order);
+      if (code === '待付款') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="cancelOrder(\'' + order.no + '\')">取消</button>' +
+        '<button class="mb-btn mb-btn-sm mb-btn-primary" onclick="payOrder(\'' + order.no + '\')">去付款</button>';
+      if (code === '待发货') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="viewDetail(\'' + order.no + '\')">查看详情</button>';
+      if (code === '待收货') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="viewLogistics(\'' + order.no + '\')">查看物流</button>' +
+        '<button class="mb-btn mb-btn-sm mb-btn-primary" onclick="confirmReceipt(\'' + order.no + '\')">确认收货</button>';
+      if (code === '已完成') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="reorder(\'' + order.no + '\')">再次购买</button>';
+      return '';
+    }
+
+    function renderOrders() {
+      var list = readOrders();
+      var filtered = (currentTab === '全部') ? list : list.filter(function(o){ return statusOf(o) === currentTab; });
+      var html;
+      if (!filtered.length) {
+        html = '<div style="text-align:center;color:#999;padding:48px 16px;">暂无订单</div>';
+      } else {
+        html = filtered.map(function(order){
+          var items = (order.items || []).map(function(it){
+            return '<div class="order-item-img"><img src="' + (it.img || 'images/thumb_apple5kg.jpg') + '" alt="' + (it.name || '') + '"></div>' +
+              '<div class="order-info"><div class="order-name">' + (it.name || '商品') + '</div>' +
+              '<div class="order-spec">' + (it.desc || '') + ' × ' + (it.qty || 1) + '</div></div>';
+          }).join('');
+          var status = statusOf(order);
+          var tag = TAG_CLASS[status] || 'default';
+          var focused = (focusOrderNo && order.no === focusOrderNo) ? ' style="border-color:var(--primary);box-shadow:0 0 0 2px rgba(46,158,90,.2);"' : '';
+          return '<div class="order-card"' + focused + ' data-no="' + order.no + '">' +
+            '<div class="order-header"><span class="order-no">' + order.no + '</span>' +
+            '<span class="mb-tag ' + tag + '">' + status + '</span></div>' +
+            '<div class="order-items">' + items + '</div>' +
+            '<div class="order-footer">' +
+            '<div class="order-total">共' + (order.items ? order.items.length : 1) + '件 合计 <strong>¥' + (order.total || 0) + '</strong></div>' +
+            '<div class="order-actions">' + actionButtons(order) + '</div>' +
+            '</div></div>';
+        }).join('');
+      }
+      document.getElementById('orderList').innerHTML = html;
+      // 自动滚动到 focus 订单
+      if (focusOrderNo) {
+        var el = document.querySelector('[data-no="' + focusOrderNo + '"]');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    function cancelOrder(no) {
+      if (!confirm('确定要取消订单 ' + no + '？')) return;
+      var list = readOrders();
+      var o = list.find(function(x){ return x.no === no; });
+      if (o) { o.status = '已取消'; o.statusCode = 'cancelled'; }
+      localStorage.setItem('h5_orders', JSON.stringify(list));
+      renderOrders();
+      showOrderToast('订单已取消');
+    }
+
+    function payOrder(no) {
+      var list = readOrders();
+      var o = list.find(function(x){ return x.no === no; });
+      if (o) { o.status = '待发货'; o.statusCode = 'paid'; }
+      localStorage.setItem('h5_orders', JSON.stringify(list));
+      renderOrders();
+      showOrderToast('支付成功，等待商家发货');
+    }
+
+    function confirmReceipt(no) {
+      var list = readOrders();
+      var o = list.find(function(x){ return x.no === no; });
+      if (o) { o.status = '已完成'; o.statusCode = 'completed'; }
+      localStorage.setItem('h5_orders', JSON.stringify(list));
+      renderOrders();
+      showOrderToast('已确认收货，感谢您的购买');
+    }
+
+    function reorder(no) {
+      var list = readOrders();
+      var o = list.find(function(x){ return x.no === no; });
+      if (!o || !o.items) return;
+      var cart = [];
+      try { cart = JSON.parse(localStorage.getItem('h5_cart') || '[]'); } catch (e) { cart = []; }
+      o.items.forEach(function(it){
+        cart.push(Object.assign({}, it, { qty: it.qty || 1, checked: true }));
+      });
+      localStorage.setItem('h5_cart', JSON.stringify(cart));
+      showOrderToast('商品已加入购物车');
+      setTimeout(function(){ window.location.href = 'h5_cart.html'; }, 600);
+    }
+
+    function viewDetail(no) {
+      var list = readOrders();
+      var o = list.find(function(x){ return x.no === no; });
+      if (!o) return;
+      var lines = ['订单 ' + no, '金额：¥' + o.total];
+      if (o.subtotal != null && o.discount != null) lines.push('商品金额：¥' + o.subtotal + '，优惠：¥' + o.discount);
+      lines.push('支付方式：' + (o.payment || '在线支付'));
+      lines.push('下单时间：' + (o.createdAt ? new Date(o.createdAt).toLocaleString() : '-'));
+      showOrderToast(lines.join('\n'));
+    }
+
+    function viewLogistics(no) {
+      var shipped = [];
+      try { shipped = JSON.parse(localStorage.getItem('h5_sales_orders') || '[]'); } catch (e) { shipped = []; }
+      var info = shipped.find(function(s){ return s.orderNo === no; });
+      if (!info) { showOrderToast('暂无物流信息，请耐心等待'); return; }
+      showOrderToast('订单 ' + no + ' 物流：\n承运：' + (info.company || '-') + '\n单号：' + info.tracking + '\n发货时间：' + new Date(info.shippedAt).toLocaleString());
+    }
+
+    function showOrderToast(message) {
+      var toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.78);color:#fff;padding:14px 22px;border-radius:10px;font-size:14px;line-height:1.7;white-space:pre-wrap;z-index:9999;max-width:82%;text-align:center;';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(function() { toast.remove(); }, 2200);
+    }
+
     // 标签切换
     document.querySelectorAll('.order-tab').forEach(function(tab) {
       tab.addEventListener('click', function() {
         document.querySelectorAll('.order-tab').forEach(function(t) { t.classList.remove('active'); });
         this.classList.add('active');
+        currentTab = this.dataset.tab || this.textContent.trim();
+        renderOrders();
       });
     });
+
+    renderOrders();
   </script>
 </body>
 </html>

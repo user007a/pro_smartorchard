@@ -166,16 +166,46 @@
       if (el) el.innerHTML = value;
     }
 
+    /* 环节日期与列表页保持同一推算规则：以批次采收日期为基准（详见 trace_h5.html DAY_OFFSET） */
+    var STAGE_DAY_OFFSET = { planting: -35, pruning: -25, bagging: -15, fertilizer: -3, testing: -1, harvest: 0, coldchain: 2 };
+
+    function shiftDate(dateStr, days) {
+      if (!dateStr) return null;
+      var d = new Date(dateStr + 'T00:00:00');
+      if (isNaN(d.getTime())) return null;
+      d.setDate(d.getDate() + days);
+      var pad = function(n) { return String(n).padStart(2, '0'); };
+      return d.getFullYear() + '.' + pad(d.getMonth() + 1) + '.' + pad(d.getDate());
+    }
+
+    function stageDate(type, harvestDate) {
+      if (harvestDate) {
+        var d = shiftDate(harvestDate, STAGE_DAY_OFFSET[type]);
+        if (d) return d;
+      }
+      return traceDetails[type] ? traceDetails[type].date : '';
+    }
+
     function loadDetail() {
       var params = new URLSearchParams(window.location.search);
       var type = params.get('type') || 'planting';
       var detail = traceDetails[type];
       if (!detail) return;
 
+      var code = params.get('code') || '';
+      var harvestDate = null;
+      if (code) {
+        try {
+          var cached = JSON.parse(sessionStorage.getItem('trace_batch_cache') || '{}');
+          harvestDate = cached[code] || null;
+        } catch (e) { harvestDate = null; }
+      }
+      var dateText = stageDate(type, harvestDate);
+
       setText('pageTitle', detail.title);
-      setText('pageDate', detail.date);
+      setText('pageDate', dateText);
       setAttr('pageImg', 'src', detail.img);
-      setText('infoDate', detail.date);
+      setText('infoDate', dateText);
       setText('infoLocation', detail.location);
       setText('infoWorker', detail.worker);
       setText('infoType', detail.title);

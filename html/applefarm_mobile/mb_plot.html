@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <!-- 共享数据层 -->
+  <script src="js/mobile-store.js"></script>
   <style>
     /* Stats Bar */
     .stats-bar {
@@ -111,6 +113,30 @@
     .plot-status.overdue {
       background: var(--error-bg);
       color: var(--error);
+    }
+
+    /* 新绘制地块标识 */
+    .plot-status.drawn {
+      background: var(--info-bg);
+      color: var(--info);
+    }
+
+    /* 空态提示 */
+    .drawn-empty {
+      margin: 0 16px 12px;
+      padding: 16px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-xl);
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: var(--font-sm);
+      background: var(--bg-white);
+    }
+
+    .drawn-empty-link {
+      color: var(--primary);
+      font-weight: 600;
+      cursor: pointer;
     }
     
     .plot-info {
@@ -385,6 +411,9 @@
 
     <!-- Content -->
     <div class="content">
+      <!-- 新绘制地块（来自共享存储） -->
+      <div id="drawnPlotsWrap"></div>
+
       <div class="plot-card" onclick="openPlotDetail('地块A1区')">
         <div class="plot-header">
           <div class="plot-name">地块A1区</div>
@@ -654,27 +683,27 @@
           <div class="detail-section-title">地块信息</div>
           <div class="detail-info-row">
             <div class="detail-info-label">地块名称</div>
-            <div class="detail-info-value">地块A1区</div>
+            <div class="detail-info-value" id="detailName">地块A1区</div>
           </div>
           <div class="detail-info-row">
             <div class="detail-info-label">种植品种</div>
-            <div class="detail-info-value">花牛苹果</div>
+            <div class="detail-info-value" id="detailVariety">花牛苹果</div>
           </div>
           <div class="detail-info-row">
             <div class="detail-info-label">树龄</div>
-            <div class="detail-info-value">5年</div>
+            <div class="detail-info-value" id="detailAge">5年</div>
           </div>
           <div class="detail-info-row">
             <div class="detail-info-label">面积</div>
-            <div class="detail-info-value">15亩</div>
+            <div class="detail-info-value" id="detailArea">15亩</div>
           </div>
           <div class="detail-info-row">
             <div class="detail-info-label">负责人</div>
-            <div class="detail-info-value">张三</div>
+            <div class="detail-info-value" id="detailOwner">张三</div>
           </div>
           <div class="detail-info-row">
             <div class="detail-info-label">当前物候期</div>
-            <div class="detail-info-value">幼果期</div>
+            <div class="detail-info-value" id="detailPheno">幼果期</div>
           </div>
         </div>
 
@@ -751,9 +780,23 @@
       }
     }
 
-    function openPlotDetail(name) {
+    function openPlotDetail(name, data) {
       document.getElementById('detailTitle').textContent = name;
       document.getElementById('detailSub').textContent = '查看地块详细信息';
+      document.getElementById('detailName').textContent = name;
+      if (data) {
+        document.getElementById('detailVariety').textContent = data.typeLabel || '未标注';
+        document.getElementById('detailAge').textContent = '—';
+        document.getElementById('detailArea').textContent = (data.area != null ? data.area : '—') + '亩';
+        document.getElementById('detailOwner').textContent = '—';
+        document.getElementById('detailPheno').textContent = '待录入';
+      } else {
+        document.getElementById('detailVariety').textContent = '花牛苹果';
+        document.getElementById('detailAge').textContent = '5年';
+        document.getElementById('detailArea').textContent = '15亩';
+        document.getElementById('detailOwner').textContent = '张三';
+        document.getElementById('detailPheno').textContent = '幼果期';
+      }
       document.getElementById('detailModal').classList.add('show');
     }
 
@@ -772,6 +815,112 @@
     function navigateToDraw() {
       window.location.href = 'mb_draw_plot.html';
     }
+
+    /* ---------------- 新绘制地块：读取共享存储并合并渲染 ---------------- */
+    var TYPE_LABELS = { apple: '苹果园', peach: '桃园', grape: '葡萄园', other: '其他' };
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function typeLabel(type) { return TYPE_LABELS[type] || '未标注'; }
+
+    // 共享键 smartorchard_plots（画地块页经 MobileStore 写入）+ 兼容早期直接写 'plots' 的数据
+    function getStoredPlots() {
+      var arr = [];
+      if (window.MobileStore) {
+        arr = arr.concat(MobileStore.list(MobileStore.KEYS.plots));
+      }
+      try {
+        var legacy = JSON.parse(localStorage.getItem('plots') || '[]');
+        if (Array.isArray(legacy)) arr = arr.concat(legacy);
+      } catch (e) { /* 忽略解析异常 */ }
+      var seen = {}, out = [];
+      arr.forEach(function (p, i) {
+        if (!p) return;
+        var key = (p.id != null) ? String(p.id) : ('idx_' + i + '_' + (p.name || ''));
+        if (seen[key]) return;
+        seen[key] = 1;
+        out.push(p);
+      });
+      return out;
+    }
+
+    function renderDrawnPlots() {
+      var wrap = document.getElementById('drawnPlotsWrap');
+      if (!wrap) return;
+      var plots = getStoredPlots();
+      if (!plots.length) {
+        wrap.innerHTML =
+          '<div class="drawn-empty">还没有新绘制的地块<br>' +
+          '<span class="drawn-empty-link" onclick="navigateToDraw()">去画地块 ›</span></div>';
+        return;
+      }
+      wrap.innerHTML = plots.map(function (p) {
+        var areaText = (p.area != null && p.area !== '') ? (p.area + ' 亩') : '面积待测';
+        var name = p.name || '未命名地块';
+        var dataArg = '{ area: ' + (p.area != null && !isNaN(parseFloat(p.area)) ? JSON.stringify(parseFloat(p.area)) : 'null') +
+          ', typeLabel: \'' + esc(typeLabel(p.type)) + '\' }';
+        return '' +
+          '<div class="plot-card" onclick="openPlotDetail(\'' + esc(name) + '\', ' + dataArg + ')">' +
+            '<div class="plot-header">' +
+              '<div class="plot-name">' + esc(name) + '</div>' +
+              '<span class="plot-status drawn">新绘制</span>' +
+            '</div>' +
+            '<div class="plot-info">' +
+              '<div class="plot-info-item">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' +
+                '<span>' + esc(typeLabel(p.type)) + '</span>' +
+              '</div>' +
+              '<div class="plot-info-item">' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/></svg>' +
+                '<span>' + esc(areaText) + '</span>' +
+              '</div>' +
+              (p.remark ? '<div class="plot-info-item"><span>备注：' + esc(p.remark) + '</span></div>' : '') +
+            '</div>' +
+          '</div>';
+      }).join('');
+    }
+
+    function updateStats() {
+      var wrap = document.getElementById('drawnPlotsWrap');
+      var staticCount = 0, staticArea = 0;
+      document.querySelectorAll('.content .plot-card').forEach(function (card) {
+        if (wrap && wrap.contains(card)) return;
+        staticCount++;
+        Array.prototype.slice.call(card.querySelectorAll('.plot-info-item span')).forEach(function (s) {
+          if (/亩\s*$/.test(s.textContent.trim())) {
+            var m = parseFloat(s.textContent);
+            if (!isNaN(m)) staticArea += m;
+          }
+        });
+      });
+      var drawn = getStoredPlots();
+      var drawnArea = drawn.reduce(function (sum, p) {
+        var a = parseFloat(p.area);
+        return sum + (isNaN(a) ? 0 : a);
+      }, 0);
+      var nums = document.querySelectorAll('.stats-bar .stat-num');
+      if (nums[0]) nums[0].textContent = staticCount + drawn.length;
+      if (nums[2]) nums[2].textContent = Math.round((staticArea + drawnArea) * 10) / 10;
+    }
+
+    renderDrawnPlots();
+    updateStats();
+
+    /* 从地图进入时直接定位并打开对应地块详情 */
+    (function () {
+      var m = location.search.match(/[?&]plot=([^&]+)/);
+      if (!m) return;
+      var name = decodeURIComponent(m[1]);
+      var sub = document.querySelector('.header-sub');
+      if (sub) sub.textContent = '已定位：' + name;
+      var run = function () { if (typeof openPlotDetail === 'function') openPlotDetail(name); };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+      else run();
+    })();
   </script>
 </body>
 </html>

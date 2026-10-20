@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -160,10 +160,25 @@
       <input type="checkbox" class="footer-checkbox" checked onclick="toggleSelectAll(this)">
       <span class="footer-text" onclick="toggleSelectAll(document.querySelector('.footer-checkbox'))">全选</span>
       <div class="footer-price">
-        <div class="price-label">合计</div>
+        <div class="price-label">合计（含优惠）</div>
         <div class="price-value" id="totalPrice">¥236</div>
+        <div class="price-discount" id="discountInfo" style="font-size:11px;color:#999;"></div>
       </div>
       <button class="mb-btn mb-btn-primary mb-btn-lg" onclick="checkout()" id="checkoutBtn">结算(2)</button>
+    </div>
+
+    <!-- 优惠券/积分选择弹窗（H5-B-003） -->
+    <div class="modal-overlay" id="couponModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:flex-end;justify-content:center;">
+      <div style="background:#fff;width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:16px;max-height:60vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h3 style="margin:0;">选择优惠</h3>
+          <button onclick="closeCouponModal()" style="background:none;border:none;font-size:18px;cursor:pointer;">×</button>
+        </div>
+        <div id="couponList"></div>
+      </div>
+    </div>
+    <div style="position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:998;">
+      <button onclick="openCouponModal()" style="background:#fff;border:1px solid #eee;border-radius:20px;padding:6px 14px;font-size:12px;color:var(--primary);box-shadow:0 2px 8px rgba(0,0,0,.08);">🎁 优惠券/积分</button>
     </div>
 
     <!-- 底部导航 -->
@@ -269,7 +284,64 @@
       });
     });
 
-    function showToast(message) {
+    // 优惠券/积分弹窗（H5-B-003）
+var selectedCoupon = null; // { name, type:'cash'|'percent', value, min }
+function openCouponModal() {
+  var list = [
+    { name: '满100减10', type: 'cash', value: 10, min: 100 },
+    { name: '满200减30', type: 'cash', value: 30, min: 200 },
+    { name: '9折优惠券', type: 'percent', value: 9, min: 0 }
+  ];
+  var html = list.map(function(c, i){
+    return '<div onclick="selectCoupon(' + i + ')" style="border:1px dashed #d4af37;border-radius:8px;padding:12px;margin:8px 0;cursor:pointer;background:linear-gradient(135deg,#fef9e7,#fff8dc);">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+      '<div><div style="font-weight:600;color:#8b4513;">' + c.name + '</div>' +
+      '<div style="font-size:11px;color:#8b7355;">满 ' + c.min + ' 元可用</div></div>' +
+      '<div style="color:#ea580c;font-weight:700;">' + (c.type === 'cash' ? '¥' + c.value : c.value + '折') + '</div>' +
+      '</div></div>';
+  }).join('');
+  html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee;">' +
+    '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">可用积分 <b id="userPoints">0</b>（100积分=¥1）</div>' +
+    '<input type="number" id="usePoints" placeholder="使用积分" min="0" style="width:100%;padding:8px;border:1px solid #eee;border-radius:6px;">' +
+    '<button onclick="applyPoints()" style="margin-top:8px;width:100%;background:var(--primary);color:#fff;border:none;padding:8px;border-radius:6px;">应用积分抵扣</button>' +
+    '</div>';
+  document.getElementById('couponList').innerHTML = html;
+  var pts = JSON.parse(localStorage.getItem('h5_points') || '[]').reduce(function(s,p){ return s + (p.amount || 0); }, 0);
+  var el = document.getElementById('userPoints'); if (el) el.textContent = pts;
+  document.getElementById('couponModal').style.display = 'flex';
+}
+function closeCouponModal() { document.getElementById('couponModal').style.display = 'none'; }
+function selectCoupon(i) {
+  var list = [{name:'满100减10',type:'cash',value:10,min:100},{name:'满200减30',type:'cash',value:30,min:200},{name:'9折优惠券',type:'percent',value:9,min:0}];
+  selectedCoupon = list[i];
+  closeCouponModal();
+  recomputeCartTotal();
+  showToast('已选用：' + selectedCoupon.name);
+}
+function applyPoints() {
+  var pts = parseInt(document.getElementById('usePoints').value) || 0;
+  if (pts <= 0) { showToast('请填写积分数量'); return; }
+  selectedCoupon = selectedCoupon || {};
+  selectedCoupon.pointsUsed = pts;
+  closeCouponModal();
+  recomputeCartTotal();
+}
+function recomputeCartTotal() {
+  var totalEl = document.getElementById('totalPrice');
+  var info = document.getElementById('discountInfo');
+  var subtotal = 236;
+  var discount = 0;
+  if (selectedCoupon) {
+    if (selectedCoupon.type === 'cash') discount = selectedCoupon.value;
+    else if (selectedCoupon.type === 'percent') discount = Math.round(subtotal * (1 - selectedCoupon.value / 10));
+  }
+  if (selectedCoupon && selectedCoupon.pointsUsed) discount += Math.floor(selectedCoupon.pointsUsed / 100);
+  var final = Math.max(0, subtotal - discount);
+  totalEl.textContent = '¥' + final;
+  if (info) info.textContent = discount > 0 ? '已优惠 ¥' + discount : '';
+}
+
+function showToast(message) {
       var toast = document.createElement('div');
       toast.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;z-index:999;animation:fadeInOut 2s ease;';
       toast.textContent = message;

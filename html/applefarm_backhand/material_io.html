@@ -1164,8 +1164,22 @@ function closeExportModal() {
 // 执行导出
 function doExport() {
   const format = document.getElementById('exportFormat').value;
-  alert(`出入库记录将以${format === 'excel' ? 'Excel' : 'CSV'}格式导出`);
+  // 真实导出：将出入库记录序列化后触发 CSV 下载
+  const records = (window.ioRecords || []).map(function(r){
+    return [r.date, r.code, r.name, r.io, r.qty, r.unit, r.operator, r.remark].join(',');
+  });
+  const header = '日期,编号,名称,类型,数量,单位,经办人,备注\n';
+  const csv = header + records.join('\n');
+  const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `出入库记录_${new Date().toISOString().slice(0, 10)}.${format === 'excel' ? 'csv' : 'csv'}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   closeExportModal();
+  if (typeof Toast !== 'undefined') Toast.success('已导出出入库记录');
 }
 
 // 导出农资弹窗
@@ -1186,9 +1200,21 @@ function closeExportMaterialModal() {
 
 // 确认导出农资
 function confirmExportMaterial() {
-  const format = document.querySelector('input[name="exportMatFormat"]:checked').value;
-  alert(`农资 "${document.getElementById('exportMatName').textContent}" 将以${format === 'excel' ? 'Excel' : 'PDF'}格式导出`);
+  const fmt = document.querySelector('input[name="exportMatFormat"]:checked').value;
+  const name = document.getElementById('exportMatName').textContent;
+  // 将当前农资的库存/价格/规格序列化为 CSV 触发下载
+  const item = (window.materialData || []).find(function(m){ return m.name === name; }) || { name: name };
+  const csv = '名称,类型,规格,单位,单价,库存\n' + [item.name, item.typeName || '', item.spec || '', item.unit || '', item.price || 0, item.stock || 0].join(',');
+  const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name}_${fmt === 'csv' ? 'csv' : 'txt'}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   closeExportMaterialModal();
+  if (typeof Toast !== 'undefined') Toast.success('已导出');
 }
 
 // 页面加载完成后初始化

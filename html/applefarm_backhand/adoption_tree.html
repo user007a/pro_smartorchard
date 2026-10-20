@@ -145,6 +145,9 @@
   .action-btn.delete { color:var(--error); border-color:var(--error-border); }
   .action-btn.delete:hover { background:var(--error-bg); }
 
+  /* 移动端挂牌来源标记 */
+  .source-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; line-height:1.6; background:#e6f4ff; color:#0958d9; margin-left:4px; vertical-align:middle; }
+
   /* 状态标签 */
   .status-tag {
     display:inline-flex;
@@ -558,6 +561,9 @@
               <option value="available">可认养</option>
               <option value="adopted">已认养</option>
               <option value="unavailable">不可认养</option>
+              <option value="pending_assign">待分配</option>
+              <option value="paused">已暂停</option>
+              <option value="refunded">已退款</option>
             </select>
             <select class="search-select" id="varietySelect">
               <option value="">品种</option>
@@ -809,6 +815,7 @@
 </div>
 
 <!-- 引入交互脚本 -->
+<script src="js/shared/mobile-bridge.js"></script>
 <script>
   // Mock数据
   const mockData = [
@@ -840,19 +847,43 @@
   const pageSize = 8;
   let currentPage = 1;
 
+  // 全部果树 = 基础数据 + 移动端挂牌记录（FLOW-011 跨端闭环）
+  let allTrees = [];
+
+  // 把移动端挂牌记录映射为 PC 端果树结构
+  function mobileTagRecords() {
+    if (typeof MobileBridge === 'undefined') return [];
+    return MobileBridge.adoptionTags().map((t, i) => ({
+      id: 'TAG-' + (i + 1),
+      code: t.code || ('TAG' + (i + 1)),
+      name: t.treeNo || ('挂牌果树-' + (i + 1)),
+      variety: '花牛苹果',
+      base: t.plot || '麦积区基地',
+      status: 'adopted',
+      adopter: t.adopter || '-',
+      expireDate: t.period || '-',
+      source: 'mobile',
+      location: t.location || '-'
+    }));
+  }
+
+  function refreshAllTrees() {
+    allTrees = mockData.concat(mobileTagRecords());
+  }
+
   // 渲染表格
   function renderTable(data) {
     const tbody = document.getElementById('treeList');
     tbody.innerHTML = '';
     
     data.forEach((item, __seq) => {
-      const statusText = item.status === 'available' ? '可认养' : item.status === 'adopted' ? '已认养' : '不可认养';
+      const statusText = item.status === 'available' ? '可认养' : item.status === 'adopted' ? '已认养' : item.status === 'unavailable' ? '不可认养' : item.status === 'pending_assign' ? '待分配' : item.status === 'paused' ? '已暂停' : item.status === 'refunded' ? '已退款' : '不可认养';
       const statusClass = item.status;
       
       const row = document.createElement('tr');
       row.innerHTML = `
         <td>${__seq + 1}</td>
-        <td><strong>${item.code}</strong></td>
+        <td><strong>${item.code}</strong>${item.source === 'mobile' ? '<span class="source-badge">移动端挂牌</span>' : ''}</td>
         <td>${item.name}</td>
         <td>${item.variety}</td>
         <td>${item.base}</td>
@@ -882,16 +913,16 @@
     currentPage = page;
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    const pageData = mockData.slice(start, end);
-    
+    const pageData = allTrees.slice(start, end);
+
     renderTable(pageData);
     updatePagination();
   }
 
   // 更新分页状态
   function updatePagination() {
-    const totalPages = Math.ceil(mockData.length / pageSize);
-    document.getElementById('paginationInfo').textContent = `共 ${mockData.length} 条记录`;
+    const totalPages = Math.ceil(allTrees.length / pageSize);
+    document.getElementById('paginationInfo').textContent = `共 ${allTrees.length} 条记录`;
     
     const prevBtn = document.getElementById('prevPage');
     const nextBtn = document.getElementById('nextPage');
@@ -931,7 +962,7 @@
     const status = document.getElementById('statusSelect').value;
     const variety = document.getElementById('varietySelect').value;
     
-    let filtered = mockData.filter(item => {
+    let filtered = allTrees.filter(item => {
       const matchKeyword = !keyword || item.code.toLowerCase().includes(keyword) || item.name.toLowerCase().includes(keyword);
       const matchBase = !base || item.base.includes(base);
       const matchStatus = !status || item.status === status;
@@ -1043,6 +1074,7 @@
   }
 
   // 初始化
+  refreshAllTrees();
   goToPage(1);
 </script>
 

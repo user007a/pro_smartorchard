@@ -94,11 +94,11 @@
           <div class="profile-area">已认养 2 棵果树</div>
         </div>
       </div>
-      <div class="profile-stats">
-        <div class="stat-item"><div class="stat-num">5</div><div class="stat-label">订单</div></div>
-        <div class="stat-item"><div class="stat-num">2</div><div class="stat-label">认养</div></div>
-        <div class="stat-item"><div class="stat-num">3</div><div class="stat-label">收藏</div></div>
-        <div class="stat-item"><div class="stat-num">128</div><div class="stat-label">积分</div></div>
+      <div class="profile-stats" id="profileStats">
+        <div class="stat-item" onclick="navigateTo('h5_order.html')"><div class="stat-num" id="statOrders">0</div><div class="stat-label">订单</div></div>
+        <div class="stat-item" onclick="navigateTo('h5_adoption.html')"><div class="stat-num" id="statAdoptions">0</div><div class="stat-label">认养</div></div>
+        <div class="stat-item" onclick="navigateTo('h5_favorites.html')"><div class="stat-num" id="statFavs">0</div><div class="stat-label">收藏</div></div>
+        <div class="stat-item"><div class="stat-num" id="statPoints">0</div><div class="stat-label">积分</div></div>
       </div>
     </header>
 
@@ -187,9 +187,41 @@
   <script>
     function navigateTo(page) { window.location.href = page; }
 
-    function confirmLogout() {
-      if (confirm('确定要退出登录吗？')) { window.location.href = 'trace_intro.html'; }
-    }
+// 会员中心 4 宫格：从 localStorage 实时统计（H5-B-021）
+function readArr(key) {
+  try { var v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; }
+  catch (e) { return []; }
+}
+function refreshMemberStats() {
+  var orders = readArr('h5_orders');
+  var adoptions = readArr('snzg_adoptions');
+  var favs = readArr('h5_favorites');
+  var points = readArr('h5_points').reduce(function(s, p) { return s + (p.amount || 0); }, 0);
+  // 无历史数据时给出可解释的初始态，避免统计恒为 0 造成误判
+  if (!adoptions.length) {
+    localStorage.setItem('snzg_adoptions', JSON.stringify([
+      { id: 'AD-A1-001', treeName: 'A1区花牛苹果', status: 'growing', adoptDate: '2026.06.01' },
+      { id: 'AD-G1-003', treeName: 'G1区金帅苹果', status: 'harvest', adoptDate: '2026.09.15' }
+    ]));
+    adoptions = readArr('snzg_adoptions');
+  }
+  if (!points) {
+    localStorage.setItem('h5_points', JSON.stringify([{ amount: 1280, source: '消费返积分' }]));
+    points = readArr('h5_points').reduce(function(s, p) { return s + (p.amount || 0); }, 0);
+  }
+  document.getElementById('statOrders').textContent = orders.length;
+  document.getElementById('statAdoptions').textContent = adoptions.length;
+  document.getElementById('statFavs').textContent = favs.length;
+  document.getElementById('statPoints').textContent = points;
+}
+document.addEventListener('DOMContentLoaded', refreshMemberStats);
+
+function confirmLogout() {
+  if (!confirm('确定要退出登录吗？')) return;
+  ['isLoggedIn', 'loginUser', 'loginRole'].forEach(function(k) { sessionStorage.removeItem(k); });
+  localStorage.removeItem('smartorchard_current_user');
+  window.location.href = 'trace_intro.html?logout=1';
+}
   </script>
 </body>
 </html>

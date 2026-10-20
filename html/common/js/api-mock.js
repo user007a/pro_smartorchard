@@ -741,7 +741,7 @@ var VRAPI = {
             customerName: '天水振华商厦',
             customerTel: '0535-6****888',
             deliveryDate: '2026-09-02',
-            deliveryAddress: '天水市芝罘区胜利路208号',
+            deliveryAddress: '烟台市芝罘区胜利路208号',
             traceCode: '69 123456 789012 9',
             status: 'completed',
             statusName: '已完成'

@@ -552,6 +552,99 @@
   const passwordError = document.getElementById('passwordError');
   const loginBtn = document.getElementById('loginBtn');
 
+  // ===== 账号库（演示用；生产环境应由后端 API 提供） =====
+  const USERS = [
+    { username: 'admin',    password: 'admin123',    role: '超级管理员',   realName: '系统管理员' },
+    { username: 'manager',  password: 'manager123',  role: '企业管理员',   realName: '惠加宁' },
+    { username: 'farmer',   password: 'farmer123',   role: '农技员',       realName: '黄忠坚' },
+    { username: 'worker',   password: 'worker123',   role: '普通农工',     realName: '张才孙' },
+    { username: 'demo',     password: 'demo123',     role: '演示账号',     realName: '演示用户', disabled: true }
+  ];
+
+  // ===== 账号覆盖表（来自用户设置页修改密码/停用账号；localStorage） =====
+  const USER_ACCOUNTS_KEY = 'snzg_user_accounts';
+  const REMEMBER_KEY = 'snzg_remember';
+  const REMEMBER_DAYS = 7;
+
+  function encodeB64(str) {
+    try { return btoa(unescape(encodeURIComponent(String(str)))); } catch (e) { return String(str); }
+  }
+  function decodeB64(str) {
+    try { return decodeURIComponent(escape(atob(String(str)))); } catch (e) { return ''; }
+  }
+  // 合并内置账号库与 localStorage 覆盖表，返回 username -> {password,realName,role,phone,disabled}
+  function getAccountMap() {
+    const map = {};
+    USERS.forEach(function(u) {
+      map[u.username] = {
+        password: u.password, realName: u.realName, role: u.role,
+        phone: u.phone || '', disabled: !!u.disabled
+      };
+    });
+    try {
+      const raw = localStorage.getItem(USER_ACCOUNTS_KEY);
+      if (raw) {
+        const ov = JSON.parse(raw) || {};
+        Object.keys(ov).forEach(function(k) {
+          const base = map[k] || { password: '', realName: k, role: '普通农工', phone: '', disabled: false };
+          const o = ov[k] || {};
+          map[k] = {
+            password: o.password !== undefined ? o.password : base.password,
+            realName: o.realName || base.realName,
+            role: o.role || base.role,
+            phone: o.phone !== undefined ? o.phone : base.phone,
+            disabled: o.disabled !== undefined ? !!o.disabled : base.disabled
+          };
+        });
+      }
+    } catch (e) {}
+    return map;
+  }
+
+  // 锁定状态（用户名 -> { until, count }）
+  const LOCK_KEY = 'snzg_login_lock';
+  const SESSION_KEY = 'snzg_logged_in';
+  const USER_KEY = 'snzg_user';
+  const MAX_ATTEMPTS = 5;
+  const LOCK_MINUTES = 15;
+  function getLockMap() {
+    try { return JSON.parse(localStorage.getItem(LOCK_KEY) || '{}'); } catch(e){ return {}; }
+  }
+  function saveLockMap(map) {
+    try { localStorage.setItem(LOCK_KEY, JSON.stringify(map)); } catch(e){}
+  }
+  function isLocked(username) {
+    const map = getLockMap();
+    const rec = map[username];
+    if (!rec) return false;
+    if (Date.now() < rec.until) return true;
+    // 已过期，清除
+    delete map[username];
+    saveLockMap(map);
+    return false;
+  }
+  function bumpFail(username) {
+    const map = getLockMap();
+    const rec = map[username] || { count: 0, until: 0 };
+    rec.count += 1;
+    if (rec.count >= MAX_ATTEMPTS) {
+      rec.until = Date.now() + LOCK_MINUTES * 60 * 1000;
+    }
+    map[username] = rec;
+    saveLockMap(map);
+    return rec;
+  }
+  function clearFail(username) {
+    const map = getLockMap();
+    delete map[username];
+    saveLockMap(map);
+  }
+
+  function setError(msg) {
+    passwordError.textContent = msg;
+    passwordError.classList.add('show');
+  }
+
   // 输入时清除错误
   usernameInput.addEventListener('input', () => {
     usernameError.classList.remove('show');
@@ -571,16 +664,29 @@
     const password = pwdInput.value.trim();
 
     if (!username) {
-      usernameError.classList.add('show');
+      usernameError.classList.remove('show');
+      setError('请输入用户名');
       usernameInput.focus();
       valid = false;
     }
     if (!password) {
-      passwordError.classList.add('show');
-      if (valid) pwdInput.focus();
+      if (valid) {
+        usernameError.classList.remove('show');
+        setError('请输入密码');
+        pwdInput.focus();
+      }
       valid = false;
     }
     if (!valid) return;
+
+    // 锁定检查
+    if (isLocked(username)) {
+      usernameError.classList.remove('show');
+      const map = getLockMap();
+      const remainMin = Math.max(1, Math.ceil((map[username].until - Date.now()) / 60000));
+      setError('账号已锁定，请 ' + remainMin + ' 分钟后再试');
+      return;
+    }
 
     // 显示加载状态
     loginBtn.classList.add('loading');
@@ -589,16 +695,55 @@
     setTimeout(function() {
       loginBtn.classList.remove('loading');
 
-      // 记住密码：存储到 localStorage
-      if (document.getElementById('rememberMe').checked) {
-        localStorage.setItem('snzg_remember', JSON.stringify({ username: username }));
-      } else {
-        localStorage.removeItem('snzg_remember');
+      // 鉴权：账号是否存在（内置账号库 + 用户设置覆盖表）
+      const accounts = getAccountMap();
+      const user = accounts[username];
+      if (!user) {
+        usernameError.textContent = '账号不存在，请检查后重试';
+        usernameError.classList.add('show');
+        passwordError.classList.remove('show');
+        return;
+      }
+      // 账号是否停用
+      if (user.disabled) {
+        usernameError.classList.remove('show');
+        setError('账号已停用，请联系管理员');
+        return;
+      }
+      // 密码校验
+      if (user.password !== password) {
+        const rec = bumpFail(username);
+        usernameError.classList.remove('show');
+        const left = MAX_ATTEMPTS - rec.count;
+        if (left > 0) {
+          setError('密码错误，还剩 ' + left + ' 次尝试机会');
+        } else {
+          setError('账号已锁定 15 分钟');
+        }
+        return;
       }
 
-      // 记录登录状态
-      sessionStorage.setItem('snzg_logged_in', '1');
-      sessionStorage.setItem('snzg_user', username);
+      // 登录成功
+      clearFail(username);
+      // 记住密码：写入用户名 + 密码(Base64) + 7 天免登录有效期
+      if (document.getElementById('rememberMe').checked) {
+        localStorage.setItem(REMEMBER_KEY, JSON.stringify({
+          username: username,
+          password: encodeB64(password),
+          expireAt: Date.now() + REMEMBER_DAYS * 24 * 60 * 60 * 1000
+        }));
+      } else {
+        localStorage.removeItem(REMEMBER_KEY);
+      }
+
+      // 记录登录状态（含真实姓名与角色）
+      sessionStorage.setItem(SESSION_KEY, '1');
+      sessionStorage.setItem(USER_KEY, JSON.stringify({
+        username: username,
+        realName: user.realName,
+        role: user.role,
+        loginAt: Date.now()
+      }));
 
       // 显示成功弹层
       var overlay = document.getElementById('successOverlay');
@@ -624,16 +769,34 @@
     }, 1200);
   }
 
-  // ===== 页面加载：填充记住的用户名 =====
+  // ===== 页面加载：7 天免登录 / 回填记住的账号密码 =====
   (function autoFill() {
-    try {
-      var saved = JSON.parse(localStorage.getItem('snzg_remember'));
-      if (saved && saved.username) {
-        usernameInput.value = saved.username;
-        document.getElementById('rememberMe').checked = true;
-        setTimeout(() => pwdInput.focus(), 100);
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(REMEMBER_KEY)); } catch (e) {}
+    if (!saved || !saved.username) return;
+
+    // 7 天免登录：未过期且账号密码仍有效，直接进入系统首页
+    if (saved.expireAt && Date.now() < saved.expireAt) {
+      var acc = getAccountMap()[saved.username];
+      var pwd = saved.password ? decodeB64(saved.password) : '';
+      if (acc && !acc.disabled && acc.password === pwd) {
+        sessionStorage.setItem(SESSION_KEY, '1');
+        sessionStorage.setItem(USER_KEY, JSON.stringify({
+          username: saved.username,
+          realName: acc.realName,
+          role: acc.role,
+          loginAt: Date.now()
+        }));
+        window.location.href = 'index.html';
+        return;
       }
-    } catch (e) {}
+    }
+
+    // 回填用户名 + 密码
+    usernameInput.value = saved.username;
+    if (saved.password) pwdInput.value = decodeB64(saved.password);
+    document.getElementById('rememberMe').checked = true;
+    setTimeout(function() { pwdInput.focus(); }, 100);
   })();
 
   // ===== 统一 Toast =====

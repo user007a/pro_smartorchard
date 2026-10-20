@@ -283,11 +283,126 @@
     function navigateTo(page) { window.location.href = page; }
 
     function manageAddress() {
-      showToast('地址管理功能开发中...');
+      // 地址管理：使用 localStorage 持久化地址列表，支持新增/编辑/设为默认
+      var list = [];
+      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) {}
+      var html = '';
+      if (!list.length) {
+        html = '<p style="text-align:center;color:#999;margin:24px 0;">暂无地址，请点击下方新增</p>';
+      } else {
+        html = list.map(function(a, i){
+          return '<div class="addr-item" data-idx="' + i + '" style="border:1px solid #eee;border-radius:8px;padding:12px;margin:8px 0;">' +
+            '<div style="display:flex;justify-content:space-between;">' +
+            '<strong>' + (a.name || '') + ' ' + (a.phone || '') + '</strong>' +
+            (a.default ? '<span style="color:var(--primary);font-size:12px;">默认</span>' : '') +
+            '</div>' +
+            '<div style="margin-top:6px;color:#666;font-size:13px;">' + (a.region || '') + ' ' + (a.detail || '') + '</div>' +
+            '<div style="margin-top:8px;text-align:right;">' +
+            '<button style="margin-right:8px;color:#999;" onclick="editAddress(' + i + ')">编辑</button>' +
+            '<button style="color:var(--danger);" onclick="deleteAddress(' + i + ')">删除</button>' +
+            '</div>' +
+            '</div>';
+        }).join('');
+      }
+      html += '<form id="addrForm" style="margin-top:16px;border-top:1px solid #eee;padding-top:16px;">' +
+        '<div><input id="addrName" placeholder="收货人" style="width:100%;padding:8px;margin:4px 0;"></div>' +
+        '<div><input id="addrPhone" placeholder="手机号" style="width:100%;padding:8px;margin:4px 0;"></div>' +
+        '<div><input id="addrRegion" placeholder="省/市/区" style="width:100%;padding:8px;margin:4px 0;"></div>' +
+        '<div><textarea id="addrDetail" placeholder="详细地址" style="width:100%;padding:8px;margin:4px 0;"></textarea></div>' +
+        '<label style="display:flex;align-items:center;margin:8px 0;"><input type="checkbox" id="addrDefault"> 设为默认</label>' +
+        '<div style="display:flex;gap:8px;">' +
+        '<button type="button" onclick="saveAddress()" style="flex:1;background:var(--primary);color:#fff;padding:8px;border-radius:6px;">保存</button>' +
+        '<button type="button" onclick="closeModal()" style="flex:1;background:#eee;color:#333;padding:8px;border-radius:6px;">取消</button>' +
+        '</div></form>';
+      showModal('地址管理', html);
+    }
+
+    function showModal(title, html) {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      overlay.innerHTML = '<div style="background:#fff;border-radius:10px;width:90%;max-width:420px;max-height:80vh;overflow-y:auto;padding:16px;">' +
+        '<h3 style="margin-bottom:12px;">' + title + '</h3>' + html +
+        '</div>';
+      document.body.appendChild(overlay);
+      window.__addrOverlay = overlay;
+    }
+
+    function closeModal() {
+      if (window.__addrOverlay) { window.__addrOverlay.remove(); window.__addrOverlay = null; }
+    }
+
+    function saveAddress() {
+      var list = [];
+      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) {}
+      var name = document.getElementById('addrName').value.trim();
+      var phone = document.getElementById('addrPhone').value.trim();
+      var region = document.getElementById('addrRegion').value.trim();
+      var detail = document.getElementById('addrDetail').value.trim();
+      var isDefault = document.getElementById('addrDefault').checked;
+      var editIdx = window.__addrEditIdx;
+      if (!name || !phone || !detail) { showToast('请填写完整'); return; }
+      if (!/^1\d{10}$/.test(phone)) { showToast('手机号格式不正确'); return; }
+      var addr = { name: name, phone: phone, region: region, detail: detail, default: isDefault };
+      if (isDefault) list.forEach(function(a){ a.default = false; });
+      if (editIdx != null && editIdx >= 0) {
+        list[editIdx] = addr;
+      } else {
+        list.push(addr);
+      }
+      if (!list.some(function(a){ return a.default; }) && list.length) list[0].default = true;
+      localStorage.setItem('h5_addresses', JSON.stringify(list));
+      window.__addrEditIdx = null;
+      closeModal();
+      manageAddress();
+      showToast('地址已保存');
+    }
+
+    function editAddress(idx) {
+      var list = [];
+      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) {}
+      var a = list[idx];
+      if (!a) return;
+      window.__addrEditIdx = idx;
+      manageAddress();
+      document.getElementById('addrName').value = a.name || '';
+      document.getElementById('addrPhone').value = a.phone || '';
+      document.getElementById('addrRegion').value = a.region || '';
+      document.getElementById('addrDetail').value = a.detail || '';
+      document.getElementById('addrDefault').checked = !!a.default;
+    }
+
+    function deleteAddress(idx) {
+      if (!confirm('确定删除该地址？')) return;
+      var list = [];
+      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) {}
+      list.splice(idx, 1);
+      localStorage.setItem('h5_addresses', JSON.stringify(list));
+      closeModal();
+      manageAddress();
+      showToast('地址已删除');
     }
 
     function viewInvoices() {
-      showToast('发票查看功能开发中...');
+      var list = [];
+      try { list = JSON.parse(localStorage.getItem('h5_invoices') || '[]'); } catch (e) {}
+      var html = '';
+      if (!list.length) {
+        html = '<p style="text-align:center;color:#999;margin:24px 0;">暂无发票记录，发票将在订单完成后自动生成</p>';
+      } else {
+        html = list.map(function(inv){
+          return '<div style="border:1px solid #eee;border-radius:8px;padding:12px;margin:8px 0;">' +
+            '<div><strong>' + (inv.title || '') + '</strong></div>' +
+            '<div style="color:#666;font-size:13px;margin-top:4px;">金额：¥' + (inv.amount || 0) + ' · 类型：' + (inv.type || '电子普通发票') + '</div>' +
+            '</div>';
+        }).join('');
+      }
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      overlay.innerHTML = '<div style="background:#fff;border-radius:10px;width:90%;max-width:420px;max-height:80vh;overflow-y:auto;padding:16px;">' +
+        '<h3 style="margin-bottom:12px;">发票管理</h3>' + html +
+        '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="margin-top:16px;width:100%;background:#eee;color:#333;padding:8px;border-radius:6px;">关闭</button>' +
+        '</div>';
+      document.body.appendChild(overlay);
     }
 
     function showToast(message) {

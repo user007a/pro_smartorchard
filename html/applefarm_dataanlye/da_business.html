@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>智慧果园 · 经营分析大屏</title>
+<style>
+/* ============================================================
+   智慧果园经营分析大屏 — 深色单屏 (1920×1080, 自包含)
+   与 da_dashboard.html 同设计系统；字阶：42 北极星 / 28 关键指标 /
+   24 指标 / 18 数据 / 16 标题 / 14 正文 / 12 辅助
+   告警收敛：全屏色块底仅 1 处（经营风险），其余用「数字变色 + 左侧细线」
+   ============================================================ */
+:root{
+  --surface-0:#060D1F;     /* 舞台底 */
+  --surface-1:#0B1830;     /* 卡片面 */
+  --surface-2:#12234A;     /* 卡片抬升 / 悬停 */
+  --line:rgba(110,170,255,.18);
+  --line-strong:rgba(110,170,255,.34);
+  --text-1:#E8F2FF;
+  --text-2:#9DB8DC;
+  --text-3:#8AA0BE;
+  --brand-700:#14549F;
+  --brand-500:#2E8FE8;
+  --brand-400:#38D6FF;
+  --warn:#F2B33D;
+  --risk:#E5564B;
+  --info:#3E8EF0;
+  --cyan:#31C9E8;
+  --up:#2bd46e;
+  --c1:#2E8FE8;--c2:#38D6FF;--c3:#31C9E8;--c4:#6E7BFF;--c5:#F2B33D;
+  --font:"PingFang SC","Microsoft YaHei","Noto Sans SC",-apple-system,system-ui,"Segoe UI",sans-serif;
+  --font-hei:"Microsoft YaHei","黑体",SimHei,"Heiti SC","PingFang SC",sans-serif;
+  --num:"DIN Alternate","Bahnschrift","Oswald","Segoe UI",var(--font);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:var(--surface-0);font-family:var(--font);color:var(--text-1);
+  -webkit-font-smoothing:antialiased;overflow:hidden}
+body{display:flex;align-items:center;justify-content:center}
+
+/* 数字统一等宽，避免跨平台字宽跳变与实时刷新抖动 */
+.num,.fact b,.mini-stat b,.clock,.hstat .num,.hstat .n,.hstat .tr,.env .v,.env .tr,
+.agri-stats .n,.rank .no,.rank .amt,.leg .pc,.pie-leg .pc,.pie-leg .amt,.brow .v,
+.ind .v,.ind b,.dot b,.cost-r .pc,.peak,.sw-leg,.bar-lab{font-family:var(--num);
+  font-variant-numeric:tabular-nums;letter-spacing:.5px}
+.card-h .t,.map-head .t,.bcard .bh,.sub-h,.detail h4{font-family:var(--font-hei);font-weight:700;letter-spacing:.8px}
+
+/* 缩放舞台：固定 1920×1080，按视口等比缩放，单屏不滚动 */
+.stage{position:fixed;left:50%;top:50%;width:1920px;height:1080px;
+  transform-origin:center center;transform:translate(-50%,-50%);
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(62,142,240,.12), transparent 60%),
+    radial-gradient(900px 600px at 100% 110%, rgba(49,201,232,.07), transparent 55%),
+    var(--surface-0);
+  padding:22px 26px;display:flex;flex-direction:column;gap:14px}
+.stage::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(62,142,240,.06),transparent 18%)}
+
+/* ===================== 顶部常驻条 ===================== */
+.topbar{height:66px;flex:0 0 66px;display:flex;align-items:center;gap:22px;
+  background:var(--surface-1);border:1px solid var(--line);border-radius:16px;
+  padding:0 22px;position:relative;overflow:visible}
+.topbar::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:16px 0 0 16px;
+  background:linear-gradient(180deg,var(--brand-500),var(--brand-700))}
+.brand{display:flex;align-items:center;gap:14px}
+.brand .logo{width:42px;height:42px;flex:none}
+.brand h1{font-family:var(--font-hei);font-size:25px;font-weight:800;letter-spacing:1.5px;line-height:1.1}
+.brand .sub{font-size:12px;color:var(--text-3);letter-spacing:2.4px;text-transform:uppercase}
+.facts{display:flex;align-items:center;gap:16px;flex:1;flex-wrap:nowrap;overflow:hidden}
+.fact{display:flex;align-items:baseline;gap:7px;white-space:nowrap}
+.fact b{font-size:24px;color:var(--brand-500);font-weight:700}
+.fact span{font-size:14px;color:var(--text-2)}
+.fact.alt b{color:var(--brand-400)}
+.topright{display:flex;align-items:center;gap:12px;flex:none}
+.mini-stat{font-size:12px;color:var(--text-3);white-space:nowrap}
+.mini-stat b{font-size:14px;color:var(--text-2);font-weight:600}
+.clock{font-size:16px;color:var(--text-1);text-align:right;line-height:1.15}
+.clock small{display:block;font-size:12px;color:var(--text-3);font-family:var(--font)}
+.topright a,.switch summary{color:var(--text-2);text-decoration:none;font-size:14px;padding:7px 13px;border-radius:30px;
+  border:1px solid var(--line);background:rgba(255,255,255,.02);transition:.2s;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.topright a:hover,.switch summary:hover{color:#fff;border-color:var(--brand-500);background:rgba(62,142,240,.15)}
+.switch{position:relative}
+.switch summary{list-style:none}
+.switch summary::-webkit-details-marker{display:none}
+.switch summary::after{content:"";width:6px;height:6px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;
+  transform:rotate(45deg) translate(-1px,-1px);margin-left:2px}
+.switch[open] summary{color:#fff;border-color:var(--brand-500);background:rgba(62,142,240,.15)}
+.switch .menu{position:absolute;right:0;top:calc(100% + 9px);min-width:216px;z-index:30;
+  background:var(--surface-2);border:1px solid var(--line-strong);border-radius:12px;padding:6px;
+  box-shadow:0 16px 40px rgba(0,0,0,.55)}
+.switch .menu a{display:block;padding:9px 12px;border-radius:8px;color:var(--text-2);text-decoration:none;font-size:14px}
+.switch .menu a:hover{background:rgba(62,142,240,.15);color:#fff}
+.switch .menu a.on{color:var(--brand-400);font-weight:700}
+.switch .menu a.on::before{content:"●";font-size:9px;margin-right:7px}
+
+/* ===================== 北极星指标带 ===================== */
+.hero{flex:0 0 96px;height:96px;display:flex;gap:12px;align-items:stretch}
+.hstat{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;
+  background:linear-gradient(180deg,var(--surface-2),var(--surface-1));
+  border:1px solid var(--line);border-radius:14px;padding:8px 14px;min-width:0}
+.hstat.north{flex:0 0 236px;background:linear-gradient(135deg,rgba(46,143,232,.16),var(--surface-1) 62%);
+  border-color:rgba(96,165,250,.35)}
+.hstat.north .num{font-size:40px;font-weight:700;color:var(--brand-400);line-height:1;letter-spacing:-1px}
+.hstat.north .num small{font-size:14px;color:var(--text-3);font-family:var(--font);letter-spacing:0}
+.hstat.north .lab{font-size:12px;color:var(--text-3);margin-top:5px;white-space:nowrap}
+.hstat.kpi{flex:1 1 0}
+.hstat.kpi .n{font-size:28px;font-weight:700;line-height:1;color:var(--text-1)}
+.hstat.kpi .n small{font-size:14px;color:var(--text-2);font-family:var(--font)}
+.hstat.kpi .l{font-size:12px;color:var(--text-3);margin-top:5px;white-space:nowrap}
+.hstat.kpi.cyan .n{color:var(--cyan)}
+.hstat .tr{font-size:11px;margin-top:4px;white-space:nowrap;color:var(--text-3)}
+.hstat .tr.up{color:var(--up)}
+.hstat .tr.down{color:var(--risk)}
+.hstat .tr b{font-weight:700}
+
+/* ===================== 主区三栏 ===================== */
+.main{flex:1;min-height:0;display:grid;grid-template-columns:472px 1fr 472px;gap:18px}
+.col{display:flex;flex-direction:column;gap:14px;min-height:0}
+.card{background:var(--surface-1);border:1px solid var(--line);
+  border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;min-height:0;position:relative;overflow:hidden;
+  transition:background .2s ease,border-color .2s ease,transform .2s ease}
+.card:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-2px)}
+.card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex:none;gap:10px}
+.card-h .t{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:700;letter-spacing:.5px}
+.card-h .t i{width:4px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--brand-500),var(--brand-700))}
+.card-h .meta{font-size:12px;color:var(--text-3);text-align:right;white-space:nowrap}
+.card-h .meta b{color:var(--text-1);font-size:14px}
+.stamp{display:block;font-size:12px;color:var(--text-3);font-family:var(--font);letter-spacing:0}
+
+#L1{flex:0 0 318px}
+#L2{flex:1 1 auto}
+#C1{flex:1}
+#R1{flex:0 0 332px}
+#R2{flex:1 1 auto}
+
+/* ---------- 营收趋势 ---------- */
+.chart-wrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
+.chart-wrap svg{width:100%;flex:1;min-height:0;display:block}
+.peak{flex:none;align-self:center;margin-top:8px;font-size:12px;color:var(--text-2);
+  background:rgba(56,214,255,.09);border:1px solid rgba(56,214,255,.28);border-radius:20px;padding:4px 12px}
+.peak b{color:var(--brand-400);font-weight:700;font-size:14px}
+
+/* 通用图例 */
+.legend{display:flex;flex-direction:column;gap:9px;min-width:0}
+.leg{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--text-2)}
+.leg em{width:12px;height:12px;border-radius:4px;flex:none;display:inline-block}
+.leg .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leg .pc{color:var(--text-1);font-weight:700}
+.leg .amt{color:var(--text-3);font-size:12px;min-width:52px;text-align:right}
+
+/* ---------- 收入构成 ---------- */
+.split{display:grid;grid-template-columns:164px 1fr;gap:18px;align-items:center;flex:1;min-height:0}
+.donut{position:relative;display:grid;place-items:center}
+.donut svg{width:100%;height:auto;display:block}
+.donut .mid{position:absolute;text-align:center}
+.donut .mid .v{font-family:var(--num);font-size:22px;font-weight:700;color:var(--text-1);line-height:1.1}
+.donut .mid .v small{font-size:12px;color:var(--text-2);font-family:var(--font)}
+.donut .mid .l{font-size:12px;color:var(--text-3);margin-top:3px}
+
+/* ---------- 成本结构与利润分析（中栏） ---------- */
+.cost-top{display:grid;grid-template-columns:196px 1fr;gap:22px;align-items:center;flex:none}
+.sec-div{height:1px;background:linear-gradient(90deg,var(--line-strong),transparent);margin:14px 0 12px;flex:none}
+.profit{flex:1;min-height:0;display:flex;flex-direction:column}
+.sub-h{display:flex;align-items:baseline;gap:10px;font-size:15px;margin-bottom:10px}
+.sub-h span{font-size:12px;color:var(--text-3);font-weight:400;font-family:var(--font);letter-spacing:0}
+.brows{flex:1;display:flex;flex-direction:column;justify-content:space-evenly;gap:6px}
+.brow{display:grid;grid-template-columns:60px 1fr 62px;gap:12px;align-items:center}
+.brow .lb{font-size:14px;color:var(--text-2);white-space:nowrap}
+.brow .track{height:16px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden;position:relative}
+.brow .track i{display:block;height:100%;border-radius:5px;
+  background:linear-gradient(90deg,var(--brand-700),var(--brand-500));}
+.brow.top .track i{background:linear-gradient(90deg,var(--brand-500),var(--brand-400))}
+.brow.low .track i{background:linear-gradient(90deg,#3c5a86,#5d7fb3)}
+.brow .v{font-size:16px;font-weight:700;color:var(--text-1);text-align:right}
+.brow .v small{font-size:12px;color:var(--text-3);font-family:var(--font);margin-left:2px}
+.cost-note{margin-top:10px;font-size:13px;color:var(--text-2);background:rgba(255,255,255,.03);
+  border-left:3px solid var(--brand-500);border-radius:8px;padding:7px 11px;line-height:1.5;flex:none}
+.cost-note b{color:var(--text-1)}
+
+/* ---------- 销售与认养总览 ---------- */
+.pie-wrap{display:grid;grid-template-columns:172px 1fr;gap:16px;align-items:center;flex:1;min-height:0}
+.pie-wrap svg{width:100%;height:auto;display:block}
+.pie-wrap path{transition:opacity .2s}
+.pie-wrap path:hover{opacity:.82}
+.pie-leg{display:flex;flex-direction:column;gap:8px}
+.pie-leg .row{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--text-2)}
+.pie-leg .row em{width:11px;height:11px;border-radius:3px;flex:none}
+.pie-leg .row .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pie-leg .row .pc{color:var(--text-1);font-weight:700;min-width:38px;text-align:right}
+.kv3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;flex:none;margin-top:12px;
+  border-top:1px solid var(--line);padding-top:12px}
+.kv3 .k{text-align:center}
+.kv3 .k .v{font-family:var(--num);font-size:22px;font-weight:700;color:var(--brand-500);line-height:1}
+.kv3 .k .v small{font-size:12px;color:var(--text-2);font-family:var(--font)}
+.kv3 .k .l{font-size:12px;color:var(--text-3);margin-top:5px;white-space:nowrap}
+.kv3 .k.cy .v{color:var(--cyan)}
+
+/* ---------- Top10 滚动榜单 ---------- */
+.rank-scroll{flex:1;min-height:0;overflow:hidden;position:relative;
+  display:flex;flex-direction:column;gap:7px;
+  mask-image:linear-gradient(180deg,transparent 0,#000 12px,#000 calc(100% - 12px),transparent 100%);
+  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 12px,#000 calc(100% - 12px),transparent 100%)}
+.rank-list{list-style:none;display:flex;flex-direction:column;gap:7px}
+.rank-list li{display:grid;grid-template-columns:26px 1fr 78px;gap:10px;align-items:center;
+  padding:8px 11px;border-radius:10px;background:rgba(255,255,255,.025);
+  border:1px solid var(--line);border-left:3px solid var(--line-strong)}
+.rank-list li .no{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;
+  background:rgba(62,142,240,.14);color:var(--brand-500);font-weight:700;font-size:13px}
+.rank-list li:nth-child(1) .no{background:rgba(242,179,61,.18);color:var(--warn)}
+.rank-list li:nth-child(2) .no{background:rgba(56,214,255,.16);color:var(--brand-400)}
+.rank-list li:nth-child(3) .no{background:rgba(110,123,255,.16);color:#8f9bff}
+.rank-list li .nm{min-width:0}
+.rank-list li .nm b{display:block;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rank-list li .nm i{font-style:normal;font-size:12px;color:var(--text-3)}
+.rank-list li .amt{font-size:16px;font-weight:700;color:var(--text-1);text-align:right}
+.rank-list li .amt small{font-size:12px;color:var(--text-3);font-family:var(--font)}
+.rank-list li.hit{border-left-color:var(--brand-500)}
+
+/* ===================== 底部支撑条 ===================== */
+.bottom{flex:0 0 196px;height:196px;display:grid;grid-template-columns:1fr 1.35fr 1.05fr;gap:18px}
+.bcard{background:var(--surface-1);border:1px solid var(--line);
+  border-radius:16px;padding:14px 18px;display:flex;flex-direction:column;min-height:0;
+  transition:background .2s ease,border-color .2s ease,transform .2s ease}
+.bcard:hover{background:var(--surface-2);border-color:var(--line-strong);transform:translateY(-2px)}
+.bcard .bh{font-size:16px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex:none}
+.bcard .bh i{width:4px;height:16px;border-radius:3px;background:linear-gradient(180deg,var(--cyan),var(--brand-500))}
+.bcard .bh span{margin-left:auto;font-size:12px;color:var(--text-3);font-weight:400;font-family:var(--font);letter-spacing:0}
+.bar-wrap{flex:1;min-height:0;display:flex;flex-direction:column}
+.sw-leg{display:flex;gap:16px;font-size:12px;color:var(--text-3);margin-bottom:4px;flex:none}
+.sw-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+.bar-wrap svg{width:100%;flex:1;min-height:0;display:block}
+
+.ind-grid{display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(3,1fr);gap:6px 18px;flex:1;min-height:0}
+.ind{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:0 12px;border-radius:10px;background:rgba(255,255,255,.025);border:1px solid var(--line)}
+.ind .l{font-size:13px;color:var(--text-2);white-space:nowrap}
+.ind .v{font-size:18px;font-weight:700;color:var(--text-1);display:flex;align-items:baseline;gap:4px}
+.ind .v small{font-size:12px;color:var(--text-3);font-family:var(--font);font-weight:400}
+.ind .tag{font-size:11px;padding:1px 6px;border-radius:6px;background:rgba(43,212,110,.14);color:var(--up);font-weight:700}
+.ind .tag.down{background:rgba(229,86,75,.14);color:var(--risk)}
+.ind .tag.flat{background:rgba(255,255,255,.08);color:var(--text-3)}
+
+.risk{border-left:3px solid var(--risk);background:rgba(229,86,75,.09);border-radius:11px;
+  padding:8px 12px;font-size:12.5px;color:var(--text-2);line-height:1.5;flex:none}
+.risk .hd{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:var(--risk);margin-bottom:3px}
+.risk .hd svg{flex:none}
+.risk b{color:var(--text-1)}
+.tips{display:flex;flex-direction:column;gap:6px;flex:1;min-height:0;justify-content:center}
+.tip{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;color:var(--text-2);line-height:1.5}
+.tip .dot{flex:none;width:7px;height:7px;border-radius:50%;margin-top:5px}
+.tip .dot.g{background:var(--up)}
+.tip .dot.w{background:var(--warn)}
+.tip .dot.b{background:var(--brand-500)}
+.tip b{color:var(--text-1)}
+
+/* ===================== 无障碍 ===================== */
+:focus-visible{outline:2px solid var(--brand-400);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important}
+}
+
+/* ===================== 状态：加载 / 骨架 ===================== */
+.sk{color:transparent!important;position:relative;pointer-events:none}
+.sk>*{visibility:hidden}
+.sk::after{content:"";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);height:.85em;
+  border-radius:4px;background:rgba(255,255,255,.10);animation:skp 1.4s ease-in-out infinite}
+@keyframes skp{0%,100%{opacity:.35}50%{opacity:.8}}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <!-- ============ 顶部常驻条 ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <img class="logo" src="../common/images/brand_logo.png" alt="" aria-hidden="true">
+      <div>
+        <h1>智慧果园 · 经营分析大屏</h1>
+        <div class="sub">Apple Orchard Business Analytics</div>
+      </div>
+    </div>
+    <div class="facts">
+      <div class="fact alt"><b>2656</b><span>万 · 年度营收</span></div>
+      <div class="fact"><b>428</b><span>万 · 净利润</span></div>
+      <div class="fact"><b>3260</b><span>认养订单</span></div>
+      <div class="fact"><b>62%</b><span>复购率</span></div>
+    </div>
+    <div class="topright">
+      <span class="mini-stat">口径 <b>2025 财年</b></span>
+      <div class="clock" role="timer" aria-live="off"><span id="clk">--:--:--</span><small id="dt">2026-10-20 周二</small></div>
+      <a href="../applefarm_backhand/login.html">管理后台</a>
+      <a href="da_index.html">返回门户</a>
+      <details class="switch" id="switch">
+        <summary aria-haspopup="true">切换大屏</summary>
+        <nav class="menu" aria-label="大屏切换">
+          <a href="da_overview.html">果园管理驾驶舱</a>
+          <a href="da_dashboard.html">生产指挥大屏</a>
+          <a href="da_trace.html">质量溯源</a>
+          <a href="da_alert.html">智能预警</a>
+          <a href="da_growth.html">物候生长</a>
+          <a href="da_iot.html">设备物联</a>
+          <a href="da_results.html">数字成果</a>
+          <a href="da_business.html" class="on" aria-current="page">经营分析大屏</a>
+        </nav>
+      </details>
+    </div>
+  </header>
+
+  <!-- ============ 北极星指标带 ============ -->
+  <section class="hero" role="group" aria-label="经营核心指标">
+    <div class="hstat north">
+      <div class="num sk" data-jit="108" data-amp="1">108<small>%</small></div>
+      <div class="lab">年度营收完成率 · 目标 2460 万</div>
+      <div class="tr up">↑ <b>8.2%</b> 较上年</div>
+    </div>
+    <div class="hstat kpi">
+      <div class="n sk" data-jit="428" data-amp="4">428<small>万</small></div>
+      <div class="l">净利润</div>
+      <div class="tr up">↑ <b>7.5%</b> 同比</div>
+    </div>
+    <div class="hstat kpi">
+      <div class="n sk">18.5<small>%</small></div>
+      <div class="l">净利率</div>
+      <div class="tr up">↑ <b>0.6</b> pt 同比</div>
+    </div>
+    <div class="hstat kpi">
+      <div class="n sk">￥328</div>
+      <div class="l">客单价</div>
+      <div class="tr down">↓ <b>2.1%</b> 环比</div>
+    </div>
+    <div class="hstat kpi cyan">
+      <div class="n sk">62<small>%</small></div>
+      <div class="l">复购率</div>
+      <div class="tr up">↑ <b>4.3</b> pt 同比</div>
+    </div>
+    <div class="hstat kpi">
+      <div class="n sk" data-jit="3260" data-amp="30">3260<small>单</small></div>
+      <div class="l">认养订单</div>
+      <div class="tr up">↑ <b>21.4%</b> 同比</div>
+    </div>
+  </section>
+
+  <!-- ============ 主区三栏 ============ -->
+  <div class="main">
+
+    <!-- ---------- 左栏 ---------- -->
+    <div class="col">
+
+      <!-- 营收趋势 -->
+      <section class="card" id="L1">
+        <div class="card-h">
+          <h3 class="t"><i></i>营收趋势 · 近 12 月</h3>
+          <div class="meta">单位：万元<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="chart-wrap">
+          <svg viewBox="0 0 440 220" preserveAspectRatio="xMidYMid meet" role="img"
+            aria-label="近 12 月营收趋势图，1月 186 万元，逐月上升，11月达到峰值 512 万元，12月回落至 486 万元">
+            <defs>
+              <linearGradient id="gRev" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#38D6FF" stop-opacity=".38"/>
+                <stop offset="100%" stop-color="#38D6FF" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <!-- y 轴网格与刻度（万元） -->
+            <g class="grid">
+              <line x1="24" y1="30"  x2="416" y2="30"  stroke="rgba(110,170,255,.13)" stroke-width="1"/>
+              <line x1="24" y1="68"  x2="416" y2="68"  stroke="rgba(110,170,255,.13)" stroke-width="1"/>
+              <line x1="24" y1="105" x2="416" y2="105" stroke="rgba(110,170,255,.13)" stroke-width="1"/>
+              <line x1="24" y1="142" x2="416" y2="142" stroke="rgba(110,170,255,.13)" stroke-width="1"/>
+              <line x1="24" y1="180" x2="416" y2="180" stroke="rgba(110,170,255,.26)" stroke-width="1"/>
+            </g>
+            <g fill="#8AA0BE" font-size="11" font-family="'DIN Alternate','Bahnschrift',sans-serif" text-anchor="end">
+              <text x="18" y="34">520</text>
+              <text x="18" y="72">390</text>
+              <text x="18" y="109">260</text>
+              <text x="18" y="146">130</text>
+              <text x="18" y="184">0</text>
+            </g>
+            <!-- 面积 + 折线 -->
+            <path d="M24,126 L60,130 L95,119 L131,109 L166,103 L202,95 L238,90 L273,77 L309,64 L345,45 L380,32 L416,40 L416,180 L24,180 Z"
+              fill="url(#gRev)"/>
+            <polyline vector-effect="non-scaling-stroke"
+              points="24,126 60,130 95,119 131,109 166,103 202,95 238,90 273,77 309,64 345,45 380,32 416,40"
+              fill="none" stroke="#38D6FF" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+            <g fill="#0B1830" stroke="#38D6FF" stroke-width="2" vector-effect="non-scaling-stroke">
+              <circle cx="24" cy="126" r="3.4"/><circle cx="60" cy="130" r="3.4"/>
+              <circle cx="95" cy="119" r="3.4"/><circle cx="131" cy="109" r="3.4"/>
+              <circle cx="166" cy="103" r="3.4"/><circle cx="202" cy="95" r="3.4"/>
+              <circle cx="238" cy="90" r="3.4"/><circle cx="273" cy="77" r="3.4"/>
+              <circle cx="309" cy="64" r="3.4"/><circle cx="345" cy="45" r="3.4"/>
+              <circle cx="380" cy="32" r="5.5" stroke="#F2B33D"/>
+              <circle cx="416" cy="40" r="3.4"/>
+            </g>
+            <g fill="#8AA0BE" font-size="11" text-anchor="middle">
+              <text x="24" y="204">1月</text>
+              <text x="95" y="204">3月</text>
+              <text x="166" y="204">5月</text>
+              <text x="238" y="204">7月</text>
+              <text x="309" y="204">9月</text>
+              <text x="380" y="204">11月</text>
+            </g>
+          </svg>
+          <div class="peak">峰值 <b>11月 · 512.0 万</b> · 较上年同期 +18.6%</div>
+        </div>
+      </section>
+
+      <!-- 收入构成 -->
+      <section class="card" id="L2">
+        <div class="card-h">
+          <h3 class="t"><i></i>收入构成</h3>
+          <div class="meta">合计 <b>2656</b> 万<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="split">
+          <div class="donut">
+            <svg viewBox="0 0 160 160" role="img" aria-label="收入构成环形图：鲜果销售 46%，认养收入 26%，农资服务 16%，冷链代储 12%">
+              <circle cx="80" cy="80" r="54" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="20"/>
+              <g transform="rotate(-90 80 80)" fill="none" stroke-width="20">
+                <circle cx="80" cy="80" r="54" stroke="#2E8FE8" stroke-dasharray="156.07 183.22" stroke-dashoffset="0"/>
+                <circle cx="80" cy="80" r="54" stroke="#38D6FF" stroke-dasharray="88.22 251.07" stroke-dashoffset="-156.07"/>
+                <circle cx="80" cy="80" r="54" stroke="#31C9E8" stroke-dasharray="54.29 284.99" stroke-dashoffset="-244.29"/>
+                <circle cx="80" cy="80" r="54" stroke="#F2B33D" stroke-dasharray="40.71 298.58" stroke-dashoffset="-298.58"/>
+              </g>
+              <text x="80" y="76" text-anchor="middle" fill="#E8F2FF" font-size="19" font-weight="700"
+                font-family="'DIN Alternate','Bahnschrift',sans-serif">2656</text>
+              <text x="80" y="94" text-anchor="middle" fill="#8AA0BE" font-size="11">万元合计</text>
+            </svg>
+          </div>
+          <div class="legend">
+            <div class="leg"><em style="background:var(--c1)"></em><span class="nm">鲜果销售</span><span class="pc">46%</span><span class="amt">1221.8万</span></div>
+            <div class="leg"><em style="background:var(--c2)"></em><span class="nm">认养收入</span><span class="pc">26%</span><span class="amt">690.6万</span></div>
+            <div class="leg"><em style="background:var(--c3)"></em><span class="nm">农资服务</span><span class="pc">16%</span><span class="amt">425.0万</span></div>
+            <div class="leg"><em style="background:var(--c5)"></em><span class="nm">冷链代储</span><span class="pc">12%</span><span class="amt">318.7万</span></div>
+            <div class="leg" style="margin-top:2px;border-top:1px solid var(--line);padding-top:8px">
+              <em style="background:rgba(255,255,255,.14)"></em><span class="nm">认养占总收入</span><span class="pc" style="color:var(--brand-400)">26%</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ---------- 中栏 ---------- -->
+    <section class="card" id="C1">
+      <div class="card-h">
+        <h3 class="t"><i></i>成本结构与利润分析</h3>
+        <div class="meta">成本合计 <b>1624</b> 万 · 较预算 <b style="color:var(--risk)">-2.4%</b><span class="stamp" data-stamp>更新 --:--</span></div>
+      </div>
+
+      <!-- 上：成本结构 -->
+      <div class="cost-top">
+        <div class="donut">
+          <svg viewBox="0 0 140 140" role="img" aria-label="成本结构环形图：农资 32%，人工 28%，物流 16%，包装 12%，其他 12%">
+            <circle cx="70" cy="70" r="48" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="18"/>
+            <g transform="rotate(-90 70 70)" fill="none" stroke-width="18">
+              <circle cx="70" cy="70" r="48" stroke="#2E8FE8" stroke-dasharray="96.51 205.08" stroke-dashoffset="0"/>
+              <circle cx="70" cy="70" r="48" stroke="#38D6FF" stroke-dasharray="84.45 217.14" stroke-dashoffset="-96.51"/>
+              <circle cx="70" cy="70" r="48" stroke="#31C9E8" stroke-dasharray="48.25 253.34" stroke-dashoffset="-180.96"/>
+              <circle cx="70" cy="70" r="48" stroke="#6E7BFF" stroke-dasharray="36.19 265.40" stroke-dashoffset="-229.21"/>
+              <circle cx="70" cy="70" r="48" stroke="#8AA0BE" stroke-dasharray="36.19 265.40" stroke-dashoffset="-265.40"/>
+            </g>
+            <text x="70" y="66" text-anchor="middle" fill="#E8F2FF" font-size="17" font-weight="700"
+              font-family="'DIN Alternate','Bahnschrift',sans-serif">1624</text>
+            <text x="70" y="83" text-anchor="middle" fill="#8AA0BE" font-size="10">万元成本</text>
+          </svg>
+        </div>
+        <div class="legend">
+          <div class="leg"><em style="background:var(--c1)"></em><span class="nm">农资投入</span><span class="pc">32%</span><span class="amt">519.7万</span></div>
+          <div class="leg"><em style="background:var(--c2)"></em><span class="nm">人工用工</span><span class="pc">28%</span><span class="amt">454.7万</span></div>
+          <div class="leg"><em style="background:var(--c3)"></em><span class="nm">物流配送</span><span class="pc">16%</span><span class="amt">259.8万</span></div>
+          <div class="leg"><em style="background:var(--c4)"></em><span class="nm">包装耗材</span><span class="pc">12%</span><span class="amt">194.9万</span></div>
+          <div class="leg"><em style="background:var(--text-3)"></em><span class="nm">其他费用</span><span class="pc">12%</span><span class="amt">194.9万</span></div>
+        </div>
+      </div>
+
+      <div class="sec-div"></div>
+
+      <!-- 下：基地利润分解 -->
+      <div class="profit">
+        <div class="sub-h">各基地利润分解<span>单位：万元 · 全年累计</span></div>
+        <div class="brows">
+          <div class="brow top">
+            <div class="lb">麦积</div>
+            <div class="track"><i style="width:100%"></i></div>
+            <div class="v">128.4<small>万</small></div>
+          </div>
+          <div class="brow">
+            <div class="lb">秦州</div>
+            <div class="track"><i style="width:75%"></i></div>
+            <div class="v">96.2<small>万</small></div>
+          </div>
+          <div class="brow">
+            <div class="lb">秦安</div>
+            <div class="track"><i style="width:61%"></i></div>
+            <div class="v">78.5<small>万</small></div>
+          </div>
+          <div class="brow">
+            <div class="lb">甘谷</div>
+            <div class="track"><i style="width:48%"></i></div>
+            <div class="v">61.7<small>万</small></div>
+          </div>
+          <div class="brow low">
+            <div class="lb">武山</div>
+            <div class="track"><i style="width:34%"></i></div>
+            <div class="v">43.6<small>万</small></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cost-note">
+        利润贡献 TOP2 基地（<b>麦积 / 秦州</b>）合计 224.6 万，占全域 <b>52.4%</b>；
+        武山受早期冻害影响利润同比 <b style="color:var(--risk)">-9.8%</b>，建议下年向麦积集中投入冷链与分选产能。
+      </div>
+    </section>
+
+    <!-- ---------- 右栏 ---------- -->
+    <div class="col">
+
+      <!-- 销售与认养总览 -->
+      <section class="card" id="R1">
+        <div class="card-h">
+          <h3 class="t"><i></i>销售与认养总览</h3>
+          <div class="meta">渠道 5 · 订单 <b>26520</b> 单<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="pie-wrap">
+          <svg viewBox="0 0 160 160" role="img"
+            aria-label="销售渠道饼图：线上商城 32%，团购 24%，商超 18%，批发 18%，认养 8%">
+            <g stroke="var(--surface-1)" stroke-width="2">
+              <path d="M70,70 L70,14 A56,56 0 0 1 120.67,93.84 Z" fill="#2E8FE8" stroke-width="2" stroke="var(--surface-1)"/>
+              <path d="M70,70 L120.67,93.84 A56,56 0 0 1 49.39,122.07 Z" fill="#38D6FF"/>
+              <path d="M70,70 L49.39,122.07 A56,56 0 0 1 14.11,73.52 Z" fill="#31C9E8"/>
+              <path d="M70,70 L14.11,73.52 A56,56 0 0 1 43.01,20.93 Z" fill="#6E7BFF"/>
+              <path d="M70,70 L43.01,20.93 A56,56 0 0 1 70,14 Z" fill="#F2B33D"/>
+            </g>
+          </svg>
+          <div class="pie-leg">
+            <div class="row"><em style="background:var(--c1)"></em><span class="nm">线上商城</span><span class="pc">32%</span></div>
+            <div class="row"><em style="background:var(--c2)"></em><span class="nm">社区团购</span><span class="pc">24%</span></div>
+            <div class="row"><em style="background:var(--c3)"></em><span class="nm">商超直供</span><span class="pc">18%</span></div>
+            <div class="row"><em style="background:var(--c4)"></em><span class="nm">产地批发</span><span class="pc">18%</span></div>
+            <div class="row"><em style="background:var(--c5)"></em><span class="nm">果树认养</span><span class="pc">8%</span></div>
+          </div>
+        </div>
+        <div class="kv3">
+          <div class="k"><div class="v sk" data-jit="3260" data-amp="30">3260</div><div class="l">认养订单（单）</div></div>
+          <div class="k cy"><div class="v sk">690.6<small>万</small></div><div class="l">认养金额</div></div>
+          <div class="k"><div class="v sk">76.4<small>%</small></div><div class="l">续费率</div></div>
+        </div>
+      </section>
+
+      <!-- Top10 排行榜 -->
+      <section class="card" id="R2">
+        <div class="card-h">
+          <h3 class="t"><i></i>Top10 客户 / 渠道排行</h3>
+          <div class="meta">按回款金额<span class="stamp" data-stamp>更新 --:--</span></div>
+        </div>
+        <div class="rank-scroll" id="rankScroll">
+          <ul class="rank-list" id="rankList">
+            <li class="hit"><span class="no">1</span><span class="nm"><b>天水华联超市</b><i>商超 · 直营结算</i></span><span class="amt">86.4<small>万</small></span></li>
+            <li><span class="no">2</span><span class="nm"><b>京东生鲜 · 西北仓</b><i>线上商城 · 平台自营</i></span><span class="amt">78.2<small>万</small></span></li>
+            <li><span class="no">3</span><span class="nm"><b>兰州正大果业</b><i>产地批发 · 长协</i></span><span class="amt">64.8<small>万</small></span></li>
+            <li><span class="no">4</span><span class="nm"><b>西安永辉超市</b><i>商超 · 联营</i></span><span class="amt">58.6<small>万</small></span></li>
+            <li><span class="no">5</span><span class="nm"><b>美团团好货</b><i>社区团购 · 区域团长</i></span><span class="amt">52.4<small>万</small></span></li>
+            <li><span class="no">6</span><span class="nm"><b>中信建投 · 企业认养</b><i>果树认养 · 年度员工福利</i></span><span class="amt">46.2<small>万</small></span></li>
+            <li><span class="no">7</span><span class="nm"><b>天水邮政电商</b><i>线上商城 · 助农专区</i></span><span class="amt">40.9<small>万</small></span></li>
+            <li><span class="no">8</span><span class="nm"><b>拼多多果园直营</b><i>线上商城 · 百亿补贴</i></span><span class="amt">36.5<small>万</small></span></li>
+            <li><span class="no">9</span><span class="nm"><b>宝鸡果品批发市场</b><i>产地批发 · 散单</i></span><span class="amt">32.1<small>万</small></span></li>
+            <li><span class="no">10</span><span class="nm"><b>认养个人会员 TOP</b><i>果树认养 · 高净值会员</i></span><span class="amt">24.0<small>万</small></span></li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ============ 底部支撑条 ============ -->
+  <div class="bottom">
+
+    <!-- 近 5 年营收 / 净利对比 -->
+    <div class="bcard">
+      <h3 class="bh"><i></i>近 5 年营收 / 净利对比<span>单位：万元</span></h3>
+      <div class="bar-wrap">
+        <div class="sw-leg">
+          <span><i style="background:var(--brand-500)"></i>营业总收入</span>
+          <span><i style="background:var(--cyan)"></i>净利润</span>
+        </div>
+        <svg viewBox="0 0 500 126" preserveAspectRatio="xMidYMid meet" role="img"
+          aria-label="近 5 年营收与净利润对比柱状图：2021 年营收 1820 万净利 268 万，2022 年 2050 万 / 318 万，2023 年 2280 万 / 362 万，2024 年 2460 万 / 398 万，2025 年 2656 万 / 428 万">
+          <line x1="20" y1="108" x2="480" y2="108" stroke="rgba(110,170,255,.28)" stroke-width="1"/>
+          <g>
+            <rect x="40"  y="50.4" width="22" height="57.6" rx="4" fill="#2E8FE8"/>
+            <rect x="68"  y="99.5" width="22" height="8.5"  rx="4" fill="#31C9E8"/>
+            <rect x="132" y="43.2" width="22" height="64.8" rx="4" fill="#2E8FE8"/>
+            <rect x="160" y="97.9" width="22" height="10.1" rx="4" fill="#31C9E8"/>
+            <rect x="224" y="35.9" width="22" height="72.1" rx="4" fill="#2E8FE8"/>
+            <rect x="252" y="96.6" width="22" height="11.4" rx="4" fill="#31C9E8"/>
+            <rect x="316" y="30.2" width="22" height="77.8" rx="4" fill="#2E8FE8"/>
+            <rect x="344" y="95.4" width="22" height="12.6" rx="4" fill="#31C9E8"/>
+            <rect x="408" y="24"   width="22" height="84"   rx="4" fill="#2E8FE8"/>
+            <rect x="436" y="94.5" width="22" height="13.5" rx="4" fill="#31C9E8"/>
+          </g>
+          <g fill="#9DB8DC" font-size="11" text-anchor="middle" font-family="'DIN Alternate','Bahnschrift',sans-serif">
+            <text x="51" y="46">1820</text><text x="79" y="96">268</text>
+            <text x="143" y="39">2050</text><text x="171" y="94">318</text>
+            <text x="235" y="32">2280</text><text x="263" y="93">362</text>
+            <text x="327" y="26">2460</text><text x="355" y="92">398</text>
+            <text x="419" y="20" fill="#38D6FF">2656</text><text x="447" y="91">428</text>
+          </g>
+          <g fill="#8AA0BE" font-size="12" text-anchor="middle">
+            <text x="66" y="122">2021</text><text x="158" y="122">2022</text><text x="250" y="122">2023</text>
+            <text x="342" y="122">2024</text><text x="434" y="122">2025</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 关键经营指标表 -->
+    <div class="bcard">
+      <h3 class="bh"><i></i>关键经营指标<span>2025 财年 · 环比上季</span></h3>
+      <div class="ind-grid">
+        <div class="ind"><span class="l">毛利率</span><span class="v">42.0<small>%</small><span class="tag">↑1.2</span></span></div>
+        <div class="ind"><span class="l">净利率</span><span class="v">18.5<small>%</small><span class="tag">↑0.6</span></span></div>
+        <div class="ind"><span class="l">应收周转</span><span class="v">38<small>天</small><span class="tag">↓3</span></span></div>
+        <div class="ind"><span class="l">库存周转</span><span class="v">12<small>天</small><span class="tag down">↑5</span></span></div>
+        <div class="ind"><span class="l">坪效产值</span><span class="v">1.86<small>万元/亩</small></span></div>
+        <div class="ind"><span class="l">人均产值</span><span class="v">118<small>万元/人</small><span class="tag">↑9%</span></span></div>
+      </div>
+    </div>
+
+    <!-- 经营提示 / 风险 -->
+    <div class="bcard">
+      <h3 class="bh"><i></i>经营提示与风险<span>系统研判</span></h3>
+      <div class="risk">
+        <div class="hd">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#E5564B" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+          Q4 冷链代储成本上升 <b>8%</b>
+        </div>
+        <div>外租库租金同比上涨，建议提前锁定秦安、武山库槽位，并推动自建冷库二期投用。</div>
+      </div>
+      <div class="tips">
+        <div class="tip"><span class="dot g"></span><div><b>结构优化：</b>认养收入占比升至 26%，续费率 76.4%。</div></div>
+        <div class="tip"><span class="dot w"></span><div><b>回款提示：</b>商超渠道应收余额 <b>412 万</b>，账龄超 60 天占 14%。</div></div>
+        <div class="tip"><span class="dot b"></span><div><b>提效建议：</b>武山基地坪效 1.32 万元/亩，低于全域 1.86。</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- 缩放适配（单屏不滚动） ---------- */
+(function(){
+  var s=document.getElementById('stage');
+  function fit(){var k=Math.min(innerWidth/1920,innerHeight/1080);s.style.transform='translate(-50%,-50%) scale('+k+')';}
+  addEventListener('resize',fit);fit();
+})();
+
+/* ---------- 时钟（aria-live=off，避免读屏持续播报） ---------- */
+(function(){
+  var w=['周日','周一','周二','周三','周四','周五','周六'];
+  function p(n){return ('0'+n).slice(-2);}
+  function t(){var d=new Date();
+    document.getElementById('clk').textContent=p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+    document.getElementById('dt').textContent=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+w[d.getDay()];
+  }
+  t();setInterval(t,1000);
+})();
+
+/* ---------- 数据时间戳：所有 [data-stamp] 统一填充 ---------- */
+function stampAll(){
+  var d=new Date(),p=function(n){return ('0'+n).slice(-2);};
+  var t=p(d.getHours())+':'+p(d.getMinutes());
+  [].forEach.call(document.querySelectorAll('[data-stamp]'),function(e){e.textContent='更新 '+t;});
+}
+stampAll();
+
+/* ---------- 加载态：骨架屏演示（接入真实接口后由数据到达驱动移除） ---------- */
+(function(){
+  var SKELETON_MS=500;
+  var nodes=[].slice.call(document.querySelectorAll('.sk'));
+  setTimeout(function(){nodes.forEach(function(n){n.classList.remove('sk');});},SKELETON_MS);
+})();
+
+/* ---------- Top10 榜单自动滚动（尊重 prefers-reduced-motion） ---------- */
+(function(){
+  var box=document.getElementById('rankScroll'), list=document.getElementById('rankList');
+  if(!box||!list) return;
+  var clone=list.cloneNode(true);
+  clone.removeAttribute('id');
+  clone.setAttribute('aria-hidden','true');
+  box.appendChild(clone);
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var y=0;
+  setInterval(function(){
+    var half=list.offsetHeight+7;            /* 含列表间距 */
+    if(half<=0) return;
+    y=(y+1)%half;
+    box.scrollTop=y;
+  },50);
+})();
+
+/* ---------- 关键数据每 30 秒自动刷新（时间戳 + 轻微波动模拟） ---------- */
+(function(){
+  var nodes=[].slice.call(document.querySelectorAll('[data-jit]'));
+  setInterval(function(){
+    stampAll();
+    nodes.forEach(function(el){
+      if(el.classList.contains('sk')) return;
+      var base=parseInt(el.getAttribute('data-jit'),10),
+          amp=parseInt(el.getAttribute('data-amp'),10)||1,
+          val=base+Math.round((Math.random()*2-1)*amp);
+      var unit=el.querySelector('small');
+      el.textContent=String(val);
+      if(unit) el.appendChild(unit);
+    });
+  },30000);
+})();
+
+/* ---------- 大屏切换菜单：点击项或空白处收起 ---------- */
+(function(){
+  var sw=document.getElementById('switch');
+  if(!sw) return;
+  sw.addEventListener('click',function(e){ if(e.target.tagName==='A') sw.open=false; });
+  document.addEventListener('click',function(e){ if(!sw.contains(e.target)) sw.open=false; });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') sw.open=false; });
+})();
+</script>
+</body>
+<script src="js/shared/mock-business.js"></script>
+<script src="js/shared/dashboards-mock.js"></script>
+</html>

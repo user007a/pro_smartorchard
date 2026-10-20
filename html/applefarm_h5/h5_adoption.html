@@ -1,4 +1,4 @@
-﻿﻿<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -327,7 +327,34 @@
     }
 
     function viewPhotos(treeId) {
-      showToast('正在加载 ' + treeId + ' 照片...');
+      // 从 localStorage 读取果树成长相册（H5-B-020）：按时间倒序展示照片墙
+      var list = [];
+      try {
+        var all = JSON.parse(localStorage.getItem('h5_adoption_photos') || '{}');
+        list = all[treeId] || [];
+      } catch (e) {}
+      var html;
+      if (!list.length) {
+        html = '<div style="text-align:center;color:#999;padding:32px;">暂无照片。认养后工作人员将上传果树成长照片。</div>';
+      } else {
+        html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">' +
+          list.map(function(p){
+            return '<div style="background:#f6f8f6;border-radius:8px;overflow:hidden;">' +
+              '<img src="' + (p.url || 'images/adoption_default.jpg') + '" style="width:100%;height:120px;object-fit:cover;">' +
+              '<div style="padding:6px 8px;font-size:11px;color:#666;">' +
+              new Date(p.time).toLocaleDateString() + ' · ' + (p.stage || '成长') +
+              '</div></div>';
+          }).join('') + '</div>';
+      }
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      overlay.innerHTML = '<div style="background:#fff;border-radius:10px;width:90%;max-width:420px;max-height:80vh;overflow-y:auto;padding:16px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+        '<h3 style="margin:0;">果树相册 ' + treeId + '</h3>' +
+        '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;">×</button>' +
+        '</div>' + html +
+        '</div>';
+      document.body.appendChild(overlay);
     }
 
     function showToast(message) {

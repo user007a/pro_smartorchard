@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <script src="js/mobile-store.js"></script>
   <style>
     /* Stats Bar */
     .stats-bar {
@@ -389,6 +390,46 @@
       background: var(--warning-bg);
       color: var(--warning);
     }
+
+    /* 刷新时间 */
+    .refresh-time {
+      text-align: center;
+      font-size: var(--font-xs);
+      color: var(--text-light);
+      margin: -6px 0 12px;
+    }
+
+    /* 筛选结果计数 */
+    .filter-result {
+      padding: 0 16px;
+      margin-bottom: 12px;
+      font-size: var(--font-xs);
+      color: var(--text-secondary);
+    }
+
+    /* 维护申请表单 */
+    .form-row { margin-bottom: 16px; }
+    .form-label {
+      font-size: var(--font-sm);
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      display: block;
+    }
+    .form-select,
+    .form-textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 10px 12px;
+      font-size: var(--font-sm);
+      color: var(--text);
+      background: var(--bg-white);
+      font-family: inherit;
+      outline: none;
+    }
+    .form-textarea { min-height: 88px; resize: vertical; line-height: 1.5; }
+    .form-select:focus,
+    .form-textarea:focus { border-color: var(--primary); }
   </style>
 </head>
 <body>
@@ -421,17 +462,20 @@
       </div>
     </div>
 
+    <div class="refresh-time" id="refreshTime">数据更新于 --:--:--</div>
+
     <!-- Filter Bar -->
     <div class="filter-bar">
-      <div class="filter-item active" onclick="filterDevices('all')">全部</div>
-      <div class="filter-item" onclick="filterDevices('online')">在线</div>
-      <div class="filter-item" onclick="filterDevices('offline')">离线</div>
-      <div class="filter-item" onclick="filterDevices('warning')">预警</div>
+      <div class="filter-item active" onclick="filterDevices('all', this)">全部</div>
+      <div class="filter-item" onclick="filterDevices('online', this)">在线</div>
+      <div class="filter-item" onclick="filterDevices('offline', this)">离线</div>
+      <div class="filter-item" onclick="filterDevices('warning', this)">预警</div>
     </div>
+    <div class="filter-result" id="filterResult">共 4 台设备</div>
 
     <!-- Device List -->
     <div class="content" id="deviceList">
-      <div class="device-card" onclick="openDeviceDetail('温湿度传感器')">
+      <div class="device-card" data-status="online" onclick="openDeviceDetail('温湿度传感器')">
         <div class="device-header">
           <div class="device-icon-wrap online">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -463,7 +507,7 @@
         </div>
       </div>
 
-      <div class="device-card" onclick="openDeviceDetail('土壤湿度传感器')">
+      <div class="device-card" data-status="online" onclick="openDeviceDetail('土壤湿度传感器')">
         <div class="device-header">
           <div class="device-icon-wrap online">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -496,7 +540,7 @@
         </div>
       </div>
 
-      <div class="device-card" onclick="openDeviceDetail('灌溉控制器')">
+      <div class="device-card" data-status="warning" onclick="openDeviceDetail('灌溉控制器')">
         <div class="device-header">
           <div class="device-icon-wrap warning">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -541,7 +585,7 @@
         </div>
       </div>
 
-      <div class="device-card" onclick="openDeviceDetail('气象站')">
+      <div class="device-card" data-status="offline" onclick="openDeviceDetail('气象站')">
         <div class="device-header">
           <div class="device-icon-wrap offline">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -683,17 +727,95 @@
     </div>
   </div>
 
+  <!-- Maintain Modal -->
+  <div class="mb-modal-overlay is-sheet" id="maintainModal">
+    <div class="mb-modal is-sheet">
+      <div class="modal-header">
+        <div class="modal-title">申请设备维护</div>
+        <div class="modal-close" onclick="closeMaintainModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="form-row">
+          <label class="form-label">选择设备</label>
+          <select class="form-select" id="mtDevice">
+            <option value="温湿度传感器">温湿度传感器 #001</option>
+            <option value="土壤湿度传感器">土壤湿度传感器 #002</option>
+            <option value="灌溉控制器">灌溉控制器 #003</option>
+            <option value="气象站">气象站 #004</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="form-label">紧急程度</label>
+          <select class="form-select" id="mtUrgency">
+            <option value="low">一般 - 可安排计划维护</option>
+            <option value="normal" selected>较急 - 48小时内处理</option>
+            <option value="high">紧急 - 需尽快处理</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="form-label">维护原因</label>
+          <textarea class="form-textarea" id="mtReason" placeholder="请描述设备故障现象或需要维护的内容…"></textarea>
+        </div>
+      </div>
+
+      <div class="mb-modal-actions">
+        <button class="mb-btn mb-btn-secondary" onclick="closeMaintainModal()">取消</button>
+        <button class="mb-btn mb-btn-primary" onclick="submitMaintain()">提交申请</button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    var currentDevice = '';
+    var currentFilter = 'all';
+
     function goBack() { window.history.back(); }
     function navigateTo(page) { window.location.href = page; }
 
-    function filterDevices(type) {
-      document.querySelectorAll('.filter-item').forEach(item => item.classList.remove('active'));
-      event.target.classList.add('active');
-      alert('筛选功能：' + type);
+    function filterLabel(type) {
+      return { all: '全部', online: '在线', offline: '离线', warning: '预警' }[type] || type;
+    }
+
+    function applyFilter(type) {
+      var cards = document.querySelectorAll('#deviceList .device-card');
+      var count = 0;
+      cards.forEach(function (card) {
+        var match = (type === 'all') || (card.getAttribute('data-status') === type);
+        card.style.display = match ? '' : 'none';
+        if (match) count++;
+      });
+      var result = document.getElementById('filterResult');
+      if (result) {
+        result.textContent = type === 'all'
+          ? '共 ' + count + ' 台设备'
+          : filterLabel(type) + '设备 ' + count + ' 台';
+      }
+    }
+
+    function filterDevices(type, el) {
+      currentFilter = type;
+      document.querySelectorAll('.filter-item').forEach(function (item) { item.classList.remove('active'); });
+      if (el) el.classList.add('active');
+      applyFilter(type);
+      var visible = document.querySelectorAll('#deviceList .device-card:not([style*="display: none"])').length;
+      MobileStore.toast('已筛选' + filterLabel(type) + '设备：' + visible + ' 台', 'info');
+    }
+
+    function updateRefreshTime() {
+      var now = new Date();
+      var p = function (n) { return n < 10 ? '0' + n : n; };
+      document.getElementById('refreshTime').textContent =
+        '数据更新于 ' + p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds());
     }
 
     function openDeviceDetail(name) {
+      currentDevice = name;
       document.getElementById('modalDeviceName').textContent = name + ' - 详情';
       document.getElementById('detailModal').classList.add('show');
     }
@@ -708,13 +830,50 @@
     }
 
     function refreshDevice() {
-      alert('正在刷新设备数据...');
+      updateRefreshTime();
+      applyFilter(currentFilter);
+      MobileStore.toast('数据已刷新', 'success');
     }
 
     function maintainDevice() {
-      alert('维护申请已提交，工作人员将尽快处理');
       closeDetailModal();
+      var sel = document.getElementById('mtDevice');
+      if (sel && currentDevice) {
+        for (var i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value === currentDevice) { sel.selectedIndex = i; break; }
+        }
+      }
+      document.getElementById('mtReason').value = '';
+      document.getElementById('maintainModal').classList.add('show');
     }
+
+    function closeMaintainModal() {
+      document.getElementById('maintainModal').classList.remove('show');
+    }
+
+    function submitMaintain() {
+      var device = document.getElementById('mtDevice').value;
+      var urgency = document.getElementById('mtUrgency').value;
+      var urgencyText = { low: '一般', normal: '较急', high: '紧急' }[urgency] || urgency;
+      var reason = document.getElementById('mtReason').value.trim();
+      if (!reason) {
+        MobileStore.toast('请填写维护原因', 'warning');
+        return;
+      }
+      MobileStore.push('smartorchard_maintenance_logs', {
+        device: device,
+        urgency: urgency,
+        urgencyText: urgencyText,
+        reason: reason,
+        status: 'pending',
+        statusText: '待受理'
+      });
+      MobileStore.toast('维护申请已提交，工作人员将尽快处理', 'success');
+      closeMaintainModal();
+    }
+
+    updateRefreshTime();
+    applyFilter('all');
   </script>
 </body>
 </html>

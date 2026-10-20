@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <script src="js/mobile-store.js"></script>
   <style>
     /* 页面特定样式 - 使用设计系统变量 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: 66px; }
@@ -193,12 +194,28 @@
     let currentTab = 'all';
     let selectedFeedbackType = 'suggestion';
 
-    const mockFeedbacks = [
+    const FEEDBACK_KEY = 'smartorchard_feedbacks';
+    const SEED_FEEDBACKS = [
       { id: 1, title: '建议增加病虫害识别功能', content: '希望能增加拍照识别病虫害的功能，这样果农可以快速判断果树问题。', type: 'suggestion', status: 'processing', createTime: '2026-09-21 10:30', reply: '感谢您的建议，我们正在开发中，预计下月上线。' },
       { id: 2, title: '数据同步异常', content: '农事记录同步到云端时经常失败，网络正常的情况下也会出现。', type: 'problem', status: 'pending', createTime: '2026-09-20 15:20' },
       { id: 3, title: '优化地块绘制', content: '画地块时希望能支持更精确的坐标定位。', type: 'suggestion', status: 'passed', createTime: '2026-09-19 09:15', reply: '已优化，在最新版本中已上线。' },
       { id: 4, title: '施肥建议不准确', content: '系统给出的施肥建议和实际需求有差异。', type: 'problem', status: 'rejected', createTime: '2026-09-18 14:00', rejectReason: '请提供具体地块信息，我们重新分析。' }
     ];
+
+    // 反馈落库持久化，刷新后不丢失
+    const mockFeedbacks = (function() {
+      try {
+        var saved = JSON.parse(localStorage.getItem(FEEDBACK_KEY) || 'null');
+        if (Array.isArray(saved) && saved.length) return saved;
+      } catch (e) { /* 读取失败则用初始数据 */ }
+      return SEED_FEEDBACKS.slice();
+    })();
+
+    function saveFeedbacks() {
+      try {
+        localStorage.setItem(FEEDBACK_KEY, JSON.stringify(mockFeedbacks));
+      } catch (e) { /* 存储不可用时不阻断交互 */ }
+    }
 
     function navigateTo(page) {
       window.location.href = page;
@@ -354,12 +371,12 @@
       const content = document.getElementById('feedbackContent').value.trim();
       
       if (!title) {
-        alert('请输入反馈标题');
+        MobileStore.toast('请输入反馈标题', 'warning');
         return;
       }
       
       if (!content) {
-        alert('请输入详细描述');
+        MobileStore.toast('请输入详细描述', 'warning');
         return;
       }
       
@@ -369,14 +386,16 @@
         content,
         type: selectedFeedbackType,
         status: 'pending',
-        createTime: new Date().toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+        createTime: MobileStore.fmtTime(Date.now())
       };
       
       mockFeedbacks.unshift(newFeedback);
+      saveFeedbacks();
       closeCreateModal();
       document.getElementById('successModalTitle').textContent = '提交成功';
       document.getElementById('successModal').classList.add('show');
       loadFeedbacks();
+      MobileStore.toast('反馈已提交', 'success');
     }
 
     function editFeedback(id) {
@@ -397,7 +416,7 @@
         const content = document.getElementById('feedbackContent').value.trim();
         
         if (!title || !content) {
-          alert('请填写完整信息');
+          MobileStore.toast('请填写完整信息', 'warning');
           return;
         }
         
@@ -406,6 +425,7 @@
         feedback.type = selectedFeedbackType;
         feedback.status = 'pending';
         delete feedback.rejectReason;
+        saveFeedbacks();
         
         submitFeedback = originalSubmit;
         closeCreateModal();

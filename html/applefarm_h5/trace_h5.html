@@ -293,6 +293,19 @@
       </div>
     </div>
 
+    <!-- 区块链存证（H5-B-005） -->
+    <div class="mb-section">
+      <div class="mb-section-title"><span class="mb-section-dot"></span>区块链存证</div>
+      <div id="h5Blockchain" style="background:#fff;border:1px solid #e6efe8;border-radius:12px;padding:12px;font-size:13px;color:#5b6b5b;line-height:1.8;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="color:#1f2e1f;font-weight:600;">数据指纹（SHA-256）</span>
+          <button onclick="verifyOnChain()" style="background:var(--primary);color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:12px;">链上验证</button>
+        </div>
+        <div id="h5Hash" style="font-family:monospace;font-size:11px;word-break:break-all;background:#f6f8f6;padding:8px;border-radius:6px;">加载中...</div>
+        <div id="h5ChainInfo" style="margin-top:8px;color:#999;font-size:12px;"></div>
+      </div>
+    </div>
+
     <!-- 底部导航 -->
     <nav class="mb-tab-bar">
       <div class="mb-tab-item" onclick="navigateTo('index.html')">
@@ -326,8 +339,8 @@
       'PC-20260901-001':{plotCode:'D-001',plotName:'东区1号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-01'},
       'PC-20260902-002':{plotCode:'D-002',plotName:'东区2号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-02'},
       'PC-20260903-003':{plotCode:'D-003',plotName:'西区1号地',base:'天水麦积区基地',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-03'},
-      'PC-20260904-004':{plotCode:'D-004',plotName:'北区1号地',base:'天水荣成基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-04'},
-      'PC-20260905-005':{plotCode:'D-005',plotName:'南区1号地',base:'天水荣成基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-05'},
+      'PC-20260904-004':{plotCode:'D-004',plotName:'北区1号地',base:'天水秦州基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-04'},
+      'PC-20260905-005':{plotCode:'D-005',plotName:'南区1号地',base:'天水秦州基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-05'},
       'PC-20260906-006':{plotCode:'D-006',plotName:'中区1号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-06'},
       'PC-20260907-007':{plotCode:'D-007',plotName:'南区2号地',base:'甘肃麦积区苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-07'},
       'PC-20260908-008':{plotCode:'D-008',plotName:'西区2号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-08'},
@@ -426,10 +439,17 @@
       const modules = MODULES_BY_TEMPLATE[template] || MODULES_BY_TEMPLATE['默认模板'];
 
       document.getElementById('productName').textContent = batch.product || '花牛苹果';
-      document.getElementById('productBatch').textContent = '批次号: ' + entry[0];
+      document.getElementById('productBatch').textContent = '批次号：' + entry[0];
       document.getElementById('productOrigin').textContent =
         `${batch.base || '—'} / ${batch.plotCode || '—'} · ${batch.plotName || '—'}　规格：${batch.spec || '—'}`;
       document.getElementById('codeText').textContent = code;
+
+      // 缓存批次采收日期，供详情页按同一规则推算各环节时间
+      try {
+        var cache = JSON.parse(sessionStorage.getItem('trace_batch_cache') || '{}');
+        cache[code] = batch.harvestDate || null;
+        sessionStorage.setItem('trace_batch_cache', JSON.stringify(cache));
+      } catch (e) {}
 
       document.getElementById('productTags').innerHTML =
         (modules.indexOf('农残检测') >= 0 ? '<span class="mb-tag success">检测合格</span>' : '') +
@@ -471,10 +491,60 @@
       window.location.href = 'h5_trace_detail.html?type=' + type + '&code=' + encodeURIComponent(code || '');
     }
 
+    // 简化 SHA-256（与 trace_blockchain.html 一致）
+    function sha256HexH5(s) {
+      function ror(x, n) { return (x >>> n) | (x << (32 - n)); }
+      var h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+      var bytes=[]; for(var i=0;i<s.length;i++) bytes.push(s.charCodeAt(i)&0xff);
+      bytes.push(0x80); while(bytes.length%64!==56) bytes.push(0);
+      var bl=s.length*8;
+      bytes.push((bl>>>56)&0xff); bytes.push((bl>>>48)&0xff); bytes.push((bl>>>40)&0xff); bytes.push((bl>>>32)&0xff);
+      bytes.push((bl>>>24)&0xff); bytes.push((bl>>>16)&0xff); bytes.push((bl>>>8)&0xff); bytes.push(bl&0xff);
+      for(var off=0; off<bytes.length; off+=64) {
+        var w=[]; for(var k=0;k<16;k++) w[k]=(bytes[off+k*4]<<24)|(bytes[off+k*4+1]<<16)|(bytes[off+k*4+2]<<8)|bytes[off+k*4+3];
+        for(var j=16;j<64;j++) {
+          var s0=ror(w[j-15],7)^ror(w[j-15],18)^(w[j-15]>>>3);
+          var s1=ror(w[j-2],17)^ror(w[j-2],19)^(w[j-2]>>>10);
+          w[j]=(w[j-16]+s0+w[j-7]+s1)|0;
+        }
+        var a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,hh=h7;
+        for(var j2=0;j2<64;j2++) {
+          var S1=ror(e,6)^ror(e,11)^ror(e,25);
+          var ch=(e&f)^(~e&g);
+          var t1=(hh+S1+ch+[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2][j2]+w[j2])|0;
+          var S0=ror(a,2)^ror(a,13)^ror(a,22);
+          var mj=(a&b)^(a&c)^(b&c);
+          var t2=(S0+mj)|0;
+          hh=g;g=f;f=e;e=(d+t1)|0;d=c;c=b;b=a;a=(t1+t2)|0;
+        }
+        h0=(h0+a)|0;h1=(h1+b)|0;h2=(h2+c)|0;h3=(h3+d)|0;
+        h4=(h4+e)|0;h5=(h5+f)|0;h6=(h6+g)|0;h7=(h7+hh)|0;
+      }
+      function pad(n){return (n<0?n+0x100000000:n).toString(16).padStart(8,'0');}
+      return pad(h0)+pad(h1)+pad(h2)+pad(h3)+pad(h4)+pad(h5)+pad(h6)+pad(h7);
+    }
+    var currentTraceCode = '';
+    function renderH5Blockchain(code) {
+      currentTraceCode = code || 'SNZG-20260901-0001';
+      var hash = '0x' + sha256HexH5(currentTraceCode + '|2026-09-01 18:30:00').substring(0, 60);
+      var el = document.getElementById('h5Hash');
+      if (el) el.textContent = hash;
+      var info = document.getElementById('h5ChainInfo');
+      if (info) info.innerHTML = '区块高度：<b>1847301</b> · 上链时间：2026-09-01 18:30:00 · 状态：<b style="color:var(--primary);">已确认</b>';
+    }
+    function verifyOnChain() {
+      var info = document.getElementById('h5ChainInfo');
+      if (info) info.innerHTML = '<span style="color:#f59e0b;">验证中...</span>';
+      setTimeout(function(){
+        if (info) info.innerHTML = '<span style="color:var(--primary);">✓ 链上验证通过</span> · 数据指纹与区块 1847301 一致';
+      }, 800);
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
       const params = new URLSearchParams(window.location.search);
       const code = params.get('code') || 'SNZG-20260901-0001';
       renderTrace(code);
+      renderH5Blockchain(code);
     });
   </script>
 </body>

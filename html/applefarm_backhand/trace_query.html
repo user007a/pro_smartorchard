@@ -207,6 +207,10 @@
         <div class="search-section">
           <div class="search-bar" style="flex-wrap:wrap; gap:12px;">
             <input type="text" class="search-input" placeholder="输入溯源码..." id="traceCodeInput" style="width:180px;">
+            <button class="jg-btn-outline" onclick="openScanner()" style="display:inline-flex;align-items:center;gap:4px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM18 18h3v3"/><path d="M21 16v5"/></svg>
+              扫一扫
+            </button>
             <input type="text" class="search-input" placeholder="输入产品名称..." id="productNameInput" style="width:180px;">
             <select class="search-select" id="statusSelect" style="width:140px;">
               <option value="">全部状态</option>
@@ -339,8 +343,8 @@ const BATCH_SOURCE = [
   {batchNo:'PC-20260901-001',plotCode:'D-001',plotName:'东区1号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-01',planNo:'HS-2026-001',processNo:'PP-2026-001',quantity:5000,grade:'一级'},
   {batchNo:'PC-20260902-002',plotCode:'D-002',plotName:'东区2号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-02',planNo:'HS-2026-002',processNo:'PP-2026-002',quantity:4600,grade:'一级'},
   {batchNo:'PC-20260903-003',plotCode:'D-003',plotName:'西区1号地',base:'天水麦积区基地',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-03',planNo:'HS-2026-003',processNo:'PP-2026-003',quantity:3200,grade:'二级'},
-  {batchNo:'PC-20260904-004',plotCode:'D-004',plotName:'北区1号地',base:'天水荣成基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-04',planNo:'HS-2026-004',processNo:'PP-2026-004',quantity:4200,grade:'一级'},
-  {batchNo:'PC-20260905-005',plotCode:'D-005',plotName:'南区1号地',base:'天水荣成基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-05',planNo:'HS-2026-005',processNo:'PP-2026-005',quantity:5800,grade:'一级'},
+  {batchNo:'PC-20260904-004',plotCode:'D-004',plotName:'北区1号地',base:'天水秦州基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-04',planNo:'HS-2026-004',processNo:'PP-2026-004',quantity:4200,grade:'一级'},
+  {batchNo:'PC-20260905-005',plotCode:'D-005',plotName:'南区1号地',base:'天水秦州基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-05',planNo:'HS-2026-005',processNo:'PP-2026-005',quantity:5800,grade:'一级'},
   {batchNo:'PC-20260906-006',plotCode:'D-006',plotName:'中区1号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-06',planNo:'HS-2026-006',processNo:'PP-2026-006',quantity:3600,grade:'二级'},
   {batchNo:'PC-20260907-007',plotCode:'D-007',plotName:'南区2号地',base:'甘肃麦积区苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-07',planNo:'HS-2026-007',processNo:'PP-2026-007',quantity:4400,grade:'一级'},
   {batchNo:'PC-20260908-008',plotCode:'D-008',plotName:'西区2号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-08',planNo:'HS-2026-008',processNo:'PP-2026-008',quantity:5200,grade:'一级'},
@@ -575,6 +579,42 @@ function resetSearch() {
   document.getElementById('batchInput').value = '';
   Pagination.updateData(mockData);
   showToast('已重置筛选条件');
+}
+
+// 扫一扫：使用 getUserMedia 调起摄像头，原型未引入真实解码库，提示输入模拟码
+function openScanner() {
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(function(stream){
+        var v = document.createElement('video');
+        v.srcObject = stream; v.setAttribute('playsinline','true');
+        v.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:300px;height:300px;background:#000;border:2px solid #fff;z-index:9999;border-radius:8px;';
+        document.body.appendChild(v); v.play();
+        // 3 秒后关闭并提示手动输入（原型无真实解码）
+        setTimeout(function(){
+          stream.getTracks().forEach(function(t){ t.stop(); });
+          v.remove();
+          var code = prompt('摄像头对准二维码后，请在弹窗中输入扫描到的溯源码（原型演示）：');
+          if (code) {
+            document.getElementById('traceCodeInput').value = code.trim();
+            searchData();
+          }
+        }, 2500);
+      })
+      .catch(function(){
+        var code = prompt('请输入溯源码：');
+        if (code) {
+          document.getElementById('traceCodeInput').value = code.trim();
+          searchData();
+        }
+      });
+  } else {
+    var code = prompt('当前浏览器不支持摄像头扫码，请手动输入溯源码：');
+    if (code) {
+      document.getElementById('traceCodeInput').value = code.trim();
+      searchData();
+    }
+  }
 }
 
 // 按批次动态组装溯源轨迹：农事作业 → 农资投入 → 采收入库 → 质量检测 → 冷链配送
