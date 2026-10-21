@@ -1,4 +1,4 @@
-﻿﻿var vrHotspotsData = {
+﻿﻿﻿var vrHotspotsData = {
     scenes: [
         {
             id: "scene_main",
