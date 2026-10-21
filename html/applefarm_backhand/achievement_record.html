@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 成效记录</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 统计卡 */
+  .stat-card-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-xl);
+    transition: box-shadow var(--transition-normal);
+  }
+  .stat-card:hover { box-shadow: var(--shadow-md); }
+  .stat-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; }
+  .stat-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-value .unit { font-size: 13px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; }
+  .stat-value.down { color: var(--success); }
+  .stat-value.up   { color: var(--accent-500); }
+  .stat-sub { margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
+
+  .data-table { min-width: 720px; }
+  .empty-row td { text-align: center; color: var(--text-tertiary); padding: 40px 0; }
+
+  /* 数字化里程碑（对齐 enterprise_info.html 的时间轴范式） */
+  .timeline-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 48px; }
+  @media (max-width: 1024px) { .timeline-grid { grid-template-columns: 1fr; } }
+  .tl-item { display: flex; gap: 16px; padding-bottom: 24px; position: relative; }
+  .tl-item:last-child { padding-bottom: 0; }
+  .tl-item::before {
+    content: ''; position: absolute; left: 8px; top: 24px; bottom: 0;
+    width: 2px; background: var(--border-light);
+  }
+  .tl-item:last-child::before { display: none; }
+  .tl-dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 3px solid var(--primary-500); background: #fff;
+    flex: none; position: relative; z-index: 1; margin-top: 2px;
+  }
+  .tl-item.current .tl-dot {
+    background: var(--primary-500);
+    box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.18);
+  }
+  .tl-content { min-width: 0; }
+  .tl-content .tl-date { font-size: 13px; color: var(--primary-600); font-weight: 500; margin-bottom: 4px; }
+  .tl-content h5 { font-size: 15px; font-weight: 600; color: var(--text-primary); margin: 0 0 4px; }
+  .tl-content p { font-size: 13px; line-height: 1.7; color: var(--text-tertiary); margin: 0; }
+  .tl-item.current .tl-content .tl-date::after {
+    content: '当前';
+    display: inline-block;
+    margin-left: 8px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--primary-500);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 18px;
+  }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="数据运营" data-active-submenu="成效记录">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 统计卡 -->
+        <div class="stat-card-row" id="statCards"></div>
+
+        <!-- 成效对比 -->
+        <div class="chart-section">
+          <h2 class="section-title">提质增效实施前后对比（%）</h2>
+          <div id="chart-achievement" style="height:320px;"></div>
+        </div>
+
+        <!-- 成效明细 -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>成效项</th>
+                  <th>实施前</th>
+                  <th>实施后</th>
+                  <th>变化幅度</th>
+                  <th>说明</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 数字化里程碑 -->
+        <div class="chart-section" id="sec-timeline">
+          <h2 class="section-title">数字化里程碑</h2>
+          <div class="timeline-grid" id="timeline-grid"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/page-actions.js"></script>
+<script src="js/components/chart.js"></script>
+<script src="js/shared/data-store.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  function fmt(n){
+    n = Number(n) || 0;
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  function esc(v){
+    return String(v === undefined || v === null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // 顶部统计卡关注的 4 项（顺序与 achievements 默认数据一致）
+  var FOCUS_ITEMS = ['节水', '节肥', '减药', '增产'];
+
+  var els = {
+    statCards : document.getElementById('statCards'),
+    tbody     : document.getElementById('tableBody'),
+    timeline  : document.getElementById('timeline-grid')
+  };
+
+  function findItem(item){
+    var list = DataStore.achievements();
+    for (var i = 0; i < list.length; i++){
+      if (list[i].item === item) return list[i];
+    }
+    return null;
+  }
+
+  function renderStats(){
+    els.statCards.innerHTML = FOCUS_ITEMS.map(function(name){
+      var row = findItem(name);
+      var delta = row ? (Number(row.delta) || 0) : 0;
+      // 节水性指标（节水/节肥/减药）下降为正向，用 success 绿；增产上升为正向，用橙色强调
+      var isReduce = (name !== '增产');
+      var valueCls = isReduce ? (delta < 0 ? 'down' : '') : (delta > 0 ? 'up' : '');
+      var sub = row ? (isReduce ? '实施后降至基准的 ' + fmt(row.after) + '%' : '实施后达基准的 ' + fmt(row.after) + '%') : '暂无数据';
+      return '<div class="stat-card">' +
+        '<div class="stat-label">' + esc(name) + '</div>' +
+        '<div class="stat-value ' + valueCls + '">' + (delta > 0 ? '+' : '') + fmt(delta) + '<span class="unit">%</span></div>' +
+        '<div class="stat-sub">' + esc(sub) + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderTable(){
+    var list = DataStore.achievements();
+    if (!list.length){
+      els.tbody.innerHTML = '<tr class="empty-row"><td colspan="5">暂无成效数据</td></tr>';
+      return;
+    }
+    els.tbody.innerHTML = list.map(function(x){
+      var delta = Number(x.delta) || 0;
+      var unit = x.unit || '%';
+      var cls = delta > 0 ? 'text-success' : (delta < 0 ? 'text-danger' : 'text-tertiary');
+      return '<tr>' +
+        '<td><strong>' + esc(x.item) + '</strong></td>' +
+        '<td class="num">' + fmt(x.before) + unit + '</td>' +
+        '<td class="num">' + fmt(x.after) + unit + '</td>' +
+        '<td class="num ' + cls + '">' + (delta > 0 ? '+' : '') + fmt(delta) + unit + '</td>' +
+        '<td>' + esc(x.desc || '-') + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderTimeline(){
+    var list = DataStore.milestones().slice().sort(function(a, b){
+      return String(a.date).localeCompare(String(b.date));
+    }).reverse();
+
+    if (!list.length){
+      els.timeline.innerHTML = '<div class="empty-state"><div class="empty-text">暂无里程碑记录</div></div>';
+      return;
+    }
+
+    els.timeline.innerHTML = list.map(function(x, i){
+      return '<div class="tl-item' + (i === 0 ? ' current' : '') + '">' +
+        '<div class="tl-dot"></div>' +
+        '<div class="tl-content">' +
+          '<div class="tl-date">' + esc(x.date) + '</div>' +
+          '<h5>' + esc(x.title) + '</h5>' +
+          '<p>' + esc(x.desc || '') + '</p>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderChart(){
+    var list = DataStore.achievements();
+    Chart.bar('#chart-achievement', {
+      categories: list.map(function(x){ return x.item; }),
+      series: [
+        { name: '实施前(%)', data: list.map(function(x){ return x.before; }), color: '#bfbfbf' },
+        { name: '实施后(%)', data: list.map(function(x){ return x.after; }),  color: '#1890ff' }
+      ]
+    });
+  }
+
+  DataStore.subscribe(function(){
+    renderStats();
+    renderTable();
+    renderTimeline();
+    renderChart();
+  });
+})();
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

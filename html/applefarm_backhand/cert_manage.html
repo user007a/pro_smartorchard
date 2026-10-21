@@ -237,6 +237,54 @@
   .action-btn.delete:hover {
     background:var(--error-bg);
   }
+  /* 有效期 / 剩余天数 */
+  .validity-text {
+    display:block;
+    font-size:var(--font-size-caption, 12px);
+    color:var(--text-tertiary);
+    line-height:1.5;
+  }
+  .remain-tag {
+    display:inline-block;
+    margin-top:4px;
+    padding:2px 8px;
+    border-radius:var(--radius-full);
+    font-size:var(--font-size-xs);
+    font-weight:var(--font-weight-medium);
+    white-space:nowrap;
+  }
+  .remain-tag.warning { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .remain-tag.error { background:var(--error-bg); color:var(--error); border:1px solid var(--error-border); }
+  .remain-tag.enabled { background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); }
+  /* 到期预警汇总 */
+  .expiry-summary {
+    display:flex;
+    align-items:center;
+    gap:var(--space-lg);
+    flex-wrap:wrap;
+    padding:var(--space-lg) var(--space-xl);
+    background:var(--bg-card);
+    border-radius:var(--radius-lg);
+    border:1px solid var(--border-light);
+    box-shadow:var(--shadow-card);
+    margin-bottom:var(--space-xl);
+  }
+  .expiry-summary-title {
+    font-size:var(--font-size-base);
+    font-weight:var(--font-weight-semibold);
+    color:var(--text-primary);
+  }
+  .expiry-item {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 12px;
+    border-radius:var(--radius-md);
+    font-size:var(--font-size-sm);
+  }
+  .expiry-item.warning { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .expiry-item.error { background:var(--error-bg); color:var(--error); border:1px solid var(--error-border); }
+  .expiry-item strong { font-size:var(--font-size-lg); font-weight:var(--font-weight-bold); }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -265,9 +313,18 @@
         <div class="search-bar">
           <select class="search-select">
             <option value="">全部证书类型</option>
-            <option value="quality">质量合格证</option>
-            <option value="检测">检测报告</option>
-            <option value="origin">原产地证明</option>
+            <option value="质量合格证">质量合格证</option>
+            <option value="检测报告">检测报告</option>
+            <option value="原产地证明">原产地证明</option>
+            <option value="有机产品认证">有机产品认证</option>
+            <option value="绿色食品认证">绿色食品认证</option>
+            <option value="HACCP 体系认证">HACCP 体系认证</option>
+            <option value="GAP 良好农业规范">GAP 良好农业规范</option>
+            <option value="ISO9001 体系认证">ISO9001 体系认证</option>
+            <option value="农产品地理标志">农产品地理标志</option>
+            <option value="国家重点龙头企业">国家重点龙头企业</option>
+            <option value="出口质量备案">出口质量备案</option>
+            <option value="区块链溯源试点">区块链溯源试点</option>
           </select>
           <select class="search-select">
             <option value="">全部状态</option>
@@ -299,6 +356,9 @@
           </div>
         </div>
 
+        <!-- 到期预警 -->
+        <div class="expiry-summary" id="expirySummary"></div>
+
         <div class="page-section data-section">
           <div class="data-table-wrapper">
             <table class="data-table">
@@ -310,6 +370,7 @@
                   <th>关联批次</th>
                   <th>客户名称</th>
                   <th>有效期</th>
+                  <th>剩余天数</th>
                   <th>状态</th>
                   <th>操作</th>
                 </tr>
@@ -352,8 +413,57 @@ const mockCertData = [
   {id:'CERT020',certNo:'ZH-2026-09120',type:'质量合格证',batchNo:'PC-20260920-020',supplier:'长春欧亚集团',validity:'2026-09-20 至 2027-09-20',status:'disabled',statusText:'已撤销'},
   {id:'CERT021',certNo:'ZH-2026-09121',type:'检测报告',batchNo:'PC-20260901-001',supplier:'合肥百大集团',validity:'2026-09-01 至 2027-09-01',status:'enabled',statusText:'有效'},
   {id:'CERT022',certNo:'ZH-2026-09122',type:'质量合格证',batchNo:'PC-20260902-002',supplier:'福州永辉超市',validity:'2026-09-02 至 2027-09-02',status:'enabled',statusText:'有效'},
-  {id:'CERT023',certNo:'ZH-2026-09123',type:'原产地证明',batchNo:'PC-20260903-003',supplier:'厦门夏商集团',validity:'2026-09-03 至 2027-09-03',status:'enabled',statusText:'有效'}
+  {id:'CERT023',certNo:'ZH-2026-09123',type:'原产地证明',batchNo:'PC-20260903-003',supplier:'厦门夏商集团',validity:'2026-09-03 至 2027-09-03',status:'enabled',statusText:'有效'},
+  {id:'CERT024',certNo:'ORG-2026-09124',type:'有机产品认证',batchNo:'PC-20260924-024',supplier:'北京华联超市',validity:'2026-09-24 至 2027-09-24',status:'enabled',statusText:'有效'},
+  {id:'CERT025',certNo:'GRN-2026-09125',type:'绿色食品认证',batchNo:'PC-20260925-025',supplier:'上海果蔬配送中心',validity:'2026-09-25 至 2027-09-25',status:'enabled',statusText:'有效'},
+  {id:'CERT026',certNo:'GAP-2026-09126',type:'GAP 良好农业规范',batchNo:'PC-20260926-026',supplier:'广州江南市场',validity:'2026-09-26 至 2027-09-26',status:'enabled',statusText:'有效'},
+  {id:'CERT027',certNo:'ISO-2026-09127',type:'ISO9001 体系认证',batchNo:'PC-20260927-027',supplier:'深圳沃尔玛超市',validity:'2026-09-27 至 2027-09-27',status:'enabled',statusText:'有效'},
+  {id:'CERT028',certNo:'GI-2026-09128',type:'农产品地理标志',batchNo:'PC-20260928-028',supplier:'成都伊藤洋华堂',validity:'2026-09-28 至 2027-09-28',status:'enabled',statusText:'有效'},
+  {id:'CERT029',certNo:'HACCP-2026-09129',type:'HACCP 体系认证',batchNo:'PC-20260929-029',supplier:'武汉中百仓储',validity:'2026-09-29 至 2027-09-29',status:'enabled',statusText:'有效'},
+  {id:'CERT030',certNo:'EXP-2026-09130',type:'出口质量备案',batchNo:'PC-20260930-030',supplier:'青岛利群集团',validity:'2026-09-30 至 2027-09-30',status:'enabled',statusText:'有效'},
+  {id:'CERT031',certNo:'BLK-2026-09131',type:'区块链溯源试点',batchNo:'PC-20260931-031',supplier:'哈尔滨中央红',validity:'2026-09-05 至 2026-10-05',status:'enabled',statusText:'有效'},
+  {id:'CERT032',certNo:'NAT-2026-09132',type:'国家重点龙头企业',batchNo:'PC-20260915-032',supplier:'北京华联超市',validity:'2026-09-15 至 2029-09-15',status:'enabled',statusText:'有效'},
+  {id:'CERT033',certNo:'NAT-2025-09133',type:'国家重点龙头企业',batchNo:'PC-20250920-033',supplier:'上海果蔬配送中心',validity:'2025-09-20 至 2028-09-20',status:'enabled',statusText:'有效'}
 ];
+
+// 剩余天数：读取 validity 结束日期与今天的差值（天）
+const CERT_TODAY = new Date();
+function certRemainDays(item) {
+  const parts = String(item.validity || '').split(' 至 ');
+  const end = parts[1] || parts[0] || '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return null;
+  const endDate = new Date(end + 'T00:00:00');
+  if (isNaN(endDate.getTime())) return null;
+  const today = new Date(CERT_TODAY.getFullYear(), CERT_TODAY.getMonth(), CERT_TODAY.getDate());
+  return Math.round((endDate - today) / 86400000);
+}
+
+// 剩余天数展示：≤90 天 warning / <0 天 error / >365 天 enabled
+function renderRemainTag(days) {
+  if (days === null) return '<span class="remain-tag enabled">—</span>';
+  if (days < 0) return `<span class="remain-tag error">已过期 ${Math.abs(days)} 天</span>`;
+  if (days <= 90) return `<span class="remain-tag warning">剩余 ${days} 天</span>`;
+  if (days > 365) return `<span class="remain-tag enabled">剩余 ${days} 天</span>`;
+  return `<span class="remain-tag enabled">剩余 ${days} 天</span>`;
+}
+
+// 到期预警汇总
+function renderExpirySummary(data) {
+  const box = document.getElementById('expirySummary');
+  if (!box) return;
+  let expiring = 0, expired = 0;
+  data.forEach(item => {
+    const days = certRemainDays(item);
+    if (days === null) return;
+    if (days < 0) expired++;
+    else if (days <= 90) expiring++;
+  });
+  box.innerHTML =
+    `<span class="expiry-summary-title">到期预警</span>` +
+    `<span class="expiry-item warning">即将到期（≤90 天）<strong>${expiring}</strong>项</span>` +
+    `<span class="expiry-item error">已过期<strong>${expired}</strong>项</span>` +
+    `<span class="expiry-item">证书总数<strong>${data.length}</strong>项</span>`;
+}
 
 // 分页组件（与农事计划一致）
 const Pagination = {
@@ -411,6 +521,7 @@ let certFilteredData = [...mockCertData];
 
 // 渲染行
 function renderCertRow(item, seq) {
+  const remainDays = certRemainDays(item);
   return `
     <tr data-id="${item.id}">
       <td>${seq}</td>
@@ -418,7 +529,8 @@ function renderCertRow(item, seq) {
       <td>${item.type}</td>
       <td>${item.batchNo}</td>
       <td>${item.supplier}</td>
-      <td>${item.validity}</td>
+      <td><span class="validity-text">${item.validity}</span></td>
+      <td>${renderRemainTag(remainDays)}</td>
       <td><span class="status-tag ${item.status}">${item.statusText}</span></td>
       <td>
         <div class="action-btns">
@@ -435,6 +547,7 @@ function renderCertRow(item, seq) {
 // 搜索按钮/重置按钮触发的重绘
 function renderCertTable() {
   Pagination.updateData(certFilteredData);
+  renderExpirySummary(certFilteredData);
 }
 
 // 合并「证书签发」页已开具的合格证（本地存储）
@@ -465,6 +578,7 @@ function mergeIssuedCerts() {
 document.addEventListener('DOMContentLoaded', function() {
   mergeIssuedCerts();
   PageActions.init('cert-manage');
+  renderExpirySummary(certFilteredData);
   Pagination.init({
     currentPage: 1,
     pageSize: 10,

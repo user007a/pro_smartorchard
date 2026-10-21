@@ -32,7 +32,13 @@
     plots: 'smartorchard_plots',
     adoptionTag: 'smartorchard_adoption_tags',
     material: 'smartorchard_material_logs',
-    labelRecords: 'smartorchard_label_records'
+    labelRecords: 'smartorchard_label_records',
+    /* 以下为 T1/T5/T6/T11 接入所需：桥接层原先未覆盖的移动端写入 key */
+    labelStock: 'smartorchard_label_stock',
+    maintenance: 'smartorchard_maintenance_logs',
+    droneEvents: 'smartorchard_drone_events',
+    droneAbnormal: 'smartorchard_drone_abnormal',
+    syncQueue: 'smartorchard_sync_queue'
   };
 
   // 移动端农事类型 → PC 端类型枚举
@@ -53,6 +59,50 @@
     } catch (e) {
       return fallback;
     }
+  }
+
+  /* 对象型读取（标签库存为 { 标签名: 剩余张数 }，非数组结构） */
+  function readObj(key, fallback) {
+    try {
+      var raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      var v = JSON.parse(raw);
+      return (v && typeof v === 'object' && !Array.isArray(v)) ? v : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  /* ============================================================
+   * 审批状态回写工具
+   * 移动端写入的记录初始 status 多为 pending / 待处理，
+   * 后台处置后需把状态与处理意见回写到同一条记录，移动端列表即刻可见。
+   * ============================================================ */
+  function updateRecord(key, id, patch) {
+    var list = read(key, null);
+    if (!list) return false;
+    var hit = false;
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].id) === String(id)) {
+        list[i] = Object.assign({}, list[i], patch);
+        hit = true;
+        break;
+      }
+    }
+    if (!hit) return false;
+    try {
+      localStorage.setItem(key, JSON.stringify(list));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function stampNow() {
+    var d = new Date();
+    var p = function (n) { return n < 10 ? '0' + n : n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+      ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
   function fmtDate(iso) {
@@ -130,6 +180,31 @@
     return read(KEYS.labelRecords, []);
   }
 
+  /** 标签库存（mb_label.html 写入，后台统一在此读，扣减权归后台，见 T19） */
+  function labelStock() {
+    return readObj(KEYS.labelStock, {});
+  }
+
+  /** 移动端维护申请（mb_device.html 写入） */
+  function maintenanceLogs() {
+    return read(KEYS.maintenance, []);
+  }
+
+  /** 无人机飞行事件（mb_drone_patrol.html 写入 pause/resume/return） */
+  function droneEvents() {
+    return read(KEYS.droneEvents, []);
+  }
+
+  /** 无人机巡检异常处置（mb_drone_patrol.html 写入 误报/确认） */
+  function droneAbnormal() {
+    return read(KEYS.droneAbnormal, []);
+  }
+
+  /** 离线同步队列（mb_record_task / mb_patrol 经 MobileStore.enqueue 写入） */
+  function syncQueue() {
+    return read(KEYS.syncQueue, []);
+  }
+
   function hasMobileData() {
     return farmingRecords().length > 0 ||
            abnormalReports().length > 0 ||
@@ -157,6 +232,13 @@
     farmingBinds: farmingBinds,
     materialLogs: materialLogs,
     labelRecords: labelRecords,
+    labelStock: labelStock,
+    maintenanceLogs: maintenanceLogs,
+    droneEvents: droneEvents,
+    droneAbnormal: droneAbnormal,
+    syncQueue: syncQueue,
+    updateRecord: updateRecord,
+    stampNow: stampNow,
     hasMobileData: hasMobileData,
     sourceTag: sourceTag,
     formatGps: formatGps

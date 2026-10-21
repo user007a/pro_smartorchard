@@ -12,6 +12,29 @@
   .drone-live-info .info-item { padding:16px; background:var(--gray-50); border-radius:8px; text-align:center; }
   .drone-live-info .info-label { font-size:12px; color:var(--text-tertiary); margin-bottom:6px; }
   .drone-live-info .info-value { font-size:20px; font-weight:600; }
+  /* 架次号与进度条 */
+  .sortie-no { font-weight:600; color:var(--text-secondary); font-variant-numeric:tabular-nums; }
+  .sortie-no.running { color:var(--primary-500); }
+  .progress-cell { display:flex; align-items:center; gap:8px; min-width:120px; }
+  .progress-cell .progress { flex:1; }
+  .progress-cell .progress-fill { background: linear-gradient(90deg, var(--primary-400, #40a9ff), var(--primary-500, #1890ff)); }
+  .progress-cell .progress-text { font-size:12px; font-weight:600; color:var(--text-secondary); min-width:34px; text-align:right; font-variant-numeric:tabular-nums; }
+  .progress-cell.running .progress-text { color:var(--primary-500); }
+  .rtk-tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:500; }
+  .rtk-tag.fixed { background:#d9f7be; color:#3a8618; }
+  .rtk-tag.float { background:#fff1b8; color:#8c6d10; }
+  /* 航线回放示意 */
+  .route-play { border:1px solid var(--border-light); border-radius:10px; padding:14px; background:var(--gray-50); }
+  .route-svg { width:100%; height:auto; display:block; }
+  .route-line { fill:none; stroke:var(--primary-500); stroke-width:2.5; stroke-linejoin:round; stroke-linecap:round; }
+  .route-line-area { fill:rgba(24,144,255,0.10); stroke:none; }
+  .route-point { fill:#fff; stroke:var(--primary-500); stroke-width:2; }
+  .route-point.start { fill:var(--success); stroke:var(--success); }
+  .route-point-label { font-size:10px; fill:var(--text-tertiary); }
+  .waypoint-list { max-height:220px; overflow-y:auto; margin-top:12px; border-top:1px dashed var(--border-light); }
+  .waypoint-item { display:flex; justify-content:space-between; padding:6px 4px; font-size:12px; border-bottom:1px dashed #f0f0f0; }
+  .waypoint-item span:first-child { color:var(--text-tertiary); font-weight:600; }
+  .waypoint-item span:last-child { color:var(--text-secondary); font-variant-numeric:tabular-nums; }
 </style>
 <style id="standalone-fix">
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -83,10 +106,14 @@
                   <tr>
                     <th style="width:60px;">序号</th>
                     <th>任务编号</th>
+                    <th>架次</th>
                     <th>所属基地</th>
                     <th>无人机</th>
                     <th>巡查地块</th>
                     <th>飞行面积</th>
+                    <th>进度</th>
+                    <th>RTK</th>
+                    <th>航高</th>
                     <th>计划时间</th>
                     <th>状态</th>
                     <th>操作</th>
@@ -367,29 +394,106 @@
   </div>
 </div>
 
+<!-- 航线回放弹窗 -->
+<div id="modal-route" class="modal-overlay">
+  <div class="modal-box" style="max-width:640px;">
+    <div class="modal-header">
+      <h3 class="modal-title" id="routeReplayTitle">航线回放</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body" id="routeReplayBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn jg-btn-primary" onclick="Modal.hide('modal-route')">关闭</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/common-functions.js"></script>
 <script>
 // Mock数据 - 18条巡检任务
 const mockData = [
-  { id: 1, code: 'DRONE-001', base: '天水麦积区基地', drone: 'DJI-01', plot: 'D-001 · 东区1号地', area: 120, time: '2026-09-20 08:00', status: '已完成' },
-  { id: 2, code: 'DRONE-002', base: '天水秦州基地', drone: 'DJI-02', plot: 'D-006 · 中区1号地', area: 95, time: '2026-09-20 10:00', status: '已完成' },
-  { id: 3, code: 'DRONE-003', base: '天水麦积区基地', drone: 'DJI-03', plot: 'D-005 · 南区1号地', area: 80, time: '2026-09-23 08:30', status: '执行中' },
-  { id: 4, code: 'DRONE-004', base: '青岛莱西基地', drone: 'DJI-04', plot: 'D-010 · 东区3号地', area: 150, time: '2026-09-22 09:00', status: '已完成' },
-  { id: 5, code: 'DRONE-005', base: '招远基地', drone: 'DJI-01', plot: 'D-015 · 东区4号地', area: 110, time: '2026-09-21 14:00', status: '已完成' },
-  { id: 6, code: 'DRONE-006', base: '天水麦积区基地', drone: 'DJI-02', plot: 'D-003 · 西区1号地', area: 90, time: '2026-09-23 14:00', status: '待执行' },
-  { id: 7, code: 'DRONE-007', base: '天水秦州基地', drone: 'DJI-03', plot: 'D-008 · 西区2号地', area: 75, time: '2026-09-23 15:30', status: '待执行' },
-  { id: 8, code: 'DRONE-008', base: '青岛莱西基地', drone: 'DJI-04', plot: 'D-012 · 西区3号地', area: 130, time: '2026-09-19 08:00', status: '已完成' },
-  { id: 9, code: 'DRONE-009', base: '招远基地', drone: 'DJI-01', plot: 'D-020 · 东区5号地', area: 105, time: '2026-09-18 10:00', status: '已完成' },
-  { id: 10, code: 'DRONE-010', base: '天水麦积区基地', drone: 'DJI-02', plot: 'D-007 · 南区2号地', area: 88, time: '2026-09-17 08:30', status: '已完成' },
-  { id: 11, code: 'DRONE-011', base: '天水秦州基地', drone: 'DJI-03', plot: 'D-013 · 北区3号地', area: 72, time: '2026-09-16 09:00', status: '已取消' },
-  { id: 12, code: 'DRONE-012', base: '青岛莱西基地', drone: 'DJI-04', plot: 'D-016 · 南区4号地', area: 140, time: '2026-09-15 14:00', status: '已完成' },
-  { id: 13, code: 'DRONE-013', base: '招远基地', drone: 'DJI-01', plot: 'D-022 · 西区5号地', area: 98, time: '2026-09-14 08:00', status: '已完成' },
-  { id: 14, code: 'DRONE-014', base: '天水麦积区基地', drone: 'DJI-04', plot: 'D-009 · 北区2号地', area: 86, time: '2026-09-13 10:30', status: '已完成' },
-  { id: 15, code: 'DRONE-015', base: '天水秦州基地', drone: 'DJI-01', plot: 'D-017 · 西区4号地', area: 115, time: '2026-09-12 08:00', status: '已完成' },
-  { id: 16, code: 'DRONE-016', base: '青岛莱西基地', drone: 'DJI-02', plot: 'D-019 · 中区3号地', area: 102, time: '2026-09-11 14:00', status: '已完成' },
-  { id: 17, code: 'DRONE-017', base: '招远基地', drone: 'DJI-03', plot: 'D-023 · 北区5号地', area: 90, time: '2026-09-24 08:00', status: '待执行' },
-  { id: 18, code: 'DRONE-018', base: '天水麦积区基地', drone: 'DJI-04', plot: 'D-011 · 南区3号地', area: 78, time: '2026-09-10 09:00', status: '已取消' }
+  { id: 1, code: 'DRONE-001', sortie: '#014', base: '天水麦积区基地', drone: 'DJI-01', plot: 'D-001 · 东区1号地', area: 120, progress: 100, rtk: '固定解', altitude: 120, speed: 8.5, time: '2026-09-20 08:00', status: '已完成' },
+  { id: 2, code: 'DRONE-002', sortie: '#015', base: '天水秦州基地', drone: 'DJI-02', plot: 'D-006 · 中区1号地', area: 95, progress: 100, rtk: '固定解', altitude: 110, speed: 8.2, time: '2026-09-20 10:00', status: '已完成' },
+  { id: 3, code: 'DRONE-003', sortie: '#016', base: '天水麦积区基地', drone: 'DJI-03', plot: 'D-005 · 南区1号地', area: 80, progress: 62, rtk: '固定解', altitude: 100, speed: 9.1, time: '2026-09-23 08:30', status: '执行中' },
+  { id: 4, code: 'DRONE-004', sortie: '#017', base: '青岛莱西基地', drone: 'DJI-04', plot: 'D-010 · 东区3号地', area: 150, progress: 100, rtk: '固定解', altitude: 130, speed: 8.8, time: '2026-09-22 09:00', status: '已完成' },
+  { id: 5, code: 'DRONE-005', sortie: '#018', base: '招远基地', drone: 'DJI-01', plot: 'D-015 · 东区4号地', area: 110, progress: 100, rtk: '浮点解', altitude: 105, speed: 7.6, time: '2026-09-21 14:00', status: '已完成' },
+  { id: 6, code: 'DRONE-006', sortie: '#019', base: '天水麦积区基地', drone: 'DJI-02', plot: 'D-003 · 西区1号地', area: 90, progress: 0, rtk: '固定解', altitude: 115, speed: 0, time: '2026-09-23 14:00', status: '待执行' },
+  { id: 7, code: 'DRONE-007', sortie: '#020', base: '天水秦州基地', drone: 'DJI-03', plot: 'D-008 · 西区2号地', area: 75, progress: 0, rtk: '固定解', altitude: 100, speed: 0, time: '2026-09-23 15:30', status: '待执行' },
+  { id: 8, code: 'DRONE-008', sortie: '#021', base: '青岛莱西基地', drone: 'DJI-04', plot: 'D-012 · 西区3号地', area: 130, progress: 100, rtk: '固定解', altitude: 125, speed: 8.4, time: '2026-09-19 08:00', status: '已完成' },
+  { id: 9, code: 'DRONE-009', sortie: '#022', base: '招远基地', drone: 'DJI-01', plot: 'D-020 · 东区5号地', area: 105, progress: 100, rtk: '固定解', altitude: 112, speed: 8.0, time: '2026-09-18 10:00', status: '已完成' },
+  { id: 10, code: 'DRONE-010', sortie: '#023', base: '天水麦积区基地', drone: 'DJI-02', plot: 'D-007 · 南区2号地', area: 88, progress: 100, rtk: '固定解', altitude: 108, speed: 8.6, time: '2026-09-17 08:30', status: '已完成' },
+  { id: 11, code: 'DRONE-011', sortie: '#024', base: '天水秦州基地', drone: 'DJI-03', plot: 'D-013 · 北区3号地', area: 72, progress: 0, rtk: '浮点解', altitude: 100, speed: 0, time: '2026-09-16 09:00', status: '已取消' },
+  { id: 12, code: 'DRONE-012', sortie: '#025', base: '青岛莱西基地', drone: 'DJI-04', plot: 'D-016 · 南区4号地', area: 140, progress: 100, rtk: '固定解', altitude: 128, speed: 8.9, time: '2026-09-15 14:00', status: '已完成' },
+  { id: 13, code: 'DRONE-013', sortie: '#026', base: '招远基地', drone: 'DJI-01', plot: 'D-022 · 西区5号地', area: 98, progress: 100, rtk: '固定解', altitude: 106, speed: 8.3, time: '2026-09-14 08:00', status: '已完成' },
+  { id: 14, code: 'DRONE-014', sortie: '#027', base: '天水麦积区基地', drone: 'DJI-04', plot: 'D-009 · 北区2号地', area: 86, progress: 100, rtk: '固定解', altitude: 118, speed: 8.1, time: '2026-09-13 10:30', status: '已完成' },
+  { id: 15, code: 'DRONE-015', sortie: '#028', base: '天水秦州基地', drone: 'DJI-01', plot: 'D-017 · 西区4号地', area: 115, progress: 100, rtk: '固定解', altitude: 116, speed: 8.7, time: '2026-09-12 08:00', status: '已完成' },
+  { id: 16, code: 'DRONE-016', sortie: '#029', base: '青岛莱西基地', drone: 'DJI-02', plot: 'D-019 · 中区3号地', area: 102, progress: 100, rtk: '浮点解', altitude: 112, speed: 7.9, time: '2026-09-11 14:00', status: '已完成' },
+  { id: 17, code: 'DRONE-017', sortie: '#030', base: '招远基地', drone: 'DJI-03', plot: 'D-023 · 北区5号地', area: 90, progress: 0, rtk: '固定解', altitude: 105, speed: 0, time: '2026-09-24 08:00', status: '待执行' },
+  { id: 18, code: 'DRONE-018', sortie: '#031', base: '天水麦积区基地', drone: 'DJI-04', plot: 'D-011 · 南区3号地', area: 78, progress: 0, rtk: '固定解', altitude: 100, speed: 0, time: '2026-09-10 09:00', status: '已取消' }
 ];
+
+// 航线回放：由任务编号 + 架次生成稳定的航点坐标（示意用）
+function buildWaypoints(task) {
+  let seed = 0;
+  const key = String(task.code || '') + (task.sortie || '');
+  for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) % 9973;
+  const pts = [];
+  const count = 6;
+  for (let i = 0; i < count; i++) {
+    seed = (seed * 9301 + 49297) % 233280;
+    const jitterX = (seed / 233280) * 40 - 20;
+    seed = (seed * 9301 + 49297) % 233280;
+    const jitterY = (seed / 233280) * 30 - 15;
+    pts.push({
+      no: i + 1,
+      lng: (34.580 + i * 0.021 + jitterX / 900).toFixed(6),
+      lat: (34.760 + (i % 2 === 0 ? 1 : -1) * (0.018 * (i + 1)) + jitterY / 900).toFixed(6)
+    });
+  }
+  return pts;
+}
+
+// 航线回放 Modal：内联 SVG 折线轨迹 + 航点列表
+function showRouteReplay(code) {
+  const task = mockData.find(t => t.code === code);
+  if (!task) return;
+  const wps = buildWaypoints(task);
+  const w = 520, h = 200;
+  const xs = wps.map((_, i) => 40 + i * ((w - 80) / (wps.length - 1)));
+  const ys = wps.map((_, i) => h / 2 + (i % 2 === 0 ? -1 : 1) * (26 + (i * 7)));
+  const poly = xs.map((x, i) => x + ',' + ys[i]).join(' ');
+  const pointsHtml = wps.map((p, i) =>
+    `<circle class="route-point${i === 0 ? ' start' : ''}" cx="${xs[i]}" cy="${ys[i]}" r="4"></circle>` +
+    `<text class="route-point-label" x="${xs[i]}" y="${ys[i] - 9}" text-anchor="middle">WP${p.no}</text>`
+  ).join('');
+  const listHtml = wps.map(p =>
+    `<div class="waypoint-item"><span>航点 ${p.no}</span><span>${p.lng}°E / ${p.lat}°N</span></div>`
+  ).join('');
+
+  document.getElementById('routeReplayTitle').textContent = '航线回放 · 架次 ' + (task.sortie || '—');
+  document.getElementById('routeReplayBody').innerHTML =
+      `<div class="route-play">` +
+        `<svg class="route-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">` +
+          `<polygon class="route-line-area" points="${poly}"></polygon>` +
+          `<polyline class="route-line" points="${poly}"></polyline>` +
+          pointsHtml +
+        `</svg>` +
+        `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--text-tertiary);">` +
+          `<span>任务编号：<strong>${task.code}</strong></span>` +
+          `<span>巡查地块：<strong>${task.plot}</strong></span>` +
+          `<span>航高：<strong>${task.altitude || 0}m</strong></span>` +
+          `<span>速度：<strong>${task.speed || 0}m/s</strong></span>` +
+          `<span>RTK：<strong>${task.rtk || '—'}</strong></span>` +
+          `<span>进度：<strong>${task.progress || 0}%</strong></span>` +
+        `</div>` +
+        `<div class="waypoint-list">${listHtml}</div>` +
+      `</div>`;
+  Modal.show('modal-route');
+}
 
 // 获取状态标签
 function getStatusTag(status) {
@@ -404,18 +508,31 @@ function getStatusTag(status) {
 
 // 渲染表格行
 function renderRow(item, index) {
+  const running = item.status === '执行中';
+  const progress = Math.max(0, Math.min(100, Number(item.progress) || 0));
+  const rtkFixed = item.rtk === '固定解';
   return `<tr>
     <td>${index + 1}</td>
     <td><strong>${item.code}</strong></td>
+    <td><span class="sortie-no${running ? ' running' : ''}">${item.sortie || '—'}</span></td>
     <td>${item.base}</td>
     <td>${item.drone}</td>
     <td>${item.plot}</td>
     <td>${item.area}亩</td>
+    <td>
+      <div class="progress-cell${running ? ' running' : ''}">
+        <div class="progress"><div class="progress-fill" style="width:${progress}%;"></div></div>
+        <span class="progress-text">${progress}%</span>
+      </div>
+    </td>
+    <td><span class="rtk-tag ${rtkFixed ? 'fixed' : 'float'}">${item.rtk || '—'}</span></td>
+    <td>${item.altitude || 0}m</td>
     <td>${item.time}</td>
     <td>${getStatusTag(item.status)}</td>
     <td>
       <div class="action-btns">
         <button class="action-btn detail" onclick="Modal.show('modal-detail')">查看</button>
+        <button class="action-btn edit" onclick="showRouteReplay('${item.code}')">航线回放</button>
         <button class="action-btn edit" onclick="Modal.show('modal-edit')">编辑</button>
         <button class="action-btn delete" onclick="handleDelete()">删除</button>
       </div>
@@ -478,8 +595,8 @@ function handleAdd() {
 // 导出
 function handleExport() {
   Modal.hide('modal-export');
-  var csv = '任务名,无人机,巡检区域,计划时间,状态\n' + mockData.map(function(r){
-    return [r.name, r.drone, r.area, r.time, r.status].join(',');
+  var csv = '任务编号,架次,所属基地,无人机,巡查地块,飞行面积,进度(%),RTK,航高(m),速度(m/s),计划时间,状态\n' + mockData.map(function(r){
+    return [r.code, r.sortie, r.base, r.drone, r.plot, r.area, r.progress, r.rtk, r.altitude, r.speed, r.time, r.status].join(',');
   }).join('\n');
   var blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
   var a = document.createElement('a');

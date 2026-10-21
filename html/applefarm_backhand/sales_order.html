@@ -631,14 +631,12 @@
               </tbody>
             </table>
           </div>
-          <!-- 分页器 -->
+          <!-- 分页器（页码由数据量动态生成） -->
           <div class="pagination">
             <button class="page-btn disabled" id="prevPage">‹</button>
-            <button class="page-btn active" onclick="goToPage(1)">1</button>
-            <button class="page-btn" onclick="goToPage(2)">2</button>
-            <button class="page-btn" onclick="goToPage(3)">3</button>
-            <button class="page-btn" id="nextPage" onclick="goToPage(2)">›</button>
-            <span id="paginationInfo" style="margin-left:16px;font-size:13px;color:var(--text-tertiary);">共 23 条记录</span>
+            <span id="pageNumbers" style="display:inline-flex;gap:4px;"></span>
+            <button class="page-btn" id="nextPage">›</button>
+            <span id="paginationInfo" style="margin-left:16px;font-size:13px;color:var(--text-tertiary);">共 0 条记录</span>
           </div>
         </div>
       </div>
@@ -898,7 +896,77 @@
 
   const pageSize = 8;
   let currentPage = 1;
-  let filteredData = [...mockData];
+  let filteredData = [];
+
+  /* ========== 与 H5 端订单闭环 ==========
+     H5 下单写入 localStorage['h5_orders']；后台本页读取并统一管理，
+     发货写入 h5_sales_orders 并把 h5_orders 对应订单状态推进为「待收货」。 */
+  const H5_ORDERS_KEY = 'h5_orders';
+  const SHIP_KEY = 'h5_sales_orders';
+
+  function readArr(key) {
+    try { var v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; }
+    catch (e) { return []; }
+  }
+  function fmtTime(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso).slice(0, 16);
+    var p = function(n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  // H5 订单状态（中文）→ 后台状态枚举
+  const H5_STATUS_MAP = {
+    '待付款': 'pending', '已取消': 'cancelled', '待发货': 'paid',
+    '待收货': 'shipped', '已完成': 'completed'
+  };
+
+  // 合法状态枚举（用于校验 H5 写入的 statusCode）
+  const H5_STATUS_CODES = { pending: 1, paid: 1, shipped: 1, completed: 1, cancelled: 1 };
+
+  /* 状态归一化（L-7）：优先使用 H5 写入的 statusCode，缺失或非法时回退中文 status；
+     已发货但 H5 未确认收货时，以物流记录为准。口径与 mall_order.html 的 statusOf 保持一致，
+     避免同一订单在「C端订单」与「销售订单」两页显示不同状态。 */
+  function statusCodeOf(o, shipped) {
+    var code = o.statusCode;
+    if (!H5_STATUS_CODES[code]) {
+      code = H5_STATUS_MAP[o.status] || 'pending';
+    }
+    if (shipped && code === 'paid') code = 'shipped';
+    return code;
+  }
+
+  function h5OrderToRow(o) {
+    var items = Array.isArray(o.items) ? o.items : [];
+    var qtyText = items.map(function(i) { return (i.name || '商品') + ' x' + (Number(i.qty) || 1); }).join('；') || '—';
+    var total = Number(o.total) || items.reduce(function(s, i) { return s + (Number(i.price) || 0) * (Number(i.qty) || 1); }, 0);
+    var ship = readArr(SHIP_KEY).filter(function(s) { return s.orderNo === (o.no || o.id); })[0];
+    var status = statusCodeOf(o, !!ship);
+    return {
+      id: o.no || o.id,
+      code: o.no || o.id,
+      type: 'retail',
+      typeText: '零售订单',
+      source: 'h5',
+      customer: o.customer || (o.address && o.address.name) || 'H5 消费者',
+      phone: (o.address && o.address.phone) || '',
+      product: qtyText,
+      quantity: items.reduce(function(s, i) { return s + (Number(i.qty) || 1); }, 0) + ' 件',
+      amount: String(total),
+      status: status,
+      statusText: o.status,
+      payment: o.payment || '',
+      tracking: ship ? ship.tracking : '',
+      company: ship ? ship.company : '',
+      createTime: fmtTime(o.createdAt)
+    };
+  }
+
+  /* 汇总数据源：H5 真实订单（在前）+ B 端样例订单 */
+  function allRows() {
+    return readArr(H5_ORDERS_KEY).map(h5OrderToRow).concat(mockData);
+  }
 
   // 渲染表格
   function renderTable(data) {
@@ -909,11 +977,12 @@
       const statusText = item.status === 'pending' ? '待支付' : item.status === 'paid' ? '已支付' : item.status === 'shipped' ? '已发货' : item.status === 'completed' ? '已完成' : '已取消';
       const statusClass = item.status;
       const typeClass = item.type;
+      const srcTag = item.source === 'h5' ? '<span class="type-tag retail" style="margin-left:6px;font-size:11px;">H5</span>' : '';
       
       const row = document.createElement('tr');
       row.innerHTML = `
         <td>${__seq + 1}</td>
-        <td class="text-mono"><strong>${item.code}</strong></td>
+        <td class="text-mono"><strong>${item.code}</strong>${srcTag}</td>
         <td><span class="type-tag ${typeClass}">${item.typeText}</span></td>
         <td style="font-weight:var(--font-weight-medium);">${item.customer}</td>
         <td>${item.product}</td>
@@ -940,6 +1009,15 @@
 
   // 分页
   function goToPage(page) {
+    // 重新拉取数据源，保证 H5 新订单实时可见
+    const curKeyword = (document.getElementById('searchInput') || {}).value || '';
+    const curStatus = (document.getElementById('statusSelect') || {}).value || '';
+    const curType = (document.getElementById('typeSelect') || {}).value || '';
+    if (curKeyword || curStatus || curType) {
+      filteredData = applyFilter(curKeyword, curStatus, curType);
+    } else {
+      filteredData = allRows();
+    }
     currentPage = page;
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
@@ -949,9 +1027,21 @@
     updatePagination();
   }
 
+  function applyFilter(keyword, status, type) {
+    const kw = (keyword || '').toLowerCase();
+    return allRows().filter(item => {
+      const matchKeyword = !kw || item.code.toLowerCase().includes(kw) ||
+        (item.customer || '').toLowerCase().includes(kw) || (item.product || '').toLowerCase().includes(kw);
+      const matchStatus = !status || item.status === status;
+      const matchType = !type || item.type === type;
+      return matchKeyword && matchStatus && matchType;
+    });
+  }
+
   // 更新分页状态
   function updatePagination() {
-    const totalPages = Math.ceil(filteredData.length / pageSize);
+    const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
+    if (currentPage > totalPages) currentPage = totalPages;
     document.getElementById('paginationInfo').textContent = `共 ${filteredData.length} 条记录`;
     
     const prevBtn = document.getElementById('prevPage');
@@ -963,10 +1053,17 @@
     prevBtn.onclick = currentPage > 1 ? () => goToPage(currentPage - 1) : null;
     nextBtn.onclick = currentPage < totalPages ? () => goToPage(currentPage + 1) : null;
     
-    document.querySelectorAll('.page-btn').forEach(btn => {
-      btn.classList.remove('active');
-    });
-    document.querySelector(`.page-btn[onclick="goToPage(${currentPage})"]`)?.classList.add('active');
+    const box = document.getElementById('pageNumbers');
+    if (box) {
+      box.innerHTML = '';
+      for (let p = 1; p <= totalPages; p++) {
+        const b = document.createElement('button');
+        b.className = 'page-btn' + (p === currentPage ? ' active' : '');
+        b.textContent = String(p);
+        b.onclick = () => goToPage(p);
+        box.appendChild(b);
+      }
+    }
   }
 
   // 全选功能
@@ -991,12 +1088,7 @@
     const status = document.getElementById('statusSelect').value;
     const type = document.getElementById('typeSelect').value;
     
-    filteredData = mockData.filter(item => {
-      const matchKeyword = !keyword || item.code.toLowerCase().includes(keyword) || item.customer.toLowerCase().includes(keyword);
-      const matchStatus = !status || item.status === status;
-      const matchType = !type || item.type === type;
-      return matchKeyword && matchStatus && matchType;
-    });
+    filteredData = applyFilter(keyword, status, type);
 
     currentPage = 1;
     renderTable(filteredData);
@@ -1023,16 +1115,20 @@
 
   // 详情弹窗
   function showDetail(id) {
-    const item = mockData.find(d => d.id === id);
+    const item = allRows().find(d => d.id === id);
     if (item) {
       const statusText = item.status === 'pending' ? '待支付' : item.status === 'paid' ? '已支付' : item.status === 'shipped' ? '已发货' : item.status === 'completed' ? '已完成' : '已取消';
+      const srcText = item.source === 'h5' ? 'H5 消费者端' : 'B 端录入';
       document.getElementById('detailContent').innerHTML = `
         <div class="detail-row"><div class="detail-label">订单编号</div><div class="detail-value text-mono">${item.code}</div></div>
+        <div class="detail-row"><div class="detail-label">数据来源</div><div class="detail-value">${srcText}</div></div>
         <div class="detail-row"><div class="detail-label">订单类型</div><div class="detail-value"><span class="type-tag ${item.type}">${item.typeText}</span></div></div>
         <div class="detail-row"><div class="detail-label">客户名称</div><div class="detail-value">${item.customer}</div></div>
         <div class="detail-row"><div class="detail-label">商品信息</div><div class="detail-value">${item.product}</div></div>
         <div class="detail-row"><div class="detail-label">数量</div><div class="detail-value">${item.quantity}</div></div>
         <div class="detail-row"><div class="detail-label">金额</div><div class="detail-value">¥${item.amount}</div></div>
+        ${item.payment ? `<div class="detail-row"><div class="detail-label">支付方式</div><div class="detail-value">${item.payment}</div></div>` : ''}
+        ${item.tracking ? `<div class="detail-row"><div class="detail-label">物流信息</div><div class="detail-value">${item.company || ''} ${item.tracking}</div></div>` : ''}
         <div class="detail-row"><div class="detail-label">订单状态</div><div class="detail-value"><span class="status-tag ${item.status}">${statusText}</span></div></div>
         <div class="detail-row"><div class="detail-label">创建时间</div><div class="detail-value">${item.createTime}</div></div>
       `;
@@ -1042,8 +1138,11 @@
 
   // 发货弹窗
   function showShip(id) {
-    const item = mockData.find(d => d.id === id);
-    document.getElementById('shipInfo').textContent = `将发货：${item?.code} - ${item?.customer}`;
+    const item = allRows().find(d => d.id === id);
+    if (!item) return;
+    window.__currentShipOrder = item.id;
+    window.__currentShipIsH5 = item.source === 'h5';
+    document.getElementById('shipInfo').textContent = `将发货：${item.code} - ${item.customer}`;
     document.getElementById('shipCompany').value = 'sf';
     document.getElementById('shipNo').value = '';
     document.getElementById('shipRemark').value = '';
@@ -1051,23 +1150,43 @@
   }
 
   function confirmShip() {
-    // 发货：收集物流单号 + 公司 → 写入订单 → 状态切到 已发货（mock 但真实落库）
-    var tracking = (document.getElementById('shipTracking') || {}).value || '';
+    // 发货：写物流记录 + 推进 H5 订单状态为「待收货」
+    var tracking = (document.getElementById('shipNo') || {}).value || '';
     var company = (document.getElementById('shipCompany') || {}).value || '';
     if (!tracking) { alert('请填写物流单号'); return; }
     var orderNo = window.__currentShipOrder || '';
-    var list = JSON.parse(localStorage.getItem('h5_sales_orders') || '[]');
+    var list = readArr(SHIP_KEY);
+    list = list.filter(function(s) { return s.orderNo !== orderNo; });
     list.unshift({ orderNo: orderNo, tracking: tracking, company: company, shippedAt: new Date().toISOString() });
-    localStorage.setItem('h5_sales_orders', JSON.stringify(list));
+    localStorage.setItem(SHIP_KEY, JSON.stringify(list));
+
+    // 同步 H5 订单状态：待发货 → 待收货
+    if (window.__currentShipIsH5) {
+      var orders = readArr(H5_ORDERS_KEY);
+      var hit = false;
+      orders.forEach(function(o) {
+        if ((o.no || o.id) !== orderNo) return;
+        if (o.status === '待付款') { o.status = '待发货'; o.statusCode = 'paid'; }
+        if (o.status === '待发货') { o.status = '待收货'; o.statusCode = 'shipped'; hit = true; }
+        if (!Array.isArray(o.logistics)) o.logistics = [];
+        o.logistics.push({ company: company, tracking: tracking, shippedAt: new Date().toISOString() });
+      });
+      if (hit) localStorage.setItem(H5_ORDERS_KEY, JSON.stringify(orders));
+    }
+
     if (typeof Toast !== 'undefined') Toast.success('已发货，物流单号：' + tracking); else alert('已发货，物流单号：' + tracking);
     closeModal('shipModal');
     window.__currentShipOrder = null;
+    window.__currentShipIsH5 = false;
+    goToPage(currentPage);
   }
 
   // 催付弹窗
   function showRemind(id) {
-    const item = mockData.find(d => d.id === id);
-    document.getElementById('remindInfo').textContent = `将向 ${item?.customer} 发送催付提醒`;
+    const item = allRows().find(d => d.id === id);
+    if (!item) return;
+    window.__currentRemindOrder = item.id;
+    document.getElementById('remindInfo').textContent = `将向 ${item.customer} 发送催付提醒`;
     document.getElementById('remindType').value = 'sms';
     showModal('remindModal');
   }
@@ -1093,8 +1212,30 @@
   }
 
   function saveAdd() {
-    alert('订单创建成功！');
+    // B 端手工录入订单：落库并可在列表中检索
+    var type = document.getElementById('addType').value;
+    var customer = (document.getElementById('addCustomer').value || '').trim();
+    var product = (document.getElementById('addProduct').value || '').trim();
+    var quantity = (document.getElementById('addQuantity').value || '').trim();
+    var amount = (document.getElementById('addAmount').value || '').trim();
+    if (!customer || !product || !amount) { alert('请填写客户、商品与金额'); return; }
+    var code = 'SN' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + String(Date.now()).slice(-4);
+    mockData.unshift({
+      id: code,
+      code: code,
+      type: type,
+      typeText: type === 'retail' ? '零售订单' : '批发订单',
+      source: 'manual',
+      customer: customer,
+      product: product,
+      quantity: quantity || '1',
+      amount: amount,
+      status: 'pending',
+      createTime: new Date().toISOString().slice(0, 16).replace('T', ' ')
+    });
+    alert('订单创建成功：' + code);
     closeModal('addModal');
+    goToPage(1);
   }
 
   // 导出功能

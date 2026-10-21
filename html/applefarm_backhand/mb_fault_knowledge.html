@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 设备故障知识库</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));
+    gap:var(--space-md);
+    margin-bottom:var(--space-lg);
+  }
+  .stat-card {
+    background:var(--bg-card);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-lg);
+    padding:var(--space-lg);
+  }
+  .stat-label { font-size:var(--font-size-sm); color:var(--text-tertiary); margin-bottom:var(--space-xs); }
+  .stat-value {
+    font-size:26px; font-weight:var(--font-weight-bold);
+    color:var(--text-primary); line-height:1.2; font-variant-numeric:tabular-nums;
+  }
+
+  /* 分类条目（横向条形） */
+  .category-row {
+    display:flex; gap:var(--space-sm); flex-wrap:wrap;
+    margin-bottom:var(--space-lg);
+  }
+  .category-pill {
+    padding:6px 14px;
+    border-radius:var(--radius-full);
+    background:var(--gray-100);
+    color:var(--text-secondary);
+    font-size:var(--font-size-sm);
+    border:1px solid transparent;
+  }
+  .category-pill strong { color:var(--text-primary); margin-left:4px; }
+
+  /* 紧急程度 / 分类 / 状态 tag */
+  .status-tag {
+    display:inline-block;
+    padding:3px 10px;
+    border-radius:var(--radius-full);
+    font-size:var(--font-size-xs);
+    font-weight:500;
+    white-space:nowrap;
+  }
+  .status-tag.high   { background:var(--error-bg);   color:var(--error);   border:1px solid var(--error-border); }
+  .status-tag.medium { background:var(--warning-bg); color:#ad8b00;        border:1px solid var(--warning-border); }
+  .status-tag.low    { background:var(--primary-light, #e6f4ff); color:var(--primary-600, #1890ff); border:1px solid var(--primary-300, #91d5ff); }
+
+  .status-tag.on  { background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); }
+  .status-tag.off { background:var(--gray-100);   color:var(--text-secondary); border:1px solid var(--border-default); }
+
+  .type-tag {
+    display:inline-block;
+    padding:3px 10px;
+    border-radius:var(--radius-sm);
+    font-size:var(--font-size-xs);
+    white-space:nowrap;
+    background:var(--bg-card);
+    color:var(--text-secondary);
+    border:1px solid var(--border-default);
+  }
+  .type-tag.irrigation { background:#e6fffb; color:#13a8a8; border-color:#87e8de; }
+  .type-tag.sensor     { background:#f0f5ff; color:#1d39c4; border-color:#adc6ff; }
+  .type-tag.weather    { background:#fff7e6; color:#ad6800; border-color:#ffd591; }
+  .type-tag.camera     { background:#f9f0ff; color:#722ed1; border-color:#d3adf7; }
+  .type-tag.drone      { background:#e6f7ff; color:#096dd9; border-color:#91d5ff; }
+  .type-tag.other      { background:var(--gray-100); color:var(--text-secondary); }
+
+  /* 操作按钮组 */
+  .action-btns { display:flex; gap:6px; flex-wrap:wrap; }
+  .action-btn {
+    padding:4px 10px;
+    font-size:var(--font-size-xs);
+    border:1px solid var(--border-default);
+    border-radius:var(--radius-sm);
+    cursor:pointer;
+    background:var(--bg-card);
+    color:var(--text-secondary);
+  }
+  .action-btn:hover { border-color:var(--primary-500); color:var(--primary-500); }
+  .action-btn.danger { color:var(--error); border-color:var(--error-border); }
+  .action-btn.danger:hover { background:var(--error-bg); }
+
+  /* 弹窗（页面内自定） */
+  .modal-overlay {
+    display:none;
+    position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.5);
+    z-index:1000;
+    justify-content:center; align-items:center;
+    backdrop-filter:blur(4px);
+  }
+  .modal-overlay.show { display:flex; }
+  .modal-box {
+    background:var(--bg-card);
+    border-radius:12px;
+    width:92%; max-width:620px;
+    max-height:85vh; overflow:hidden;
+    box-shadow:0 20px 40px rgba(0,0,0,0.2);
+    animation:modalFadeIn 0.2s ease-out;
+  }
+  .modal-box.wide { max-width:760px; }
+  @keyframes modalFadeIn {
+    from { opacity:0; transform:scale(0.95) translateY(-20px); }
+    to   { opacity:1; transform:scale(1)   translateY(0); }
+  }
+  .modal-header {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:16px 20px; border-bottom:1px solid var(--border-default);
+  }
+  .modal-title { font-size:16px; font-weight:600; color:#1f1f1f; margin:0; }
+  .modal-close {
+    background:none; border:none; cursor:pointer; padding:4px;
+    font-size:20px; line-height:1; color:var(--text-tertiary);
+  }
+  .modal-close:hover { color:var(--text-secondary); }
+  .modal-body { padding:20px; overflow-y:auto; max-height:calc(85vh - 132px); }
+  .modal-footer {
+    display:flex; justify-content:flex-end; gap:12px;
+    padding:16px 20px; border-top:1px solid var(--border-default);
+  }
+
+  /* 表单 */
+  .form-row { display:flex; gap:var(--space-md); margin-bottom:var(--space-lg); }
+  .form-field { flex:1; }
+  .form-field label {
+    display:block; font-size:var(--font-size-sm);
+    font-weight:500; color:var(--text-primary); margin-bottom:var(--space-sm);
+  }
+  .form-field input,
+  .form-field select,
+  .form-field textarea {
+    width:100%; padding:10px 14px; border:1.5px solid var(--border-default);
+    border-radius:var(--radius-lg); font-size:var(--font-size-base);
+    font-family:inherit; background:var(--bg-card); box-sizing:border-box;
+    transition:all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .form-field textarea { min-height:100px; resize:vertical; }
+  .form-field input:focus,
+  .form-field select:focus,
+  .form-field textarea:focus {
+    border-color:var(--primary-500);
+    box-shadow:0 0 0 4px rgba(24,144,255,0.12);
+    outline:none;
+  }
+
+  /* 详情步骤 */
+  .step-list { padding:14px 18px; background:var(--bg-card); border:1px solid var(--border-light); border-radius:var(--radius-md); margin-top:10px; }
+  .step-list ol { margin:0; padding-left:24px; line-height:1.9; font-size:var(--font-size-sm); color:var(--text-secondary); }
+
+  .empty-state {
+    padding:var(--space-2xl) 0; text-align:center;
+    color:var(--text-tertiary); font-size:var(--font-size-sm);
+  }
+</style>
+</head>
+<body data-active-menu="device" data-active-submenu="mb-fault-knowledge">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">设备故障知识库</div>
+        <div class="page-subtitle">移动端「查故障」页 (mb_troubleshoot.html) 的数据源，维护排查指南</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn jg-btn-primary" onclick="openEdit()">新增故障</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">故障条目</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">启用中</div>
+        <div class="stat-value" id="statOn">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">高紧急</div>
+        <div class="stat-value" id="statHigh">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">关联设备型号</div>
+        <div class="stat-value" id="statDevices">0</div>
+      </div>
+    </div>
+
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <select class="search-select" id="searchCategory">
+          <option value="">全部分类</option>
+          <option value="irrigation">灌溉</option>
+          <option value="sensor">传感器</option>
+          <option value="weather">气象</option>
+          <option value="camera">摄像头</option>
+          <option value="drone">无人机</option>
+          <option value="other">其他</option>
+        </select>
+        <select class="search-select" id="searchSeverity">
+          <option value="">全部紧急程度</option>
+          <option value="high">高紧急</option>
+          <option value="medium">较急</option>
+          <option value="low">一般</option>
+        </select>
+        <select class="search-select" id="searchEnabled">
+          <option value="">全部状态</option>
+          <option value="true">启用</option>
+          <option value="false">停用</option>
+        </select>
+        <input type="text" class="search-input" id="searchKw" placeholder="搜索故障标题 / 现象 / 设备类型...">
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="renderTable()">搜索</button>
+          <button class="jg-btn" onclick="resetSearch()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="categorySummary" class="category-row"></div>
+
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:60px;">序号</th>
+              <th>故障标题</th>
+              <th style="width:90px;">分类</th>
+              <th style="width:120px;">设备类型</th>
+              <th style="width:90px;">紧急程度</th>
+              <th style="width:90px;">步骤数</th>
+              <th style="width:80px;">状态</th>
+              <th style="width:230px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="kbBody"></tbody>
+        </table>
+      </div>
+      <div id="kbEmpty" class="empty-state" style="display:none;">暂无故障数据</div>
+    </div>
+  </main>
+</div>
+
+<!-- 新增/编辑 弹窗 -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="editTitle">新增故障</h3>
+      <button class="modal-close" onclick="closeEdit()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>故障标题<span style="color:var(--error);">*</span></label>
+          <input type="text" id="editTitle" placeholder="如 灌溉系统水泵不工作">
+        </div>
+        <div class="form-field">
+          <label>分类<span style="color:var(--error);">*</span></label>
+          <select id="editCategory">
+            <option value="irrigation">灌溉</option>
+            <option value="sensor">传感器</option>
+            <option value="weather">气象</option>
+            <option value="camera">摄像头</option>
+            <option value="drone">无人机</option>
+            <option value="other">其他</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>关联设备类型</label>
+          <input type="text" id="editDeviceType" placeholder="如 土壤湿度传感器 / 摄像头">
+        </div>
+        <div class="form-field">
+          <label>紧急程度<span style="color:var(--error);">*</span></label>
+          <select id="editSeverity">
+            <option value="high">紧急</option>
+            <option value="medium">较急</option>
+            <option value="low">一般</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>故障现象<span style="color:var(--error);">*</span></label>
+        <textarea id="editSymptom" placeholder="描述用户实际看到的现象..."></textarea>
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>排查步骤<span style="color:var(--error);">*</span></label>
+        <textarea id="editGuide" placeholder="每行一条排查步骤，例如：&#10;1. 检查电源连接是否牢固&#10;2. 查看控制器指示灯状态&#10;3. 重启数据采集器"></textarea>
+        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:4px;">每行一条，最多 30 条。保存时按行拆分并去空行。</div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>排序值</label>
+          <input type="number" id="editOrder" value="100">
+          <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:4px;">数字越小排序越靠前</div>
+        </div>
+        <div class="form-field">
+          <label>启用状态</label>
+          <select id="editEnabled">
+            <option value="true">启用</option>
+            <option value="false">停用</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeEdit()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-box wide">
+    <div class="modal-header">
+      <h3 class="modal-title">故障详情</h3>
+      <button class="modal-close" onclick="closeDetail()">&times;</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeDetail()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * 设备故障知识库（移动端 mb_troubleshoot.html 数据源）
+ * ============================================================ */
+
+var KB_KEY = 'mb_fault_kb';
+
+var CATEGORY_TEXT = {
+  irrigation: '灌溉',
+  sensor:     '传感器',
+  weather:    '气象',
+  camera:     '摄像头',
+  drone:      '无人机',
+  other:      '其他'
+};
+var SEVERITY_TEXT = { high: '紧急', medium: '较急', low: '一般' };
+
+/* 种子：来自 mb_troubleshoot.html 现有 4 条（已提取） */
+var DEFAULT_KB = [
+  {
+    id: 'F001',
+    title: '灌溉系统水泵不工作',
+    category: 'irrigation',
+    deviceType: '灌溉水泵',
+    symptom: '设备通电但水泵不启动，可能是电机或控制器故障',
+    guide: [
+      '检查电源连接是否牢固，电压是否正常',
+      '查看控制器指示灯状态，确认是否有报错',
+      '检查水泵叶轮是否卡死，手动尝试转动',
+      '如以上均正常，请联系技术人员检修'
+    ],
+    severity: 'high',
+    enabled: true,
+    order: 10
+  },
+  {
+    id: 'F002',
+    title: '土壤传感器数据异常',
+    category: 'sensor',
+    deviceType: '土壤湿度传感器',
+    symptom: '传感器读数波动大或长期不变化',
+    guide: [
+      '检查传感器探头是否清洁，清除泥土附着',
+      '确认传感器安装位置是否符合要求',
+      '检查线缆连接是否松动或破损'
+    ],
+    severity: 'medium',
+    enabled: true,
+    order: 20
+  },
+  {
+    id: 'F003',
+    title: '气象站无数据上传',
+    category: 'weather',
+    deviceType: '气象站',
+    symptom: '设备在线但平台收不到气象数据',
+    guide: [
+      '检查网络信号强度，确认4G/5G连接正常',
+      '重启数据采集器，观察指示灯状态',
+      '检查SIM卡是否欠费或松动'
+    ],
+    severity: 'medium',
+    enabled: true,
+    order: 30
+  },
+  {
+    id: 'F004',
+    title: '摄像头离线',
+    category: 'camera',
+    deviceType: '网络摄像头',
+    symptom: '监控画面无法加载，显示设备离线',
+    guide: [
+      '检查摄像头电源是否正常',
+      '确认WiFi或有线网络连接',
+      '尝试重启摄像头和路由器'
+    ],
+    severity: 'low',
+    enabled: true,
+    order: 40
+  }
+];
+
+var editingId = null;
+
+/* ---------- 通用工具 ---------- */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+  });
+}
+function readJSON(key, fallback) {
+  try {
+    var raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    var v = JSON.parse(raw);
+    return Array.isArray(v) ? v : fallback;
+  } catch (e) { return fallback; }
+}
+function writeJSON(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+  catch (e) { Toast.error('本地存储写入失败'); return false; }
+}
+
+/* 拆分 + 去空（≤30 条） */
+function splitGuideLines(text) {
+  var lines = String(text || '').split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+  return lines.slice(0, 30);
+}
+
+function genId(list) {
+  var max = 0;
+  list.forEach(function (i) {
+    var n = parseInt(String(i.id || '').replace(/\D/g, ''), 10);
+    if (!isNaN(n) && n > max) max = n;
+  });
+  return 'F' + String(max + 1).padStart(3, '0');
+}
+
+/* ---------- CRUD ---------- */
+function readKB() {
+  var list = readJSON(KB_KEY, null);
+  if (!list || list.length === 0) {
+    list = DEFAULT_KB.map(function (k) { return Object.assign({}, k, { guide: k.guide.slice() }); });
+    writeJSON(KB_KEY, list);
+  }
+  return list;
+}
+function writeKB(list) { return writeJSON(KB_KEY, list); }
+
+function renderStats() {
+  var list = readKB();
+  var on = 0, high = 0;
+  var deviceSet = {};
+  list.forEach(function (k) {
+    if (k.enabled) on++;
+    if (k.severity === 'high') high++;
+    if (k.deviceType) deviceSet[k.deviceType] = true;
+  });
+  document.getElementById('statTotal').textContent  = list.length;
+  document.getElementById('statOn').textContent     = on;
+  document.getElementById('statHigh').textContent   = high;
+  document.getElementById('statDevices').textContent = Object.keys(deviceSet).length;
+}
+
+function renderCategorySummary() {
+  var list = readKB();
+  var groups = {};
+  list.forEach(function (k) {
+    var c = k.category || 'other';
+    groups[c] = (groups[c] || 0) + 1;
+  });
+  var box = document.getElementById('categorySummary');
+  var keys = Object.keys(CATEGORY_TEXT);
+  var html = '<span class="category-pill">总计 <strong>' + list.length + '</strong></span>';
+  keys.forEach(function (k) {
+    if (!groups[k]) return;
+    html += '<span class="category-pill">' + esc(CATEGORY_TEXT[k]) + ' <strong>' + groups[k] + '</strong></span>';
+  });
+  box.innerHTML = html;
+}
+
+function renderTable() {
+  var list = readKB().slice().sort(function (a, b) { return (a.order || 100) - (b.order || 100); });
+  var kw   = (document.getElementById('searchKw').value || '').trim().toLowerCase();
+  var cat  = document.getElementById('searchCategory').value;
+  var sev  = document.getElementById('searchSeverity').value;
+  var en   = document.getElementById('searchEnabled').value;
+  var filtered = list.filter(function (k) {
+    if (cat && k.category !== cat) return false;
+    if (sev && k.severity !== sev) return false;
+    if (en === 'true' && !k.enabled) return false;
+    if (en === 'false' && k.enabled) return false;
+    if (kw) {
+      var hay = ((k.title || '') + '|' + (k.symptom || '') + '|' + (k.deviceType || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+  var tbody = document.getElementById('kbBody');
+  var empty = document.getElementById('kbEmpty');
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = filtered.map(function (k, i) {
+    var stepCount = Array.isArray(k.guide) ? k.guide.length : 0;
+    var statusText = k.enabled ? '启用' : '停用';
+    var statusCls  = k.enabled ? 'on' : 'off';
+    return ''
+      + '<tr>'
+      +   '<td>' + (i + 1) + '</td>'
+      +   '<td><strong>' + esc(k.title) + '</strong>'
+      +     '<div class="cell-sub" style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:2px;">' + esc(k.id) + '</div>'
+      +   '</td>'
+      +   '<td><span class="type-tag ' + esc(k.category) + '">' + esc(CATEGORY_TEXT[k.category] || k.category) + '</span></td>'
+      +   '<td>' + esc(k.deviceType || '-') + '</td>'
+      +   '<td><span class="status-tag ' + esc(k.severity) + '">' + esc(SEVERITY_TEXT[k.severity] || k.severity) + '</span></td>'
+      +   '<td>' + stepCount + ' 条</td>'
+      +   '<td><span class="status-tag ' + statusCls + '">' + statusText + '</span></td>'
+      +   '<td>'
+      +     '<div class="action-btns">'
+      +       '<button class="action-btn" onclick="openDetail(\'' + esc(k.id) + '\')">详情</button>'
+      +       '<button class="action-btn" onclick="openEdit(\'' + esc(k.id) + '\')">编辑</button>'
+      +       '<button class="action-btn" onclick="toggleEnabled(\'' + esc(k.id) + '\')">' + (k.enabled ? '停用' : '启用') + '</button>'
+      +       '<button class="action-btn danger" onclick="deleteItem(\'' + esc(k.id) + '\')">删除</button>'
+      +     '</div>'
+      +   '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function openEdit(id) {
+  editingId = id || null;
+  var titleEl = document.querySelector('#editModal .modal-title');
+  if (titleEl) titleEl.textContent = id ? '编辑故障' : '新增故障';
+  var list = readKB();
+  var item = id ? list.filter(function (k) { return k.id === id; })[0] : null;
+  document.getElementById('editTitle').value    = (item && item.title)       || '';
+  document.getElementById('editCategory').value = (item && item.category)    || 'irrigation';
+  document.getElementById('editDeviceType').value = (item && item.deviceType) || '';
+  document.getElementById('editSeverity').value = (item && item.severity)    || 'medium';
+  document.getElementById('editSymptom').value   = (item && item.symptom)     || '';
+  document.getElementById('editGuide').value     = (item && Array.isArray(item.guide)) ? item.guide.join('\n') : '';
+  document.getElementById('editOrder').value     = (item && item.order != null) ? item.order : 100;
+  document.getElementById('editEnabled').value   = item ? (item.enabled ? 'true' : 'false') : 'true';
+  document.getElementById('editModal').classList.add('show');
+}
+function closeEdit() {
+  document.getElementById('editModal').classList.remove('show');
+  editingId = null;
+}
+function submitEdit() {
+  var title = (document.getElementById('editTitle').value || '').trim();
+  var symptom = (document.getElementById('editSymptom').value || '').trim();
+  var guideText = document.getElementById('editGuide').value || '';
+  if (!title) { Toast.warning('请填写故障标题'); return; }
+  if (!symptom) { Toast.warning('请填写故障现象'); return; }
+  var guideArr = splitGuideLines(guideText);
+  if (!guideArr.length) { Toast.warning('请至少填写一条排查步骤'); return; }
+  var data = {
+    title: title,
+    category: document.getElementById('editCategory').value || 'other',
+    deviceType: (document.getElementById('editDeviceType').value || '').trim(),
+    severity: document.getElementById('editSeverity').value || 'medium',
+    symptom: symptom,
+    guide: guideArr,
+    order: parseInt(document.getElementById('editOrder').value, 10) || 100,
+    enabled: document.getElementById('editEnabled').value === 'true'
+  };
+  var list = readKB();
+  if (editingId) {
+    var idx = list.findIndex(function (k) { return k.id === editingId; });
+    if (idx >= 0) list[idx] = Object.assign({}, list[idx], data);
+    Toast.success('已保存');
+  } else {
+    data.id = genId(list);
+    list.unshift(data);
+    Toast.success('已新增');
+  }
+  writeKB(list);
+  closeEdit();
+  renderStats();
+  renderCategorySummary();
+  renderTable();
+}
+
+function deleteItem(id) {
+  ConfirmDialog.show({
+    title: '删除故障',
+    message: '确认删除该故障知识条目吗？移动端将不再展示。',
+    onConfirm: function () {
+      var list = readKB().filter(function (k) { return k.id !== id; });
+      writeKB(list);
+      Toast.success('已删除');
+      renderStats(); renderCategorySummary(); renderTable();
+    }
+  });
+}
+function toggleEnabled(id) {
+  var list = readKB();
+  var idx = list.findIndex(function (k) { return k.id === id; });
+  if (idx < 0) return;
+  list[idx].enabled = !list[idx].enabled;
+  writeKB(list);
+  Toast.success(list[idx].enabled ? '已启用' : '已停用');
+  renderStats(); renderTable();
+}
+
+function openDetail(id) {
+  var list = readKB();
+  var k = list.filter(function (i) { return i.id === id; })[0];
+  if (!k) { Toast.error('记录不存在'); return; }
+  var steps = (k.guide || []).map(function (s, i) {
+    return '<li>' + esc(s) + '</li>';
+  }).join('');
+  var html = ''
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;font-size:13px;margin-bottom:8px;">'
+    +   '<div>ID：<b>' + esc(k.id) + '</b></div>'
+    +   '<div>分类：<span class="type-tag ' + esc(k.category) + '">' + esc(CATEGORY_TEXT[k.category] || k.category) + '</span></div>'
+    +   '<div>紧急程度：<span class="status-tag ' + esc(k.severity) + '">' + esc(SEVERITY_TEXT[k.severity] || k.severity) + '</span></div>'
+    +   '<div>关联设备：' + esc(k.deviceType || '-') + '</div>'
+    +   '<div>排序：' + esc(String(k.order != null ? k.order : '-')) + '</div>'
+    +   '<div>状态：<span class="status-tag ' + (k.enabled ? 'on' : 'off') + '">' + (k.enabled ? '启用' : '停用') + '</span></div>'
+    + '</div>'
+    + '<div style="margin-top:14px;color:var(--text-primary);font-size:14px;font-weight:600;">故障现象</div>'
+    + '<div style="background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:10px 14px;color:var(--text-secondary);font-size:13px;margin-top:6px;line-height:1.7;">' + esc(k.symptom) + '</div>'
+    + '<div style="margin-top:14px;color:var(--text-primary);font-size:14px;font-weight:600;">排查步骤</div>'
+    + '<div class="step-list"><ol>' + steps + '</ol></div>';
+  document.getElementById('detailBody').innerHTML = html;
+  document.getElementById('detailModal').classList.add('show');
+}
+function closeDetail() { document.getElementById('detailModal').classList.remove('show'); }
+
+function resetSearch() {
+  document.getElementById('searchCategory').value = '';
+  document.getElementById('searchSeverity').value = '';
+  document.getElementById('searchEnabled').value  = '';
+  document.getElementById('searchKw').value = '';
+  renderTable();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  renderStats();
+  renderCategorySummary();
+  renderTable();
+});
+</script>
+</body>
+</html>

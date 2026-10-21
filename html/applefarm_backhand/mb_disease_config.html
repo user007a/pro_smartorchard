@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 病害识别规则配置</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-xs);
+  }
+  .stat-value {
+    font-size: 26px;
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card.is-total .stat-value { color: var(--info); }
+  .stat-card.is-active .stat-value { color: var(--success); }
+  .stat-card.is-disabled .stat-value { color: var(--text-tertiary); }
+  .stat-card.is-danger .stat-value { color: var(--error); }
+
+  .notice-bar {
+    padding: 10px 14px;
+    background: var(--warning-bg);
+    border-left: 3px solid var(--warning);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-lg);
+    line-height: 1.6;
+  }
+
+  .kw-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--gray-100);
+    color: var(--text-secondary);
+    font-family: var(--font-family-mono, monospace);
+    font-size: var(--font-size-xs);
+    margin-right: 4px;
+    margin-bottom: 2px;
+  }
+
+  .risk-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .risk-tag.high   { background: var(--error-bg);   color: var(--error); }
+  .risk-tag.medium { background: var(--warning-bg); color: var(--warning); }
+  .risk-tag.low    { background: var(--success-bg); color: var(--success); }
+
+  .enabled-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .enabled-tag.on  { background: var(--success-bg); color: var(--success); }
+  .enabled-tag.off { background: var(--gray-100);    color: var(--text-tertiary); }
+
+  .cell-sub {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card);
+    border-radius: 12px;
+    width: 92%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer;
+    padding: 4px; font-size: 20px; line-height: 1;
+    color: var(--text-tertiary); transition: color 0.2s;
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(90vh - 132px);
+  }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-default);
+  }
+  .modal-field { margin-bottom: var(--space-lg); }
+  .modal-field label {
+    display: block;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+  }
+  .modal-field input, .modal-field select, .modal-field textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    background: var(--bg-card);
+  }
+  .modal-field textarea {
+    min-height: 120px;
+    resize: vertical;
+    line-height: 1.6;
+  }
+  .modal-field input:focus, .modal-field select:focus, .modal-field textarea:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.12);
+    outline: none;
+  }
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 130px 100px;
+    gap: var(--space-md);
+  }
+  .field-hint {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    margin-top: 4px;
+  }
+  .toggle-switch {
+    display: inline-block;
+    width: 44px; height: 24px;
+    background: var(--gray-200);
+    border-radius: 999px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .toggle-switch::after {
+    content: '';
+    position: absolute;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    left: 2px; top: 2px;
+    transition: left 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .toggle-switch.on { background: var(--success); }
+  .toggle-switch.on::after { left: 22px; }
+  .empty-state {
+    padding: var(--space-2xl) 0;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+  }
+</style>
+</head>
+<body data-active-menu="mobile-ops" data-active-submenu="disease-config">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">病害识别规则配置</div>
+        <div class="page-subtitle">维护移动端「病虫害识别」页用到的文件名启发式识别规则</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="resetSeed()" title="还原为移动端初始的 7 条规则">恢复默认</button>
+        <button class="jg-btn" onclick="refreshAll()">刷新</button>
+        <button class="jg-btn jg-btn-primary" onclick="openRuleModal()">新增规则</button>
+      </div>
+    </div>
+
+    <!-- 统计区 -->
+    <div class="stat-row">
+      <div class="stat-card is-total">
+        <div class="stat-label">规则总数</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card is-active">
+        <div class="stat-label">启用中</div>
+        <div class="stat-value" id="statActive">0</div>
+      </div>
+      <div class="stat-card is-disabled">
+        <div class="stat-label">已停用</div>
+        <div class="stat-value" id="statDisabled">0</div>
+      </div>
+      <div class="stat-card is-danger">
+        <div class="stat-label">高风险规则</div>
+        <div class="stat-value" id="statHigh">0</div>
+      </div>
+    </div>
+
+    <!-- 数据列表区 -->
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:200px;">病害名称</th>
+              <th style="width:240px;">匹配关键字（任一命中）</th>
+              <th style="width:110px;">风险等级</th>
+              <th style="width:90px;">置信度</th>
+              <th style="width:90px;">状态</th>
+              <th style="width:200px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="ruleBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无识别规则，请新增规则</div>
+    </div>
+  </main>
+</div>
+
+<!-- 表单弹窗 -->
+<div class="modal-overlay" id="ruleModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="ruleModalTitle">新增识别规则</h3>
+      <button class="modal-close" onclick="closeRuleModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label>病害名称<span style="color:var(--error);">*</span></label>
+        <input id="ruleDiseaseInput" placeholder="例如 苹果腐烂病" maxlength="32">
+      </div>
+      <div class="modal-field">
+        <label>匹配关键字<span style="color:var(--error);">*</span></label>
+        <textarea id="ruleKeywordInput" placeholder="多个关键字用空格或英文逗号分隔，文件名中包含任一关键字即命中。例：rot fub 腐烂"
+          maxlength="200"></textarea>
+      </div>
+      <div class="modal-field">
+        <div class="field-row">
+          <div>
+            <label>风险等级<span style="color:var(--error);">*</span></label>
+            <select id="ruleRiskInput">
+              <option value="high">高风险</option>
+              <option value="medium" selected>中风险</option>
+              <option value="low">低风险</option>
+            </select>
+          </div>
+          <div>
+            <label>置信度 (%)</label>
+            <input id="ruleConfInput" type="number" min="1" max="100" value="85">
+          </div>
+        </div>
+      </div>
+      <div class="modal-field">
+        <label>防治要点<span style="color:var(--error);">*</span></label>
+        <textarea id="rulePreventInput" placeholder="每行一条防治要点"
+          style="min-height:140px;"
+          maxlength="600"></textarea>
+      </div>
+      <div class="modal-field" style="display:flex;align-items:center;gap:10px;">
+        <div class="toggle-switch on" id="ruleEnabledToggle" onclick="toggleEnabled()" role="switch" aria-checked="true"></div>
+        <label style="margin:0;">启用此规则</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeRuleModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitRule()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * 病害识别规则配置（T13）
+ * 数据源：localStorage['mb_disease_rules']
+ * 单条结构：
+ *   { id, keyword: [str], disease, risk ('high'|'medium'|'low'),
+ *     confidence: Number, prevent: [str], enabled: Boolean }
+ * 移动端 mb_disease.html 读取同一存储；未配置时回到本文件 SEED 默认值（来自原 DEMO_RULES）。
+ *
+ * 移动端使用细节：
+ *   - keyword 用于对上传图片的文件名做小写匹配，命中即返回该规则
+ *   - 禁用（enabled=false）规则不参与匹配
+ *   - 无命中时按文件名哈希稳定映射到第一条启用的规则（沿用移动端原逻辑）
+ * ============================================================ */
+(function () {
+  'use strict';
+
+  var STORAGE_KEY = 'mb_disease_rules';
+
+  /* 把原 7 条 DEMO_RULES 的 HTML <br> 拆成纯文本数组，每行就是一条独立防治要点 */
+  var SEED_RULES = [
+    { id: 'rule_rot',
+      keyword: ['rot', 'fub', '腐烂'],
+      disease: '苹果腐烂病',
+      risk: 'high',
+      confidence: 91,
+      prevent: [
+        '及时刮除病斑并涂抹杀菌剂（如戊唑醇）',
+        '剪除病枝集中烧毁，减少侵染源',
+        '增施有机肥、控制负载，增强树势',
+        '冬季清园，树干涂白防冻防病'
+      ],
+      enabled: true },
+    { id: 'rule_ring',
+      keyword: ['ring', 'lunwen', '轮纹'],
+      disease: '苹果轮纹病',
+      risk: 'high',
+      confidence: 92,
+      prevent: [
+        '及时清除病枝病果',
+        '春季发芽前喷布波尔多液',
+        '谢花后喷施甲基托布津',
+        '加强果园排水通风'
+      ],
+      enabled: true },
+    { id: 'rule_spot',
+      keyword: ['spot', 'leaf', '斑点', '落叶'],
+      disease: '苹果斑点落叶病',
+      risk: 'medium',
+      confidence: 88,
+      prevent: [
+        '清除落叶与病枝，减少病原',
+        '谢花后喷多抗霉素或代森锰锌',
+        '生长期视病情间隔 10~15 天连喷 2~3 次',
+        '平衡施肥，避免偏施氮肥'
+      ],
+      enabled: true },
+    { id: 'rule_red',
+      keyword: ['red', 'spider', 'mite', 'hongzhizhu', '红蜘蛛'],
+      disease: '红蜘蛛虫害',
+      risk: 'high',
+      confidence: 90,
+      prevent: [
+        '冬季刮除粗老树皮、清除越冬螨卵',
+        '萌芽前喷石硫合剂或矿物油',
+        '发生期喷阿维菌素、螺螨酯，注意轮换',
+        '保护捕食螨、草蛉等天敌'
+      ],
+      enabled: true },
+    { id: 'rule_aphid',
+      keyword: ['aphid', 'ya', '蚜虫'],
+      disease: '蚜虫虫害',
+      risk: 'medium',
+      confidence: 86,
+      prevent: [
+        '剪除虫梢，减少虫源',
+        '发生期喷吡虫啉、噻虫嗪',
+        '保护瓢虫、草蛉等天敌',
+        '避免偏施氮肥，防止徒长诱蚜'
+      ],
+      enabled: true },
+    { id: 'rule_anth',
+      keyword: ['anthracnose', '炭疽'],
+      disease: '苹果炭疽病',
+      risk: 'medium',
+      confidence: 85,
+      prevent: [
+        '清除病果、病枝，集中处理',
+        '套袋前喷保护性杀菌剂',
+        '生长期喷多菌灵、咪鲜胺等',
+        '加强通风透光，降低果园湿度'
+      ],
+      enabled: true },
+    { id: 'rule_healthy',
+      keyword: ['healthy', 'normal', 'ok', '健康', '正常'],
+      disease: '未发现明显病害',
+      risk: 'low',
+      confidence: 94,
+      prevent: [
+        '叶片、果面未见典型病斑',
+        '建议保持现有水肥与通风管理',
+        '定期巡园，早发现早防治',
+        '关注后续天气变化，做好预防'
+      ],
+      enabled: true }
+  ];
+
+  var RISK_TEXT = { high: '高风险', medium: '中风险', low: '低风险' };
+
+  function readAll() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      var v = JSON.parse(raw);
+      if (!Array.isArray(v)) return null;
+      var cleaned = [];
+      v.forEach(function (r) {
+        if (!r || !r.disease) return;
+        if (!Array.isArray(r.keyword)) return;
+        if (!Array.isArray(r.prevent)) return;
+        cleaned.push(normalizeRule(r));
+      });
+      return cleaned;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function ensureSeed() {
+    var cur = readAll();
+    if (cur && cur.length) return cur;
+    var seed = SEED_RULES.slice().map(normalizeRule);
+    writeAll(seed);
+    return seed;
+  }
+
+  function normalizeRule(r) {
+    var kws = (r.keyword || [])
+      .map(function (k) { return String(k).trim().toLowerCase(); })
+      .filter(function (k) { return k.length > 0; });
+    var pts = (r.prevent || [])
+      .map(function (p) { return String(p).trim(); })
+      .filter(function (p) { return p.length > 0; });
+    var risk = r.risk;
+    if (risk !== 'high' && risk !== 'medium' && risk !== 'low') risk = 'medium';
+    var conf = Number(r.confidence);
+    if (!isFinite(conf) || conf < 1) conf = 80;
+    if (conf > 100) conf = 100;
+    var enabled = r.enabled === false ? false : true;
+    return {
+      id: r.id || ('rule_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+      keyword: kws,
+      disease: String(r.disease),
+      risk: risk,
+      confidence: conf,
+      prevent: pts,
+      enabled: enabled
+    };
+  }
+
+  function writeAll(list) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+      return true;
+    } catch (e) {
+      Toast.error('本地存储写入失败，请稍后重试');
+      return false;
+    }
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function genId() {
+    return 'rule_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  }
+
+  function parseKeywordInput(text) {
+    // 同时支持空格、中文逗号、英文逗号分隔
+    return String(text || '')
+      .split(/[\s,,，]+/)
+      .map(function (k) { return k.trim().toLowerCase(); })
+      .filter(function (k) { return k.length > 0; });
+  }
+
+  function parsePreventInput(text) {
+    return String(text || '')
+      .split(/\r?\n/)
+      .map(function (p) { return p.trim(); })
+      .filter(function (p) { return p.length > 0; });
+  }
+
+  /* ====================== 渲染 ====================== */
+
+  function renderStats(list) {
+    var active = 0, disabled = 0, high = 0;
+    list.forEach(function (r) {
+      if (r.enabled) active++; else disabled++;
+      if (r.risk === 'high' && r.enabled) high++;
+    });
+    document.getElementById('statTotal').textContent = list.length;
+    document.getElementById('statActive').textContent = active;
+    document.getElementById('statDisabled').textContent = disabled;
+    document.getElementById('statHigh').textContent = high;
+  }
+
+  function renderTable(list) {
+    var body = document.getElementById('ruleBody');
+    var empty = document.getElementById('emptyHint');
+    if (!list.length) {
+      body.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    body.innerHTML = list.map(function (r) {
+      var kwHtml = r.keyword.map(function (k) { return '<span class="kw-tag">' + esc(k) + '</span>'; }).join('');
+      var preventSummary = r.prevent.length ? r.prevent.length + ' 条要点' : '无要点';
+      return '<tr>' +
+        '<td>' +
+          '<div class="cell-title">' + esc(r.disease) + '</div>' +
+          '<div class="cell-sub">' + esc(preventSummary) + '</div>' +
+        '</td>' +
+        '<td><div>' + kwHtml + '</div></td>' +
+        '<td><span class="risk-tag ' + esc(r.risk) + '">' + esc(RISK_TEXT[r.risk]) + '</span></td>' +
+        '<td class="text-mono">' + esc(r.confidence) + '%</td>' +
+        '<td><span class="enabled-tag ' + (r.enabled ? 'on' : 'off') + '">' + (r.enabled ? '启用' : '已停') + '</span></td>' +
+        '<td><div class="action-btns">' +
+          '<button class="action-btn detail" data-edit-rule="' + esc(r.id) + '">编辑</button>' +
+          '<button class="action-btn ' + (r.enabled ? 'warning' : 'success') + '" data-toggle-rule="' + esc(r.id) + '">' + (r.enabled ? '停用' : '启用') + '</button>' +
+          '<button class="action-btn danger" data-del-rule="' + esc(r.id) + '">删除</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function refreshAll() {
+    var data = ensureSeed();
+    renderStats(data);
+    renderTable(data);
+  }
+
+  /* ====================== 弹窗 ====================== */
+  var editingId = null;
+  var pendingEnabled = true;
+
+  function openRuleModal(id) {
+    editingId = id || null;
+    document.getElementById('ruleModalTitle').textContent = id ? '编辑识别规则' : '新增识别规则';
+    document.getElementById('ruleDiseaseInput').value = '';
+    document.getElementById('ruleKeywordInput').value = '';
+    document.getElementById('ruleRiskInput').value = 'medium';
+    document.getElementById('ruleConfInput').value = '85';
+    document.getElementById('rulePreventInput').value = '';
+    pendingEnabled = true;
+    paintToggle();
+
+    if (id) {
+      var data = readAll();
+      if (!data) return;
+      var target = null;
+      data.forEach(function (r) { if (r.id === id) target = r; });
+      if (!target) { Toast.error('未找到该规则'); return; }
+      document.getElementById('ruleDiseaseInput').value = target.disease || '';
+      document.getElementById('ruleKeywordInput').value = (target.keyword || []).join(' ');
+      document.getElementById('ruleRiskInput').value = target.risk || 'medium';
+      document.getElementById('ruleConfInput').value = String(target.confidence || 85);
+      document.getElementById('rulePreventInput').value = (target.prevent || []).join('\n');
+      pendingEnabled = target.enabled !== false;
+      paintToggle();
+    }
+
+    document.getElementById('ruleModal').classList.add('show');
+  }
+
+  function closeRuleModal() {
+    document.getElementById('ruleModal').classList.remove('show');
+    editingId = null;
+  }
+
+  function toggleEnabled() {
+    pendingEnabled = !pendingEnabled;
+    paintToggle();
+  }
+
+  function paintToggle() {
+    var el = document.getElementById('ruleEnabledToggle');
+    if (!el) return;
+    if (pendingEnabled) { el.classList.add('on'); el.setAttribute('aria-checked', 'true'); }
+    else { el.classList.remove('on'); el.setAttribute('aria-checked', 'false'); }
+  }
+
+  function submitRule() {
+    var disease = (document.getElementById('ruleDiseaseInput').value || '').trim();
+    var kwArr = parseKeywordInput(document.getElementById('ruleKeywordInput').value);
+    var risk = document.getElementById('ruleRiskInput').value;
+    var conf = Number(document.getElementById('ruleConfInput').value);
+    var prevent = parsePreventInput(document.getElementById('rulePreventInput').value);
+
+    if (!disease) { Toast.warning('请填写病害名称'); return; }
+    if (!kwArr.length) { Toast.warning('请至少填写一个匹配关键字'); return; }
+    if (risk !== 'high' && risk !== 'medium' && risk !== 'low') risk = 'medium';
+    if (!isFinite(conf) || conf < 1 || conf > 100) { Toast.warning('置信度需在 1~100 之间'); return; }
+    if (!prevent.length) { Toast.warning('请填写至少一条防治要点'); return; }
+
+    var data = ensureSeed();
+    if (editingId) {
+      var hit = false;
+      data.forEach(function (r) {
+        if (r.id === editingId) {
+          r.disease = disease;
+          r.keyword = kwArr;
+          r.risk = risk;
+          r.confidence = conf;
+          r.prevent = prevent;
+          r.enabled = pendingEnabled;
+          hit = true;
+        }
+      });
+      if (!hit) { Toast.error('未找到该规则'); return; }
+      if (writeAll(data)) {
+        closeRuleModal();
+        refreshAll();
+        Toast.success('规则已更新');
+      }
+    } else {
+      data.push({
+        id: genId(),
+        disease: disease,
+        keyword: kwArr,
+        risk: risk,
+        confidence: conf,
+        prevent: prevent,
+        enabled: pendingEnabled
+      });
+      if (writeAll(data)) {
+        closeRuleModal();
+        refreshAll();
+        Toast.success('已新增识别规则');
+      }
+    }
+  }
+
+  function toggleRule(id) {
+    var data = readAll();
+    if (!data) return;
+    var hit = false, target = null;
+    data.forEach(function (r) { if (r.id === id) { r.enabled = !r.enabled; hit = true; target = r; } });
+    if (!hit) { Toast.error('未找到该规则'); return; }
+    if (writeAll(data)) {
+      refreshAll();
+      Toast.success('已' + (target.enabled ? '启用' : '停用') + '规则');
+    }
+  }
+
+  function deleteRule(id) {
+    var data = readAll();
+    if (!data) return;
+    var target = null;
+    data.forEach(function (r) { if (r.id === id) target = r; });
+    if (!target) { Toast.error('未找到该规则'); return; }
+    ConfirmDialog.show({
+      title: '删除识别规则',
+      message: '确认删除「' + (target.disease || id) + '」规则？删除后该病害将无法被命中。',
+      onConfirm: function () {
+        var cur = readAll();
+        cur = cur.filter(function (r) { return r.id !== id; });
+        if (writeAll(cur)) {
+          refreshAll();
+          Toast.success('规则已删除');
+        }
+      }
+    });
+  }
+
+  /* ====================== 默认还原 ====================== */
+  function resetSeed() {
+    ConfirmDialog.show({
+      title: '恢复默认规则',
+      message: '将所有识别规则还原为移动端内置的 7 条默认规则。继续？',
+      onConfirm: function () {
+        var seed = SEED_RULES.slice().map(normalizeRule);
+        if (writeAll(seed)) {
+          refreshAll();
+          Toast.success('已恢复默认规则');
+        }
+      }
+    });
+  }
+
+  /* ====================== 事件代理 ====================== */
+  document.addEventListener('click', function (e) {
+    var editEl = e.target.closest && e.target.closest('[data-edit-rule]');
+    var togEl  = e.target.closest && e.target.closest('[data-toggle-rule]');
+    var delEl  = e.target.closest && e.target.closest('[data-del-rule]');
+    if (editEl) openRuleModal(editEl.getAttribute('data-edit-rule'));
+    else if (togEl) toggleRule(togEl.getAttribute('data-toggle-rule'));
+    else if (delEl) deleteRule(delEl.getAttribute('data-del-rule'));
+  });
+
+  /* ====================== 启动 ====================== */
+  window.addEventListener('storage', function (e) {
+    if (e.key === STORAGE_KEY) refreshAll();
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    refreshAll();
+  });
+
+  /* 暴露给内联 onclick */
+  window.refreshAll = refreshAll;
+  window.resetSeed = resetSeed;
+  window.openRuleModal = openRuleModal;
+  window.closeRuleModal = closeRuleModal;
+  window.submitRule = submitRule;
+  window.toggleEnabled = toggleEnabled;
+})();
+</script>
+</body>
+</html>

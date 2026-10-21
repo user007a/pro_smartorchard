@@ -395,6 +395,17 @@
       width: var(--font-lg); 
       height: var(--font-lg); 
     }
+    /* 示例数据提示（兜底态，复用设计系统警告色 token） */
+    .demo-tip {
+      display: none;
+      margin-bottom: var(--space-3);
+      padding: 6px var(--space-3);
+      background: var(--warning-light);
+      color: var(--warning-dark);
+      border-radius: var(--radius-md);
+      font-size: var(--font-xs);
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -421,6 +432,7 @@
     </div>
     
     <div class="content">
+      <div class="demo-tip" id="certDemoTip">示例数据 · 未读取到后台证书</div>
       <div class="cert-container">
         <span class="tree-decoration left">🍎</span>
         <span class="tree-decoration right">🍎</span>
@@ -839,12 +851,132 @@
       }
     }
 
-    // 初始化识别码图形（依据认养编号确定性生成）
-    (function () {
+    /* ============================================================
+     * 证书数据接入
+     * 读取后台 adoption_cert.html 写入的同源共享数据：
+     *   localStorage['adoption_certs']           证书主表
+     *   localStorage['adoption_cert_templates']  证书模板
+     * 规则：优先按 URL ?certNo=xxx 精确查找；无参数时取首条
+     * status === 'issued'（已签发）的证书；查不到则保留页面
+     * 硬编码兜底值，并显示「示例数据」提示。
+     * ============================================================ */
+    var ADOPTION_CERT_KEY = 'adoption_certs';
+    var ADOPTION_TPL_KEY = 'adoption_cert_templates';
+
+    // 读取 localStorage 中的数组，任何异常均降级为空数组
+    function readSharedList(key) {
+      try {
+        var raw = localStorage.getItem(key);
+        if (!raw) return [];
+        var v = JSON.parse(raw);
+        return Object.prototype.toString.call(v) === '[object Array]' ? v : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    // 取 URL 查询参数
+    function getQueryParam(name) {
+      var m = new RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+      return m ? decodeURIComponent(m[1]) : '';
+    }
+
+    // 定位目标证书：URL 参数优先，其次首条已签发证书
+    function resolveCert() {
+      var list = readSharedList(ADOPTION_CERT_KEY);
+      if (!list.length) return null;
+      var wanted = getQueryParam('certNo');
+      if (wanted) {
+        for (var i = 0; i < list.length; i++) {
+          if (String(list[i].certNo) === wanted) return list[i];
+        }
+        return null;
+      }
+      for (var j = 0; j < list.length; j++) {
+        if (list[j] && list[j].status === 'issued') return list[j];
+      }
+      return null;
+    }
+
+    // 按 id 查模板
+    function findTemplate(id) {
+      if (!id) return null;
+      var list = readSharedList(ADOPTION_TPL_KEY);
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].id === id) return list[i];
+      }
+      return null;
+    }
+
+    // 日期格式：2026-03-15 -> 2026.03.15
+    function fmtDateDot(s) {
+      var t = String(s || '').slice(0, 10);
+      return t ? t.replace(/-/g, '.') : '';
+    }
+
+    // 日期格式：2026-03-15 -> 2026年03月15日
+    function fmtDateCn(s) {
+      var t = String(s || '').slice(0, 10);
+      var p = t.split('-');
+      if (p.length !== 3) return '';
+      return p[0] + '年' + p[1] + '月' + p[2] + '日';
+    }
+
+    // 仅在有值时覆盖文本，空值保留原硬编码兜底，避免视觉退化
+    function setCertText(id, val) {
+      var el = document.getElementById(id);
+      if (el && val) el.textContent = val;
+    }
+
+    // 用证书记录渲染页面各字段
+    function applyCertData() {
+      var cert = resolveCert();
+      var tip = document.getElementById('certDemoTip');
+      if (!cert) {
+        // 兜底：保留页面硬编码示例，并给出不显眼的提示
+        if (tip) tip.style.display = 'block';
+        return;
+      }
+      if (tip) tip.style.display = 'none';
+
+      var tpl = findTemplate(cert.templateId);
+      var base = (cert.base || '') + (cert.plot ? ' ' + cert.plot : '');
+      if (!base && tpl && tpl.orgName) base = tpl.orgName; // 复用模板落款单位
+
+      var treeLabel = '';
+      if (cert.variety) treeLabel = cert.variety + ' #' + (cert.treeNo || '');
+      else if (cert.treeNo) treeLabel = '#' + cert.treeNo;
+
+      setCertText('certNo', cert.certNo);
+      setCertText('certAdopter', cert.adopter);
+      setCertText('certInfoAdopter', cert.adopter);
+      setCertText('certTreeNo', treeLabel);
+      setCertText('certPeriod',
+        (cert.periodStart && cert.periodEnd)
+          ? (fmtDateDot(cert.periodStart) + ' - ' + fmtDateDot(cert.periodEnd))
+          : '');
+      setCertText('certVariety', cert.variety);
+      setCertText('certYield', cert.expectedYield);
+      setCertText('certBase', base);
+      setCertText('certDate', fmtDateCn(cert.issueDate));
+    }
+
+    // 渲染数据并依据认养编号重新生成确定性识别码
+    function refreshCertView() {
+      applyCertData();
       var c = document.getElementById('certQr');
       var noEl = document.getElementById('certNo');
       if (c && noEl) drawCodeMatrix(c, noEl.textContent.trim());
-    })();
+    }
+
+    // 初始化：先按共享数据渲染，再生成识别码
+    refreshCertView();
+
+    // 后台改动证书 / 模板后，移动端（同源其它标签页）同步刷新
+    window.addEventListener('storage', function (e) {
+      if (!e || (e.key !== ADOPTION_CERT_KEY && e.key !== ADOPTION_TPL_KEY)) return;
+      refreshCertView();
+    });
   </script>
 </body>
 </html>

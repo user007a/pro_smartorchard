@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 设备报修受理</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-xs);
+  }
+  .stat-value {
+    font-size: 26px;
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card.is-pending .stat-value { color: var(--warning); }
+  .stat-card.is-accepted .stat-value { color: var(--info); }
+  .stat-card.is-done .stat-value { color: var(--success); }
+  .status-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .status-tag.pending { background: var(--warning-bg); color: var(--warning); }
+  .status-tag.accepted { background: var(--info-bg); color: var(--info); }
+  .status-tag.done { background: var(--success-bg); color: var(--success); }
+  .status-tag.rejected { background: var(--error-bg); color: var(--error); }
+  /* 紧急程度标签 */
+  .urgency-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+  }
+  .urgency-tag.low { background: var(--gray-100); color: var(--text-secondary); }
+  .urgency-tag.normal { background: var(--warning-bg); color: var(--warning); }
+  .urgency-tag.high { background: var(--error-bg); color: var(--error); }
+  .cell-sub {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .handle-box {
+    margin-top: var(--space-sm);
+    padding: 8px 10px;
+    background: var(--gray-50);
+    border-left: 3px solid var(--primary-300);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+  }
+  .modal-field { margin-bottom: var(--space-lg); }
+  .modal-field label {
+    display: block;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+  }
+  .modal-field textarea, .modal-field input, .modal-field select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    background: var(--bg-card);
+  }
+  .modal-field textarea { min-height: 100px; resize: vertical; line-height: 1.6; }
+  .modal-field textarea:focus, .modal-field input:focus, .modal-field select:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.12);
+    outline: none;
+  }
+  .detail-row {
+    display: flex;
+    gap: var(--space-md);
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-light);
+    font-size: var(--font-size-sm);
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-label { color: var(--text-tertiary); min-width: 84px; flex-shrink: 0; }
+  .detail-value { color: var(--text-primary); flex: 1; word-break: break-all; }
+  .empty-state {
+    padding: var(--space-2xl) 0;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+  }
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card);
+    border-radius: 12px;
+    width: 92%;
+    max-width: 620px;
+    max-height: 85vh;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer;
+    padding: 4px; font-size: 20px; line-height: 1;
+    color: var(--text-tertiary); transition: color 0.2s;
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(85vh - 132px);
+  }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-default);
+  }
+</style>
+</head>
+<body data-active-menu="device" data-active-submenu="device-maint-mb">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">设备报修受理</div>
+        <div class="page-subtitle">受理移动端设备维护申请，跟踪受理、维修与完成状态</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="refreshList()">刷新</button>
+      </div>
+    </div>
+
+    <!-- 统计区 -->
+    <div class="stat-row">
+      <div class="stat-card is-pending">
+        <div class="stat-label">待受理</div>
+        <div class="stat-value" id="statPending">0</div>
+      </div>
+      <div class="stat-card is-accepted">
+        <div class="stat-label">已受理</div>
+        <div class="stat-value" id="statAccepted">0</div>
+      </div>
+      <div class="stat-card is-done">
+        <div class="stat-label">已完成</div>
+        <div class="stat-value" id="statDone">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已驳回</div>
+        <div class="stat-value" id="statRejected">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">申请总数</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+    </div>
+
+    <!-- 搜索栏区 -->
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <select class="search-select" id="statusSelect">
+          <option value="">全部状态</option>
+          <option value="pending">待受理</option>
+          <option value="accepted">已受理</option>
+          <option value="done">已完成</option>
+          <option value="rejected">已驳回</option>
+        </select>
+        <select class="search-select" id="urgencySelect">
+          <option value="">全部紧急程度</option>
+          <option value="high">紧急</option>
+          <option value="normal">较急</option>
+          <option value="low">一般</option>
+        </select>
+        <input type="text" class="search-input" placeholder="搜索设备名称或故障原因..." id="searchInput">
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="renderTable()">搜索</button>
+          <button class="jg-btn" onclick="resetFilter()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据列表区 -->
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="checkbox-col" style="width:60px;">序号</th>
+              <th style="width:150px;">申请时间</th>
+              <th style="width:150px;">设备名称</th>
+              <th style="width:90px;">紧急程度</th>
+              <th>故障原因</th>
+              <th style="width:100px;">状态</th>
+              <th style="width:200px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="maintainBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无移动端报修申请</div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== 处理弹窗 ===== -->
+<div class="modal-overlay" id="handleModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="handleTitle">报修处理</h3>
+      <button class="modal-close" onclick="closeHandleModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-row">
+        <div class="detail-label">申请时间</div>
+        <div class="detail-value" id="hmTime"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">设备名称</div>
+        <div class="detail-value" id="hmDevice"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">紧急程度</div>
+        <div class="detail-value" id="hmUrgency"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">故障原因</div>
+        <div class="detail-value" id="hmReason"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">当前状态</div>
+        <div class="detail-value" id="hmStatus"></div>
+      </div>
+      <div class="modal-field" style="margin-top:var(--space-lg);">
+        <label>处理说明</label>
+        <textarea id="hmRemark" placeholder="填写处理说明，移动端报修人可见"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeHandleModal()">取消</button>
+      <button class="jg-btn jg-btn-danger" onclick="submitHandle('rejected')">驳回</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitHandle('accepted')">受理</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitHandle('done')">完成维修</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-bridge.js"></script>
+<script>
+/* ============================================================
+ * 设备报修受理
+ * 数据源：MobileBridge.maintenanceLogs()
+ *   写入方 = 移动端设备页维护申请
+ *   字段：{ device, urgency, urgencyText, reason,
+ *          status:'pending', statusText:'待受理', id, createTime }
+ *   urgency：low 一般 / normal 较急 / high 紧急
+ * 状态流转：pending 待受理 → accepted 已受理 → done 已完成
+ *          另支持 rejected 已驳回
+ * 每次操作均回写 MobileBridge.KEYS.maintenance，移动端状态同步更新
+ * ============================================================ */
+
+/* 状态枚举：值 → 展示文案 / 标签样式类 */
+var STATUS_MAP = {
+  pending: { text: '待受理', cls: 'pending' },
+  accepted: { text: '已受理', cls: 'accepted' },
+  done: { text: '已完成', cls: 'done' },
+  rejected: { text: '已驳回', cls: 'rejected' }
+};
+
+/* 紧急程度枚举 */
+var URGENCY_TEXT = { low: '一般', normal: '较急', high: '紧急' };
+
+var currentId = null;
+
+/* HTML 转义，所有用户数据渲染前必须走这里 */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* 读取移动端报修申请，读取失败回退空数组 */
+function readList() {
+  try {
+    if (typeof MobileBridge === 'undefined') return [];
+    var list = MobileBridge.maintenanceLogs();
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function statusInfo(item) {
+  return STATUS_MAP[item.status] || STATUS_MAP.pending;
+}
+
+function renderStats(list) {
+  var pending = 0, accepted = 0, done = 0, rejected = 0;
+  list.forEach(function (i) {
+    if (i.status === 'accepted') accepted++;
+    else if (i.status === 'done') done++;
+    else if (i.status === 'rejected') rejected++;
+    else pending++;
+  });
+  document.getElementById('statPending').textContent = pending;
+  document.getElementById('statAccepted').textContent = accepted;
+  document.getElementById('statDone').textContent = done;
+  document.getElementById('statRejected').textContent = rejected;
+  document.getElementById('statTotal').textContent = list.length;
+}
+
+function filteredList() {
+  var status = document.getElementById('statusSelect').value;
+  var urgency = document.getElementById('urgencySelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  return readList().filter(function (item) {
+    if (status && item.status !== status) return false;
+    if (urgency && item.urgency !== urgency) return false;
+    if (kw) {
+      var hay = ((item.device || '') + ' ' + (item.reason || '') + ' ' + (item.urgencyText || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable() {
+  var all = readList();
+  renderStats(all);
+  var list = filteredList();
+
+  var body = document.getElementById('maintainBody');
+  var emptyHint = document.getElementById('emptyHint');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+
+  body.innerHTML = list.map(function (item, i) {
+    var st = statusInfo(item);
+    var urgency = item.urgency || 'low';
+    /* 处理说明回显 */
+    var extra = '';
+    if (item.handleRemark || item.handleTime) {
+      extra = '<div class="handle-box">' +
+        (item.handleRemark ? esc(item.handleRemark) : '') +
+        (item.handleTime ? '<br>处理时间：' + esc(item.handleTime) : '') + '</div>';
+    }
+    /* 操作按钮按状态给出：pending→受理，accepted→完成维修/驳回，done/rejected→查看 */
+    var btns = '<div class="action-btns">' +
+      '<button class="action-btn detail" onclick="openHandleModal(\'' + esc(item.id) + '\')">' +
+      (item.status === 'done' || item.status === 'rejected' ? '查看' : '处理') + '</button>' +
+      '</div>';
+
+    return '<tr>' +
+      '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td class="text-mono">' + esc(item.createTime || '-') + '</td>' +
+      '<td><strong>' + esc(item.device || '-') + '</strong></td>' +
+      '<td><span class="urgency-tag ' + esc(urgency) + '">' + esc(item.urgencyText || URGENCY_TEXT[urgency] || '-') + '</span></td>' +
+      '<td><div class="cell-sub">' + esc(item.reason || '-') + '</div>' + extra + '</td>' +
+      '<td><span class="status-tag ' + st.cls + '">' + esc(item.statusText || st.text) + '</span></td>' +
+      '<td>' + btns + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function resetFilter() {
+  document.getElementById('statusSelect').value = '';
+  document.getElementById('urgencySelect').value = '';
+  document.getElementById('searchInput').value = '';
+  renderTable();
+}
+
+function refreshList() {
+  renderTable();
+  Toast.success('报修数据已刷新');
+}
+
+/* ---------- 处理弹窗 ---------- */
+function openHandleModal(id) {
+  var list = readList();
+  var target = null;
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].id) === String(id)) { target = list[i]; break; }
+  }
+  if (!target) { Toast.error('未找到该报修申请'); return; }
+
+  currentId = target.id;
+  var st = statusInfo(target);
+  document.getElementById('handleTitle').textContent = '报修处理';
+  document.getElementById('hmTime').textContent = target.createTime || '-';
+  document.getElementById('hmDevice').textContent = target.device || '-';
+  document.getElementById('hmUrgency').innerHTML =
+    '<span class="urgency-tag ' + esc(target.urgency || 'low') + '">'
+    + esc(target.urgencyText || URGENCY_TEXT[target.urgency] || '-') + '</span>';
+  document.getElementById('hmReason').textContent = target.reason || '-';
+  document.getElementById('hmStatus').innerHTML =
+    '<span class="status-tag ' + st.cls + '">' + esc(target.statusText || st.text) + '</span>';
+  document.getElementById('hmRemark').value = target.handleRemark || '';
+
+  /* 已完成/已驳回的记录只读展示；驳回与完成均按状态收敛按钮 */
+  var isClosed = target.status === 'done' || target.status === 'rejected';
+  var footerBtns = document.querySelectorAll('#handleModal .modal-footer button');
+  footerBtns.forEach(function (b) {
+    var act = b.getAttribute('onclick') || '';
+    if (isClosed) {
+      b.style.display = 'none';
+    } else if (act.indexOf("'done'") > -1 && target.status !== 'accepted') {
+      /* 未受理的申请不能直接标记完成 */
+      b.style.display = 'none';
+    } else if (act.indexOf("'rejected'") > -1 && target.status === 'done') {
+      b.style.display = 'none';
+    } else {
+      b.style.display = '';
+    }
+  });
+
+  document.getElementById('handleModal').classList.add('show');
+}
+
+function closeHandleModal() {
+  document.getElementById('handleModal').classList.remove('show');
+  currentId = null;
+}
+
+/* 提交状态流转：accepted 受理 / done 完成维修 / rejected 驳回；均回写移动端记录 */
+function submitHandle(next) {
+  if (typeof MobileBridge === 'undefined') {
+    Toast.error('数据桥接未加载，无法保存处理结果');
+    return;
+  }
+  var remark = document.getElementById('hmRemark').value.trim();
+
+  /* 驳回与完成为终态操作，需二次确认 */
+  if (next === 'rejected' || next === 'done') {
+    ConfirmDialog.show({
+      title: next === 'rejected' ? '驳回报修申请' : '确认完成维修',
+      message: next === 'rejected'
+        ? '确定要驳回该报修申请吗？驳回后移动端将标记为「已驳回」。'
+        : '确定该设备已维修完成吗？完成后移动端将标记为「已完成」。',
+      onConfirm: function () { doHandle(next, remark); }
+    });
+    return;
+  }
+  doHandle(next, remark);
+}
+
+function doHandle(next, remark) {
+  var ok = MobileBridge.updateRecord(MobileBridge.KEYS.maintenance, currentId, {
+    status: next,
+    statusText: STATUS_MAP[next].text,
+    handleRemark: remark,
+    handleTime: MobileBridge.stampNow()
+  });
+  if (!ok) { Toast.error('处理结果保存失败，请刷新后重试'); return; }
+
+  closeHandleModal();
+  renderTable();
+  Toast.success('已标记为「' + STATUS_MAP[next].text + '」，移动端可查看');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  renderTable();
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') renderTable();
+  });
+});
+</script>
+</body>
+</html>

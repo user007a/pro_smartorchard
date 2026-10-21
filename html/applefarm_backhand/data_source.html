@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 数据源接入</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 统计卡：4 列网格 */
+  .stat-card-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-xl);
+    transition: box-shadow var(--transition-normal);
+  }
+  .stat-card:hover { box-shadow: var(--shadow-md); }
+  .stat-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; }
+  .stat-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-value .unit { font-size: 13px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; }
+  .stat-sub { margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
+  .stat-sub.up { color: var(--success); }
+  .stat-sub.warn { color: var(--warning); }
+  .stat-sub.err { color: var(--error); }
+
+  /* 表格 */
+  .data-table { min-width: 900px; }
+  .empty-row td { text-align: center; color: var(--text-tertiary); padding: 40px 0; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="数据运营" data-active-submenu="数据源接入">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 统计卡 -->
+        <div class="stat-card-row" id="statCards"></div>
+
+        <!-- 筛选栏 -->
+        <div class="search-bar">
+          <select class="search-select" id="filterType">
+            <option value="">全部类型</option>
+            <option value="业务库">业务库</option>
+            <option value="IoT 网关">IoT 网关</option>
+            <option value="区块链">区块链</option>
+            <option value="移动端">移动端</option>
+          </select>
+          <select class="search-select" id="filterStatus">
+            <option value="">全部状态</option>
+            <option value="online">运行中</option>
+            <option value="warning">延迟偏高</option>
+            <option value="offline">已离线</option>
+          </select>
+          <input type="text" class="search-input" id="keywordInput" placeholder="搜索数据源名称、协议、接入地址...">
+          <div class="search-actions">
+            <button class="jg-btn jg-btn-primary" id="btnSearch">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+              </svg>搜索
+            </button>
+            <button class="jg-btn" id="btnReset">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:4px;">
+                <path d="M3 8a5 5 0 1 1 1.5 3.6"/><path d="M3 13V9h4"/>
+              </svg>重置
+            </button>
+          </div>
+        </div>
+
+        <!-- 操作栏 -->
+        <div class="action-bar">
+          <div class="action-left">
+            <button class="jg-btn jg-btn-primary" id="btnCreate">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+                <path d="M8 3V13M3 8H13"/>
+              </svg>
+              新增数据源
+            </button>
+            <button class="jg-btn" id="btnExport">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+                <path d="M3 10V13C3 13.55 3.45 14 4 14H12C12.55 14 13 13.55 13 13V10"/><path d="M2 6H14M6 6V3C6 2.45 6.45 2 7 2H9C9.55 2 10 2.45 10 3V6"/>
+              </svg>
+              导出
+            </button>
+          </div>
+          <div class="action-right">
+            <span class="selected-info" id="totalInfo"></span>
+          </div>
+        </div>
+
+        <!-- 数据表格 -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>数据源名称</th>
+                  <th>类型</th>
+                  <th>协议</th>
+                  <th>接入地址</th>
+                  <th>采集频率</th>
+                  <th>状态</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/page-actions.js"></script>
+<script src="js/shared/data-store.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  function fmt(n){
+    n = Number(n) || 0;
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  var STATUS_CLASS = { online: 'enabled', warning: 'warning', offline: 'error' };
+  var STATUS_TEXT  = { online: '运行中', warning: '延迟偏高', offline: '已离线' };
+
+  var TYPE_OPTIONS  = ['业务库', 'IoT 网关', '区块链', '移动端'];
+  var PROTO_OPTIONS = ['REST API', 'MQTT', 'WebSocket', 'HTTPS', 'Kafka', 'FTP'];
+  var FREQ_OPTIONS  = ['实时', '5分钟', '10分钟', '15分钟', '30分钟', '1小时', '每日'];
+
+  var els = {
+    statCards : document.getElementById('statCards'),
+    tbody     : document.getElementById('tableBody'),
+    totalInfo : document.getElementById('totalInfo'),
+    filterType   : document.getElementById('filterType'),
+    filterStatus : document.getElementById('filterStatus'),
+    keyword   : document.getElementById('keywordInput')
+  };
+
+  function statusText(s){ return STATUS_TEXT[s] || s || '-'; }
+
+  function renderStats(){
+    var sources = DataStore.sources();
+    var s = DataStore.summary();
+    var warning = sources.filter(function(x){ return x.status === 'warning'; }).length;
+    var offline = sources.filter(function(x){ return x.status === 'offline'; }).length;
+    var running = s.onlineSources;
+
+    els.statCards.innerHTML =
+      '<div class="stat-card">' +
+        '<div class="stat-label">数据源总数</div>' +
+        '<div class="stat-value">' + fmt(s.sourceTotal) + '<span class="unit">个</span></div>' +
+        '<div class="stat-sub">接入 ' + TYPE_OPTIONS.length + ' 类数据源</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">运行中</div>' +
+        '<div class="stat-value">' + fmt(running) + '<span class="unit">个</span></div>' +
+        '<div class="stat-sub up">占比 ' + (s.sourceTotal ? Math.round(running / s.sourceTotal * 1000) / 10 : 0) + '%</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">告警</div>' +
+        '<div class="stat-value">' + fmt(warning) + '<span class="unit">个</span></div>' +
+        '<div class="stat-sub warn">需关注采集延迟</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">离线</div>' +
+        '<div class="stat-value">' + fmt(offline) + '<span class="unit">个</span></div>' +
+        '<div class="stat-sub err">建议尽快恢复采集</div>' +
+      '</div>';
+  }
+
+  function currentFilter(){
+    var type   = els.filterType.value || '';
+    var status = els.filterStatus.value || '';
+    var kw     = (els.keyword.value || '').trim().toLowerCase();
+    return { type: type, status: status, kw: kw };
+  }
+
+  function filteredSources(){
+    var f = currentFilter();
+    return DataStore.sources().filter(function(x){
+      if (f.type   && x.type   !== f.type)   return false;
+      if (f.status && x.status !== f.status) return false;
+      if (f.kw){
+        var hay = [x.name, x.type, x.protocol, x.endpoint, x.statusText].join(' ').toLowerCase();
+        if (hay.indexOf(f.kw) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderTable(){
+    var list = filteredSources();
+    els.totalInfo.textContent = '共 ' + list.length + ' 条记录';
+
+    if (!list.length){
+      els.tbody.innerHTML = '<tr class="empty-row"><td colspan="8">暂无符合条件的数据源</td></tr>';
+      return;
+    }
+
+    els.tbody.innerHTML = list.map(function(x, i){
+      return '<tr data-id="' + x.id + '">' +
+        '<td><strong>' + (i + 1) + '. ' + esc(x.name) + '</strong></td>' +
+        '<td>' + esc(x.type || '-') + '</td>' +
+        '<td>' + esc(x.protocol || '-') + '</td>' +
+        '<td>' + esc(x.endpoint || '-') + '</td>' +
+        '<td>' + esc(x.freq || '-') + '</td>' +
+        '<td><span class="status-tag ' + (STATUS_CLASS[x.status] || 'disabled') + '">' + statusText(x.status) + '</span></td>' +
+        '<td>' + esc(x.updatedAt || '-') + '</td>' +
+        '<td><div class="action-btns">' +
+          '<button class="action-btn edit" data-act="edit" data-id="' + x.id + '">编辑</button>' +
+          '<button class="action-btn delete" data-act="del" data-id="' + x.id + '">删除</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function esc(v){
+    return String(v === undefined || v === null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function renderAll(){
+    renderStats();
+    renderTable();
+  }
+
+  /* ---------- 新增 / 编辑 ---------- */
+  function sourceFields(){
+    return [
+      { name: 'name',     label: '数据源名称', type: 'text',   required: true },
+      { name: 'type',     label: '类型',       type: 'select', required: true,
+        options: TYPE_OPTIONS.map(function(v){ return { value: v, label: v }; }) },
+      { name: 'protocol', label: '协议',       type: 'select', required: true,
+        options: PROTO_OPTIONS.map(function(v){ return { value: v, label: v }; }) },
+      { name: 'endpoint', label: '接入地址',   type: 'text',   required: true, placeholder: '如 /api/v1/xxx 或 mqtt://host:1883/topic' },
+      { name: 'freq',     label: '采集频率',   type: 'select', required: true,
+        options: FREQ_OPTIONS.map(function(v){ return { value: v, label: v }; }) },
+      { name: 'status',   label: '状态',       type: 'select', required: true,
+        options: [
+          { value: 'online',  label: '运行中' },
+          { value: 'warning', label: '延迟偏高' },
+          { value: 'offline', label: '已离线' }
+        ] }
+    ];
+  }
+
+  function genId(){
+    return 'DS' + String(Date.now()).slice(-3);
+  }
+
+  function nowText(){
+    var d = new Date();
+    function p(n){ return String(n).padStart(2, '0'); }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function openSourceModal(item){
+    var isEdit = !!item;
+    Modal.form({
+      title: isEdit ? '编辑数据源' : '新增数据源',
+      fields: sourceFields(),
+      values: item || { status: 'online', freq: '5分钟' },
+      submitText: '保存',
+      width: '640px',
+      onSubmit: function(formData){
+        if (!formData.name){ Toast.show('请填写数据源名称', 'warning'); return false; }
+        var payload = {
+          id: isEdit ? item.id : genId(),
+          name: formData.name,
+          type: formData.type || '业务库',
+          protocol: formData.protocol || 'REST API',
+          endpoint: formData.endpoint || '',
+          freq: formData.freq || '5分钟',
+          status: formData.status || 'online',
+          statusText: statusText(formData.status),
+          updatedAt: nowText()
+        };
+        DataStore.upsertSource(payload);
+        Toast.show(isEdit ? '保存成功' : '新增成功', 'success');
+        return true;
+      }
+    });
+  }
+
+  function handleEdit(id){
+    var item = DataStore.sources().filter(function(x){ return x.id === id; })[0];
+    if (!item){ Toast.show('数据源不存在', 'error'); return; }
+    openSourceModal(item);
+  }
+
+  function handleDelete(id){
+    var item = DataStore.sources().filter(function(x){ return x.id === id; })[0];
+    if (!item){ Toast.show('数据源不存在', 'error'); return; }
+    Confirm.delete('确定要删除数据源「' + item.name + '」吗？此操作不可撤销。').then(function(ok){
+      if (!ok) return;
+      DataStore.removeSource(id);
+      Toast.show('删除成功', 'success');
+    });
+  }
+
+  function exportCsv(){
+    var list = filteredSources();
+    var headers = ['数据源名称', '类型', '协议', '接入地址', '采集频率', '状态', '更新时间'];
+    var rows = list.map(function(x){
+      return [x.name, x.type, x.protocol, x.endpoint, x.freq, statusText(x.status), x.updatedAt];
+    });
+    var csv = [headers.join(',')].concat(rows.map(function(r){ return r.join(','); })).join('\n');
+    try {
+      var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = '数据源接入_' + nowText().split(' ')[0] + '.csv';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      Toast.show('导出成功，共 ' + list.length + ' 条', 'success');
+    } catch(e){
+      Toast.show('导出失败', 'error');
+    }
+  }
+
+  /* ---------- 事件绑定 ---------- */
+  document.getElementById('btnCreate').addEventListener('click', function(){ openSourceModal(null); });
+  document.getElementById('btnExport').addEventListener('click', exportCsv);
+  document.getElementById('btnSearch').addEventListener('click', renderTable);
+  document.getElementById('btnReset').addEventListener('click', function(){
+    els.filterType.value = '';
+    els.filterStatus.value = '';
+    els.keyword.value = '';
+    renderTable();
+  });
+  els.filterType.addEventListener('change', renderTable);
+  els.filterStatus.addEventListener('change', renderTable);
+  els.keyword.addEventListener('keydown', function(e){ if (e.key === 'Enter') renderTable(); });
+
+  els.tbody.addEventListener('click', function(e){
+    var btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    var id = btn.getAttribute('data-id');
+    if (btn.getAttribute('data-act') === 'edit') handleEdit(id);
+    else handleDelete(id);
+  });
+
+  /* ---------- 订阅 Store 变更实时重渲染 ---------- */
+  DataStore.subscribe(function(){
+    renderAll();
+  });
+})();
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

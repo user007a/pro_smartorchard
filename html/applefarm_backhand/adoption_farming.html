@@ -464,6 +464,66 @@
     margin-bottom:var(--space-lg);
   }
 
+  /* 数据来源角标（移动端写入 vs 演示基础数据） */
+  .source-badge {
+    display:inline-block;
+    padding:1px 6px;
+    border-radius:4px;
+    font-size:10px;
+    line-height:1.6;
+    background:#e6f4ff;
+    color:#0958d9;
+    margin-left:4px;
+    vertical-align:middle;
+    white-space:nowrap;
+  }
+
+  .source-badge.mock {
+    background:var(--gray-100);
+    color:var(--text-tertiary);
+  }
+
+  /* 统计卡（统一规范下用紧凑行式，避免大块卡片占位） */
+  .stat-row {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+    gap:var(--space-md);
+    margin-bottom:var(--space-lg);
+  }
+
+  .stat-row .stat-card {
+    padding:var(--space-lg);
+    border-radius:var(--radius-lg);
+    border:1px solid var(--border-light);
+  }
+
+  /* 绑定农事清单（详情弹窗） */
+  .bind-list {
+    margin-top:var(--space-sm);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-md);
+    overflow:hidden;
+  }
+
+  .bind-item {
+    display:flex;
+    align-items:center;
+    gap:var(--space-md);
+    padding:10px 12px;
+    border-bottom:1px solid var(--border-light);
+    font-size:var(--font-size-sm);
+  }
+
+  .bind-item:last-child { border-bottom:none; }
+
+  .bind-item-title { flex:1; color:var(--text-primary); }
+
+  .bind-item-time {
+    font-size:var(--font-size-xs);
+    color:var(--text-tertiary);
+    font-family:'SF Mono', Monaco, 'Courier New', monospace;
+  }
+
   /* 表格行悬停动画 */
   .data-table tbody tr {
     transition:transform var(--transition-fast);
@@ -573,7 +633,21 @@
     <main class="main-content">
     <div class="content-wrapper">
       <!-- 统计卡片 -->
-      <!-- 统计卡条已按统一规范移除 (原class=stats-cards) -->
+      <!-- 绑定数据概览：基础数据 + 移动端现场绑定合并后的实时口径 -->
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label">绑定总数</div>
+          <div class="stat-value" id="statTotal">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">移动端绑定</div>
+          <div class="stat-value" id="statMobile">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">已推送</div>
+          <div class="stat-value" id="statPushed">0</div>
+        </div>
+      </div>
 
       <!-- 搜索栏区 -->
       <div class="page-section search-section">
@@ -618,7 +692,8 @@
             <thead>
               <tr>
                 <th style="width:60px;">序号</th>
-                <th style="width:120px;">记录编号</th>
+                <th style="width:150px;">记录编号</th>
+                <th style="width:70px;">来源</th>
                 <th style="width:140px;">认养果树</th>
                 <th style="width:100px;">认养人</th>
                 <th style="width:100px;">农事类型</th>
@@ -742,6 +817,8 @@
 </div>
 
 <!-- 引入交互脚本 -->
+<!-- 跨端桥接层：读取移动端写入的 smartorchard_adoption_tags（农事绑定记录） -->
+<script src="js/shared/mobile-bridge.js"></script>
 <script>
   // Mock数据
   const mockData = [
@@ -772,7 +849,91 @@
 
   const pageSize = 8;
   let currentPage = 1;
-  let filteredData = [...mockData];
+
+  /* ============================================================
+   * 跨端闭环：移动端 mb_adoption_farming.html 现场绑定的农事
+   * 写入 localStorage['smartorchard_adoption_tags']（kind='farming_bind'），
+   * 此处经 MobileBridge.farmingBinds() 读回并映射为 PC 端表格结构，
+   * 与原有 23 条基础数据合并展示，移动端来源单独标注角标。
+   * ============================================================ */
+
+  // 移动端农事类型文案 → PC 端类型枚举（用于类型筛选与标签配色）
+  const BIND_TYPE_MAP = {
+    '施肥': 'fertilize', '追肥': 'fertilize', '基肥': 'fertilize',
+    '浇水': 'water', '灌溉': 'water',
+    '修剪': 'prune',
+    '套袋': 'bag',
+    '病虫害防治': 'pest', '喷药': 'pest', '杀菌': 'pest'
+  };
+
+  function escHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  // ISO / 时间戳 → 'YYYY-MM-DD HH:mm'（便于与日期筛选、mockData 同口径比较）
+  function fmtBindTime(ts) {
+    var d = ts instanceof Date ? ts : new Date(ts);
+    if (isNaN(d.getTime())) return String(ts || '');
+    var p = function (n) { return n < 10 ? '0' + n : n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+      ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function mobileBindRecords() {
+    if (typeof MobileBridge === 'undefined') return [];
+    var binds = MobileBridge.farmingBinds();
+    if (!Array.isArray(binds)) return [];
+    return binds.map(function (b, i) {
+      b = b || {};
+      var records = Array.isArray(b.records) ? b.records : [];
+      // 类型取首条农事类型，多条混合时归为 mixed
+      var typeText = records.length ? (records[0].type || '') : '';
+      var type = BIND_TYPE_MAP[typeText] || 'mixed';
+      var treeCode = (b.treeNo || '').trim();
+      var stamp = Date.now().toString(36).toUpperCase().slice(-5);
+      return {
+        id: b.id || ('FB-' + (i + 1)),
+        code: 'MOB' + (records.length ? ('-' + records.length + '项-' + stamp) : ('-' + stamp)),
+        treeCode: treeCode,
+        treeName: b.treeName || treeCode || '未指定果树',
+        treeMissing: !treeCode,
+        adopter: b.adopter || '—',
+        type: type,
+        typeText: typeText || (records.length ? records.length + ' 项农事' : '农事绑定'),
+        date: fmtBindTime(b.bindTime || b.createTime),
+        status: b.status || 'pending',
+        base: b.base || '移动端现场',
+        records: records,
+        count: b.count != null ? b.count : records.length,
+        source: 'mobile'
+      };
+    });
+  }
+
+  // 全量数据 = 移动端现场绑定（优先展示）+ 原有基础数据
+  let allData = [];
+  let filteredData = [];
+
+  function loadData() {
+    allData = mobileBindRecords().concat(mockData);
+    filteredData = [...allData];
+    currentPage = 1;
+    renderStats();
+    goToPage(1);
+  }
+
+  // 统计卡：绑定总数 / 移动端绑定数 / 已推送数
+  function renderStats() {
+    var mobile = allData.filter(function (d) { return d.source === 'mobile'; }).length;
+    var pushed = allData.filter(function (d) { return d.status === 'pushed'; }).length;
+    var map = { statTotal: allData.length, statMobile: mobile, statPushed: pushed };
+    Object.keys(map).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = map[id];
+    });
+  }
 
   // 渲染表格
   function renderTable(data) {
@@ -783,28 +944,38 @@
       const statusText = item.status === 'pushed' ? '✓ 已推送' : item.status === 'failed' ? '✕ 推送失败' : '○ 待推送';
       const statusClass = item.status;
       const typeClass = item.type;
-      
+      // 来源角标：移动端现场绑定 vs 后台基础数据
+      const isMobile = item.source === 'mobile';
+      const sourceHtml = isMobile
+        ? '<span class="source-badge">移动端</span>'
+        : '<span class="source-badge mock">基础数据</span>';
+      // 移动端记录若缺果树编号，用 warning 色标提示追溯不全
+      const treeNameHtml = item.treeMissing
+        ? `<span style="color:var(--warning);">${escHtml(item.treeName)}</span>`
+        : escHtml(item.treeName);
+
       const row = document.createElement('tr');
       row.innerHTML = `
         <td>${__seq + 1}</td>
-        <td class="text-mono">${item.code}</td>
+        <td class="text-mono">${escHtml(item.code)}</td>
+        <td>${sourceHtml}</td>
         <td>
           <div class="tree-info">
             <span class="tree-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M12 22v-7"/><path d="M7 15h10l-5-8-5 8z"/><path d="M12 7l3.5-5h-7L12 7z"/></svg></span>
             <div>
-              <div class="tree-name">${item.treeName}</div>
-              <div class="tree-code">${item.base}</div>
+              <div class="tree-name">${treeNameHtml}</div>
+              <div class="tree-code">${escHtml(item.base)}</div>
             </div>
           </div>
         </td>
-        <td>${item.adopter}</td>
-        <td><span class="farming-type-tag ${typeClass}">${item.typeText}</span></td>
-        <td class="text-mono">${item.date}</td>
+        <td>${escHtml(item.adopter)}</td>
+        <td><span class="farming-type-tag ${typeClass}">${escHtml(item.typeText)}</span></td>
+        <td class="text-mono">${escHtml(item.date)}</td>
         <td><span class="status-tag ${statusClass}">${statusText}</span></td>
         <td>
           <div class="action-btns">
-            <button class="action-btn view" onclick="showDetail('${item.id}')">详情</button>
-            <button class="action-btn repush" onclick="showRepush('${item.id}')">重推</button>
+            <button class="action-btn view" onclick="showDetail('${escHtml(item.id)}')">详情</button>
+            <button class="action-btn repush" onclick="showRepush('${escHtml(item.id)}')">重推</button>
           </div>
         </td>
       `;
@@ -872,9 +1043,11 @@
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
     
-    filteredData = mockData.filter(item => {
-      const matchKeyword = !keyword || item.adopter.toLowerCase().includes(keyword);
-      const matchBase = !base || item.base.includes(base);
+    filteredData = allData.filter(item => {
+      const matchKeyword = !keyword || String(item.adopter || '').toLowerCase().includes(keyword)
+        || String(item.treeName || '').toLowerCase().includes(keyword)
+        || String(item.code || '').toLowerCase().includes(keyword);
+      const matchBase = !base || String(item.base || '').includes(base);
       const matchType = !type || item.type === type;
       const matchDate = (!startDate && !endDate) || 
                        (startDate && item.date >= startDate) && 
@@ -898,18 +1071,35 @@
 
   // 详情弹窗
   function showDetail(id) {
-    const item = mockData.find(d => d.id === id);
+    const item = allData.find(d => String(d.id) === String(id));
     if (item) {
       const statusText = item.status === 'pushed' ? '已推送' : item.status === 'failed' ? '推送失败' : '待推送';
-      const typeText = item.type === 'fertilize' ? '施肥' : item.type === 'water' ? '浇水' : item.type === 'prune' ? '修剪' : item.type === 'bag' ? '套袋' : '病虫害防治';
+      const isMobile = item.source === 'mobile';
+      const typeText = item.typeText || (item.type === 'fertilize' ? '施肥' : item.type === 'water' ? '浇水' : item.type === 'prune' ? '修剪' : item.type === 'bag' ? '套袋' : '病虫害防治');
+      // 移动端绑定记录带 records 清单，展示逐条农事（title/type/time）
+      const records = Array.isArray(item.records) ? item.records : [];
+      const bindListHtml = records.length ? `
+        <div class="detail-row" style="display:block;">
+          <div class="detail-label" style="width:auto;margin-bottom:8px;">绑定农事清单（${records.length} 项）</div>
+          <div class="bind-list">
+            ${records.map(r => `
+              <div class="bind-item">
+                <span class="farming-type-tag ${BIND_TYPE_MAP[r.type] || ''}">${escHtml(r.type || '农事')}</span>
+                <span class="bind-item-title">${escHtml(r.title || '—')}</span>
+                <span class="bind-item-time">${escHtml(r.time || '—')}</span>
+              </div>`).join('')}
+          </div>
+        </div>` : '';
       document.getElementById('detailContent').innerHTML = `
-        <div class="detail-row"><div class="detail-label">记录编号</div><div class="detail-value text-mono">${item.code}</div></div>
-        <div class="detail-row"><div class="detail-label">认养果树</div><div class="detail-value">${item.treeName}</div></div>
-        <div class="detail-row"><div class="detail-label">认养人</div><div class="detail-value">${item.adopter}</div></div>
-        <div class="detail-row"><div class="detail-label">所属基地</div><div class="detail-value">${item.base}</div></div>
-        <div class="detail-row"><div class="detail-label">农事类型</div><div class="detail-value"><span class="farming-type-tag ${item.type}">${typeText}</span></div></div>
-        <div class="detail-row"><div class="detail-label">执行日期</div><div class="detail-value">${item.date}</div></div>
+        <div class="detail-row"><div class="detail-label">记录编号</div><div class="detail-value text-mono">${escHtml(item.code)}</div></div>
+        <div class="detail-row"><div class="detail-label">数据来源</div><div class="detail-value">${isMobile ? '<span class="source-badge">移动端现场绑定</span>' : '<span class="source-badge mock">后台基础数据</span>'}</div></div>
+        <div class="detail-row"><div class="detail-label">认养果树</div><div class="detail-value">${item.treeMissing ? `<span style="color:var(--warning);">${escHtml(item.treeName)}</span>` : escHtml(item.treeName)}</div></div>
+        <div class="detail-row"><div class="detail-label">认养人</div><div class="detail-value">${escHtml(item.adopter)}</div></div>
+        <div class="detail-row"><div class="detail-label">所属基地</div><div class="detail-value">${escHtml(item.base)}</div></div>
+        <div class="detail-row"><div class="detail-label">农事类型</div><div class="detail-value"><span class="farming-type-tag ${item.type}">${escHtml(typeText)}</span></div></div>
+        <div class="detail-row"><div class="detail-label">执行日期</div><div class="detail-value">${escHtml(item.date)}</div></div>
         <div class="detail-row"><div class="detail-label">状态</div><div class="detail-value"><span class="status-tag ${item.status}">${statusText}</span></div></div>
+        ${bindListHtml}
       `;
       showModal('detailModal');
     }
@@ -917,8 +1107,10 @@
 
   // 重推弹窗
   function showRepush(id) {
-    const item = mockData.find(d => d.id === id);
-    document.getElementById('repushInfo').textContent = `将重新推送：${item?.code} - ${item?.treeName}`;
+    const item = allData.find(d => String(d.id) === String(id));
+    document.getElementById('repushInfo').textContent = item
+      ? `将重新推送：${item.code} - ${item.treeName}`
+      : '未找到对应记录';
     showModal('repushModal');
   }
 
@@ -946,8 +1138,13 @@
     alert(`已导出全部 ${filteredData.length} 条记录`);
   }
 
-  // 初始化
-  goToPage(1);
+  // 初始化：合并移动端现场绑定数据后渲染
+  loadData();
+
+  // 移动端现场新增绑定后回到本页即可看到最新数据
+  window.addEventListener('storage', function (e) {
+    if (e && e.key === 'smartorchard_adoption_tags') loadData();
+  });
 </script>
 
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->

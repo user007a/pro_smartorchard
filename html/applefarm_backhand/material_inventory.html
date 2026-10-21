@@ -217,6 +217,9 @@
     <!-- 主内容区 -->
     <main class="main-content">
       <div class="content-wrapper">
+        <!-- ===== 顶部统计卡 ===== -->
+        <div class="patrol-stats" id="inventoryStats"></div>
+
         <!-- ===== 搜索栏区 ===== -->
         <div class="page-section search-section">
           <div class="search-bar">
@@ -271,6 +274,8 @@
                   <th style="width:100px;text-align:right;">库存数量</th>
                   <th style="width:100px;text-align:right;">最低库存</th>
                   <th style="width:100px;">库存状态</th>
+                  <th style="width:110px;text-align:right;">可覆盖天数</th>
+                  <th style="width:130px;">补货建议</th>
                   <th style="width:140px;">操作</th>
                 </tr>
               </thead>
@@ -280,6 +285,30 @@
           </div>
           <div class="pagination" id="pagination">
           </div>
+        </div>
+
+        <!-- ===== 补货提醒区（可覆盖天数 ≤7 天） ===== -->
+        <div class="page-section" id="replenishSection" style="margin-top:var(--space-lg);">
+          <div class="search-bar" style="margin-bottom:var(--space-md);padding:var(--space-lg);">
+            <h2 class="section-title" style="margin:0;">补货提醒</h2>
+            <span style="font-size:var(--font-size-sm);color:var(--text-tertiary);">可覆盖天数 ≤7 天的农资品种，建议立即补货</span>
+          </div>
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>农资名称</th>
+                  <th style="text-align:right;">当前库存</th>
+                  <th style="text-align:right;">最低库存</th>
+                  <th style="text-align:right;">日均消耗</th>
+                  <th style="text-align:right;">可覆盖天数</th>
+                  <th style="text-align:right;">建议补货量</th>
+                </tr>
+              </thead>
+              <tbody id="replenishBody"></tbody>
+            </table>
+          </div>
+          <div id="replenishEmpty" class="empty-hint" style="display:none;padding:32px;text-align:center;color:var(--text-tertiary);font-size:var(--font-size-sm);">当前无紧急补货项</div>
         </div>
 
       </div>
@@ -392,6 +421,18 @@
           <span class="detail-value" id="viewMin">-</span>
         </div>
         <div class="detail-row">
+          <span class="detail-label">日均消耗</span>
+          <span class="detail-value" id="viewDailyUse">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">可覆盖天数</span>
+          <span class="detail-value" id="viewCoverDays">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">补货建议</span>
+          <span class="detail-value" id="viewSuggest">-</span>
+        </div>
+        <div class="detail-row">
           <span class="detail-label">库存状态</span>
           <span class="detail-value" id="viewStatus">-</span>
         </div>
@@ -500,6 +541,14 @@ let inventoryData = [];
 
 function loadInventoryData() {
   inventoryData = MaterialStore.all().map(function (m) {
+    const stock = Number(m.stock) || 0;
+    const dailyUse = Number(m.dailyUse) || 0;
+    const safety = Number(m.safety) || 0;
+    const leadDays = Number(m.leadDays) || 7;
+    // 可覆盖天数 = 当前库存 / 日均消耗（取整）
+    const coverDays = dailyUse > 0 ? Math.floor(stock / dailyUse) : 999;
+    // 建议补货量 = 最低库存 × 2 - 当前库存（向上取整，最小 0）
+    const suggestQty = Math.max(0, Math.ceil(safety * 2 - stock));
     return {
       id: m.code,
       warehouse: m.warehouse,
@@ -509,7 +558,11 @@ function loadInventoryData() {
       spec: m.spec,
       unit: m.unit,
       stock: String(m.stock),
-      minStock: String(m.safety),
+      minStock: String(safety),
+      dailyUse: dailyUse,
+      leadDays: leadDays,
+      coverDays: coverDays,
+      suggestQty: suggestQty,
       status: MaterialStore.statusOf(m.code)
     };
   });
@@ -544,10 +597,72 @@ function init() {
   filteredData = inventoryData.slice();
   totalItems = filteredData.length;
   totalPages = Math.ceil(totalItems / pageSize) || 1;
+  renderStats();
   renderTable();
   renderPagination();
+  renderReplenish();
   bindEvents();
   populateMaterialSelect();
+}
+
+// 顶部统计卡：物料种类 / 库存不足种类数 / 需立即补货种类数 / 平均可覆盖天数
+function renderStats() {
+  const box = document.getElementById('inventoryStats');
+  if (!box) return;
+  const total = inventoryData.length;
+  const lowStock = inventoryData.filter(function (i) { return i.status === 'danger'; }).length;
+  const urgent = inventoryData.filter(function (i) { return i.coverDays <= 7; }).length;
+  const coverList = inventoryData.filter(function (i) { return i.coverDays < 999; });
+  const avgCover = coverList.length
+    ? Math.round(coverList.reduce(function (s, i) { return s + i.coverDays; }, 0) / coverList.length)
+    : 0;
+  box.innerHTML =
+    '<div class="patrol-stat-card"><div class="stat-value">' + total + '</div><div class="stat-label">物料种类</div></div>' +
+    '<div class="patrol-stat-card"><div class="stat-value">' + lowStock + '</div><div class="stat-label">库存不足种类</div></div>' +
+    '<div class="patrol-stat-card"><div class="stat-value">' + urgent + '</div><div class="stat-label">需立即补货种类</div></div>' +
+    '<div class="patrol-stat-card"><div class="stat-value">' + avgCover + '</div><div class="stat-label">平均可覆盖天数</div></div>';
+}
+
+// 可覆盖天数单元格样式：≤7 error / 8~20 warning / >20 正常
+function coverDaysStyle(days) {
+  if (days <= 7) return 'color:var(--error);font-weight:600;';
+  if (days <= 20) return 'color:#9a6700;font-weight:600;';
+  return 'color:var(--text-secondary);';
+}
+
+// 补货建议单元格：≤7 立即补货 / 8~20 3 日内补货 / >20 库存充足
+function replenishCell(item) {
+  if (item.coverDays <= 7) {
+    return '<span class="status-tag danger">立即补货，建议补 ' + item.suggestQty + ' ' + item.unit + '</span>';
+  }
+  if (item.coverDays <= 20) {
+    return '<span class="status-tag warning">建议 3 日内补货</span>';
+  }
+  return '<span class="status-tag normal">库存充足</span>';
+}
+
+// 渲染补货提醒区：列出所有可覆盖天数 ≤7 天的物料
+function renderReplenish() {
+  const body = document.getElementById('replenishBody');
+  const empty = document.getElementById('replenishEmpty');
+  if (!body) return;
+  const list = inventoryData.filter(function (i) { return i.coverDays <= 7; });
+  if (!list.length) {
+    body.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  body.innerHTML = list.map(function (item) {
+    return '<tr>' +
+      '<td><strong>' + item.name + '</strong><div style="font-size:12px;color:var(--text-tertiary);">' + item.code + ' · ' + item.warehouse + '</div></td>' +
+      '<td class="text-right">' + item.stock + ' ' + item.unit + '</td>' +
+      '<td class="text-right">' + item.minStock + ' ' + item.unit + '</td>' +
+      '<td class="text-right">' + item.dailyUse + '</td>' +
+      '<td class="text-right" style="' + coverDaysStyle(item.coverDays) + '">' + item.coverDays + ' 天</td>' +
+      '<td class="text-right"><strong>' + item.suggestQty + ' ' + item.unit + '</strong></td>' +
+    '</tr>';
+  }).join('');
 }
 
 // 渲染表格
@@ -555,7 +670,16 @@ function renderTable() {
   const start = (currentPage - 1) * pageSize;
   const end = start + pageSize;
   const pageData = filteredData.slice(start, end);
-  
+
+  // 空态友好：筛选无结果时给出提示行，避免页面看起来像没数据
+  if (!pageData.length) {
+    tableBody.innerHTML =
+      '<tr><td colspan="12" style="text-align:center;padding:40px 0;color:var(--text-tertiary);font-size:13px;">' +
+      (inventoryData.length ? '没有符合筛选条件的农资' : '暂无农资库存数据') +
+      '</td></tr>';
+    return;
+  }
+
   tableBody.innerHTML = pageData.map((item, __seq) => {
     const stockClass = item.status === 'danger' ? 'style="color:var(--error); font-weight:600;"' : '';
     return `
@@ -569,6 +693,8 @@ function renderTable() {
         <td class="text-right" ${stockClass}>${item.stock}</td>
         <td class="text-right">${item.minStock}</td>
         <td><span class="status-tag ${item.status}">${getStatusText(item.status)}</span></td>
+        <td class="text-right" style="${coverDaysStyle(item.coverDays)}">${item.coverDays}</td>
+        <td>${replenishCell(item)}</td>
         <td>
           <div class="action-btns">
             <button class="action-btn detail" onclick="viewInventory('${item.id}')">详情</button>
@@ -670,8 +796,10 @@ function search() {
   totalPages = Math.ceil(totalItems / pageSize);
   currentPage = 1;
   
+  renderStats();
   renderTable();
   renderPagination();
+  renderReplenish();
 }
 
 // 绑定事件
@@ -779,6 +907,9 @@ function viewInventory(id) {
     document.getElementById('viewUnit').textContent = item.unit;
     document.getElementById('viewStock').textContent = item.stock;
     document.getElementById('viewMin').textContent = item.minStock;
+    document.getElementById('viewDailyUse').textContent = item.dailyUse + ' ' + item.unit + '/天';
+    document.getElementById('viewCoverDays').textContent = item.coverDays === 999 ? '无消耗' : item.coverDays + ' 天';
+    document.getElementById('viewSuggest').textContent = replenishCell(item).replace(/<[^>]+>/g, '');
     document.getElementById('viewStatus').textContent = getStatusText(item.status);
     viewModal.classList.add('show');
   }

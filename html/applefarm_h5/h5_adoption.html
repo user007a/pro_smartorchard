@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -208,92 +208,9 @@
 <body>
   <div class="mb-app">
 
-    <div class="adoption-section">
-      <!-- 认养卡片 1 -->
-      <div class="adoption-card">
-        <div class="adoption-header">
-          <div class="adoption-img">
-            <img src="images/thumb_tree.jpg" alt="花牛苹果果树">
-          </div>
-          <div class="adoption-info">
-            <div class="adoption-name">花牛苹果果树</div>
-            <div class="adoption-id">编号：A1-001</div>
-            <span class="adoption-status growing">生长中</span>
-          </div>
-        </div>
-        <div class="adoption-details">
-          <div class="detail-row">
-            <span class="detail-label">认养时间</span>
-            <span class="detail-value">2026.06.01</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">认养周期</span>
-            <span class="detail-value">3年</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">认养费用</span>
-            <span class="detail-value">¥1,888/年</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">所在区域</span>
-            <span class="detail-value">A1区花牛苹果果园</span>
-          </div>
-        </div>
-        <div class="adoption-progress">
-          <div class="progress-title">生长进度</div>
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: 65%;"></div>
-          </div>
-          <div class="progress-text">已完成 65% · 预计收获期 2026.09</div>
-        </div>
-        <div class="adoption-actions">
-          <div class="action-btn primary" onclick="viewTrace('A1-001')">查看溯源</div>
-          <div class="action-btn secondary" onclick="viewPhotos('A1-001')">查看照片</div>
-        </div>
-      </div>
-
-      <!-- 认养卡片 2 -->
-      <div class="adoption-card">
-        <div class="adoption-header">
-          <div class="adoption-img">
-            <img src="images/thumb_tree.jpg" alt="花牛苹果果树">
-          </div>
-          <div class="adoption-info">
-            <div class="adoption-name">花牛苹果果树</div>
-            <div class="adoption-id">编号：G1-003</div>
-            <span class="adoption-status harvest">已挂果</span>
-          </div>
-        </div>
-        <div class="adoption-details">
-          <div class="detail-row">
-            <span class="detail-label">认养时间</span>
-            <span class="detail-value">2026.09.15</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">认养周期</span>
-            <span class="detail-value">3年</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">认养费用</span>
-            <span class="detail-value">¥1,510/年</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">所在区域</span>
-            <span class="detail-value">G1区花牛苹果果园</span>
-          </div>
-        </div>
-        <div class="adoption-progress">
-          <div class="progress-title">生长进度</div>
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: 85%;"></div>
-          </div>
-          <div class="progress-text">已完成 85% · 预计收获期 2026.08</div>
-        </div>
-        <div class="adoption-actions">
-          <div class="action-btn primary" onclick="viewTrace('G1-003')">查看溯源</div>
-          <div class="action-btn secondary" onclick="viewPhotos('G1-003')">查看照片</div>
-        </div>
-      </div>
+    <div class="adoption-section" id="adoptionList">
+      <!-- 认养卡片由 js 依据 localStorage['snzg_adoptions'] 动态渲染 -->
+    </div>
 
     <!-- 底部导航 -->
     <nav class="mb-tab-bar">
@@ -317,30 +234,166 @@
   </div>
 
   <script>
+    /* ============================================================
+     * 我的认养（T16 认养编号双源统一）
+     * 唯一数据源：localStorage['snzg_adoptions']
+     *   字段：{ id, treeName, status, adoptDate, ... }
+     *   id 为 AD-A1-001 形式，展示时统一去掉 AD- 前缀为 A1-001，
+     *   使 H5 展示编号与 h5_adoption_photos 的键、溯源查询保持一致。
+     * 无数据时显示空态并引导，不自动播种演示数据。
+     * ============================================================ */
+
+    var ADOPTION_KEY = 'snzg_adoptions';
+    var LEGACY_ADOPTION_KEY = 'h5_adoptions';
+
+    // status → 中文文案与样式类
+    var STATUS_MAP = {
+      growing: { text: '生长中', cls: 'growing' },
+      harvest: { text: '已挂果', cls: 'harvest' },
+      active:   { text: '认养中', cls: 'active' }
+    };
+
+    // 按认养状态推算生长进度（无进度字段时的兜底展示）
+    var PROGRESS_MAP = { active: 20, growing: 60, harvest: 85 };
+
+    function escHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    // 统一编号：去掉 AD- 前缀
+    function normalizeTreeId(id) {
+      return String(id == null ? '' : id).trim().replace(/^AD-/i, '').trim();
+    }
+
+    function readAdoptions() {
+      var keys = [ADOPTION_KEY, LEGACY_ADOPTION_KEY];
+      for (var i = 0; i < keys.length; i++) {
+        try {
+          var raw = localStorage.getItem(keys[i]);
+          if (!raw) continue;
+          var v = JSON.parse(raw);
+          if (Array.isArray(v)) {
+            return v.filter(function (x) { return x && typeof x === 'object'; });
+          }
+        } catch (e) { /* 损坏数据跳过，尝试下一个来源 */ }
+      }
+      return [];
+    }
+
+    // 日期兼容：2026.06.01 / 2026-06-01 / ISO
+    function fmtAdoptDate(v) {
+      var s = String(v == null ? '' : v).trim();
+      if (!s) return '—';
+      var m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+      if (m) return m[1] + '.' + m[2].padStart(2, '0') + '.' + m[3].padStart(2, '0');
+      return s;
+    }
+
+    function cardHtml(item) {
+      var treeId = normalizeTreeId(item.id) || normalizeTreeId(item.treeNo) || '—';
+      var st = STATUS_MAP[item.status] || { text: item.status || '认养中', cls: 'active' };
+      var progress = Number(item.progress);
+      if (isNaN(progress) || progress <= 0) progress = PROGRESS_MAP[item.status] || 60;
+      progress = Math.max(0, Math.min(100, progress));
+      var name = item.treeName || item.name || '认养果树';
+      var period = item.period || item.years || '3年';
+      var fee = item.fee || item.price || '—';
+      var area = item.area || item.plotArea || (name + '果园');
+      var expect = item.expectHarvest || item.harvestDate || '—';
+
+      return '<div class="adoption-card">' +
+        '<div class="adoption-header">' +
+          '<div class="adoption-img">' +
+            '<img src="images/thumb_tree.jpg" alt="' + escHtml(name) + '">' +
+          '</div>' +
+          '<div class="adoption-info">' +
+            '<div class="adoption-name">' + escHtml(name) + '</div>' +
+            '<div class="adoption-id">编号：' + escHtml(treeId) + '</div>' +
+            '<span class="adoption-status ' + escHtml(st.cls) + '">' + escHtml(st.text) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="adoption-details">' +
+          '<div class="detail-row"><span class="detail-label">认养时间</span>' +
+            '<span class="detail-value">' + escHtml(fmtAdoptDate(item.adoptDate)) + '</span></div>' +
+          '<div class="detail-row"><span class="detail-label">认养周期</span>' +
+            '<span class="detail-value">' + escHtml(period) + '</span></div>' +
+          '<div class="detail-row"><span class="detail-label">认养费用</span>' +
+            '<span class="detail-value">' + escHtml(fee) + '</span></div>' +
+          '<div class="detail-row"><span class="detail-label">所在区域</span>' +
+            '<span class="detail-value">' + escHtml(area) + '</span></div>' +
+        '</div>' +
+        '<div class="adoption-progress">' +
+          '<div class="progress-title">生长进度</div>' +
+          '<div class="progress-bar"><div class="progress-fill" style="width:' + progress + '%;"></div></div>' +
+          '<div class="progress-text">已完成 ' + progress + '% · 预计收获期 ' + escHtml(expect) + '</div>' +
+        '</div>' +
+        '<div class="adoption-actions">' +
+          '<div class="action-btn primary" onclick="viewTrace(\'' + escHtml(treeId) + '\')">查看溯源</div>' +
+          '<div class="action-btn secondary" onclick="viewPhotos(\'' + escHtml(treeId) + '\')">查看照片</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function renderAdoptions() {
+      var box = document.getElementById('adoptionList');
+      if (!box) return;
+      var list = readAdoptions();
+
+      if (!list.length) {
+        box.innerHTML =
+          '<div class="empty-state">' +
+            '<div class="empty-icon">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>' +
+            '</div>' +
+            '<div class="empty-title">暂无认养记录</div>' +
+            '<div class="empty-desc">您还没有认养的果树，去商城挑选一株属于您的花牛苹果树吧。</div>' +
+            '<button class="mb-btn" style="padding:10px 28px;border-radius:8px;" onclick="navigateTo(\'h5_store.html\')">去认养果树</button>' +
+          '</div>';
+        return;
+      }
+
+      box.innerHTML = list.map(cardHtml).join('');
+    }
+
     function navigateTo(page) { window.location.href = page; }
 
     function viewTrace(treeId) {
       showToast('正在查看 ' + treeId + ' 溯源信息...');
       setTimeout(function() {
-        window.location.href = 'trace_h5.html?tree=' + treeId;
+        window.location.href = 'trace_h5.html?tree=' + encodeURIComponent(treeId);
       }, 500);
     }
 
+    // 成长相册占位图（本地实拍图片，真实存在；原 images/adoption_default.jpg 不存在）
+    var PHOTO_FALLBACK = 'images/apple_tree_orchard.jpg';
+
     function viewPhotos(treeId) {
       // 从 localStorage 读取果树成长相册（H5-B-020）：按时间倒序展示照片墙
+      // 数据结构：{ [果树编号]: [{ url, time, stage }] }，与后台「认养成长相册」共用
+      // 兼容两种键：统一编号 A1-001 与 snzg_adoptions 的 AD-A1-001
       var list = [];
       try {
         var all = JSON.parse(localStorage.getItem('h5_adoption_photos') || '{}');
-        list = all[treeId] || [];
-      } catch (e) {}
+        if (all && typeof all === 'object' && !Array.isArray(all)) {
+          if (Array.isArray(all[treeId])) list = all[treeId];
+          else if (Array.isArray(all['AD-' + treeId])) list = all['AD-' + treeId];
+        }
+      } catch (e) { list = []; }
       var html;
       if (!list.length) {
         html = '<div style="text-align:center;color:#999;padding:32px;">暂无照片。认养后工作人员将上传果树成长照片。</div>';
       } else {
         html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">' +
           list.map(function(p){
+            // url 为空或加载失败时，回退到本地占位图
             return '<div style="background:#f6f8f6;border-radius:8px;overflow:hidden;">' +
-              '<img src="' + (p.url || 'images/adoption_default.jpg') + '" style="width:100%;height:120px;object-fit:cover;">' +
+              '<img src="' + (p.url || PHOTO_FALLBACK) + '" alt="果树成长照片" ' +
+              'style="width:100%;height:120px;object-fit:cover;" ' +
+              'onerror="this.onerror=null;this.src=\'' + PHOTO_FALLBACK + '\';" ' +
+              'onload="if(!this.naturalWidth){this.onerror&&this.onerror();}">' +
               '<div style="padding:6px 8px;font-size:11px;color:#666;">' +
               new Date(p.time).toLocaleDateString() + ' · ' + (p.stage || '成长') +
               '</div></div>';
@@ -367,6 +420,12 @@
     var style = document.createElement('style');
     style.textContent = '@keyframes fadeInOut { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.8)} 20%{opacity:1;transform:translate(-50%,-50%) scale(1)} 80%{opacity:1} 100%{opacity:0} }';
     document.head.appendChild(style);
+
+    // 认养列表渲染：进入页面时读一次，后台/其他标签页写入后自动同步
+    renderAdoptions();
+    window.addEventListener('storage', function (e) {
+      if (e.key === ADOPTION_KEY || e.key === LEGACY_ADOPTION_KEY) renderAdoptions();
+    });
   </script>
 </body>
 </html>

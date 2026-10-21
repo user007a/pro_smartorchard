@@ -588,19 +588,64 @@
 <script src="js/components/chart.js"></script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  // 评分公式（PC-B-052）：
-  // 综合绩效 = 完成率×40% + 质量评分×30% + 及时率×20% + 协作评分×10%
-  // ≥90 优秀；80-89 良好；60-79 合格；<60 待提升
-  // 评级结果写入 localStorage('snzg_performance_results')，与移动端/大屏共享
+// 绩效排名数据（与上方「绩效排名」表格展示值一一对应）
+// 字段：completion 完成率(%) / quality 质量评分 / workload 工作量 / total 综合 / level 评级
+// 说明：表格中的「综合」与「评级」为已核定展示值，直接作为落库口径，
+//      不再由 PC-B-052 公式反算（该公式需要及时率、协作评分两项，
+//      而表格未展示这两项，反算结果与表格展示值不一致）。
+var performanceData = [
+  {id:'P01',name:'惠加宁',team:'一班',completion:100,quality:95,workload:48,total:96,level:'excellent'},
+  {id:'P02',name:'黄忠坚',team:'二班',completion:98, quality:93,workload:46,total:94,level:'excellent'},
+  {id:'P03',name:'徐水应',team:'一班',completion:97, quality:92,workload:45,total:93,level:'excellent'},
+  {id:'P04',name:'朱泉龙',team:'三班',completion:96, quality:91,workload:44,total:92,level:'excellent'},
+  {id:'P05',name:'陈小忠',team:'二班',completion:95, quality:90,workload:43,total:91,level:'excellent'},
+  {id:'P06',name:'廖春亮',team:'一班',completion:94, quality:90,workload:43,total:91,level:'excellent'},
+  {id:'P07',name:'李建明',team:'三班',completion:94, quality:89,workload:42,total:90,level:'excellent'},
+  {id:'P08',name:'李根',  team:'二班',completion:93, quality:89,workload:42,total:90,level:'excellent'},
+  {id:'P09',name:'张才孙',team:'一班',completion:93, quality:89,workload:42,total:90,level:'excellent'},
+  {id:'P10',name:'刘全国',team:'三班',completion:92, quality:88,workload:41,total:89,level:'excellent'},
+  {id:'P11',name:'毛定卫',team:'二班',completion:92, quality:88,workload:41,total:89,level:'good'},
+  {id:'P12',name:'叶三东',team:'一班',completion:91, quality:87,workload:40,total:88,level:'good'},
+  {id:'P13',name:'周才贵',team:'三班',completion:91, quality:87,workload:40,total:88,level:'good'},
+  {id:'P14',name:'程名高',team:'二班',completion:90, quality:86,workload:39,total:87,level:'good'},
+  {id:'P15',name:'邓小华',team:'一班',completion:90, quality:86,workload:39,total:87,level:'good'},
+  {id:'P16',name:'周成友',team:'三班',completion:89, quality:85,workload:38,total:86,level:'good'},
+  {id:'P17',name:'危红卫',team:'二班',completion:88, quality:85,workload:37,total:85,level:'good'},
+  {id:'P18',name:'方超',  team:'一班',completion:87, quality:84,workload:37,total:85,level:'good'},
+  {id:'P19',name:'曹红英',team:'三班',completion:94, quality:82,workload:40,total:82,level:'pass'},
+  {id:'P20',name:'崔新根',team:'二班',completion:93, quality:82,workload:39,total:82,level:'pass'},
+  {id:'P21',name:'惠加宁',team:'一班',completion:92, quality:81,workload:39,total:82,level:'pass'},
+  {id:'P22',name:'黄忠坚',team:'三班',completion:91, quality:81,workload:38,total:81,level:'pass'},
+  {id:'P23',name:'徐水应',team:'二班',completion:90, quality:80,workload:37,total:80,level:'pass'},
+  {id:'P24',name:'朱泉龙',team:'一班',completion:90, quality:80,workload:36,total:80,level:'pass'},
+  {id:'P25',name:'陈小忠',team:'三班',completion:88, quality:79,workload:35,total:79,level:'pass'},
+  {id:'P26',name:'曹二九',team:'二班',completion:85, quality:76,workload:32,total:74,level:'fail'},
+  {id:'P27',name:'彭三十',team:'一班',completion:82, quality:74,workload:30,total:72,level:'fail'},
+  {id:'P28',name:'曾三一',team:'三班',completion:80, quality:72,workload:28,total:70,level:'fail'}
+];
+
+// 评级阈值（供缺少 level 时兜底推导）
+function deriveLevel(total){
+  return total >= 90 ? 'excellent' : total >= 80 ? 'good' : total >= 60 ? 'pass' : 'fail';
+}
+
+// 落库：写入 localStorage('snzg_performance_results')，与移动端/大屏共享
+function savePerformanceResults(){
   try {
-    var results = performanceData.map(function(p) {
-      var total = (p.completion || 0) * 0.4 + (p.quality || 0) * 0.3 + (p.timeliness || 0) * 0.2 + (p.collab || 0) * 0.1;
-      var level = total >= 90 ? 'excellent' : total >= 80 ? 'good' : total >= 60 ? 'pass' : 'fail';
-      return Object.assign({}, p, { total: Math.round(total * 10) / 10, level: level });
+    var results = performanceData.map(function(p){
+      var t = typeof p.total === 'number' ? p.total : 0;
+      return Object.assign({}, p, { total: t, level: p.level || deriveLevel(t) });
     });
     localStorage.setItem('snzg_performance_results', JSON.stringify(results));
-  } catch (e) {}
+    return results;
+  } catch (e) {
+    console.warn('[performance] 结果落库失败', e);
+    return [];
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  savePerformanceResults();
 
   // 绩效趋势数据
   const performanceTrendData = {

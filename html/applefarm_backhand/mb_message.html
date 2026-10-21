@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 消息推送与公告</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .notice-bar {
+    display: flex; align-items: flex-start; gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--info-bg); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); font-size: var(--font-size-sm);
+    color: var(--text-secondary); margin-bottom: var(--space-lg);
+  }
+  .notice-bar svg { flex-shrink: 0; margin-top: 2px; color: var(--info); }
+  .notice-bar code {
+    font-family: var(--font-family-mono, monospace);
+    background: rgba(24,144,255,0.08); padding: 1px 5px; border-radius: 4px;
+  }
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label { font-size: var(--font-size-sm); color: var(--text-tertiary); margin-bottom: var(--space-xs); }
+  .stat-value {
+    font-size: 26px; font-weight: var(--font-weight-bold);
+    color: var(--text-primary); line-height: 1.2; font-variant-numeric: tabular-nums;
+  }
+  .stat-card.is-on   .stat-value { color: var(--success); }
+  .stat-card.is-ai   .stat-value { color: var(--primary-500); }
+  .stat-card.is-alert .stat-value { color: var(--error); }
+
+  .cat-tag {
+    display: inline-block; padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+  }
+  .cat-tag.ai      { background: var(--primary-50); color: var(--primary-600); }
+  .cat-tag.alert   { background: var(--error-bg); color: var(--error); }
+  .cat-tag.farming { background: var(--success-bg); color: var(--success); }
+  .cat-tag.device  { background: var(--info-bg); color: var(--info); }
+  .cat-tag.notice  { background: var(--warning-bg); color: var(--warning); }
+
+  .status-tag {
+    display: inline-block; padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs); white-space: nowrap;
+  }
+  .status-tag.on  { background: var(--success-bg); color: var(--success); }
+  .status-tag.off { background: var(--gray-100); color: var(--text-tertiary); }
+
+  .cell-title {
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--text-primary); margin-bottom: 2px;
+  }
+  .cell-sub {
+    font-size: var(--font-size-xs); color: var(--text-tertiary);
+    max-width: 360px; overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .target-tag {
+    display: inline-block; margin-left: 6px; padding: 1px 6px;
+    border-radius: var(--radius-sm); font-size: 11px;
+    background: var(--gray-100); color: var(--text-tertiary);
+  }
+  .empty-state {
+    padding: var(--space-2xl) 0; text-align: center;
+    color: var(--text-tertiary); font-size: var(--font-size-sm);
+  }
+
+  /* ===== 弹窗 ===== */
+  .modal-overlay {
+    display: none;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center; align-items: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card);
+    border-radius: 12px;
+    width: 92%; max-width: 620px; max-height: 85vh;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer;
+    padding: 4px; font-size: 20px; line-height: 1;
+    color: var(--text-tertiary); transition: color 0.2s;
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body { padding: 20px; overflow-y: auto; max-height: calc(85vh - 132px); }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 12px;
+    padding: 16px 20px; border-top: 1px solid var(--border-default);
+  }
+  .modal-field { margin-bottom: var(--space-lg); }
+  .modal-field:last-child { margin-bottom: 0; }
+  .modal-field label {
+    display: block; font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--text-primary); margin-bottom: var(--space-sm);
+  }
+  .modal-field textarea, .modal-field input, .modal-field select {
+    width: 100%; padding: 10px 14px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base); font-family: inherit;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--bg-card);
+  }
+  .modal-field textarea { min-height: 90px; resize: vertical; line-height: var(--line-height-relaxed); }
+  .modal-field input:focus, .modal-field select:focus, .modal-field textarea:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.12);
+    outline: none;
+  }
+  .field-hint { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-top: 6px; }
+</style>
+</head>
+<body data-active-menu="mobile-ops" data-active-submenu="mb-message">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">消息推送与公告</div>
+        <div class="page-subtitle">维护移动端作业人员首页滚动消息栏的内容、分类与启停状态</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="refreshList()">刷新</button>
+        <button class="jg-btn" onclick="openEdit('bulletin')">群发公告</button>
+        <button class="jg-btn jg-btn-primary" onclick="openEdit()">新增消息</button>
+      </div>
+    </div>
+
+    <!-- 统计区 -->
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">消息总数</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card is-on">
+        <div class="stat-label">启用中</div>
+        <div class="stat-value" id="statOn">0</div>
+      </div>
+      <div class="stat-card is-ai">
+        <div class="stat-label">AI 类</div>
+        <div class="stat-value" id="statAi">0</div>
+      </div>
+      <div class="stat-card is-alert">
+        <div class="stat-label">预警类</div>
+        <div class="stat-value" id="statAlert">0</div>
+      </div>
+    </div>
+
+    <!-- 搜索栏区 -->
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <select class="search-select" id="catSelect">
+          <option value="">全部分类</option>
+        </select>
+        <select class="search-select" id="statusSelect">
+          <option value="">全部状态</option>
+          <option value="on">启用中</option>
+          <option value="off">已停用</option>
+        </select>
+        <input type="text" class="search-input" placeholder="搜索标题或内容..." id="searchInput">
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="refreshList()">搜索</button>
+          <button class="jg-btn" onclick="resetFilter()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据列表区 -->
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:60px;">序号</th>
+              <th style="width:150px;">发布时间</th>
+              <th style="width:100px;">分类</th>
+              <th>标题与内容</th>
+              <th style="width:100px;">状态</th>
+              <th style="width:190px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="msgBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无消息，点击右上角「新增消息」创建第一条</div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== 编辑弹窗 ===== -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="editTitle">新增消息</h3>
+      <button class="modal-close" onclick="closeEdit()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label>消息分类<span style="color:var(--error);">*</span></label>
+        <select id="editCat"></select>
+      </div>
+      <div class="modal-field">
+        <label>消息标题<span style="color:var(--error);">*</span></label>
+        <input type="text" id="editTitleInput" placeholder="请输入滚动栏展示的标题">
+      </div>
+      <div class="modal-field">
+        <label>消息内容<span style="color:var(--error);">*</span></label>
+        <textarea id="editContent" placeholder="请输入点击后弹窗展示的详细内容"></textarea>
+      </div>
+      <div class="modal-field">
+        <label>面向对象</label>
+        <select id="editTarget">
+          <option value="mobile">移动端作业人员</option>
+          <option value="all">全部用户</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>发布时间<span style="color:var(--error);">*</span></label>
+        <input type="datetime-local" id="editTime">
+      </div>
+      <div class="modal-field">
+        <label>启用状态</label>
+        <select id="editEnabled">
+          <option value="1">启用（移动端可见）</option>
+          <option value="0">停用（移动端不展示）</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeEdit()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * 消息推送与公告（T17）
+ * 数据源：localStorage['mb_messages']
+ *   结构：[{ id, category, title, content, time, target, enabled }]
+ *   category：ai AI / alert 预警 / farming 农事 / device 设备 / notice 通知
+ *   target  ：mobile 移动端作业人员 / all 全部用户
+ *   读取方  ：applefarm_mobile/mb_home.html 首页滚动消息栏（仅取 enabled:true）
+ *   首次访问时沿用移动端原有 8 条硬编码消息初始化
+ * ============================================================ */
+var MSG_KEY = 'mb_messages';
+
+/* 当前编辑中的消息 id（null = 新增） */
+var currentEditId = null;
+
+var CATEGORY_TEXT = {
+  ai: 'AI', alert: '预警', farming: '农事', device: '设备', notice: '通知'
+};
+
+var TARGET_TEXT = {
+  mobile: '移动端作业人员', all: '全部用户'
+};
+
+/* 移动端 mb_home.html 原硬编码的 8 条滚动消息（首次访问时写入，保证两端一致） */
+var SEED_MESSAGES = [
+  { category: 'ai', title: '95%地块进入膨大期，建议加强水肥管理', content: '根据物候期监测模型分析，当前基地95%的苹果树已进入果实膨大期。此阶段是果实快速生长的关键时期，对水分和养分需求较大。建议适当增加灌溉频次，追施磷钾肥促进果实发育。', time: '2026-09-21 09:30', target: 'mobile' },
+  { category: 'alert', title: 'B3区土壤湿度超标88%，建议及时排水降湿', content: 'B3区土壤湿度传感器监测数据显示当前湿度达88%，高于适宜范围上限（80%），且超过预警阈值85%。长期高湿度将导致根系缺氧腐烂，影响果实正常发育。建议立即安排排水降湿作业，检查排水沟渠是否畅通。', time: '2026-09-21 08:15', target: 'mobile' },
+  { category: 'farming', title: '今日已完成A1区套袋作业3200株', content: 'A1区套袋作业已按计划完成，共套袋3200株花牛苹果树。使用双层纸袋，套袋质量合格率98%。作业人员：张三、李四、王五。预计明日继续完成A2区套袋作业。', time: '2026-09-21 17:00', target: 'mobile' },
+  { category: 'device', title: '气象站3号传感器数据异常，已修复', content: '气象站3号温度传感器在上午10:20出现数据异常波动，经技术人员现场排查，发现为传感器接线松动导致。已于14:00完成修复，当前数据恢复正常。建议定期检查设备连接状态。', time: '2026-09-21 14:30', target: 'mobile' },
+  { category: 'ai', title: '明日锈病风险中等，建议喷施多菌灵', content: '病虫害预测模型分析显示，明日气象条件（湿度75%、温度22-28°C、有降雨概率）有利于苹果锈病孢子传播。当前锈病风险等级为"中等"。建议明日喷施多菌灵进行预防性防治。', time: '2026-09-21 07:00', target: 'mobile' },
+  { category: 'notice', title: '今日下午2点套袋技术培训，请准时参加', content: '为提高套袋作业质量，今日下午2点在基地会议室举办套袋技术培训。培训内容包括：套袋时机选择、纸袋类型选用、套袋操作规范、套袋后管理等。请相关作业人员准时参加。', time: '2026-09-21 10:00', target: 'mobile' },
+  { category: 'ai', title: '预测下月收购价上升3-5%，建议适时销售', content: '市场价格预测模型分析显示，受今年全国苹果产量预估下降8%影响，预计下月花牛苹果收购价格将上涨3-5%。当前收购价约3.2元/斤，建议根据果实成熟度和市场行情适时安排销售。', time: '2026-09-20 16:00', target: 'mobile' },
+  { category: 'alert', title: '本周末有雷阵雨，请做好防涝排水准备', content: '气象预报显示本周末（周六、周日）将有雷阵雨天气，预计累计降雨量30-50mm。请提前检查果园排水沟渠，确保排水畅通。低洼地块需特别注意防涝，避免积水影响果树根系。', time: '2026-09-20 18:00', target: 'mobile' }
+];
+
+/* ---------- 数据读写（全部容错） ---------- */
+function readAll() {
+  try {
+    var raw = localStorage.getItem(MSG_KEY);
+    if (!raw) return null;
+    var v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter(function (m) { return m && typeof m === 'object'; }) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeAll(list) {
+  try {
+    localStorage.setItem(MSG_KEY, JSON.stringify(list));
+    return true;
+  } catch (e) {
+    Toast.error('本地存储写入失败，消息未能保存');
+    return false;
+  }
+}
+
+/* 首次访问：沿用移动端原有 8 条消息并回写，保持两端一致 */
+function readList() {
+  var list = readAll();
+  if (!list || !list.length) {
+    list = SEED_MESSAGES.map(function (m, i) {
+      return {
+        id: i + 1,
+        category: m.category,
+        title: m.title,
+        content: m.content,
+        time: m.time,
+        target: m.target || 'mobile',
+        enabled: true
+      };
+    });
+    writeAll(list);
+    return list;
+  }
+  return list;
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function fmtTime(t) {
+  if (!t) return '—';
+  var d = new Date(String(t).replace(/-/g, '/').replace('T', ' ').replace(/\..*$/, ''));
+  if (isNaN(d.getTime())) return String(t).replace('T', ' ').slice(0, 16);
+  var p = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+/* ---------- 统计与渲染 ---------- */
+function renderStats(list) {
+  var on = 0, ai = 0, alert = 0;
+  list.forEach(function (m) {
+    if (m.enabled !== false) on++;
+    if (m.category === 'ai') ai++;
+    if (m.category === 'alert') alert++;
+  });
+  document.getElementById('statTotal').textContent = list.length;
+  document.getElementById('statOn').textContent = on;
+  document.getElementById('statAi').textContent = ai;
+  document.getElementById('statAlert').textContent = alert;
+}
+
+function filteredList() {
+  var cat = document.getElementById('catSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  return readList().filter(function (m) {
+    if (cat && m.category !== cat) return false;
+    if (status === 'on' && m.enabled === false) return false;
+    if (status === 'off' && m.enabled !== false) return false;
+    if (kw) {
+      var hay = ((m.title || '') + ' ' + (m.content || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  }).sort(function (a, b) {
+    return new Date(String(b.time || 0).replace(/-/g, '/')).getTime() -
+           new Date(String(a.time || 0).replace(/-/g, '/')).getTime();
+  });
+}
+
+function renderTable() {
+  var all = readList();
+  renderStats(all);
+
+  var list = filteredList();
+  var body = document.getElementById('msgBody');
+  var empty = document.getElementById('emptyHint');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = all.length
+      ? '没有符合条件的消息，试试调整筛选条件'
+      : '暂无消息，点击右上角「新增消息」创建第一条';
+    return;
+  }
+  empty.style.display = 'none';
+
+  body.innerHTML = list.map(function (m, i) {
+    var cat = CATEGORY_TEXT[m.category] || m.category || '通知';
+    var target = TARGET_TEXT[m.target] || TARGET_TEXT.mobile;
+    var on = m.enabled !== false;
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td class="text-mono">' + esc(fmtTime(m.time)) + '</td>' +
+      '<td><span class="cat-tag ' + esc(m.category || 'notice') + '">' + esc(cat) + '</span></td>' +
+      '<td><div class="cell-title">' + esc(m.title) + '</div>' +
+          '<div class="cell-sub">' + esc(m.content) + '</div></td>' +
+      '<td><span class="status-tag ' + (on ? 'on' : 'off') + '">' + (on ? '启用中' : '已停用') + '</span>' +
+          '<span class="target-tag">' + esc(target) + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn edit" data-act="edit" data-id="' + esc(m.id) + '">编辑</button>' +
+        '<button class="action-btn detail" data-act="toggle" data-id="' + esc(m.id) + '">' + (on ? '停用' : '启用') + '</button>' +
+        '<button class="action-btn delete" data-act="delete" data-id="' + esc(m.id) + '">删除</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function refreshList() { renderTable(); }
+
+function resetFilter() {
+  document.getElementById('catSelect').value = '';
+  document.getElementById('statusSelect').value = '';
+  document.getElementById('searchInput').value = '';
+  renderTable();
+}
+
+/* ---------- 启停 ---------- */
+function toggleMsg(id) {
+  var list = readList();
+  var target = null;
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].id) === String(id)) { target = list[i]; break; }
+  }
+  if (!target) { Toast.error('未找到该消息'); return; }
+  target.enabled = target.enabled === false;
+  if (writeAll(list)) {
+    renderTable();
+    Toast.success(target.enabled ? '消息已启用，移动端可展示' : '消息已停用，移动端不再展示');
+  }
+}
+
+/* ---------- 删除 ---------- */
+function deleteMsg(id) {
+  var list = readList();
+  var target = null;
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].id) === String(id)) { target = list[i]; break; }
+  }
+  if (!target) { Toast.error('未找到该消息'); return; }
+  ConfirmDialog.show({
+    title: '删除消息',
+    message: '将删除消息「' + (target.title || '') + '」，删除后移动端首页不再展示，删除不可恢复。',
+    onConfirm: function () {
+      var cur = readList().filter(function (m) { return String(m.id) !== String(id); });
+      if (writeAll(cur)) {
+        renderTable();
+        Toast.success('消息已删除');
+      }
+    }
+  });
+}
+
+/* ---------- 新增 / 编辑 ---------- */
+function openEdit(id, mode) {
+  document.getElementById('editCat').value = 'notice';
+  document.getElementById('editTitleInput').value = '';
+  document.getElementById('editContent').value = '';
+  document.getElementById('editTarget').value = 'mobile';
+  document.getElementById('editEnabled').value = '1';
+
+  // 群发公告：默认分类为「通知」，标题预填
+  if (mode === 'bulletin') {
+    document.getElementById('editTitle').textContent = '群发公告';
+    document.getElementById('editTitleInput').placeholder = '请输入公告标题';
+  } else {
+    document.getElementById('editTitle').textContent = '新增消息';
+    document.getElementById('editTitleInput').placeholder = '请输入滚动栏展示的标题';
+  }
+
+  currentEditId = id == null ? null : id;
+  if (currentEditId != null) {
+    var list = readList();
+    var target = null;
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].id) === String(currentEditId)) { target = list[i]; break; }
+    }
+    if (target) {
+      document.getElementById('editTitle').textContent = '编辑消息';
+      document.getElementById('editCat').value = target.category || 'notice';
+      document.getElementById('editTitleInput').value = target.title || '';
+      document.getElementById('editContent').value = target.content || '';
+      document.getElementById('editTarget').value = target.target || 'mobile';
+      document.getElementById('editEnabled').value = target.enabled === false ? '0' : '1';
+      document.getElementById('editTime').value = toLocalInput(target.time);
+    }
+  } else {
+    document.getElementById('editTime').value = toLocalInput('');
+  }
+
+  document.getElementById('editModal').classList.add('show');
+}
+
+/* datetime-local 输入值：'2026-09-21 09:30' / ISO → '2026-09-21T09:30' */
+function toLocalInput(v) {
+  if (!v) {
+    var d = new Date();
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  var s = String(v).replace('T', ' ').slice(0, 16);
+  return s.replace(' ', 'T');
+}
+
+function closeEdit() {
+  document.getElementById('editModal').classList.remove('show');
+  currentEditId = null;
+}
+
+function submitEdit() {
+  var category = document.getElementById('editCat').value;
+  var title = document.getElementById('editTitleInput').value.trim();
+  var content = document.getElementById('editContent').value.trim();
+  var target = document.getElementById('editTarget').value;
+  var time = document.getElementById('editTime').value;
+  var enabled = document.getElementById('editEnabled').value === '1';
+
+  if (!title) { Toast.warning('请填写消息标题'); return; }
+  if (!content) { Toast.warning('请填写消息内容'); return; }
+  if (!time) { Toast.warning('请选择发布时间'); return; }
+
+  var list = readList();
+  if (currentEditId != null) {
+    var hit = null;
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].id) === String(currentEditId)) { hit = list[i]; break; }
+    }
+    if (!hit) { Toast.error('未找到该消息'); return; }
+    hit.category = category;
+    hit.title = title;
+    hit.content = content;
+    hit.target = target;
+    hit.time = time;
+    hit.enabled = enabled;
+  } else {
+    var maxId = 0;
+    list.forEach(function (m) {
+      var n = Number(m.id);
+      if (!isNaN(n) && n > maxId) maxId = n;
+    });
+    list.push({
+      id: maxId + 1,
+      category: category,
+      title: title,
+      content: content,
+      time: time,
+      target: target,
+      enabled: enabled
+    });
+  }
+
+  var isEdit = currentEditId != null;
+  if (writeAll(list)) {
+    closeEdit();
+    renderTable();
+    Toast.success(isEdit ? '消息已更新，移动端实时生效' : '消息已发布，移动端首页可见');
+  }
+}
+
+/* ---------- 初始化 ---------- */
+document.addEventListener('DOMContentLoaded', function () {
+  var catSelect = document.getElementById('catSelect');
+  var editCat = document.getElementById('editCat');
+  Object.keys(CATEGORY_TEXT).forEach(function (k) {
+    var o1 = document.createElement('option');
+    o1.value = k; o1.textContent = CATEGORY_TEXT[k];
+    catSelect.appendChild(o1);
+    var o2 = document.createElement('option');
+    o2.value = k; o2.textContent = CATEGORY_TEXT[k];
+    editCat.appendChild(o2);
+  });
+
+  // 操作按钮用事件代理绑定，避免把消息 id 拼进 onclick 属性
+  document.getElementById('msgBody').addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('[data-act]') : null;
+    if (!btn) return;
+    var id = btn.getAttribute('data-id');
+    var act = btn.getAttribute('data-act');
+    if (act === 'edit') openEdit(id);
+    else if (act === 'toggle') toggleMsg(id);
+    else if (act === 'delete') deleteMsg(id);
+  });
+
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') renderTable();
+  });
+  renderTable();
+});
+</script>
+</body>
+</html>

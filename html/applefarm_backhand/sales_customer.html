@@ -9,6 +9,14 @@
 <link rel="stylesheet" href="css/sidebar-layout.css">
 <link rel="stylesheet" href="css/page-content.css">
 <style>
+  /* 顶部统计卡：客户总数/成交/回款/应收/平均账龄 共 5 张 */
+  #customerStats {
+    grid-template-columns:repeat(5, 1fr);
+  }
+  @media (max-width:1200px) {
+    #customerStats { grid-template-columns:repeat(3, 1fr); }
+  }
+
   /* 统计卡片 */
   .stats-cards {
     display:grid;
@@ -483,6 +491,85 @@
     font-family:'SF Mono', Monaco, 'Courier New', monospace;
   }
 
+  /* 金额列：右对齐 + 等宽数字 */
+  .num-cell {
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+  }
+
+  /* 可排序列头 */
+  .data-table th.sortable {
+    cursor:pointer;
+    user-select:none;
+  }
+  .data-table th.sortable:hover {
+    color:var(--primary-500);
+  }
+  .data-table th.sortable .sort-ico {
+    font-size:10px;
+    margin-left:4px;
+    color:var(--text-disabled);
+  }
+  .data-table th.sortable.sort-asc .sort-ico::after { content:'↑'; }
+  .data-table th.sortable.sort-desc .sort-ico::after { content:'↓'; }
+  .data-table th.sortable.sort-asc .sort-ico,
+  .data-table th.sortable.sort-desc .sort-ico { font-size:0; }
+  .data-table th.sortable.sort-asc,
+  .data-table th.sortable.sort-desc { color:var(--primary-500); }
+  .data-table th.sortable.sort-asc .sort-ico,
+  .data-table th.sortable.sort-desc .sort-ico { color:var(--primary-500); }
+
+  /* 排名徽标 */
+  .rank-badge {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:22px;
+    height:22px;
+    padding:0 6px;
+    border-radius:var(--radius-full);
+    font-size:var(--font-size-xs);
+    font-weight:var(--font-weight-semibold);
+    background:var(--gray-100);
+    color:var(--text-tertiary);
+  }
+  .rank-badge.top1 { background:linear-gradient(135deg,#fff7e6,#ffd666); color:#ad8b00; }
+  .rank-badge.top2 { background:linear-gradient(135deg,#f5f5f5,#d9d9d9); color:#595959; }
+  .rank-badge.top3 { background:linear-gradient(135deg,#f6e3d0,#e8b98a); color:#96551b; }
+
+  /* 账龄标签 */
+  .aging-tag {
+    display:inline-flex;
+    align-items:center;
+    padding:3px 8px;
+    border-radius:var(--radius-full);
+    font-size:var(--font-size-xs);
+    font-weight:var(--font-weight-medium);
+    line-height:1.4;
+    white-space:nowrap;
+  }
+  .aging-tag.normal { background:var(--gray-100); color:var(--text-tertiary); }
+  .aging-tag.warning { background:var(--warning-bg); color:#9a6700; border:1px solid var(--warning-border); }
+  .aging-tag.danger { background:var(--error-bg); color:var(--error); border:1px solid var(--error-border); }
+
+  /* 排行金额条 */
+  .rank-bar-cell { min-width:160px; }
+  .rank-bar {
+    display:block;
+    position:relative;
+    height:8px;
+    border-radius:4px;
+    background:var(--gray-100);
+    overflow:hidden;
+  }
+  .rank-bar > i {
+    position:absolute;
+    left:0; top:0; bottom:0;
+    border-radius:4px;
+    background:linear-gradient(90deg, var(--primary-500), var(--primary-300));
+  }
+
   /* 响应式布局 */
   @media (max-width:768px) {
     .stats-cards {
@@ -507,7 +594,7 @@
 <link rel="stylesheet" href="css/unified-theme.css">
 <link rel="stylesheet" href="css/typography.css">
 </head>
-<body data-active-menu="sales" data-active-submenu="sales-customer">
+<body data-active-menu="销售管理" data-active-submenu="sales-customer">
 
 <!-- ===== 整体布局容器 ===== -->
 <div class="app-layout">
@@ -534,7 +621,7 @@
     <main class="main-content">
       <div class="content-wrapper">
         <!-- ===== 统计卡片区 ===== -->
-        <!-- 统计卡条已按统一规范移除 (原class=stats-cards) -->
+        <div class="patrol-stats" id="customerStats"></div>
 
         <!-- ===== 搜索栏区 ===== -->
         <div class="page-section search-section">
@@ -600,6 +687,7 @@
             <table class="data-table">
               <thead>
                 <tr>
+                  <th style="width:60px;">排名</th>
                   <th style="width:60px;">序号</th>
                   <th style="width:100px;">客户编号</th>
                   <th style="width:140px;">客户名称</th>
@@ -607,7 +695,12 @@
                   <th style="width:120px;">电话</th>
                   <th style="width:100px;">客户类型</th>
                   <th style="width:80px;">等级</th>
+                  <th style="width:90px;">所属区域</th>
                   <th style="width:80px;">订单数</th>
+                  <th style="width:120px;text-align:right;" class="sortable" id="thAmount" onclick="toggleSort('amount')">成交金额<span class="sort-ico">↕</span></th>
+                  <th style="width:120px;text-align:right;">回款金额</th>
+                  <th style="width:120px;text-align:right;">应收余额</th>
+                  <th style="width:100px;text-align:right;" class="sortable" id="thAging" onclick="toggleSort('aging')">账龄<span class="sort-ico">↕</span></th>
                   <th>操作</th>
                 </tr>
               </thead>
@@ -623,6 +716,26 @@
             <button class="page-btn" onclick="goToPage(3)">3</button>
             <button class="page-btn" id="nextPage" onclick="goToPage(2)">›</button>
             <span id="paginationInfo" style="margin-left:16px;font-size:13px;color:var(--text-tertiary);">共 23 条记录</span>
+          </div>
+        </div>
+
+        <!-- ===== 客户排行（按成交金额降序 Top10） ===== -->
+        <div class="page-section" id="customerRankSection">
+          <h3 class="section-title" style="font-size:16px;font-weight:600;color:var(--text-primary);margin:0 0 12px;">客户排行 TOP10 <span style="font-size:12px;font-weight:normal;color:var(--text-tertiary);margin-left:8px;">按成交金额降序</span></h3>
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:70px;">排名</th>
+                  <th>客户名称</th>
+                  <th style="width:110px;">客户类型</th>
+                  <th style="width:90px;">所属区域</th>
+                  <th style="width:120px;text-align:right;">成交金额(万元)</th>
+                  <th style="width:200px;">金额占比</th>
+                </tr>
+              </thead>
+              <tbody id="customerTopRank"></tbody>
+            </table>
           </div>
         </div>
 
@@ -843,45 +956,172 @@
 
 <!-- 引入交互脚本 -->
 <script>
-  // Mock数据
+  // Mock数据（金额单位：万元；region 所属区域；aging 账龄区间：30天内/31-60天/61-90天/90天以上）
   const mockData = [
-    { id: '1', code: 'C001', name: '北京XX超市', contact: '王经理', phone: '138****8888', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', orders: '28', address: '北京市朝阳区XX街道XX号', status: 'active' },
-    { id: '2', code: 'C002', name: '上海XX电商', contact: '李总监', phone: '139****6666', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', orders: '45', address: '上海市浦东新区XX路XX号', status: 'active' },
-    { id: '3', code: 'C003', name: '李女士', contact: '李女士', phone: '137****5555', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', orders: '3', address: '广州市天河区XX小区XX栋', status: 'active' },
-    { id: '4', code: 'C004', name: '广州XX水果店', contact: '赵老板', phone: '136****3333', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', orders: '15', address: '广州市越秀区XX路XX号', status: 'active' },
-    { id: '5', code: 'C005', name: '张先生', contact: '张先生', phone: '135****2222', type: 'adoption', typeText: '认养用户', level: 'silver', levelText: '白银客户', orders: '2', address: '深圳市南山区XX花园XX号', status: 'inactive' },
-    { id: '6', code: 'C006', name: '成都XX电商', contact: '周经理', phone: '134****1111', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', orders: '32', address: '成都市高新区XX大道XX号', status: 'active' },
-    { id: '7', code: 'C007', name: '刘女士', contact: '刘女士', phone: '133****0000', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', orders: '5', address: '杭州市西湖区XX小区XX栋', status: 'active' },
-    { id: '8', code: 'C008', name: '杭州XX水果店', contact: '吴老板', phone: '132****9999', type: 'wholesale', typeText: '批发客户', level: 'silver', levelText: '白银客户', orders: '8', address: '杭州市拱墅区XX路XX号', status: 'active' },
-    { id: '9', code: 'C009', name: '王先生', contact: '王先生', phone: '131****8888', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', orders: '4', address: '南京市鼓楼区XX花园XX号', status: 'inactive' },
-    { id: '10', code: 'C010', name: '武汉XX超市', contact: '郑经理', phone: '130****7777', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', orders: '56', address: '武汉市江汉区XX街道XX号', status: 'active' },
-    { id: '11', code: 'C011', name: '陈女士', contact: '陈女士', phone: '129****6666', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', orders: '6', address: '西安市雁塔区XX小区XX栋', status: 'active' },
-    { id: '12', code: 'C012', name: '深圳XX电商', contact: '黄总监', phone: '128****5555', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', orders: '78', address: '深圳市福田区XX路XX号', status: 'active' },
-    { id: '13', code: 'C013', name: '赵女士', contact: '赵女士', phone: '127****4444', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', orders: '1', address: '重庆市渝北区XX花园XX号', status: 'inactive' },
-    { id: '14', code: 'C014', name: '南京XX水果店', contact: '孙老板', phone: '126****3333', type: 'wholesale', typeText: '批发客户', level: 'silver', levelText: '白银客户', orders: '12', address: '南京市建邺区XX路XX号', status: 'active' },
-    { id: '15', code: 'C015', name: '周先生', contact: '周先生', phone: '125****2222', type: 'adoption', typeText: '认养用户', level: 'silver', levelText: '白银客户', orders: '2', address: '天津市和平区XX小区XX栋', status: 'active' },
-    { id: '16', code: 'C016', name: '苏州XX电商', contact: '吴经理', phone: '124****1111', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', orders: '28', address: '苏州市工业园区XX大道XX号', status: 'active' },
-    { id: '17', code: 'C017', name: '徐女士', contact: '徐女士', phone: '123****0000', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', orders: '4', address: '长沙市岳麓区XX花园XX号', status: 'active' },
-    { id: '18', code: 'C018', name: '青岛XX超市', contact: '马经理', phone: '122****9999', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', orders: '35', address: '青岛市市南区XX街道XX号', status: 'active' },
-    { id: '19', code: 'C019', name: '胡先生', contact: '胡先生', phone: '121****8888', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', orders: '3', address: '大连市中山区XX小区XX栋', status: 'inactive' },
-    { id: '20', code: 'C020', name: '宁波XX水果店', contact: '林老板', phone: '120****7777', type: 'wholesale', typeText: '批发客户', level: 'silver', levelText: '白银客户', orders: '10', address: '宁波市海曙区XX路XX号', status: 'active' },
-    { id: '21', code: 'C021', name: '郭女士', contact: '郭女士', phone: '119****6666', type: 'adoption', typeText: '认养用户', level: 'vip', levelText: 'VIP客户', orders: '8', address: '厦门市思明区XX花园XX号', status: 'active' },
-    { id: '22', code: 'C022', name: '无锡XX电商', contact: '何总监', phone: '118****5555', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', orders: '62', address: '无锡市新吴区XX大道XX号', status: 'active' },
-    { id: '23', code: 'C023', name: '罗先生', contact: '罗先生', phone: '117****4444', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', orders: '2', address: '合肥市包河区XX小区XX栋', status: 'active' },
+    { id: '1', code: 'C001', name: '北京XX超市', contact: '王经理', phone: '138****8888', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', region: '北京', orders: '28', amount: 86.5, received: 86.5, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-18', address: '北京市朝阳区XX街道XX号', status: 'active' },
+    { id: '2', code: 'C002', name: '上海XX电商', contact: '李总监', phone: '139****6666', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', region: '上海', orders: '45', amount: 92.0, received: 92.0, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-20', address: '上海市浦东新区XX路XX号', status: 'active' },
+    { id: '3', code: 'C003', name: '李女士', contact: '李女士', phone: '137****5555', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', region: '广东', orders: '3', amount: 8.6, received: 8.6, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-16', address: '广州市天河区XX小区XX栋', status: 'active' },
+    { id: '4', code: 'C004', name: '广州XX水果店', contact: '赵老板', phone: '136****3333', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', region: '广东', orders: '15', amount: 34.2, received: 24.9, receivable: 9.3, aging: '31-60天', agingDays: 52, lastOrderDate: '2026-09-02', address: '广州市越秀区XX路XX号', status: 'active' },
+    { id: '5', code: 'C005', name: '张先生', contact: '张先生', phone: '135****2222', type: 'adoption', typeText: '认养用户', level: 'silver', levelText: '白银客户', region: '广东', orders: '2', amount: 5.0, received: 5.0, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-08-28', address: '深圳市南山区XX花园XX号', status: 'inactive' },
+    { id: '6', code: 'C006', name: '成都XX电商', contact: '周经理', phone: '134****1111', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', region: '四川', orders: '32', amount: 61.8, received: 61.8, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-19', address: '成都市高新区XX大道XX号', status: 'active' },
+    { id: '7', code: 'C007', name: '刘女士', contact: '刘女士', phone: '133****0000', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', region: '浙江', orders: '5', amount: 12.4, received: 8.0, receivable: 4.4, aging: '31-60天', agingDays: 41, lastOrderDate: '2026-09-12', address: '杭州市西湖区XX小区XX栋', status: 'active' },
+    { id: '8', code: 'C008', name: '杭州XX水果店', contact: '吴老板', phone: '132****9999', type: 'wholesale', typeText: '批发客户', level: 'silver', levelText: '白银客户', region: '浙江', orders: '8', amount: 18.6, received: 18.6, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-11', address: '杭州市拱墅区XX路XX号', status: 'active' },
+    { id: '9', code: 'C009', name: '王先生', contact: '王先生', phone: '131****8888', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', region: '江苏', orders: '4', amount: 6.8, received: 2.1, receivable: 4.7, aging: '61-90天', agingDays: 88, lastOrderDate: '2026-07-18', address: '南京市鼓楼区XX花园XX号', status: 'inactive' },
+    { id: '10', code: 'C010', name: '武汉XX超市', contact: '郑经理', phone: '130****7777', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', region: '湖北', orders: '56', amount: 78.4, received: 78.4, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-20', address: '武汉市江汉区XX街道XX号', status: 'active' },
+    { id: '11', code: 'C011', name: '陈女士', contact: '陈女士', phone: '129****6666', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', region: '陕西', orders: '6', amount: 15.2, received: 15.2, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-14', address: '西安市雁塔区XX小区XX栋', status: 'active' },
+    { id: '12', code: 'C012', name: '深圳XX电商', contact: '黄总监', phone: '128****5555', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', region: '广东', orders: '78', amount: 89.6, received: 41.2, receivable: 48.4, aging: '90天以上', agingDays: 96, lastOrderDate: '2026-07-10', address: '深圳市福田区XX路XX号', status: 'active' },
+    { id: '13', code: 'C013', name: '赵女士', contact: '赵女士', phone: '127****4444', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', region: '重庆', orders: '1', amount: 5.4, received: 5.4, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-05', address: '重庆市渝北区XX花园XX号', status: 'inactive' },
+    { id: '14', code: 'C014', name: '南京XX水果店', contact: '孙老板', phone: '126****3333', type: 'wholesale', typeText: '批发客户', level: 'silver', levelText: '白银客户', region: '江苏', orders: '12', amount: 24.8, received: 17.6, receivable: 7.2, aging: '31-60天', agingDays: 34, lastOrderDate: '2026-09-20', address: '南京市建邺区XX路XX号', status: 'active' },
+    { id: '15', code: 'C015', name: '周先生', contact: '周先生', phone: '125****2222', type: 'adoption', typeText: '认养用户', level: 'silver', levelText: '白银客户', region: '天津', orders: '2', amount: 7.2, received: 7.2, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-09-28', address: '天津市和平区XX小区XX栋', status: 'active' },
+    { id: '16', code: 'C016', name: '苏州XX电商', contact: '吴经理', phone: '124****1111', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', region: '江苏', orders: '28', amount: 52.6, received: 52.6, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-17', address: '苏州市工业园区XX大道XX号', status: 'active' },
+    { id: '17', code: 'C017', name: '徐女士', contact: '徐女士', phone: '123****0000', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', region: '湖南', orders: '4', amount: 10.8, received: 10.8, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-09', address: '长沙市岳麓区XX花园XX号', status: 'active' },
+    { id: '18', code: 'C018', name: '青岛XX超市', contact: '马经理', phone: '122****9999', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', region: '山东', orders: '35', amount: 45.3, received: 22.6, receivable: 22.7, aging: '61-90天', agingDays: 74, lastOrderDate: '2026-08-02', address: '青岛市市南区XX街道XX号', status: 'active' },
+    { id: '19', code: 'C019', name: '胡先生', contact: '胡先生', phone: '121****8888', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', region: '辽宁', orders: '3', amount: 6.2, received: 6.2, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-09-30', address: '大连市中山区XX小区XX栋', status: 'inactive' },
+    { id: '20', code: 'C020', name: '宁波XX水果店', contact: '林老板', phone: '120****7777', type: 'wholesale', typeText: '批发客户', level: 'silver', levelText: '白银客户', region: '浙江', orders: '10', amount: 20.4, received: 14.9, receivable: 5.5, aging: '30天内', agingDays: 28, lastOrderDate: '2026-09-26', address: '宁波市海曙区XX路XX号', status: 'active' },
+    { id: '21', code: 'C021', name: '郭女士', contact: '郭女士', phone: '119****6666', type: 'adoption', typeText: '认养用户', level: 'vip', levelText: 'VIP客户', region: '福建', orders: '8', amount: 19.6, received: 19.6, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-15', address: '厦门市思明区XX花园XX号', status: 'active' },
+    { id: '22', code: 'C022', name: '无锡XX电商', contact: '何总监', phone: '118****5555', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', region: '江苏', orders: '62', amount: 74.2, received: 74.2, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-20', address: '无锡市新吴区XX大道XX号', status: 'active' },
+    { id: '23', code: 'C023', name: '罗先生', contact: '罗先生', phone: '117****4444', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', region: '安徽', orders: '2', amount: 5.8, received: 1.4, receivable: 4.4, aging: '90天以上', agingDays: 102, lastOrderDate: '2026-07-04', address: '合肥市包河区XX小区XX栋', status: 'active' },
   ];
 
   const pageSize = 8;
   let currentPage = 1;
   let filteredData = [...mockData];
 
+  // 排序状态：key = 'amount'（成交金额） | 'aging'（账龄），order = 'desc' | 'asc'
+  let sortKey = 'amount';
+  let sortOrder = 'desc';
+
+  // 金额格式化（万元，保留一位小数）
+  function fmtWan(n) {
+    return (Number(n) || 0).toFixed(1);
+  }
+
+  // 应收余额按账龄分色
+  function receivableClass(item) {
+    if (item.receivable > 0 && item.agingDays > 60) return 'var(--error)';
+    if (item.receivable > 0 && item.agingDays >= 30) return '#9a6700';
+    return 'var(--success)';
+  }
+
+  // 排名徽标
+  function renderRank(rank) {
+    const cls = rank === 1 ? ' top1' : rank === 2 ? ' top2' : rank === 3 ? ' top3' : '';
+    return `<span class="rank-badge${cls}">${rank}</span>`;
+  }
+
+  // 应用排序，返回排好序的副本
+  function applySort(list) {
+    const sorted = list.slice();
+    sorted.sort((a, b) => {
+      const va = sortKey === 'aging' ? (a.agingDays || 0) : (a.amount || 0);
+      const vb = sortKey === 'aging' ? (b.agingDays || 0) : (b.amount || 0);
+      return sortOrder === 'desc' ? vb - va : va - vb;
+    });
+    return sorted;
+  }
+
+  // 更新排序列头样式
+  function updateSortHeader() {
+    const amountTh = document.getElementById('thAmount');
+    const agingTh = document.getElementById('thAging');
+    [amountTh, agingTh].forEach(th => { if (th) th.classList.remove('sort-asc', 'sort-desc'); });
+    const activeTh = sortKey === 'aging' ? agingTh : amountTh;
+    if (activeTh) activeTh.classList.add(sortOrder === 'desc' ? 'sort-desc' : 'sort-asc');
+  }
+
+  // 点击金额列头：在「成交金额」与「账龄」间切换排序，同项升/降切换
+  function toggleSort(key) {
+    if (sortKey === key) {
+      sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+    } else {
+      sortKey = key;
+      sortOrder = 'desc';
+    }
+    updateSortHeader();
+    currentPage = 1;
+    goToPage(1);
+  }
+
+  // 账龄区间分色：90天以上 error / 61-90 warning / 其余默认
+  function agingTag(item) {
+    const a = item.aging || '30天内';
+    const cls = a === '90天以上' ? 'danger' : a === '61-90天' ? 'warning' : 'normal';
+    return `<span class="aging-tag ${cls}">${a}</span>`;
+  }
+
+  // 顶部统计卡：客户总数 / 成交总额 / 回款总额 / 应收总额 / 平均账龄
+  function renderStats() {
+    const box = document.getElementById('customerStats');
+    if (!box) return;
+    const total = mockData.length;
+    const sum = key => mockData.reduce((s, i) => s + (Number(i[key]) || 0), 0);
+    const amount = sum('amount');
+    const received = sum('received');
+    const receivable = sum('receivable');
+    const withReceivable = mockData.filter(i => i.receivable > 0);
+    const avgAging = withReceivable.length
+      ? Math.round(withReceivable.reduce((s, i) => s + (Number(i.agingDays) || 0), 0) / withReceivable.length)
+      : 0;
+    box.innerHTML = `
+      <div class="patrol-stat-card">
+        <div class="stat-value">${total}</div>
+        <div class="stat-label">客户总数</div>
+      </div>
+      <div class="patrol-stat-card">
+        <div class="stat-value">${fmtWan(amount)}</div>
+        <div class="stat-label">成交总额（万元）</div>
+      </div>
+      <div class="patrol-stat-card">
+        <div class="stat-value">${fmtWan(received)}</div>
+        <div class="stat-label">回款总额（万元）</div>
+      </div>
+      <div class="patrol-stat-card">
+        <div class="stat-value">${fmtWan(receivable)}</div>
+        <div class="stat-label">应收总额（万元）</div>
+      </div>
+      <div class="patrol-stat-card">
+        <div class="stat-value">${avgAging}</div>
+        <div class="stat-label">平均账龄（天）</div>
+      </div>
+    `;
+  }
+
+  // 客户排行：按成交金额降序取 Top10，数据从 mockData 动态计算
+  function renderTopRank() {
+    const box = document.getElementById('customerTopRank');
+    if (!box) return;
+    const top = mockData.slice()
+      .sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0))
+      .slice(0, 10);
+    const max = top.length ? (Number(top[0].amount) || 0) : 0;
+    box.innerHTML = top.map((item, i) => {
+      const pct = max > 0 ? Math.max(2, Math.round(item.amount / max * 100)) : 0;
+      return `<tr>
+        <td>${renderRank(i + 1)}</td>
+        <td style="font-weight:var(--font-weight-medium);">${item.name}</td>
+        <td><span class="type-tag ${item.type}">${item.typeText}</span></td>
+        <td>${item.region || '-'}</td>
+        <td class="num-cell">${fmtWan(item.amount)}</td>
+        <td class="rank-bar-cell">
+          <span class="rank-bar"><i style="width:${pct}%"></i></span>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
   // 渲染表格
   function renderTable(data) {
     const tbody = document.getElementById('customerList');
     tbody.innerHTML = '';
-    
+
+    // 排名按当前排序结果（全量）计算，与分页无关
+    const rankMap = new Map();
+    applySort(filteredData).forEach((item, i) => rankMap.set(item.id, i + 1));
+
     data.forEach((item, __seq) => {
       const row = document.createElement('tr');
       row.innerHTML = `
+        <td>${renderRank(rankMap.get(item.id) || __seq + 1)}</td>
         <td>${__seq + 1}</td>
         <td class="text-mono"><strong>${item.code}</strong></td>
         <td style="font-weight:var(--font-weight-medium);">${item.name}</td>
@@ -889,7 +1129,12 @@
         <td>${item.phone}</td>
         <td><span class="type-tag ${item.type}">${item.typeText}</span></td>
         <td><span class="level-badge ${item.level}">${item.levelText}</span></td>
+        <td>${item.region || '-'}</td>
         <td style="font-weight:var(--font-weight-semibold);">${item.orders}</td>
+        <td class="num-cell">${fmtWan(item.amount)}</td>
+        <td class="num-cell">${fmtWan(item.received)}</td>
+        <td class="num-cell" style="color:${item.receivable > 0 ? 'var(--warning)' : 'var(--success)'};font-weight:var(--font-weight-semibold);">${fmtWan(item.receivable)}</td>
+        <td class="num-cell">${agingTag(item)}</td>
         <td>
           <div class="action-btns">
             <button class="action-btn detail" onclick="showDetail('${item.id}')">查看</button>
@@ -909,10 +1154,11 @@
   // 分页
   function goToPage(page) {
     currentPage = page;
+    const sorted = applySort(filteredData);
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    const pageData = filteredData.slice(start, end);
-    
+    const pageData = sorted.slice(start, end);
+
     renderTable(pageData);
     updatePagination();
   }
@@ -969,7 +1215,7 @@
     });
 
     currentPage = 1;
-    renderTable(filteredData);
+    renderTable(applySort(filteredData));
     updatePagination();
   }
 
@@ -993,7 +1239,13 @@
         <div class="detail-row"><div class="detail-label">联系电话</div><div class="detail-value">${item.phone}</div></div>
         <div class="detail-row"><div class="detail-label">客户类型</div><div class="detail-value"><span class="type-tag ${item.type}">${item.typeText}</span></div></div>
         <div class="detail-row"><div class="detail-label">客户等级</div><div class="detail-value"><span class="level-badge ${item.level}">${item.levelText}</span></div></div>
+        <div class="detail-row"><div class="detail-label">所属区域</div><div class="detail-value">${item.region || '-'}</div></div>
         <div class="detail-row"><div class="detail-label">订单数量</div><div class="detail-value">${item.orders} 单</div></div>
+        <div class="detail-row"><div class="detail-label">成交金额</div><div class="detail-value">${fmtWan(item.amount)} 万元</div></div>
+        <div class="detail-row"><div class="detail-label">已回款</div><div class="detail-value">${fmtWan(item.received)} 万元</div></div>
+        <div class="detail-row"><div class="detail-label">应收余额</div><div class="detail-value" style="color:${receivableClass(item)};">${fmtWan(item.receivable)} 万元</div></div>
+        <div class="detail-row"><div class="detail-label">账龄</div><div class="detail-value">${item.aging || '30天内'}（${item.agingDays || 0} 天）</div></div>
+        <div class="detail-row"><div class="detail-label">最近下单</div><div class="detail-value">${item.lastOrderDate || '-'}</div></div>
         <div class="detail-row"><div class="detail-label">地址</div><div class="detail-value">${item.address}</div></div>
       `;
       showModal('detailModal');
@@ -1061,6 +1313,9 @@
   }
 
   // 初始化
+  renderStats();
+  renderTopRank();
+  updateSortHeader();
   goToPage(1);
 </script>
 

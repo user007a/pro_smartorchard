@@ -357,6 +357,36 @@
     
     .leave-btn:active { transform: scale(0.98); }
 
+    /* --- 基地切换（巡园路线按基地隔离，L-12） --- */
+    .base-bar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      margin: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      background: var(--bg-white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+    .base-bar-label {
+      font-size: var(--font-sm);
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+    .base-bar-select {
+      flex: 1;
+      min-width: 0;
+      height: 36px;
+      padding: 0 var(--space-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--bg-white);
+      color: var(--text-secondary);
+      font-size: var(--font-sm);
+      font-family: inherit;
+    }
+    .base-bar-select:disabled { opacity: 0.6; }
+
     /* --- 底部提示 --- */
     .footer-tip {
       padding: var(--space-4);
@@ -387,8 +417,14 @@
         </div>
       </div>
       <div class="header-content">
-        <div class="header-sub">今日路线：A区 → B区 → C区</div>
+        <div class="header-sub" id="routeSubtitle">今日路线：A区 → B区 → C区</div>
       </div>
+    </div>
+
+    <!-- 基地切换：巡园路线按基地隔离（L-12） -->
+    <div class="base-bar">
+      <span class="base-bar-label">当前基地</span>
+      <select class="base-bar-select" id="baseSelect" onchange="onBaseChange()"></select>
     </div>
 
     <!-- 状态统计 -->
@@ -417,25 +453,8 @@
     <div class="map-area">
       <div class="map-grid"></div>
       <div class="map-placeholder"><iframe src="https://www.openstreetmap.org/export/embed.html?bbox=106.05%2C34.20%2C106.30%2C34.50&layer=mapnik&marker=34.35%2C106.18" style="width:100%;height:100%;border:0;" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="天水市麦积区 红崖村花牛苹果基地地图"></iframe></div>
-      <!-- 打卡点标记 -->
-      <div class="checkpoint-marker done" style="top: 30%; left: 25%;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-        <div class="checkpoint-label">A1区</div>
-      </div>
-      <div class="checkpoint-marker current" style="top: 50%; left: 55%;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-        </svg>
-        <div class="checkpoint-label" id="markerB1">B1区</div>
-      </div>
-      <div class="checkpoint-marker" style="top: 70%; left: 75%;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-        </svg>
-        <div class="checkpoint-label">C1区</div>
-      </div>
+      <!-- 打卡点标记（按 mb_patrol_routes 动态渲染） -->
+      <div id="mapMarkers"></div>
       <!-- 用户位置标记 -->
       <div class="user-marker" style="top: 45%; left: 48%;" id="userMarker">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -459,45 +478,11 @@
       </div>
     </div>
 
-    <!-- 打卡列表 -->
+    <!-- 打卡列表（按 mb_patrol_routes 动态渲染） -->
     <div class="mb-section">
       <div class="mb-section-title"><span class="mb-section-dot"></span>巡园路线</div>
-      <div class="mb-list" id="checkpointList">
-        <div class="mb-list-item checkpoint-item" data-cp="A1" data-status="done">
-          <div class="checkpoint-status done">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-          <div class="mb-list-content">
-            <div class="mb-list-title">A1区 - 主入口</div>
-            <div class="checkpoint-distance" id="distA1">已完成 · 打卡时间：09:15</div>
-          </div>
-        </div>
-        <div class="mb-list-item checkpoint-item" data-cp="B1" data-status="current">
-          <div class="checkpoint-status current">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-            </svg>
-          </div>
-          <div class="mb-list-content">
-            <div class="mb-list-title">B1区 - 果园中部</div>
-            <div class="checkpoint-distance" id="distB1">定位中…</div>
-          </div>
-          <div class="checkpoint-time">当前</div>
-        </div>
-        <div class="mb-list-item checkpoint-item" data-cp="C1" data-status="pending">
-          <div class="checkpoint-status pending">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-            </svg>
-          </div>
-          <div class="mb-list-content">
-            <div class="mb-list-title">C1区 - 仓库附近</div>
-            <div class="checkpoint-distance" id="distC1">定位中…</div>
-          </div>
-        </div>
-      </div>
+      <div class="mb-list" id="checkpointList"></div>
+      <div id="checkpointEmpty" class="footer-tip" style="display:none;">当前基地暂无启用的巡园路线</div>
     </div>
 
     <!-- 异常上报 -->
@@ -514,7 +499,7 @@
 
     <!-- 底部提示 -->
     <div class="footer-tip">
-      提示：到达打卡点50米范围内将自动弹出打卡提示
+      提示：到达各打卡点各自配置的就近半径内将自动弹出打卡提示
     </div>
   </div>
 
@@ -615,18 +600,180 @@
     var reportType = '';
     var reportPhoto = null;
 
-    /* ---------- 打卡点（果园坐标系，单位：经纬度） ---------- */
-    var CHECKPOINTS = [
-      { id: 'A1', name: 'A1区 - 主入口',   lat: 34.34900, lng: 106.18000, status: 'done',    time: '09:15' },
-      { id: 'B1', name: 'B1区 - 果园中部', lat: 34.35200, lng: 106.18365, status: 'pending', time: '' },
-      { id: 'C1', name: 'C1区 - 仓库附近', lat: 34.35500, lng: 106.18600, status: 'pending', time: '' }
+    /* ---------- 打卡点数据源：mb_patrol_routes（后台「巡园路线配置」写入） ---------- */
+    var ROUTE_KEY = 'mb_patrol_routes';
+    var BASE_KEY = 'mb_patrol_base';   // 当前选中基地（本机记忆，L-12）
+    var NEAR_THRESHOLD = 100;   // 米，点位未配置 nearRadius 时的默认就近范围
+
+    /* 读不到路线数据时的硬编码兜底（保证页面功能不退化） */
+    var FALLBACK_POINTS = [
+      { id: 'A1', name: 'A1区 - 主入口',   lat: 34.34900, lng: 106.18000, nearRadius: 100, required: true, status: 'done',    time: '09:15' },
+      { id: 'B1', name: 'B1区 - 果园中部', lat: 34.35200, lng: 106.18365, nearRadius: 100, required: true, status: 'pending', time: '' },
+      { id: 'C1', name: 'C1区 - 仓库附近', lat: 34.35500, lng: 106.18600, nearRadius: 100, required: true, status: 'pending', time: '' }
     ];
-    var NEAR_THRESHOLD = 100;   // 米，进入该范围视为"到达打卡点"
+
+    var CHECKPOINTS = [];       // 当前生效的打卡点（由路线数据生成）
+    var currentRouteName = '';  // 当前路线名称
+    var routeBases = [];        // 后台路线中出现的全部基地（去重）
+    var currentBase = '';       // 当前选中基地（L-12）
+
     var currentPos = null;      // 当前定位
     var tracker = null;         // 轨迹采集句柄
     var trackPoints = [];       // 本次巡园轨迹
     var popupCp = null;         // 打卡弹窗对应的打卡点
     var popupShown = {};        // 已弹过窗的打卡点，避免重复打扰
+
+    function escHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+      });
+    }
+
+    /* 读取后台写入的路线列表；未写入 / 解析失败返回 null */
+    function readRoutesRaw() {
+      try {
+        var raw = localStorage.getItem(ROUTE_KEY);
+        if (!raw) return null;
+        var v = JSON.parse(raw);
+        return Array.isArray(v) ? v : null;
+      } catch (e) { return null; }
+    }
+
+    /* 取第一条启用且有有效点位的路线（仅在路线未配置基地字段时兼容使用） */
+    function pickEnabledRoute(list) {
+      for (var i = 0; i < list.length; i++) {
+        var r = list[i];
+        if (r && r.enabled === true && r.points && r.points.length) return r;
+      }
+      return null;
+    }
+
+    /* ---------- 基地与路线（L-12：巡园路线按基地隔离） ---------- */
+    function readSavedBase() {
+      try { return localStorage.getItem(BASE_KEY) || ''; } catch (e) { return ''; }
+    }
+
+    function saveBase(b) {
+      try { if (b) localStorage.setItem(BASE_KEY, b); } catch (e) { /* 忽略 */ }
+    }
+
+    /* 从全部路线按 base 去重聚合基地（不限启用状态，便于用户看到完整可选项） */
+    function collectBases(list) {
+      var seen = {}, out = [];
+      list.forEach(function (r) {
+        var b = (r && r.base) ? String(r.base) : '';
+        if (b && !seen[b]) { seen[b] = 1; out.push(b); }
+      });
+      return out;
+    }
+
+    /* 取指定基地下首条启用且有有效点位的路线 */
+    function pickRouteForBase(list, base) {
+      for (var i = 0; i < list.length; i++) {
+        var r = list[i];
+        if (r && String(r.base || '') === base && r.enabled === true && r.points && r.points.length) return r;
+      }
+      return null;
+    }
+
+    /* 路线点位 → 打卡点（按 order 升序） */
+    function mapRoutePoints(points) {
+      return points.slice().sort(function (a, b) {
+        return (Number(a.order) || 0) - (Number(b.order) || 0);
+      }).map(function (p) {
+        var radius = Number(p.nearRadius);
+        return {
+          id: String(p.id),
+          name: p.name || p.id,
+          lat: Number(p.lat),
+          lng: Number(p.lng),
+          nearRadius: (radius > 0) ? radius : NEAR_THRESHOLD,
+          required: p.required !== false,
+          status: 'pending',
+          time: ''
+        };
+      });
+    }
+
+    /* 渲染基地下拉：无基地数据时禁用并提示 */
+    function renderBaseSelect() {
+      var sel = document.getElementById('baseSelect');
+      if (!sel) return;
+      if (!routeBases.length) {
+        sel.innerHTML = '<option value="">暂无基地数据</option>';
+        sel.disabled = true;
+        return;
+      }
+      sel.disabled = false;
+      sel.innerHTML = routeBases.map(function (b) {
+        return '<option value="' + escHtml(b) + '">' + escHtml(b) + '</option>';
+      }).join('');
+      sel.value = currentBase;
+    }
+
+    /* 切换基地：重新加载该基地的巡园路线 */
+    function onBaseChange() {
+      var sel = document.getElementById('baseSelect');
+      if (!sel) return;
+      currentBase = sel.value;
+      saveBase(currentBase);
+      loadCheckpoints();
+      updateRouteSubtitle();
+      renderCheckpoints();
+    }
+
+    /* 从路线数据生成打卡点；保留已打卡的运行时状态 */
+    function loadCheckpoints() {
+      // 按「基地 + 点位id」记录旧状态，避免不同基地的同名点位互相串状态
+      var prevBase = currentBase;
+      var prev = {};
+      CHECKPOINTS.forEach(function (cp) { prev[prevBase + '|' + cp.id] = { status: cp.status, time: cp.time }; });
+
+      var list = readRoutesRaw();
+
+      if (list === null) {
+        // 读不到数据：沿用硬编码 3 点兜底
+        routeBases = [];
+        currentBase = '';
+        CHECKPOINTS = FALLBACK_POINTS.map(function (p) { return JSON.parse(JSON.stringify(p)); });
+        if (!currentRouteName) currentRouteName = 'A区 → B区 → C区';
+      } else {
+        routeBases = collectBases(list);
+        if (!routeBases.length) {
+          // 后台路线未配置基地：回退到「取首条启用路线」，保证兼容
+          currentBase = '';
+          var legacy = pickEnabledRoute(list);
+          if (legacy) {
+            currentRouteName = legacy.routeName || legacy.routeId || '';
+            CHECKPOINTS = mapRoutePoints(legacy.points);
+          } else {
+            CHECKPOINTS = [];
+            currentRouteName = '';
+          }
+        } else {
+          // 优先恢复上次选择的基地，失效时取第一个
+          var saved = readSavedBase();
+          currentBase = (saved && routeBases.indexOf(saved) !== -1) ? saved : routeBases[0];
+          saveBase(currentBase);
+
+          var route = pickRouteForBase(list, currentBase);
+          if (route) {
+            currentRouteName = route.routeName || route.routeId || '';
+            CHECKPOINTS = mapRoutePoints(route.points);
+          } else {
+            // 该基地无启用路线：尊重后台配置，展示空态
+            CHECKPOINTS = [];
+            currentRouteName = '';
+          }
+        }
+      }
+
+      // 恢复已打卡状态
+      CHECKPOINTS.forEach(function (cp) {
+        var rec = prev[currentBase + '|' + cp.id];
+        if (rec) { cp.status = rec.status; cp.time = rec.time; }
+      });
+    }
 
     /* ---------- 距离计算（Haversine） ---------- */
     function distanceMeters(lat1, lng1, lat2, lng2) {
@@ -649,7 +796,9 @@
       tracker = MobileStore.track({
         onPoint: function (pt) {
           if (!pt.ok) {
-            document.getElementById('distB1').textContent = '定位失败：' + (pt.message || '信号弱');
+            var first = CHECKPOINTS[0];
+            var failEl = first ? document.getElementById('dist' + first.id) : null;
+            if (failEl) failEl.textContent = '定位失败：' + (pt.message || '信号弱');
             return;
           }
           currentPos = pt;
@@ -673,26 +822,29 @@
 
     function refreshDistances() {
       if (!currentPos) return;
+      var nearest = null;
       CHECKPOINTS.forEach(function (cp) {
         var el = document.getElementById('dist' + cp.id);
-        if (!el) return;
         var d = distanceMeters(currentPos.lat, currentPos.lng, cp.lat, cp.lng);
         cp._dist = d;
-        if (cp.status === 'done') {
-          el.textContent = '已完成 · 打卡时间：' + cp.time;
-        } else if (d <= NEAR_THRESHOLD) {
-          el.textContent = '距离' + fmtDist(d) + '，已进入打卡范围';
-        } else {
-          el.textContent = '距离' + fmtDist(d) + '，请前往打卡';
+        if (el) {
+          if (cp.status === 'done') {
+            el.textContent = '已完成 · 打卡时间：' + (cp.time || '');
+          } else if (d <= cp.nearRadius) {
+            el.textContent = '距离' + fmtDist(d) + '，已进入打卡范围';
+          } else {
+            el.textContent = '距离' + fmtDist(d) + '，请前往打卡';
+          }
         }
+        // 点位标记文案同步
+        var ml = document.querySelector('.checkpoint-marker[data-marker="' + cp.id + '"] .checkpoint-label');
+        if (ml) ml.textContent = cp.status === 'done' ? (cp.id + ' ✓') : (cp.id + ' (' + fmtDist(d) + ')');
+        if (!nearest || d < nearest._dist) nearest = cp;
       });
-      var ml = document.getElementById('markerB1');
-      var b1 = CHECKPOINTS[1];
-      if (ml && b1._dist !== undefined) ml.textContent = b1.status === 'done' ? 'B1区 ✓' : 'B1区 (' + fmtDist(b1._dist) + ')';
-      // 真实定位时同步移动用户标记的位置（按相对距离近似映射，仅作视觉反馈）
+      // 真实定位时同步移动用户标记的位置（按最近点位距离近似映射，仅作视觉反馈）
       var um = document.getElementById('userMarker');
       if (um && currentPos) {
-        var d0 = b1._dist === undefined ? 0 : b1._dist;
+        var d0 = nearest ? nearest._dist : 0;
         var left = Math.max(8, Math.min(88, 48 + (d0 / 12)));
         var top = Math.max(8, Math.min(88, 45 + (d0 / 20)));
         um.style.left = left + '%';
@@ -700,14 +852,14 @@
       }
     }
 
-    /** 仅当一个「待打卡」点在阈值内时自动弹窗，且同一打卡点只弹一次 */
+    /** 仅当一个「待打卡」点进入其就近范围时自动弹窗，且同一打卡点只弹一次 */
     function maybeAutoPopup() {
       if (!currentPos) return;
       var target = null;
       CHECKPOINTS.forEach(function (cp) {
         if (cp.status !== 'pending') return;
         if (cp._dist === undefined) return;
-        if (cp._dist <= NEAR_THRESHOLD && !target) target = cp;
+        if (cp._dist <= cp.nearRadius && !target) target = cp;
       });
       if (!target || popupShown[target.id]) return;
       popupShown[target.id] = true;
@@ -718,9 +870,9 @@
       popupCp = cp;
       document.getElementById('checkinTitle').textContent = '到达打卡点';
       document.getElementById('checkinDesc').textContent =
-        '您已到达 ' + cp.id + '区 打卡点，距离' + fmtDist(cp._dist || 0) + '，在 ' + NEAR_THRESHOLD + ' 米范围内';
+        '您已到达 ' + cp.id + ' 打卡点，距离' + fmtDist(cp._dist || 0) + '，在 ' + cp.nearRadius + ' 米范围内';
       document.getElementById('checkinPopup').classList.add('show');
-      MobileStore.toast('已进入 ' + cp.id + '区 打卡范围', 'info');
+      MobileStore.toast('已进入 ' + cp.id + ' 打卡范围', 'info');
     }
 
     /* ---------- 打卡 ---------- */
@@ -755,28 +907,103 @@
       MobileStore.toast('打卡成功，已记录当前位置', 'success');
     }
 
-    /* ---------- 渲染打卡点状态 ---------- */
+    /* ---------- 渲染打卡点（列表 + 地图标记） ---------- */
+    function renderCheckpointList() {
+      var box = document.getElementById('checkpointList');
+      var empty = document.getElementById('checkpointEmpty');
+      if (!box) return;
+      if (!CHECKPOINTS.length) {
+        box.innerHTML = '';
+        if (empty) empty.style.display = 'block';
+        return;
+      }
+      if (empty) empty.style.display = 'none';
+      var curId = nextPendingId();
+      box.innerHTML = CHECKPOINTS.map(function (cp) {
+        var st = cp.status === 'done' ? 'done' : (cp.id === curId ? 'current' : 'pending');
+        var icon = cp.status === 'done'
+          ? '<polyline points="20 6 9 17 4 12"/>'
+          : '<circle cx="12" cy="12" r="10"/>';
+        var timeHtml = cp.status === 'done'
+          ? '<div class="checkpoint-time">' + escHtml(cp.time || '') + '</div>'
+          : (cp.id === curId ? '<div class="checkpoint-time">当前</div>' : '');
+        var reqTip = cp.required ? '' : ' <span style="font-size:10px;color:var(--text-tertiary);">（非必到）</span>';
+        var distText = cp.status === 'done'
+          ? ('已完成 · 打卡时间：' + escHtml(cp.time || ''))
+          : '定位中…';
+        return ''
+          + '<div class="mb-list-item checkpoint-item" data-cp="' + escHtml(cp.id) + '" data-status="' + st + '">'
+          +   '<div class="checkpoint-status ' + st + '">'
+          +     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + icon + '</svg>'
+          +   '</div>'
+          +   '<div class="mb-list-content">'
+          +     '<div class="mb-list-title">' + escHtml(cp.name) + reqTip + '</div>'
+          +     '<div class="checkpoint-distance" id="dist' + escHtml(cp.id) + '">' + distText + '</div>'
+          +   '</div>'
+          +   timeHtml
+          + '</div>';
+      }).join('');
+      bindCheckpointClicks();
+    }
+
+    function renderMarkers() {
+      var box = document.getElementById('mapMarkers');
+      if (!box) return;
+      var n = CHECKPOINTS.length;
+      var curId = nextPendingId();
+      box.innerHTML = CHECKPOINTS.map(function (cp, i) {
+        var left, top;
+        if (n > 1) { left = 25 + i * (50 / (n - 1)); top = 30 + i * (40 / (n - 1)); }
+        else { left = 50; top = 50; }
+        var cls = cp.status === 'done' ? 'done' : (cp.id === curId ? 'current' : '');
+        var icon = cp.status === 'done'
+          ? '<polyline points="20 6 9 17 4 12"/>'
+          : '<circle cx="12" cy="12" r="10"/>';
+        return ''
+          + '<div class="checkpoint-marker ' + cls + '" data-marker="' + escHtml(cp.id) + '" style="top:' + top.toFixed(2) + '%;left:' + left.toFixed(2) + '%;">'
+          +   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + icon + '</svg>'
+          +   '<div class="checkpoint-label">' + escHtml(cp.id) + '</div>'
+          + '</div>';
+      }).join('');
+    }
+
+    /* 点击路线中的待打卡点可手动打卡（必到点超出范围时二次确认） */
+    function bindCheckpointClicks() {
+      document.querySelectorAll('.checkpoint-item').forEach(function (item) {
+        item.style.cursor = 'pointer';
+        item.addEventListener('click', function () {
+          var id = item.getAttribute('data-cp');
+          var cp = null;
+          CHECKPOINTS.forEach(function (c) { if (c.id === id) cp = c; });
+          if (!cp || cp.status === 'done') return;
+          if (cp.required && cp._dist !== undefined && cp._dist > cp.nearRadius) {
+            if (!MobileStore.confirm('当前距离 ' + cp.id + ' ' + fmtDist(cp._dist) +
+                '，已超出打卡范围（' + cp.nearRadius + '米）。该点为必到点，仍要打卡吗？（将记录当前实际位置）')) return;
+          }
+          popupCp = cp;
+          checkin();
+        });
+      });
+    }
+
     function renderCheckpoints() {
       var done = 0;
-      CHECKPOINTS.forEach(function (cp) {
-        if (cp.status === 'done') done++;
-        var item = document.querySelector('.checkpoint-item[data-cp="' + cp.id + '"]');
-        if (!item) return;
-        item.setAttribute('data-status', cp.status === 'done' ? 'done' : (cp.id === nextPendingId() ? 'current' : 'pending'));
-        var badge = item.querySelector('.checkpoint-status');
-        if (badge) badge.className = 'checkpoint-status ' + (cp.status === 'done' ? 'done' : (cp.id === nextPendingId() ? 'current' : 'pending'));
-        var timeEl = item.querySelector('.checkpoint-time');
-        if (cp.status === 'done' && !timeEl) {
-          timeEl = document.createElement('div');
-          timeEl.className = 'checkpoint-time';
-          item.appendChild(timeEl);
-        }
-        if (timeEl) timeEl.textContent = cp.status === 'done' ? cp.time : (cp.id === nextPendingId() ? '当前' : '');
-      });
+      CHECKPOINTS.forEach(function (cp) { if (cp.status === 'done') done++; });
       document.getElementById('statTotal').textContent = CHECKPOINTS.length;
       document.getElementById('statDone').textContent = done;
       document.getElementById('statPending').textContent = CHECKPOINTS.length - done;
+      renderCheckpointList();
+      renderMarkers();
       refreshDistances();
+    }
+
+    function updateRouteSubtitle() {
+      var el = document.getElementById('routeSubtitle');
+      if (!el) return;
+      var pointsText = CHECKPOINTS.map(function (cp) { return cp.id; }).join(' → ');
+      el.textContent = currentRouteName
+        ? ('今日路线：' + currentRouteName + (pointsText ? '（' + pointsText + '）' : ''))
+        : '当前基地暂无启用的巡园路线';
     }
 
     function nextPendingId() {
@@ -786,13 +1013,17 @@
       return null;
     }
 
+    /* 未完成的必到点数（非必到点不计入离开提醒） */
     function pendingCount() {
-      return CHECKPOINTS.filter(function (c) { return c.status === 'pending'; }).length;
+      return CHECKPOINTS.filter(function (c) { return c.status === 'pending' && c.required; }).length;
     }
 
     /* ---------- 离开确认（按真实未打卡数） ---------- */
     function goBack() {
-      if (pendingCount() > 0) {
+      var left = pendingCount();
+      if (left > 0) {
+        var tip = document.querySelector('#leaveModal .leave-desc');
+        if (tip) tip.innerHTML = '您还有 <span style="color: var(--warning); font-weight: 600;">' + left + '</span> 个必到打卡点未完成，确定要退出吗？';
         document.getElementById('leaveModal').classList.add('show');
       } else {
         window.history.back();
@@ -887,25 +1118,21 @@
       MobileStore.renderSyncBar(document.getElementById('syncBar'));
       document.getElementById('reportPhotoInput').addEventListener('change', function () { onReportPhotoPicked(this); });
 
-      // 点击路线中的待打卡点可手动打卡（超出范围时二次确认）
-      document.querySelectorAll('.checkpoint-item').forEach(function (item) {
-        item.style.cursor = 'pointer';
-        item.addEventListener('click', function () {
-          var id = item.getAttribute('data-cp');
-          var cp = null;
-          CHECKPOINTS.forEach(function (c) { if (c.id === id) cp = c; });
-          if (!cp || cp.status === 'done') return;
-          if (cp._dist !== undefined && cp._dist > NEAR_THRESHOLD) {
-            if (!MobileStore.confirm('当前距离 ' + cp.id + '区 ' + fmtDist(cp._dist) +
-                '，已超出打卡范围。仍要打卡吗？（将记录当前实际位置）')) return;
-          }
-          popupCp = cp;
-          checkin();
-        });
-      });
-
+      loadCheckpoints();
+      renderBaseSelect();
+      updateRouteSubtitle();
       renderCheckpoints();
       startTracking();
+    });
+
+    // 后台「巡园路线配置」改动后，跨标签页同步刷新
+    window.addEventListener('storage', function (e) {
+      if (!e || e.key !== ROUTE_KEY) return;
+      loadCheckpoints();
+      renderBaseSelect();
+      updateRouteSubtitle();
+      renderCheckpoints();
+      if (MobileStore.toast) MobileStore.toast('巡园路线已更新', 'info');
     });
 
     // 页面关闭时提示未完成打卡（按真实剩余数量）

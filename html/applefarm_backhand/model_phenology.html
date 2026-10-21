@@ -35,6 +35,16 @@
   .task-meta { font-size:11.5px; color:var(--text-tertiary); }
   .task-action { padding:7px 16px; background:linear-gradient(135deg,#1890ff,#096dd9); color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer; white-space:nowrap; transition:all 0.2s; }
   .task-action:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(24,144,255,0.25); }
+  /* 物候期配置 */
+  .stage-config-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .stage-config-table th { text-align:left; font-weight:600; color:var(--text-secondary); font-size:12px; padding:8px 10px; border-bottom:1px solid var(--border-light); }
+  .stage-config-table td { padding:9px 10px; border-bottom:1px dashed #f0f0f0; color:var(--text-primary); }
+  .stage-config-table tr:last-child td { border-bottom:none; }
+  .stage-swatch { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:middle; }
+  .stage-btn { padding:3px 10px; font-size:12px; border:1px solid var(--border-default); border-radius:5px; background:#fff; color:var(--text-secondary); cursor:pointer; transition:all 0.2s; }
+  .stage-btn:hover { border-color:var(--primary-500); color:var(--primary-500); }
+  .stage-btn + .stage-btn { margin-left:6px; }
+  .stage-variety { font-size:11.5px; color:var(--text-tertiary); }
 </style>
 <style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
 </head>
@@ -63,6 +73,26 @@
   <div class="chart-section" style="margin-bottom:20px;">
     <h2 class="section-title">物候期年历视图 <span style="font-size:12px;color:var(--text-tertiary);font-weight:400;">红虚线=今天 09-24</span></h2>
     <div id="chart-calendar" class="chart-container" style="height:340px;"></div>
+  </div>
+
+  <!-- 物候期配置 -->
+  <div class="chart-section" style="margin-bottom:20px;">
+    <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>物候期配置</span>
+      <button class="stage-btn" onclick="resetPhenologyStages()">恢复默认</button>
+    </div>
+    <table class="stage-config-table">
+      <thead>
+        <tr>
+          <th style="width:30%;">物候期名称</th>
+          <th style="width:18%;">起始日期</th>
+          <th style="width:18%;">结束日期</th>
+          <th>适用品种</th>
+          <th style="width:130px;text-align:right;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="stageConfigBody"></tbody>
+    </table>
   </div>
 
   <!-- 农时偏差 + 驱动任务（2 列） -->
@@ -121,36 +151,193 @@
   </div>
 </div>
 
+<!-- 物候期编辑弹窗 -->
+<div id="modal-stage" class="modal-overlay">
+  <div class="modal-box" style="max-width:480px;">
+    <div class="modal-header">
+      <h3 class="modal-title" id="stageModalTitle">编辑物候期</h3>
+      <button class="modal-close">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label>物候期名称</label>
+          <input type="text" class="form-input" id="stageEditName">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label>起始日期（MM-DD）</label>
+          <input type="text" class="form-input" id="stageEditStart" placeholder="03-20" maxlength="5">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>结束日期（MM-DD）</label>
+          <input type="text" class="form-input" id="stageEditEnd" placeholder="05-10" maxlength="5">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="hideStageModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="saveStageEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
 <script src="js/components/chart.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  const dom = document.getElementById('chart-calendar');
-  if (!dom || typeof Chart === 'undefined' || !Chart.initChart) {
-    if (dom) dom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;">图表库加载失败</div>';
-    return;
-  }
+// ===== 物候期配置（localStorage: snzg_phenology_stages）=====
+// 默认值由原硬编码月份小数区间换算为 MM-DD
+const PHENOLOGY_STAGE_DEFAULTS = [
+  { name: '休眠期', start: '01-01', end: '01-15', color: '#d5dbd5', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
+  { name: '萌芽期', start: '01-15', end: '02-15', color: '#b7eb8f', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
+  { name: '花期',   start: '02-15', end: '03-15', color: '#ffadd2', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
+  { name: '幼果期', start: '03-15', end: '04-15', color: '#ffd591', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
+  { name: '膨大期', start: '04-15', end: '08-15', color: '#91d5ff', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
+  { name: '着色期', start: '08-15', end: '10-01', color: '#d3adf7', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
+  { name: '采收期', start: '10-01', end: '12-31', color: '#ffa39e', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' }
+];
+const PHENOLOGY_STORAGE_KEY = 'snzg_phenology_stages';
 
-  Chart.initChart(dom).then((chart) => {
-    if (!chart) {
-      dom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;">图表初始化失败</div>';
-      return;
+// 品种偏移（保持原有逻辑不变）
+const PHENOLOGY_OFFSETS = { '花牛苹果（早熟）': -0.3, '花牛苹果（晚熟）': 0, '金帅': 0.2 };
+
+let phenologyStages = loadPhenologyStages();
+let calendarChart = null;
+let editingStageIndex = -1;
+
+function loadPhenologyStages() {
+  try {
+    const raw = localStorage.getItem(PHENOLOGY_STORAGE_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      if (Array.isArray(saved) && saved.length === PHENOLOGY_STAGE_DEFAULTS.length) {
+        return saved.map((s, i) => ({ ...PHENOLOGY_STAGE_DEFAULTS[i], ...s }));
+      }
     }
+  } catch (e) { /* 存储不可用时使用默认值 */ }
+  return PHENOLOGY_STAGE_DEFAULTS.map(s => ({ ...s }));
+}
+
+function savePhenologyStages() {
+  try { localStorage.setItem(PHENOLOGY_STORAGE_KEY, JSON.stringify(phenologyStages)); } catch (e) { /* 忽略存储异常 */ }
+}
+
+// MM-DD → 月份小数（用于复用原有 ECharts 月份坐标轴）
+function mmddToMonthFloat(text, fallback) {
+  const m = /^(\d{1,2})-(\d{1,2})$/.exec(String(text || '').trim());
+  if (!m) return fallback;
+  const month = Math.min(12, Math.max(1, parseInt(m[1], 10)));
+  const day = Math.min(31, Math.max(1, parseInt(m[2], 10)));
+  return month - 1 + (day - 1) / 30;
+}
+
+// 物候期配置表渲染
+function renderStageConfig() {
+  const tbody = document.getElementById('stageConfigBody');
+  if (!tbody) return;
+  tbody.innerHTML = phenologyStages.map((s, i) => `
+    <tr>
+      <td><span class="stage-swatch" style="background:${s.color}"></span>${s.name}</td>
+      <td>${s.start}</td>
+      <td>${s.end}</td>
+      <td class="stage-variety">${s.varieties || '—'}</td>
+      <td style="text-align:right;">
+        <button class="stage-btn" onclick="editStage(${i})">编辑</button>
+        <button class="stage-btn" onclick="resetSingleStage(${i})">重置</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function editStage(index) {
+  const s = phenologyStages[index];
+  if (!s) return;
+  editingStageIndex = index;
+  document.getElementById('stageModalTitle').textContent = '编辑物候期 · ' + s.name;
+  document.getElementById('stageEditName').value = s.name;
+  document.getElementById('stageEditStart').value = s.start;
+  document.getElementById('stageEditEnd').value = s.end;
+  const modal = document.getElementById('modal-stage');
+  if (modal) modal.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function hideStageModal() {
+  const modal = document.getElementById('modal-stage');
+  if (modal) modal.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function saveStageEdit() {
+  const name = (document.getElementById('stageEditName').value || '').trim();
+  const start = (document.getElementById('stageEditStart').value || '').trim();
+  const end = (document.getElementById('stageEditEnd').value || '').trim();
+  const valid = t => /^(\d{1,2})-(\d{1,2})$/.test(t);
+  if (!name) { Toast.show('请输入物候期名称', 'error'); return; }
+  if (!valid(start) || !valid(end)) { Toast.show('日期格式应为 MM-DD，例如 03-20', 'error'); return; }
+  if (editingStageIndex < 0 || !phenologyStages[editingStageIndex]) { hideStageModal(); return; }
+  phenologyStages[editingStageIndex].name = name;
+  phenologyStages[editingStageIndex].start = start;
+  phenologyStages[editingStageIndex].end = end;
+  savePhenologyStages();
+  renderStageConfig();
+  renderCalendarChart();
+  hideStageModal();
+  Toast.show('物候期已更新', 'success');
+}
+
+// 单行重置为默认值
+function resetSingleStage(index) {
+  const def = PHENOLOGY_STAGE_DEFAULTS[index];
+  if (!def || !phenologyStages[index]) return;
+  phenologyStages[index] = { ...def };
+  savePhenologyStages();
+  renderStageConfig();
+  renderCalendarChart();
+  Toast.show('已恢复「' + def.name + '」默认日期', 'success');
+}
+
+// 恢复默认：清除存储并重绘
+function resetPhenologyStages() {
+  ConfirmDialog.show({
+    title: '恢复默认物候期配置',
+    message: '确定要清除自定义配置并恢复默认物候期日期吗？此操作不可撤销。',
+    onConfirm: function() {
+      try { localStorage.removeItem(PHENOLOGY_STORAGE_KEY); } catch (e) { /* 忽略存储异常 */ }
+      phenologyStages = PHENOLOGY_STAGE_DEFAULTS.map(s => ({ ...s }));
+      renderStageConfig();
+      renderCalendarChart();
+      Toast.show('已恢复默认物候期配置', 'success');
+    }
+  });
+}
+
+// 物候期年历渲染（读取当前配置）
+function renderCalendarChart() {
+  const dom = document.getElementById('chart-calendar');
+  if (!dom || typeof Chart === 'undefined' || !Chart.initChart) return;
+
+  const draw = (chart) => {
+    calendarChart = chart;
 
     const varieties = ['花牛苹果（早熟）', '花牛苹果（晚熟）', '金帅'];
     const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
-    const stages = {
-      '休眠期': { range:[0, 1.5], color:'#d5dbd5' },
-      '萌芽期': { range:[1.5, 2.5], color:'#b7eb8f' },
-      '花期':   { range:[2.5, 3.5], color:'#ffadd2' },
-      '幼果期': { range:[3.5, 4.5], color:'#ffd591' },
-      '膨大期': { range:[4.5, 8.5], color:'#91d5ff' },
-      '着色期': { range:[8.5, 10.0], color:'#d3adf7' },
-      '采收期': { range:[10.0, 12.0], color:'#ffa39e' }
-    };
+    const stages = {};
+    phenologyStages.forEach(s => {
+      stages[s.name] = {
+        range: [mmddToMonthFloat(s.start, 0), mmddToMonthFloat(s.end, 12)],
+        color: s.color
+      };
+    });
 
-    const offsets = { '花牛苹果（早熟）': -0.3, '花牛苹果（晚熟）': 0, '金帅': 0.2 };
+    const offsets = PHENOLOGY_OFFSETS;
 
     const series = [];
     Object.keys(stages).forEach((sName) => {
@@ -198,7 +385,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       },
       legend: {
-        data: Object.keys(stages),
+        data: phenologyStages.map(s => s.name),
         top: 0,
         itemWidth: 12,
         itemHeight: 12,
@@ -221,7 +408,43 @@ document.addEventListener('DOMContentLoaded', function() {
       },
       series: series
     }, true);
+  };
+
+  if (calendarChart) {
+    draw(calendarChart);
+    return;
+  }
+
+  Chart.initChart(dom).then((chart) => {
+    if (!chart) {
+      dom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;">图表初始化失败</div>';
+      return;
+    }
+    draw(chart);
   });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  renderStageConfig();
+
+  // 物候期编辑弹窗关闭（关闭按钮 / 遮罩 / ESC）
+  const stageModal = document.getElementById('modal-stage');
+  if (stageModal) {
+    stageModal.addEventListener('click', function(e) {
+      if (e.target === stageModal || e.target.closest('.modal-close')) hideStageModal();
+    });
+  }
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && stageModal && stageModal.classList.contains('show')) hideStageModal();
+  });
+
+  const dom = document.getElementById('chart-calendar');
+  if (!dom || typeof Chart === 'undefined' || !Chart.initChart) {
+    if (dom) dom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;">图表库加载失败</div>';
+    return;
+  }
+
+  renderCalendarChart();
 
   // 顶部统计卡点击
   document.querySelectorAll('.patrol-stat-card').forEach((card, i) => {

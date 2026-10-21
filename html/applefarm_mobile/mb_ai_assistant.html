@@ -601,15 +601,11 @@
     <!-- 问答内容 -->
     <div id="qaContent">
 
-      <!-- 分类标签 -->
+      <!-- 分类标签（由 JS 动态渲染，配置来源：localStorage['mb_ai_config']） -->
       <div class="category-section">
         <div class="category-scroll" id="categoryScroll">
+          <!-- 默认占位项；DOMContentLoaded 后会被基于后台配置的动态渲染覆盖 -->
           <div class="category-item active" data-id="general">综合</div>
-          <div class="category-item" data-id="plant">植保</div>
-          <div class="category-item" data-id="grow">种植</div>
-          <div class="category-item" data-id="breed">育种</div>
-          <div class="category-item" data-id="crop">作物</div>
-          <div class="category-item" data-id="adoption">认养</div>
         </div>
       </div>
 
@@ -628,13 +624,14 @@
             </div>
           </div>
           <div id="questionsList">
-            <div class="question-item" onclick="openAnswer('q1')">
+            <!-- 默认占位 3 条；DOMContentLoaded 后会被基于后台配置的动态渲染覆盖 -->
+            <div class="question-item" data-fallback-question="苹果常见病虫害有哪些？如何防治？">
               <div class="question-text">苹果常见病虫害有哪些？如何防治？</div>
             </div>
-            <div class="question-item" onclick="openAnswer('q2')">
+            <div class="question-item" data-fallback-question="苹果最佳施肥时间是什么时候？">
               <div class="question-text">苹果最佳施肥时间是什么时候？</div>
             </div>
-            <div class="question-item" onclick="openAnswer('q3')">
+            <div class="question-item" data-fallback-question="如何提高苹果果实品质？">
               <div class="question-text">如何提高苹果果实品质？</div>
             </div>
           </div>
@@ -1114,7 +1111,105 @@
     };
 
     let currentCategory = 'general';
-    let displayedQuestions = [...questionsData.general];
+    let displayedQuestions = [];
+
+    /* ====================================================================
+     * 后台配置接入（T12）：分类与热门问题动态化
+     * 数据源：localStorage['mb_ai_config']
+     *   { categories: [{ id, name, desc }], hotQuestions: [{ id, question, category }] }
+     * 失败/未配置时回退到：
+     *   - 6 个分类：综合/植保/种植/育种/作物/认养
+     *   - 初始热门：questionsData.general 的前 3 条
+     * 私有静态方法（IIFE 内部）：解析后台配置并驱动分类与问题渲染。
+     * ==================================================================== */
+    var DEFAULT_CATEGORIES = [
+      { id: 'general',  name: '综合' },
+      { id: 'plant',    name: '植保' },
+      { id: 'grow',     name: '种植' },
+      { id: 'breed',    name: '育种' },
+      { id: 'crop',     name: '作物' },
+      { id: 'adoption', name: '认养' }
+    ];
+
+    var DEFAULT_HOT_QUESTIONS = [
+      questionsData.general[0],
+      questionsData.general[1],
+      questionsData.general[2]
+    ];
+
+    var uiCategories = DEFAULT_CATEGORIES.slice();
+    var uiHotQuestions = DEFAULT_HOT_QUESTIONS.slice();
+
+    function loadAiConfig() {
+      try {
+        var raw = localStorage.getItem('mb_ai_config');
+        if (!raw) return false;
+        var v = JSON.parse(raw);
+        if (!v || typeof v !== 'object') return false;
+        if (Array.isArray(v.categories) && v.categories.length) {
+          var cleaned = v.categories
+            .filter(function (c) { return c && c.id && c.name; })
+            .map(function (c) { return { id: String(c.id), name: String(c.name) }; });
+          if (cleaned.length) uiCategories = cleaned;
+        }
+        if (Array.isArray(v.hotQuestions) && v.hotQuestions.length) {
+          var qClean = v.hotQuestions
+            .filter(function (q) { return q && q.question; })
+            .map(function (q) { return { id: q.id, question: String(q.question), category: q.category ? String(q.category) : '' }; })
+            .filter(function (q) { return q.question.length > 0; });
+          if (qClean.length) uiHotQuestions = qClean;
+        }
+        return true;
+      } catch (e) {
+        // 损坏 JSON 一律回退默认，不让页面崩溃
+        return false;
+      }
+    }
+
+    function renderCategoriesFromConfig() {
+      var wrap = document.getElementById('categoryScroll');
+      if (!wrap) return;
+      wrap.innerHTML = uiCategories.map(function (c, i) {
+        var activeCls = i === 0 ? ' active' : '';
+        return '<div class="category-item' + activeCls + '" data-id="' + escHtml(c.id) + '">' + escHtml(c.name) + '</div>';
+      }).join('');
+      // 选择首个已存在的分类作为默认
+      currentCategory = uiCategories[0] ? uiCategories[0].id : 'general';
+      // 重新绑定 click 事件
+      wrap.querySelectorAll('.category-item').forEach(function (item) {
+        item.addEventListener('click', function () { switchCategory(item.dataset.id); });
+      });
+    }
+
+    function pickDisplayedForCurrentCategory() {
+      // 优先取当前分类下由后台配置的热门问题，没有再回退到 questionsData[catId]（已弃用但兼容）
+      var catHot = uiHotQuestions.filter(function (q) { return q.category === currentCategory; });
+      if (catHot.length) return catHot.map(function (q) { return q.question; });
+      if (questionsData[currentCategory] && questionsData[currentCategory].length) {
+        return [].concat(questionsData[currentCategory]);
+      }
+      // 兜底：所有热门问题（不限分类）
+      return uiHotQuestions.map(function (q) { return q.question; });
+    }
+
+    // 初始化：从后台配置加载分类与热门问题，构建分类横滑与初始问题列表
+    function bootstrapFromConfig() {
+      loadAiConfig();
+      renderCategoriesFromConfig();
+      displayedQuestions = pickDisplayedForCurrentCategory();
+      // 立刻用最新配置替换默认占位的 3 条问题
+      if (typeof renderQuestions === 'function') renderQuestions();
+    }
+    // 在脚本末尾 DOMContentLoaded 时调用
+    bootstrapFromConfig();
+
+    // 监听外部修改（跨页面管理）：从 storage 事件接收，自动刷新
+    window.addEventListener('storage', function (e) {
+      if (e.key === 'mb_ai_config') {
+        bootstrapFromConfig();
+        renderQuestions();
+      }
+    });
 
     function switchTab(tab) {
       document.getElementById('tabQa').classList.toggle('active', tab === 'qa');
@@ -1129,21 +1224,39 @@
         if (item.dataset.id === categoryId) item.classList.add('active');
       });
       currentCategory = categoryId;
-      displayedQuestions = [...questionsData[categoryId]];
+      displayedQuestions = pickDisplayedForCurrentCategory();
       renderQuestions();
     }
 
-    document.querySelectorAll('.category-item').forEach(item => {
-      item.addEventListener('click', () => switchCategory(item.dataset.id));
-    });
-
     function renderQuestions() {
       const list = document.getElementById('questionsList');
-      list.innerHTML = displayedQuestions.slice(0, 3).map((q, index) => `
-        <div class="question-item" onclick="openAnswer('q${index + 1}')">
-          <div class="question-text">${q}</div>
-        </div>
-      `).join('');
+      if (!list) return;
+      // 把字符串数组统一成 { text, qId }，未匹配到 answersData 的 id 填空
+      var slice = displayedQuestions.slice(0, 3);
+      list.innerHTML = slice.map(function (q, index) {
+        var qid = resolveAnswerId(q);
+        var safeText = escHtml(q);
+        var safeQid = escHtml(qid);
+        // 命中知识库走 openAnswer(qid)，否则填充输入框让用户发送
+        var onclick = qid
+          ? 'onclick="openAnswer(\'' + safeQid + '\')"'
+          : 'onclick="document.getElementById(\'inputBox\').value=\'' + safeText.replace(/'/g, "\\'") + '\';document.getElementById(\'inputBox\').focus();"';
+        return '<div class="question-item" ' + onclick + '>' +
+                 '<div class="question-text">' + safeText + '</div>' +
+               '</div>';
+      }).join('');
+    }
+
+    /* 在 answersData 里按 question 文本查找匹配的 id（用于兼容动态热门问题） */
+    function resolveAnswerId(text) {
+      try {
+        var keys = Object.keys(answersData || {});
+        for (var i = 0; i < keys.length; i++) {
+          var k = keys[i];
+          if (answersData[k] && answersData[k].question === text) return k;
+        }
+      } catch (e) { /* 保持原容错风格 */ }
+      return '';
     }
 
     function refreshQuestions() {

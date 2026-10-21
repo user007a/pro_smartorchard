@@ -444,6 +444,8 @@
   <span id="toastMessage">操作成功</span>
 </div>
 
+<!-- T19：标签领用记录回写依赖桥接层（MobileBridge.updateRecord / stampNow） -->
+<script src="js/shared/mobile-bridge.js"></script>
 <script>
 /* ============================================================
  * 溯源编码 —— 追溯码生成与管理
@@ -517,9 +519,10 @@ const mockData = [
 
 let currentDetailCode = '';
 
-// 按批次号取批次信息
+// 按批次号取批次信息（批次真源与批次管理页共用）
 function getBatchInfo(batchNo) {
-  return BATCH_SOURCE.find(b => b.batchNo === batchNo) || { batchNo: batchNo, plotCode: '-', plotName: '-', base: '-', product: '-', spec: '-' };
+  const src = getBatchSource();
+  return src.find(b => b.batchNo === batchNo) || { batchNo: batchNo, plotCode: '-', plotName: '-', base: '-', product: '-', spec: '-' };
 }
 function enrichCode(item) {
   const b = getBatchInfo(item.batch);
@@ -615,7 +618,7 @@ function searchData() {
   const code = document.getElementById('codeInput').value.trim().toLowerCase();
   const status = document.getElementById('statusSelect').value;
 
-  const filtered = mockData.filter(item => {
+  const filtered = allCodes().filter(item => {
     if (batch && item.batch !== batch) return false;
     if (code && !item.code.toLowerCase().includes(code)) return false;
     if (status && item.status !== status) return false;
@@ -630,7 +633,7 @@ function resetSearch() {
   document.getElementById('batchSelect').value = '';
   document.getElementById('codeInput').value = '';
   document.getElementById('statusSelect').value = '';
-  Pagination.updateData(mockData);
+  Pagination.updateData(allCodes());
   showToast('已重置筛选条件');
 }
 
@@ -721,7 +724,7 @@ function previewFromDetail() {
 function openGenerateModal(presetBatch) {
   const batchSelect = document.getElementById('generateBatch');
   batchSelect.innerHTML = '<option value="">请选择采收批次</option>' +
-    BATCH_SOURCE.map(b => `<option value="${b.batchNo}">${b.batchNo} · ${b.product} · ${b.plotCode} ${b.plotName}</option>`).join('');
+    getBatchSource().map(b => `<option value="${b.batchNo}">${b.batchNo} · ${b.product} · ${b.plotCode} ${b.plotName}</option>`).join('');
 
   document.getElementById('generateOrder').innerHTML = '<option value="">暂不关联</option>' +
     ORDER_SOURCE.map(o => `<option value="${o}">${o}</option>`).join('');
@@ -739,7 +742,7 @@ function openGenerateModal(presetBatch) {
 // 选择批次后带出产品 / 规格 / 产地
 function syncBatchFields() {
   const batchNo = document.getElementById('generateBatch').value;
-  const b = batchNo ? BATCH_SOURCE.find(x => x.batchNo === batchNo) : null;
+  const b = batchNo ? getBatchSource().find(x => x.batchNo === batchNo) : null;
   document.getElementById('generateProduct').value = b ? b.product : '';
   document.getElementById('generateSpec').value = b ? b.spec : '';
   document.getElementById('generateOrigin').value = b ? `${b.base} / ${b.plotCode} ${b.plotName}` : '';
@@ -753,7 +756,7 @@ function confirmGenerate() {
   if (!batchNo) { showToast('请选择采收批次', 'error'); return; }
   if (!count || count < 1 || count > 200) { showToast('生成数量需在 1-200 之间', 'error'); return; }
 
-  const b = BATCH_SOURCE.find(x => x.batchNo === batchNo);
+  const b = getBatchSource().find(x => x.batchNo === batchNo);
   const order = document.getElementById('generateOrder').value;
   const template = document.getElementById('generateTemplate').value || '标准版履历模板';
 
@@ -762,10 +765,11 @@ function confirmGenerate() {
   const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
   const dateCode = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
 
-  let seq = mockData.length;
+  const codes = loadCodes();
+  let seq = codes.length + mockData.length;
   for (let i = 0; i < count; i++) {
     seq += 1;
-    mockData.unshift({
+    codes.unshift({
       code: `SNZG-${dateCode}-${String(seq).padStart(4, '0')}`,
       batch: batchNo,
       time: stamp,
@@ -776,31 +780,180 @@ function confirmGenerate() {
     });
   }
 
+  saveCodes(codes);
+  // 同步批次主数据的已赋码数量
+  syncBatchTraceCount(batchNo, count);
+
   closeModal('generateModal');
-  Pagination.updateData(mockData);
+  Pagination.updateData(allCodes());
   showToast(`已生成 ${count} 个追溯码，批次：${batchNo}（${b ? b.product : ''}）`);
 }
 
+/* ---------- 批次真源：与批次管理页共用 smartorchard_trace_batches ---------- */
+function getBatchSource() {
+  try {
+    const raw = localStorage.getItem('smartorchard_trace_batches');
+    if (raw) {
+      const v = JSON.parse(raw);
+      if (Array.isArray(v) && v.length) return v.map(function (x) {
+        return {
+          batchNo: x.batchNo,
+          plotCode: x.plotCode || '-',
+          plotName: x.plotName || x.plotCode || '-',
+          base: x.base || '麦积区基地',
+          product: x.product || x.variety || '花牛苹果',
+          spec: x.spec || '-',
+          harvestDate: x.harvestDate || '-'
+        };
+      });
+    }
+  } catch (e) { /* 回落到内置样例 */ }
+  return BATCH_SOURCE;
+}
+
+/* ---------- 追溯码持久化（key: smartorchard_trace_codes） ---------- */
+const CODE_STORE_KEY = 'smartorchard_trace_codes';
+function loadCodes() {
+  try {
+    const raw = localStorage.getItem(CODE_STORE_KEY);
+    if (raw) {
+      const v = JSON.parse(raw);
+      if (Array.isArray(v)) return v;
+    }
+  } catch (e) { /* 忽略 */ }
+  return [];
+}
+function saveCodes(list) {
+  localStorage.setItem(CODE_STORE_KEY, JSON.stringify(list));
+}
+
+// 全部追溯码 = 内置样例 + 新生成落库
+function allCodes() {
+  return mockData.concat(loadCodes());
+}
+
+function syncBatchTraceCount(batchNo, delta) {
+  try {
+    const raw = localStorage.getItem('smartorchard_trace_batches');
+    if (!raw) return;
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return;
+    const hit = list.find(function (x) { return x.batchNo === batchNo; });
+    if (hit) {
+      hit.traceCount = (Number(hit.traceCount) || 0) + Number(delta || 0);
+      localStorage.setItem('smartorchard_trace_batches', JSON.stringify(list));
+    }
+  } catch (e) { /* 忽略 */ }
+}
+
 // 标签库存（与移动端「标签领用」共用同一份本地存储）
+// T19 治理：库存扣减权归本打印环节，移动端只读库存 + 提交申请，不再本地扣减。
+// 维护入口：本页打印扣减 + 后台「标签管理」库存管理弹窗改数。
 const LABEL_STOCK_KEY = 'smartorchard_label_stock';
+const LABEL_RECORDS_KEY = 'smartorchard_label_records';
 const LABEL_TYPES = [
   { name: '花牛苹果专用标签（双层纸袋型）', stock: 12500 },
   { name: '花牛苹果专用标签（透气膜袋型）', stock: 8200 },
   { name: '秦冠专用标签', stock: 6800 }
 ];
 
+// 打印批次号（用于把领用记录关联到本次打印批次）
+let currentPrintBatchNo = '';
+
 function readLabelStock() {
   try {
     const raw = localStorage.getItem(LABEL_STOCK_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) { /* 忽略 */ }
+    if (raw) {
+      const v = JSON.parse(raw);
+      // 仅接受对象结构；数组/非法结构视为损坏，交由兜底默认值处理
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const clean = {};
+        Object.keys(v).forEach(k => {
+          const n = Number(v[k]);
+          if (typeof n === 'number' && isFinite(n) && n >= 0) clean[k] = Math.floor(n);
+        });
+        return clean;
+      }
+    }
+  } catch (e) { /* 数据损坏则回落到内置默认值 */ }
   const init = {};
   LABEL_TYPES.forEach(t => { init[t.name] = t.stock; });
   return init;
 }
 
 function writeLabelStock(stock) {
-  try { localStorage.setItem(LABEL_STOCK_KEY, JSON.stringify(stock)); } catch (e) { /* 忽略 */ }
+  try {
+    localStorage.setItem(LABEL_STOCK_KEY, JSON.stringify(stock));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/* T19：统一扣减入口
+ * 校验库存充足后扣减，返回 { ok, stock, message }；写入失败也不静默通过 */
+function consumeLabelStock(name, count) {
+  const need = Math.floor(Number(count) || 0);
+  if (!(need > 0)) return { ok: false, stock: null, message: '打印数量无效，未扣减库存' };
+
+  const stock = readLabelStock();
+  const left = Number(stock[name]);
+  if (!isFinite(left)) return { ok: false, stock: null, message: `未找到「${name}」的库存记录，未扣减库存` };
+  if (left < need) return { ok: false, stock: left, message: `标签库存不足：需 ${need} 张，仅剩 ${left} 张，未扣减库存` };
+
+  stock[name] = left - need;
+  if (!writeLabelStock(stock)) return { ok: false, stock: null, message: '库存写入失败（本地存储不可写），未扣减库存' };
+  return { ok: true, stock: stock[name] };
+}
+
+/* T19：把本次打印关联到「同标签名 + 待打印」的领用记录，按 FIFO 推进状态
+ * 返回本次打印推进的记录条数 */
+function syncLabelRecordsAfterPrint(name, printedCount) {
+  let records = [];
+  try {
+    const raw = localStorage.getItem(LABEL_RECORDS_KEY);
+    if (raw) {
+      const v = JSON.parse(raw);
+      if (Array.isArray(v)) records = v;
+    }
+  } catch (e) { return 0; }
+
+  // 领用记录为 unshift 写入（新的在前），此处按写入顺序取最早申请，保证 FIFO
+  // 第一遍：确定本次打印实际覆盖的记录 id 集合
+  let remain = Math.floor(Number(printedCount) || 0);
+  const targetIds = [];
+  for (let i = records.length - 1; i >= 0 && remain > 0; i--) {
+    const r = records[i];
+    if (!r || r.status !== 'pending') continue;
+    if ((r.name || '') !== name) continue;
+    const qty = Math.floor(Number(r.qty) || 0);
+    if (!(qty > 0)) continue;
+
+    remain -= Math.min(qty, remain);
+    if (r.id != null) targetIds.push(r.id);
+  }
+
+  if (!targetIds.length) return 0;
+
+  const stamp = new Date();
+  const p = n => String(n).padStart(2, '0');
+  const printTime = `${stamp.getFullYear()}-${p(stamp.getMonth() + 1)}-${p(stamp.getDate())} ${p(stamp.getHours())}:${p(stamp.getMinutes())}`;
+  // 优先用当前筛选的溯源批次号关联，无筛选时用打印时间生成批次号
+  const batchNo = currentPrintBatchNo || ('PT-' + p(stamp.getMonth() + 1) + p(stamp.getDate()) + '-' + p(stamp.getHours()) + p(stamp.getMinutes()));
+
+  // 第二遍：按第一遍确定的 id 集合回写，保证覆盖的记录与扣减数量一致
+  let done = 0;
+  if (typeof MobileBridge !== 'undefined') {
+    targetIds.forEach(function (id) {
+      if (MobileBridge.updateRecord(LABEL_RECORDS_KEY, id, {
+        status: '已打印',
+        printTime: printTime,
+        printBatch: batchNo,
+        approveRemark: '后台打印环节已扣减库存'
+      })) done++;
+    });
+  }
+  return done;
 }
 
 function currentLabelType() {
@@ -811,7 +964,7 @@ function currentLabelType() {
 function refreshLabelStock() {
   const stock = readLabelStock();
   const name = currentLabelType();
-  const left = stock[name] != null ? stock[name] : 0;
+  const left = Number(stock[name]) || 0;
   document.getElementById('labelStockInfo').textContent = `标签库存：${left} 张`;
 }
 
@@ -819,32 +972,39 @@ function refreshLabelStock() {
 function printLabels() {
   const count = Pagination.filteredData.length;
   const name = currentLabelType();
-  const stock = readLabelStock();
-  const left = stock[name] != null ? stock[name] : 0;
+  // 取当前筛选的批次号作为打印批次，无筛选时留空由下方自动生成
+  currentPrintBatchNo = document.getElementById('batchSelect').value || '';
 
-  if (left < count) {
-    showToast(`标签库存不足：需 ${count} 张，仅剩 ${left} 张，请先在移动端领用`, 'error');
+  if (!count) {
+    showToast('当前没有可打印的追溯码', 'error');
     return;
   }
-  stock[name] = left - count;
-  writeLabelStock(stock);
+
+  const result = consumeLabelStock(name, count);
+  if (!result.ok) {
+    showToast(result.message, 'error');
+    return;
+  }
+
+  const linked = syncLabelRecordsAfterPrint(name, count);
   refreshLabelStock();
-  showToast(`已打印 ${count} 个标签，${name} 剩余 ${stock[name]} 张`);
+  showToast(`已打印 ${count} 个标签，${name} 剩余 ${result.stock} 张` +
+    (linked ? `，已关联 ${linked} 条领用申请并标记为已打印` : '（无匹配的待打印领用记录）'));
 }
 
 function printSingleLabel() {
   const name = currentLabelType();
-  const stock = readLabelStock();
-  const left = stock[name] != null ? stock[name] : 0;
+  currentPrintBatchNo = document.getElementById('batchSelect').value || '';
 
-  if (left < 1) {
-    showToast(`标签库存不足，请先在移动端领用`, 'error');
+  const result = consumeLabelStock(name, 1);
+  if (!result.ok) {
+    showToast(result.message, 'error');
     return;
   }
-  stock[name] = left - 1;
-  writeLabelStock(stock);
+
+  syncLabelRecordsAfterPrint(name, 1);
   refreshLabelStock();
-  showToast(`已打印标签：${currentDetailCode}，剩余 ${stock[name]} 张`);
+  showToast(`已打印标签：${currentDetailCode}，剩余 ${result.stock} 张`);
   closeModal('detailModal');
 }
 
@@ -930,7 +1090,7 @@ function showToast(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', function() {
   // 搜索栏批次下拉
   const batchSelect = document.getElementById('batchSelect');
-  BATCH_SOURCE.forEach(b => {
+  getBatchSource().forEach(b => {
     const opt = document.createElement('option');
     opt.value = b.batchNo;
     opt.textContent = `${b.batchNo} · ${b.product} · ${b.plotCode} ${b.plotName}`;
@@ -943,13 +1103,16 @@ document.addEventListener('DOMContentLoaded', function() {
   // 标签类型下拉 + 库存显示
   const labelSelect = document.getElementById('labelTypeSelect');
   labelSelect.innerHTML = LABEL_TYPES.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+  // T19：由「标签管理 - 去打印」跳转过来时预选对应标签类型
+  const presetLabel = new URLSearchParams(window.location.search).get('label');
+  if (presetLabel && LABEL_TYPES.some(t => t.name === presetLabel)) labelSelect.value = presetLabel;
   labelSelect.addEventListener('change', refreshLabelStock);
   refreshLabelStock();
 
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
-    data: mockData,
+    data: allCodes(),
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderCodeRow

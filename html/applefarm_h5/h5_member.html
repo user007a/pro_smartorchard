@@ -194,19 +194,16 @@ function readArr(key) {
 }
 function refreshMemberStats() {
   var orders = readArr('h5_orders');
-  var adoptions = readArr('snzg_adoptions');
   var favs = readArr('h5_favorites');
   var points = readArr('h5_points').reduce(function(s, p) { return s + (p.amount || 0); }, 0);
-  // 无历史数据时给出可解释的初始态，避免统计恒为 0 造成误判
-  if (!adoptions.length) {
-    localStorage.setItem('snzg_adoptions', JSON.stringify([
-      { id: 'AD-A1-001', treeName: 'A1区花牛苹果', status: 'growing', adoptDate: '2026.06.01' },
-      { id: 'AD-G1-003', treeName: 'G1区金帅苹果', status: 'harvest', adoptDate: '2026.09.15' }
-    ]));
-    adoptions = readArr('snzg_adoptions');
-  }
+  // 认养数只读不播种：认养记录是真实消费行为，无数据即显示 0，
+  // 由「我的认养」页统一写入 snzg_adoptions（不再自动写入演示数据）
+  var adoptions = readArr('snzg_adoptions');
+  // 积分为纯展示型演示值，无数据时保留基础额度，保证会员中心有可解释的初始态
   if (!points) {
-    localStorage.setItem('h5_points', JSON.stringify([{ amount: 1280, source: '消费返积分' }]));
+    try {
+      localStorage.setItem('h5_points', JSON.stringify([{ amount: 1280, source: '消费返积分' }]));
+    } catch (e) { /* 隐私模式等写入失败时按 0 展示 */ }
     points = readArr('h5_points').reduce(function(s, p) { return s + (p.amount || 0); }, 0);
   }
   document.getElementById('statOrders').textContent = orders.length;

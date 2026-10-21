@@ -23,6 +23,12 @@
     
     /* 农资列表项 */
     .material-item { display: flex; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: var(--space-3); }
+    /* 库存数据源说明 */
+    .stock-tip {
+      font-size:12px;color:var(--text-light);line-height:1.6;
+      padding:8px 10px;margin-bottom:var(--space-3);
+      background:var(--primary-light);border-radius:var(--radius-md);
+    }
     .material-icon { width: 56px; height: 56px; border-radius: var(--radius-lg); background: var(--primary-light); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .material-icon svg { width: 32px; height: 32px; color: var(--primary); }
     .material-info { flex: 1; min-width: 0; }
@@ -43,6 +49,7 @@
     .record-status { padding: var(--space-1) var(--space-3); border-radius: var(--radius-lg); font-size: var(--font-sm); font-weight: 500; }
     .record-status.pending { background: var(--warning-bg); color: var(--warning); }
     .record-status.approved { background: var(--success-bg); color: var(--success); }
+    .record-status.rejected { background: var(--error-bg, #ffece8); color: var(--error, #f5222d); }
     .record-info { font-size: var(--font-sm); color: var(--text-secondary); display: flex; justify-content: space-between; }
     
     /* Modal: 已迁移到统一弹窗组件 .mb-modal-overlay / .mb-modal */
@@ -76,6 +83,9 @@
     <div class="content">
       <div class="card">
         <div class="card-title">可领取农资</div>
+        <div class="stock-tip">库存数据来自后台农资库（唯一权威数据源）；提交领用申请不会直接扣减库存，由后台「农资使用 - 领用审批」通过后统一扣减。</div>
+        <!-- 可领取农资列表：优先由后台农资库（smartorchard_material_store_v1）动态渲染，读不到数据时保留下列硬编码兜底 -->
+        <div id="materialList">
         <div class="material-item">
           <div class="material-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -178,6 +188,7 @@
               <button class="btn btn-primary" onclick="openApplyModal('尿素')">申请</button>
             </div>
           </div>
+        </div>
         </div>
       </div>
 
@@ -320,10 +331,22 @@
       document.getElementById('materialRemark').value = '';
     }
 
-    function openApplyModal(name) {
+    /* 打开领用弹窗：动态项传入按钮元素（带后台编号），兜底项传入品名 */
+    function openApplyModal(target) {
+      var name, code;
+      if (target && target.nodeType === 1) {
+        name = target.getAttribute('data-name') || '';
+        code = target.getAttribute('data-code') || '';
+      } else {
+        name = String(target == null ? '' : target);
+        code = MATERIAL_ALIAS[name] || '';
+      }
+      var modal = document.getElementById('applyModal');
+      modal.dataset.materialName = name;
+      modal.dataset.materialCode = code;
       document.getElementById('materialName').value = name;
       resetApplyForm();
-      document.getElementById('applyModal').classList.add('show');
+      modal.classList.add('show');
     }
 
     function closeApplyModal() {
@@ -338,23 +361,61 @@
         return;
       }
       box.innerHTML = list.map(function (r) {
+        /* 状态由后台审批回写，这里如实展示，不做本地假定 */
+        var st = r.status === 'pending' ? { text: '审批中', cls: 'pending' }
+          : r.status === '已审批' ? { text: '已审批', cls: 'approved' }
+          : r.status === '已驳回' ? { text: '已驳回', cls: 'rejected' }
+          : { text: r.status || '审批中', cls: 'pending' };
+        var tail = r.status === 'pending' ? ' · 待后台审批'
+          : r.status === '已审批' ? ' · 后台已扣减库存'
+          : r.status === '已驳回' ? ' · ' + (r.approveRemark || '后台已驳回')
+          : '';
         return '<div class="record-item">' +
           '<div class="record-header">' +
           '<div class="record-name">' + esc(r.name) + '</div>' +
-          '<span class="record-status pending">审批中</span>' +
+          '<span class="record-status ' + st.cls + '">' + esc(st.text) + '</span>' +
           '</div>' +
           '<div class="record-info">' +
-          '<span>数量：' + esc(r.qty) + '</span>' +
+          '<span>数量：' + esc(r.qty) + (r.unit ? ' ' + esc(r.unit) : '') + '</span>' +
           '<span>' + esc(r.time || '') + '</span>' +
           '</div>' +
           '<div style="font-size:12px;color:var(--text-light);margin-top:6px;">用途：' + esc(r.plot || '') +
-          (r.remark ? ' · 备注：' + esc(r.remark) : '') + ' · 待审批</div>' +
+          (r.code ? ' · 后台编号：' + esc(r.code) : '') +
+          (r.remark ? ' · 备注：' + esc(r.remark) : '') + tail + '</div>' +
           '</div>';
       }).join('');
     }
 
-    /* 农资库存：与标签领用一致，提交申请即扣减可领库存（库存不足时拦截） */
-    var STOCK_KEY = 'smartorchard_material_stock';
+    /* ============================================================
+     * T18 农资库存双源治理 —— 移动端只读库存，不做扣减
+     * ------------------------------------------------------------
+     * 唯一库存权威源 = 后台「农资库存」页共享仓库 MaterialStore
+     *   localStorage['smartorchard_material_store_v1']
+     *   结构：{ version:1, materials:[{ code, name, stock, unit, ... }] }
+     * 移动端只读取展示 + 提交申请，扣减统一发生在后台「农资使用 - 领用审批」。
+     * 注意：读取时绝不回写后台源，避免移动端污染权威数据。
+     * ============================================================ */
+
+    var BACKEND_STOCK_KEY = 'smartorchard_material_store_v1';
+
+    /* 移动端品名 → 后台农资（按后台 SEED 实际品名/编号建立映射）：
+     *   氮磷钾复合肥 → M-001 NPK复合肥     依据：同属氮磷钾三元复合肥，仅品牌叫法不同
+     *   生物有机肥   → M-003 有机肥料       依据：移动端描述「发酵羊粪有机质≥45%」，即有机肥料；M-010 生物农药为农药类，品类不符
+     *   磷酸二氢钾   → M-009 叶面肥         依据：移动端描述「叶面肥，99%纯度」，后台叶面肥(M-009)同为叶面肥类；磷酸二铵/钾肥均为固体基础肥，与叶面施用方式不符
+     *   尿素         → M-015 尿素           依据：唯一两边同名的品项，直连
+     *   波尔多液     → M-005 杀菌剂         依据：波尔多液即波尔多杀菌剂，后台杀菌剂(M-005)是唯一通用杀菌剂项
+     *   阿维菌素     → M-013 杀螨剂         依据：移动端描述「杀虫剂，防治红蜘蛛」，红蜘蛛为螨害，后台杀螨剂(M-013)品类最贴合
+     */
+    var MATERIAL_ALIAS = {
+      '氮磷钾复合肥': 'M-001',
+      '生物有机肥': 'M-003',
+      '磷酸二氢钾': 'M-009',
+      '尿素': 'M-015',
+      '波尔多液': 'M-005',
+      '阿维菌素': 'M-013'
+    };
+
+    /* 后台源不存在（或数据损坏）时使用的兜底默认值，仅用于展示，不写入任何存储 */
     var DEFAULT_STOCK = {
       '氮磷钾复合肥': 520,
       '生物有机肥': 380,
@@ -363,33 +424,156 @@
       '阿维菌素': 60,
       '尿素': 280
     };
-    function readStock() {
-      var s = {};
-      try { s = JSON.parse(localStorage.getItem(STOCK_KEY) || '{}') || {}; } catch (e) { s = {}; }
-      var changed = false;
-      Object.keys(DEFAULT_STOCK).forEach(function(k) {
-        if (typeof s[k] !== 'number') { s[k] = DEFAULT_STOCK[k]; changed = true; }
-      });
-      if (changed) { try { localStorage.setItem(STOCK_KEY, JSON.stringify(s)); } catch (e) {} }
-      return s;
+
+    /* 兜底 HTML：后台农资库不可用时回填页面原有的 6 条硬编码展示，保证页面不空白 */
+    var FALLBACK_HTML = '';
+
+    /* 读取后台农资库原始清单（保持后台顺序）；读不到/损坏返回空数组，绝不回写后台源 */
+    function readBackendMaterials() {
+      var raw = null;
+      try { raw = localStorage.getItem(BACKEND_STOCK_KEY); } catch (e) { raw = null; }
+      if (!raw) return [];
+      try {
+        var parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.materials)) return [];
+        return parsed.materials.filter(function (m) { return m && m.code; });
+      } catch (e) {
+        /* 数据损坏时按空处理，页面走兜底默认值 */
+        return [];
+      }
     }
+
+    /* 按后台编号读取单条农资（提交领用时以编号为准，与后台 code 对齐） */
+    function findMaterialByCode(code) {
+      if (!code) return null;
+      var list = readBackendMaterials();
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].code === code) return list[i];
+      }
+      return null;
+    }
+
+    /* 读取后台库存源，解析为 { code: { code, name, stock, unit, spec, type } } */
+    function readBackendStore() {
+      var map = {};
+      readBackendMaterials().forEach(function (m) { map[m.code] = m; });
+      return map;
+    }
+
+    /* 解析某移动端品名对应的后台农资；未登记时返回 null */
+    function resolveMaterial(name) {
+      var code = MATERIAL_ALIAS[name];
+      if (!code) return null;
+      var store = readBackendStore();
+      return store[code] || null;
+    }
+
+    /* 当前可展示库存（后台源优先，缺失时回落到 DEFAULT_STOCK） */
+    function currentStockOf(name) {
+      var m = resolveMaterial(name);
+      if (m && typeof m.stock === 'number') return { stock: m.stock, unit: m.unit || '', fromStore: true };
+      var fb = DEFAULT_STOCK[name];
+      if (typeof fb === 'number') return { stock: fb, unit: /阿维菌素/.test(name) ? 'L' : 'kg', fromStore: false };
+      return { stock: null, unit: '', fromStore: false };
+    }
+
+    /* 后台库存源是否已初始化（未被任何后台页面写入过） */
+    function isBackendStoreReady() {
+      return readBackendMaterials().length > 0;
+    }
+
+    /* 按农资分类返回图标，保持与原视觉一致 */
+    function iconOf(type) {
+      if (type === 'fertilizer') {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M12 2L2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>';
+      }
+      if (type === 'pesticide') {
+        return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+      }
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>';
+    }
+
+    /* 依据后台农资库渲染「可领取农资」清单；读不到数据时回填硬编码兜底 */
+    function renderMaterialList() {
+      var box = document.getElementById('materialList');
+      if (!box) return;
+
+      var list = readBackendMaterials();
+
+      if (!list.length) {
+        /* 后台数据不可用：恢复 6 条硬编码兜底并标注库存状态 */
+        if (FALLBACK_HTML) box.innerHTML = FALLBACK_HTML;
+        renderStocks();
+        return;
+      }
+
+      box.innerHTML = list.map(function (m) {
+        var stock = typeof m.stock === 'number' ? m.stock : 0;
+        var unit = m.unit || '';
+        var desc = m.spec || m.typeName || '';
+        var soldOut = stock <= 0;
+        return '<div class="material-item" data-code="' + esc(m.code) + '">' +
+          '<div class="material-icon">' + iconOf(m.type) + '</div>' +
+          '<div class="material-info">' +
+            '<div class="material-name">' + esc(m.name) + '</div>' +
+            '<div class="material-desc">' + esc(desc) + '</div>' +
+            '<div class="material-meta">' +
+              '<span class="material-stock">库存：' + esc(String(stock)) + esc(unit) + '</span>' +
+              '<button class="btn btn-primary"' + (soldOut ? ' disabled style="opacity:.5;cursor:not-allowed;"' : '') +
+                ' data-code="' + esc(m.code) + '" data-name="' + esc(m.name) + '" onclick="openApplyModal(this)">' +
+                (soldOut ? '暂无库存' : '申请') + '</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
     function renderStocks() {
-      var s = readStock();
+      var storeReady = isBackendStoreReady();
       var nodes = document.querySelectorAll('.material-item');
-      Array.prototype.forEach.call(nodes, function(item) {
+      Array.prototype.forEach.call(nodes, function (item) {
+        /* 动态渲染项库存已内联展示，无需二次处理 */
+        if (item.getAttribute('data-code')) return;
         var nameEl = item.querySelector('.material-name');
         var stockEl = item.querySelector('.material-stock');
         var btn = item.querySelector('button');
         if (!nameEl || !stockEl) return;
-        var left = s[nameEl.textContent.trim()];
-        if (typeof left !== 'number') return;
-        stockEl.textContent = '库存：' + left + (/[L]/.test(stockEl.textContent) ? 'L' : 'kg');
-        if (btn) btn.disabled = left <= 0;
+        var name = nameEl.textContent.trim();
+        var info = currentStockOf(name);
+        var mapped = resolveMaterial(name);
+
+        if (mapped) {
+          /* 正常路径：展示后台权威库存 */
+          stockEl.setAttribute('style', '');
+          stockEl.textContent = '库存：' + info.stock + (info.unit || (/阿维菌素/.test(name) ? 'L' : 'kg'));
+          if (btn) {
+            btn.disabled = info.stock <= 0;
+            btn.textContent = info.stock <= 0 ? '暂无库存' : '申请';
+          }
+          return;
+        }
+
+        /* 未在后台登记：明确提示 + 禁用申请，避免提交后才被拦下 */
+        stockEl.setAttribute('style', 'color:var(--error);');
+        if (btn) { btn.disabled = true; btn.textContent = '不可申请'; }
+        if (info.stock === null) {
+          stockEl.textContent = '该农资未在后台登记';
+        } else if (storeReady) {
+          stockEl.textContent = '库存：' + info.stock + (info.unit || (/阿维菌素/.test(name) ? 'L' : 'kg')) + ' · 未在后台登记';
+        } else {
+          /* 后台源尚未初始化：按兜底默认值展示，但明确标注不可申请 */
+          stockEl.textContent = '库存：' + info.stock + (info.unit || (/阿维菌素/.test(name) ? 'L' : 'kg')) + ' · 后台库存未初始化';
+        }
       });
     }
 
     function submitApply() {
-      var name = document.getElementById('materialName').value;
+      var modal = document.getElementById('applyModal');
+      var name = modal.dataset.materialName || document.getElementById('materialName').value;
+      var code = modal.dataset.materialCode || MATERIAL_ALIAS[name] || '';
       var qtyRaw = document.getElementById('materialQty').value.trim();
       var plot = document.getElementById('materialPlot').value;
       var remark = document.getElementById('materialRemark').value.trim();
@@ -399,16 +583,28 @@
       if (!isFinite(qty) || qty <= 0) { MobileStore.toast('领用数量必须是大于 0 的数字', 'error'); return; }
       if (qty > 1000) { MobileStore.toast('单次领用数量不能超过 1000', 'error'); return; }
       if (!plot) { MobileStore.toast('请选择领用地块', 'warning'); return; }
-      var stock = readStock();
-      var left = typeof stock[name] === 'number' ? stock[name] : null;
-      if (left === null) { MobileStore.toast('未找到该农资的库存记录', 'error'); return; }
-      if (qty > left) { MobileStore.toast('库存不足，当前仅剩 ' + left, 'error'); return; }
 
-      stock[name] = left - qty;
-      localStorage.setItem(STOCK_KEY, JSON.stringify(stock));
+      /* 以后台编号为准校验；未在后台农资库登记则禁止提交，避免产生无法审批的脏数据 */
+      var mapped = findMaterialByCode(code);
+      if (!mapped) {
+        MobileStore.toast('「' + name + '」未在后台农资库登记，请联系管理员先建档', 'error');
+        return;
+      }
 
+      /* 仅做提交前的可用量校验，实际扣减由后台审批环节执行 */
+      var stock = typeof mapped.stock === 'number' ? mapped.stock : null;
+      var unit = mapped.unit || '';
+      if (stock === null || qty > stock) {
+        MobileStore.toast('库存不足，当前仅剩 ' + (stock == null ? 0 : stock) + ' ' + unit, 'error');
+        return;
+      }
+
+      /* 只写申请记录，不动后台库存 */
       MobileStore.push(MobileStore.KEYS.material, {
         name: name,
+        code: mapped.code,
+        backName: mapped.name,
+        unit: unit,
         qty: qty,
         plot: plot,
         remark: remark,
@@ -417,15 +613,24 @@
       });
 
       closeApplyModal();
-      MobileStore.toast('申请已提交，等待审批', 'success');
+      MobileStore.toast('申请已提交：' + name + ' ' + qty + unit + '，由后台审批通过后统一扣减库存', 'success');
       renderMyApplies();
-      renderStocks();
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-      renderStocks();
+      /* 记录初始硬编码列表作为兜底快照，供后台数据缺失时还原 */
+      var box = document.getElementById('materialList');
+      FALLBACK_HTML = box ? box.innerHTML : '';
+      renderMaterialList();
       renderMyApplies();
-      MobileStore.subscribe(renderMyApplies);
+      /* 订阅：后台审批/库存调整写回后，列表与库存展示同步刷新 */
+      MobileStore.subscribe(function () {
+        renderMyApplies();
+        renderMaterialList();
+      });
+      window.addEventListener('storage', function (e) {
+        if (e.key === BACKEND_STOCK_KEY) renderMaterialList();
+      });
     });
   </script>
 </body>

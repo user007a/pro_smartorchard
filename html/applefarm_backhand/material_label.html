@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 标签管理</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-xs);
+  }
+  .stat-value {
+    font-size: 26px;
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-unit {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-normal);
+    color: var(--text-tertiary);
+    margin-left: 4px;
+  }
+  .stat-card.is-low .stat-value { color: var(--warning); }
+  .status-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .status-tag.processing { background: var(--warning-bg); color: var(--warning); }
+  .status-tag.passed { background: var(--success-bg); color: var(--success); }
+  .status-tag.rejected { background: var(--error-bg); color: var(--error); }
+  .cell-sub {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .approve-box {
+    margin-top: var(--space-sm);
+    padding: 8px 10px;
+    background: var(--gray-50);
+    border-left: 3px solid var(--primary-300);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+  }
+  .modal-field { margin-bottom: var(--space-lg); }
+  .modal-field label {
+    display: block;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+  }
+  .modal-field textarea, .modal-field input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    background: var(--bg-card);
+  }
+  .modal-field textarea { min-height: 100px; resize: vertical; line-height: 1.6; }
+  .modal-field textarea:focus, .modal-field input:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.12);
+    outline: none;
+  }
+  .stock-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .stock-row:last-child { border-bottom: none; }
+  .stock-name { flex: 1; font-size: var(--font-size-sm); color: var(--text-primary); }
+  .stock-row input {
+    width: 120px;
+    padding: 8px 12px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+  }
+  .stock-row input:focus {
+    border-color: var(--primary-500);
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.12);
+  }
+  .detail-row {
+    display: flex;
+    gap: var(--space-md);
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-light);
+    font-size: var(--font-size-sm);
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-label { color: var(--text-tertiary); min-width: 84px; flex-shrink: 0; }
+  .detail-value { color: var(--text-primary); flex: 1; word-break: break-all; }
+  .empty-state {
+    padding: var(--space-2xl) 0;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+  }
+  /* T19 库存单一数据源说明条 */
+  .notice-bar {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-bottom: var(--space-lg);
+    background: var(--info-bg);
+    border: 1px solid var(--border-light);
+    border-left: 3px solid var(--primary-500);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
+  .notice-bar svg { flex-shrink: 0; margin-top: 3px; width: 16px; height: 16px; color: var(--primary-500); }
+  .notice-bar b { color: var(--text-primary); }
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card);
+    border-radius: 12px;
+    width: 92%;
+    max-width: 620px;
+    max-height: 85vh;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer;
+    padding: 4px; font-size: 20px; line-height: 1;
+    color: var(--text-tertiary); transition: color 0.2s;
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(85vh - 132px);
+  }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-default);
+  }
+</style>
+</head>
+<body data-active-menu="material" data-active-submenu="material-label">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">标签管理</div>
+        <div class="page-subtitle">维护各类溯源标签库存，并审批移动端标签领用申请</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="openTypeModal()">标签类型</button>
+        <button class="jg-btn" onclick="openStockModal()">库存管理</button>
+        <button class="jg-btn" onclick="refreshAll()">刷新</button>
+      </div>
+    </div>
+
+    <!-- 统计区 -->
+    <div class="page-section">
+      <div class="stat-row" id="stockStatRow"></div>
+    </div>
+
+    <!-- 搜索栏区 -->
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <select class="search-select" id="statusSelect">
+          <option value="">全部状态</option>
+          <option value="待打印">待打印</option>
+          <option value="已打印">已打印</option>
+          <option value="已驳回">已驳回</option>
+        </select>
+        <input type="text" class="search-input" placeholder="搜索标签名称或使用地块..." id="searchInput">
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="renderTable()">搜索</button>
+          <button class="jg-btn" onclick="resetFilter()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 领用记录表 -->
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="checkbox-col" style="width:60px;">序号</th>
+              <th style="width:150px;">领用时间</th>
+              <th>标签名称</th>
+              <th style="width:90px;">数量</th>
+              <th style="width:150px;">使用地块</th>
+              <th style="width:100px;">状态</th>
+              <th>备注</th>
+              <th style="width:160px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="recordBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无标签领用记录</div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== 领用审批弹窗 ===== -->
+<div class="modal-overlay" id="approveModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="approveTitle">标签领用审批</h3>
+      <button class="modal-close" onclick="closeApproveModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-row">
+        <div class="detail-label">标签名称</div>
+        <div class="detail-value" id="apName"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">领用数量</div>
+        <div class="detail-value" id="apQty"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">使用地块</div>
+        <div class="detail-value" id="apPlot"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">领用时间</div>
+        <div class="detail-value" id="apTime"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">当前状态</div>
+        <div class="detail-value" id="apStatus"></div>
+      </div>
+      <div class="detail-row" id="apPrintWrap" style="display:none;">
+        <div class="detail-label">打印信息</div>
+        <div class="detail-value" id="apPrint"></div>
+      </div>
+      <div class="modal-field" style="margin-top:var(--space-lg);" id="apRemarkField">
+        <label>驳回原因</label>
+        <textarea id="apRemark" placeholder="驳回时请填写原因，移动端领用人可见"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeApproveModal()">关闭</button>
+      <button class="jg-btn" id="apRejectBtn" onclick="submitApprove('已驳回')">驳回</button>
+      <button class="jg-btn jg-btn-primary" id="apPrintBtn" onclick="goPrint()">去打印</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 库存管理弹窗 ===== -->
+<div class="modal-overlay" id="stockModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">标签库存管理</h3>
+      <button class="modal-close" onclick="closeStockModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-tertiary);margin-bottom:12px;">
+        库存为移动端领用与后台打印标签共用的同一份数据，修改后两端即时生效。
+      </p>
+      <div id="stockEditBox"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeStockModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="saveStock()">保存库存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 标签类型管理弹窗 ===== -->
+<div class="modal-overlay" id="typeModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">标签类型管理</h3>
+      <button class="modal-close" onclick="closeTypeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-tertiary);margin-bottom:12px;">
+        标签类型为移动端「标签领用」可选清单的唯一权威源，保存后移动端即时生效；停用后移动端不再展示该类型。
+      </p>
+      <div id="typeEditBox"></div>
+      <button class="jg-btn" style="margin-top:12px;" onclick="addTypeRow()">+ 新增标签类型</button>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeTypeModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="saveTypes()">保存类型</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-bridge.js"></script>
+<script>
+/* ============================================================
+ * 标签管理
+ * 数据源：
+ *   MobileBridge.labelRecords() → 标签领用记录（移动端 mb_label.html 写入）
+ *     { name, qty, time, plot, status:'pending', remark, id, createTime }
+ *   MobileBridge.labelStock()   → 标签库存对象 { 标签名: 剩余张数 }
+ * 审批结果回写 MobileBridge.KEYS.labelRecords，库存维护回写 KEYS.labelStock
+ * ============================================================ */
+
+/* 状态归一：pending → 待打印（移动端已提交申请，尚未打印扣减） */
+var STATUS_TEXT = { '审批中': '审批中', '待打印': '待打印', '已审批': '待打印', '已打印': '已打印', '已驳回': '已驳回' };
+/* 状态 → 标签样式类 */
+var STATUS_CLASS = { '审批中': 'processing', '待打印': 'processing', '已打印': 'passed', '已驳回': 'rejected' };
+
+/* 库存低于该值时用告警色提示 */
+var LOW_STOCK_THRESHOLD = 1000;
+
+var currentId = null;
+
+/* HTML 转义，所有用户数据渲染前必须走这里 */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* 读取领用记录，读取失败回退空数组 */
+function readRecords() {
+  try {
+    if (typeof MobileBridge === 'undefined') return [];
+    var list = MobileBridge.labelRecords();
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/* 读取库存对象（库存以对象形式存储，桥接层已按对象型读取处理） */
+function readStock() {
+  try {
+    if (typeof MobileBridge === 'undefined') return {};
+    var stock = MobileBridge.labelStock();
+    return (stock && typeof stock === 'object') ? stock : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+/* 状态归一：pending → 待打印 */
+function statusText(item) {
+  if (item.status === 'pending') return '待打印';
+  return STATUS_TEXT[item.status] || item.status || '待打印';
+}
+
+/* 是否为待打印（尚未由后台打印环节扣减库存）的记录 */
+function isPendingPrint(item) {
+  return statusText(item) === '待打印';
+}
+
+/* 渲染各标签库存统计卡 */
+function renderStockStats() {
+  var stock = readStock();
+  var row = document.getElementById('stockStatRow');
+  var names = Object.keys(stock);
+
+  if (!names.length) {
+    row.innerHTML = '<div class="stat-card"><div class="stat-label">标签库存</div>' +
+      '<div class="stat-value" style="font-size:15px;color:var(--text-tertiary);">暂无库存数据，可点击右上角「库存管理」初始化</div></div>';
+    return;
+  }
+
+  row.innerHTML = names.map(function (name) {
+    var num = Number(stock[name]) || 0;
+    var low = num < LOW_STOCK_THRESHOLD ? ' is-low' : '';
+    return '<div class="stat-card' + low + '">' +
+      '<div class="stat-label">' + esc(name) + '</div>' +
+      '<div class="stat-value">' + num.toLocaleString('zh-CN') + '<span class="stat-unit">张</span></div>' +
+    '</div>';
+  }).join('');
+}
+
+function filteredRecords() {
+  var status = document.getElementById('statusSelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  return readRecords().filter(function (item) {
+    if (status && statusText(item) !== status) return false;
+    if (kw) {
+      var hay = ((item.name || '') + ' ' + (item.plot || '') + ' ' + (item.remark || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable() {
+  renderStockStats();
+  var list = filteredRecords();
+
+  var body = document.getElementById('recordBody');
+  var emptyHint = document.getElementById('emptyHint');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+
+  body.innerHTML = list.map(function (item, i) {
+    var st = statusText(item);
+    var cls = STATUS_CLASS[st] || 'processing';
+    var extra = '';
+    if (item.printTime) {
+      extra = '<div class="approve-box">打印时间：' + esc(item.printTime) +
+        (item.printBatch ? '<br>打印批次：' + esc(item.printBatch) : '') + '</div>';
+    } else if (item.approveRemark) {
+      extra = '<div class="approve-box">处理意见：' + esc(item.approveRemark) +
+        (item.approveTime ? '<br>处理时间：' + esc(item.approveTime) : '') + '</div>';
+    }
+    var btnText = isPendingPrint(item) ? '去打印' : '查看';
+    return '<tr>' +
+      '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td class="text-mono">' + esc(item.time || item.createTime || '-') + '</td>' +
+      '<td><strong>' + esc(item.name || '-') + '</strong></td>' +
+      '<td>' + esc(item.qty != null ? item.qty : '-') + '</td>' +
+      '<td>' + esc(item.plot || '-') + '</td>' +
+      '<td><span class="status-tag ' + cls + '">' + esc(st) + '</span></td>' +
+      '<td><div class="cell-sub">' + esc(item.remark || '-') + '</div>' + extra + '</td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn detail" onclick="openApproveModal(\'' + esc(item.id) + '\')">' + btnText + '</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function resetFilter() {
+  document.getElementById('statusSelect').value = '';
+  document.getElementById('searchInput').value = '';
+  renderTable();
+}
+
+function refreshAll() {
+  renderTable();
+  Toast.success('标签数据已刷新');
+}
+
+/* ---------- 审批弹窗 ---------- */
+function openApproveModal(id) {
+  var list = readRecords();
+  var target = null;
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].id) === String(id)) { target = list[i]; break; }
+  }
+  if (!target) { Toast.error('未找到该领用记录'); return; }
+
+  currentId = target.id;
+  var st = statusText(target);
+  var pending = isPendingPrint(target);
+
+  document.getElementById('approveTitle').textContent = pending ? '待打印领用申请' : '领用记录详情';
+  document.getElementById('apName').textContent = target.name || '-';
+  document.getElementById('apQty').textContent = target.qty != null ? target.qty : '-';
+  document.getElementById('apPlot').textContent = target.plot || '-';
+  document.getElementById('apTime').textContent = target.time || target.createTime || '-';
+  document.getElementById('apStatus').innerHTML =
+    '<span class="status-tag ' + (STATUS_CLASS[st] || 'processing') + '">' + esc(st) + '</span>';
+  document.getElementById('apRemark').value = target.approveRemark || '';
+
+  // 打印信息：已打印时展示打印时间与打印批次
+  var printWrap = document.getElementById('apPrintWrap');
+  if (target.printTime) {
+    printWrap.style.display = '';
+    document.getElementById('apPrint').textContent =
+      target.printTime + (target.printBatch ? ' · 批次 ' + target.printBatch : '');
+  } else {
+    printWrap.style.display = 'none';
+  }
+
+  // 待打印：可驳回并跳转打印；已打印 / 已驳回：只读查看
+  document.getElementById('apRemarkField').style.display = pending ? '' : 'none';
+  document.getElementById('apRejectBtn').style.display = pending ? '' : 'none';
+  document.getElementById('apPrintBtn').style.display = pending ? '' : 'none';
+
+  document.getElementById('approveModal').classList.add('show');
+}
+
+/* 跳转到打印环节：带上标签类型，便于直接打印扣减库存 */
+function goPrint() {
+  var list = readRecords();
+  var target = null;
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].id) === String(currentId)) { target = list[i]; break; }
+  }
+  var name = target && target.name ? target.name : '';
+  closeApproveModal();
+  var url = 'trace_code.html' + (name ? '?label=' + encodeURIComponent(name) : '');
+  if (window.parent && typeof window.parent.openPage === 'function') {
+    window.parent.openPage(url, '溯源编码');
+  } else {
+    window.location.href = url;
+  }
+}
+
+function closeApproveModal() {
+  document.getElementById('approveModal').classList.remove('show');
+  currentId = null;
+}
+
+/* 提交驳回；驳回需二次确认。库存扣减不在本页发生，交由打印环节处理 */
+function submitApprove(decision) {
+  var remark = document.getElementById('apRemark').value.trim();
+
+  if (decision === '已驳回') {
+    if (!remark) { Toast.warning('驳回时请填写驳回原因'); return; }
+    ConfirmDialog.show({
+      title: '驳回标签领用',
+      message: '确定要驳回该领用申请吗？驳回后移动端将标记为「已驳回」，且不再占用待打印标签库存。',
+      onConfirm: function () { doApprove(decision, remark); }
+    });
+    return;
+  }
+  doApprove(decision, remark);
+}
+
+function doApprove(decision, remark) {
+  if (typeof MobileBridge === 'undefined') {
+    Toast.error('数据桥接未加载，无法保存审批结果');
+    return;
+  }
+  var ok = MobileBridge.updateRecord(MobileBridge.KEYS.labelRecords, currentId, {
+    status: decision,
+    approveRemark: remark,
+    approveTime: MobileBridge.stampNow()
+  });
+  if (!ok) { Toast.error('审批结果保存失败，请刷新后重试'); return; }
+
+  closeApproveModal();
+  renderTable();
+  Toast.success('审批结果已保存（' + decision + '），移动端可查看');
+}
+
+/* ---------- 库存管理弹窗 ---------- */
+function openStockModal() {
+  var stock = readStock();
+  var box = document.getElementById('stockEditBox');
+  var names = Object.keys(stock);
+
+  if (!names.length) {
+    box.innerHTML = '<div class="empty-state" style="padding:20px 0;">暂无库存记录</div>';
+  } else {
+    box.innerHTML = names.map(function (name, i) {
+      return '<div class="stock-row">' +
+        '<div class="stock-name">' + esc(name) + '</div>' +
+        '<input type="number" min="0" step="1" value="' + esc(stock[name]) + '" data-stock-index="' + i + '">' +
+        '<span style="font-size:13px;color:var(--text-tertiary);">张</span>' +
+      '</div>';
+    }).join('');
+  }
+  document.getElementById('stockModal').classList.add('show');
+}
+
+function closeStockModal() {
+  document.getElementById('stockModal').classList.remove('show');
+}
+
+/* 保存库存：整份对象回写 localStorage */
+function saveStock() {
+  var stock = readStock();
+  var names = Object.keys(stock);
+  var inputs = document.querySelectorAll('#stockEditBox input[data-stock-index]');
+  var invalid = false;
+
+  inputs.forEach(function (input) {
+    var idx = Number(input.getAttribute('data-stock-index'));
+    var name = names[idx];
+    if (!name) return;
+    var val = Number(input.value);
+    if (input.value === '' || isNaN(val) || val < 0) { invalid = true; return; }
+    stock[name] = Math.floor(val);
+  });
+
+  if (invalid) { Toast.warning('库存数量必须为不小于 0 的整数'); return; }
+
+  try {
+    if (typeof MobileBridge === 'undefined') { Toast.error('数据桥接未加载，无法保存库存'); return; }
+    localStorage.setItem(MobileBridge.KEYS.labelStock, JSON.stringify(stock));
+  } catch (e) {
+    Toast.error('本地存储写入失败，库存未能保存');
+    return;
+  }
+
+  closeStockModal();
+  renderTable();
+  Toast.success('标签库存已更新，移动端领用即时生效');
+}
+
+/* ============================================================
+ * 标签类型维护（移动端 mb_label.html 可选清单的权威源）
+ *   localStorage['smartorchard_label_types']
+ *   结构：[{ id, name, desc, unit, enabled }]
+ * 首次访问播种原有 3 种标签（标签名/描述不丢失），并同步初始化库存键，
+ * 保证「库存管理」可对新建类型设置库存。
+ * ============================================================ */
+var TYPE_KEY = 'smartorchard_label_types';
+var TYPE_SEED = [
+  { id: 'LB-A', name: '花牛苹果专用标签（双层纸袋型）', desc: '双层纸袋，防水防虫', unit: '张', enabled: true, stock: 12500 },
+  { id: 'LB-B', name: '花牛苹果专用标签（透气膜袋型）', desc: '透气膜袋，早熟品种适用', unit: '张', enabled: true, stock: 8200 },
+  { id: 'LB-C', name: '秦冠专用标签', desc: '三色可选，中熟品种', unit: '张', enabled: true, stock: 6800 }
+];
+
+var typeWorking = [];
+
+/* 读取标签类型清单（原始结构） */
+function readTypes() {
+  try {
+    var raw = localStorage.getItem(TYPE_KEY);
+    if (raw) {
+      var v = JSON.parse(raw);
+      if (Array.isArray(v)) return v;
+    }
+  } catch (e) { /* 损坏时按空处理 */ }
+  return [];
+}
+
+/* 播种：仅在键缺失时写入，避免覆盖后台已维护的数据 */
+function seedLabelData() {
+  try {
+    if (!localStorage.getItem(TYPE_KEY)) {
+      var types = TYPE_SEED.map(function (t) {
+        return { id: t.id, name: t.name, desc: t.desc, unit: t.unit, enabled: true };
+      });
+      localStorage.setItem(TYPE_KEY, JSON.stringify(types));
+    }
+    if (typeof MobileBridge !== 'undefined' && !localStorage.getItem(MobileBridge.KEYS.labelStock)) {
+      var stock = {};
+      TYPE_SEED.forEach(function (t) { stock[t.name] = t.stock; });
+      localStorage.setItem(MobileBridge.KEYS.labelStock, JSON.stringify(stock));
+    }
+  } catch (e) { /* 隐私模式等场景忽略播种失败 */ }
+}
+
+function openTypeModal() {
+  var list = readTypes();
+  if (!list.length) {
+    list = TYPE_SEED.map(function (t) {
+      return { id: t.id, name: t.name, desc: t.desc, unit: t.unit, enabled: true };
+    });
+  }
+  typeWorking = list.map(function (t) { return Object.assign({}, t); });
+  renderTypeRows();
+  document.getElementById('typeModal').classList.add('show');
+}
+
+function closeTypeModal() {
+  document.getElementById('typeModal').classList.remove('show');
+}
+
+function renderTypeRows() {
+  var box = document.getElementById('typeEditBox');
+  if (!typeWorking.length) {
+    box.innerHTML = '<div class="empty-state" style="padding:20px 0;">暂无标签类型，点击下方按钮新增</div>';
+    return;
+  }
+  box.innerHTML = typeWorking.map(function (t, i) {
+    return '<div class="stock-row">' +
+      '<div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;">' +
+        '<input type="text" data-type-index="' + i + '" data-field="name" value="' + esc(t.name || '') + '" placeholder="标签名称">' +
+        '<input type="text" data-type-index="' + i + '" data-field="desc" value="' + esc(t.desc || '') + '" placeholder="描述">' +
+      '</div>' +
+      '<input type="text" data-type-index="' + i + '" data-field="unit" value="' + esc(t.unit || '张') + '" style="width:64px;" placeholder="单位">' +
+      '<label style="display:flex;align-items:center;gap:4px;font-size:13px;white-space:nowrap;color:var(--text-secondary);">' +
+        '<input type="checkbox" data-type-index="' + i + '" data-field="enabled" ' + (t.enabled !== false ? 'checked' : '') + '>启用</label>' +
+      '<button class="jg-btn" style="padding:6px 10px;" onclick="removeTypeRow(' + i + ')">删除</button>' +
+    '</div>';
+  }).join('');
+}
+
+/* 把界面输入同步回 typeWorking，供增删行前保存用户输入 */
+function syncTypeInputs() {
+  var inputs = document.querySelectorAll('#typeEditBox [data-type-index]');
+  Array.prototype.forEach.call(inputs, function (el) {
+    var i = Number(el.getAttribute('data-type-index'));
+    var field = el.getAttribute('data-field');
+    if (!typeWorking[i]) return;
+    if (field === 'enabled') typeWorking[i].enabled = el.checked;
+    else typeWorking[i][field] = el.value.trim();
+  });
+}
+
+function addTypeRow() {
+  syncTypeInputs();
+  typeWorking.push({ id: 'LB-' + Date.now().toString(36), name: '', desc: '', unit: '张', enabled: true });
+  renderTypeRows();
+}
+
+function removeTypeRow(i) {
+  syncTypeInputs();
+  typeWorking.splice(i, 1);
+  renderTypeRows();
+}
+
+function saveTypes() {
+  syncTypeInputs();
+  var list = typeWorking.filter(function (t) { return t.name; });
+  if (!list.length) { Toast.warning('至少保留一个标签类型'); return; }
+
+  var seen = {};
+  for (var i = 0; i < list.length; i++) {
+    if (seen[list[i].name]) { Toast.warning('标签名称重复：' + list[i].name); return; }
+    seen[list[i].name] = true;
+  }
+
+  try {
+    localStorage.setItem(TYPE_KEY, JSON.stringify(list));
+  } catch (e) {
+    Toast.error('本地存储写入失败，标签类型未能保存');
+    return;
+  }
+
+  /* 为新增类型补齐库存键，使「库存管理」可对其设置库存（不覆盖已有库存） */
+  if (typeof MobileBridge !== 'undefined') {
+    var stock = readStock();
+    var changed = false;
+    list.forEach(function (t) { if (stock[t.name] == null) { stock[t.name] = 0; changed = true; } });
+    if (changed) {
+      try { localStorage.setItem(MobileBridge.KEYS.labelStock, JSON.stringify(stock)); } catch (e) { /* 忽略 */ }
+    }
+  }
+
+  closeTypeModal();
+  renderTable();
+  Toast.success('标签类型已保存，移动端领用清单即时生效');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  seedLabelData();
+  renderTable();
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') renderTable();
+  });
+});
+</script>
+</body>
+</html>

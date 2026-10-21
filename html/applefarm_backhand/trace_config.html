@@ -45,6 +45,13 @@
   .module-tag:hover { background:var(--gray-100); }
   .module-tag.selected { background:var(--primary-500); color:var(--text-inverse); }
   .module-tag input { display:none; }
+  /* ===== T15：C 端溯源展示 Tab ===== */
+  .stage-icon-cell { font-size:20px; line-height:1; text-align:center; }
+  .stage-name-cell { font-weight:600; color:var(--text-primary); }
+  .stage-desc-cell { font-size:12px; color:var(--text-tertiary); max-width:340px; }
+  .stage-key { font-family:var(--font-family-mono, monospace); font-size:12px; color:var(--text-tertiary); }
+  .stage-hint { font-size:12px; color:var(--text-tertiary); padding:12px 0 0; margin:0; }
+  .order-btns { display:inline-flex; gap:6px; }
   .toast { position:fixed; top:20px; right:20px; padding:14px 20px; background:var(--bg-card); border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.15); display:flex; align-items:center; gap:12px; z-index:2000; transform:translateX(120%); transition:all 0.3s ease; }
   .toast.show { transform:translateX(0); }
   .toast.success { border-left:4px solid var(--border-primary); }
@@ -68,6 +75,14 @@
 
     <main class="main-content">
       <div class="content-wrapper">
+        <!-- T15：页面 Tab（模板配置 / C 端溯源展示） -->
+        <div class="tabs" id="configTabs">
+          <div class="tab-item active" data-tab="template">溯源模板配置</div>
+          <div class="tab-item" data-tab="cstage">C端溯源展示</div>
+        </div>
+
+        <!-- ===== Tab 1：溯源模板配置（原有内容） ===== -->
+        <div class="tab-content active" id="tab-template">
         <div class="page-section action-bar">
           <button class="jg-btn jg-btn-primary" onclick="openAddModal()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M12 4v16m8-8H4"/></svg>
@@ -103,6 +118,30 @@
             <tbody id="dataTableBody"></tbody>
           </table>
           <div id="pagination-container"></div>
+        </div>
+        </div><!-- /tab-template -->
+
+        <!-- ===== Tab 2：C 端溯源展示（T15） ===== -->
+        <div class="tab-content" id="tab-cstage">
+          <div class="data-section">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:70px;">排序</th>
+                  <th style="width:110px;">环节图标</th>
+                  <th style="width:140px;">环节名称</th>
+                  <th>环节说明</th>
+                  <th style="width:110px;">状态</th>
+                  <th style="width:190px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="cstageBody"></tbody>
+            </table>
+            <p class="stage-hint">
+              停用的环节不会出现在消费者 H5 溯源页（trace_h5.html）的时间线中；排序决定 C 端展示先后。
+              数据源：<code>localStorage['h5_trace_stages']</code>，与 <code>applefarm_h5/js/trace-stages.js</code> 共用。
+            </p>
+          </div>
         </div>
       </div>
     </main>
@@ -473,6 +512,8 @@ function showToast(message, type = 'success') {
 
 // 页面初始化
 document.addEventListener('DOMContentLoaded', function() {
+  initConfigTabs();
+
   // 适用产品下拉
   const productSelect = document.getElementById('editProduct');
   PRODUCT_SOURCE.forEach(p => {
@@ -500,7 +541,187 @@ document.addEventListener('DOMContentLoaded', function() {
     tbodyId: 'dataTableBody',
     renderRow: renderTemplateRow
   });
+
+  renderCStages();
 });
+
+/* ============================================================
+ * T15 · C 端溯源展示配置
+ * 数据源：localStorage['h5_trace_stages']
+ *   结构：[{ key, title, icon, img, desc, enabled, order }]，7 个固定环节
+ *   读取方 = H5 端 trace_h5.html / h5_trace_detail.html（经 applefarm_h5/js/trace-stages.js）
+ *   首次访问时由本文件的 DEFAULT_CSTAGES 初始化
+ * ============================================================ */
+var CSTAGE_KEY = 'h5_trace_stages';
+var DEFAULT_CSTAGES = [
+  { key: 'planting',   title: '种植管理', icon: '🌱', img: 'images/trace_planting.jpg',   desc: 'A1区花牛苹果果园，有机种植，施用有机肥' },
+  { key: 'pruning',    title: '修剪疏果', icon: '✂️', img: 'images/trace_pruning.jpg',    desc: '采用开心形整形，去除过密枝条，保证通风透光' },
+  { key: 'bagging',    title: '套袋保护', icon: '🛡️', img: 'images/trace_bagging.jpg',    desc: '使用双层纸袋套袋，防止虫害和农药污染' },
+  { key: 'fertilizer', title: '施肥喷药', icon: '🌿', img: 'images/trace_fertilizer.jpg', desc: '使用生物有机肥和绿色农药，确保果实安全' },
+  { key: 'testing',    title: '农残检测', icon: '🔬', img: 'images/trace_testing.jpg',    desc: '采摘前第三方农残检测，全部指标未检出' },
+  { key: 'harvest',    title: '采摘入库', icon: '🍎', img: 'images/trace_harvest.jpg',    desc: '人工采摘，精选一级果，全程冷链保鲜' },
+  { key: 'coldchain',  title: '冷链配送', icon: '🚚', img: 'images/trace_coldchain.jpg',  desc: '全程冷链配送，运输温度维持 2-8°C' }
+];
+var CSTAGE_VALID_KEYS = DEFAULT_CSTAGES.map(function (s) { return s.key; });
+
+function escCStage(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* 读取并归一化；损坏数据 / 非预期结构一律回退到默认清单 */
+function readCStages() {
+  try {
+    var raw = localStorage.getItem(CSTAGE_KEY);
+    if (!raw) return null;
+    var v = JSON.parse(raw);
+    if (!Array.isArray(v)) return null;
+    var list = v.filter(function (s) {
+      return s && typeof s === 'object' && CSTAGE_VALID_KEYS.indexOf(s.key) >= 0;
+    }).map(function (s) {
+      return {
+        key: s.key,
+        title: String(s.title || s.name || ''),
+        icon: String(s.icon || ''),
+        img: String(s.img || ''),
+        desc: String(s.desc || ''),
+        enabled: s.enabled !== false,
+        order: Number(s.order) || 0
+      };
+    });
+    return list.length ? list.sort(function (a, b) { return a.order - b.order; }) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function getCStages() {
+  var list = readCStages();
+  if (list) return list;
+  list = DEFAULT_CSTAGES.map(function (s, i) {
+    return { key: s.key, title: s.title, icon: s.icon, img: s.img, desc: s.desc, enabled: true, order: i + 1 };
+  });
+  try { localStorage.setItem(CSTAGE_KEY, JSON.stringify(list)); } catch (e) { /* 只读降级 */ }
+  return list;
+}
+
+function saveCStages(list) {
+  try {
+    localStorage.setItem(CSTAGE_KEY, JSON.stringify(list));
+    return true;
+  } catch (e) {
+    showToast('保存失败：本地存储写入异常', 'error');
+    return false;
+  }
+}
+
+function renderCStages() {
+  var list = getCStages();
+  var tbody = document.getElementById('cstageBody');
+  if (!tbody) return;
+  tbody.innerHTML = list.map(function (s, i) {
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td class="stage-icon-cell">' + escCStage(s.icon) + '</td>' +
+      '<td><div class="stage-name-cell">' + escCStage(s.title) + '</div>' +
+          '<div class="stage-key">' + escCStage(s.key) + '</div></td>' +
+      '<td class="stage-desc-cell">' + escCStage(s.desc) + '</td>' +
+      '<td><span class="status-tag ' + (s.enabled ? 'active' : 'inactive') + '">' +
+          (s.enabled ? '启用中' : '已停用') + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn detail" onclick="toggleCStage(\'' + escCStage(s.key) + '\')">' +
+          (s.enabled ? '停用' : '启用') + '</button>' +
+        '<button class="action-btn edit" onclick="editCStage(\'' + escCStage(s.key) + '\')">编辑</button>' +
+      '</div>' +
+      '<div class="order-btns" style="margin-top:6px;">' +
+        '<button class="action-btn" ' + (i === 0 ? 'disabled' : '') +
+          ' onclick="moveCStage(\'' + escCStage(s.key) + '\',-1)">上移</button>' +
+        '<button class="action-btn" ' + (i === list.length - 1 ? 'disabled' : '') +
+          ' onclick="moveCStage(\'' + escCStage(s.key) + '\',1)">下移</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function findCStage(list, key) {
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].key === key) return list[i];
+  }
+  return null;
+}
+
+function toggleCStage(key) {
+  var list = getCStages();
+  var target = findCStage(list, key);
+  if (!target) { showToast('未找到该环节', 'error'); return; }
+  target.enabled = !target.enabled;
+  if (saveCStages(list)) {
+    renderCStages();
+    showToast(target.enabled ? '「' + target.title + '」已启用，C 端将展示该环节' : '「' + target.title + '」已停用，C 端不再展示');
+  }
+}
+
+function moveCStage(key, delta) {
+  var list = getCStages();
+  var idx = -1;
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].key === key) { idx = i; break; }
+  }
+  if (idx < 0) { showToast('未找到该环节', 'error'); return; }
+  var target = idx + delta;
+  if (target < 0 || target >= list.length) return;
+  var tmp = list[idx];
+  list[idx] = list[target];
+  list[target] = tmp;
+  list.forEach(function (s, i) { s.order = i + 1; });
+  if (saveCStages(list)) {
+    renderCStages();
+    showToast('环节顺序已更新');
+  }
+}
+
+/* 编辑环节：图标 / 名称 / 说明 / 图片文件名（7 个 key 固定，不支持增删） */
+function editCStage(key) {
+  var list = getCStages();
+  var target = findCStage(list, key);
+  if (!target) { showToast('未找到该环节', 'error'); return; }
+
+  var icon = prompt('请输入环节图标（emoji，如 🌱）', target.icon);
+  if (icon === null) return;
+  var title = prompt('请输入环节名称', target.title);
+  if (title === null) return;
+  if (!title.trim()) { showToast('环节名称不能为空', 'error'); return; }
+  var img = prompt('请输入环节图片文件名（相对 applefarm_h5/images/，如 trace_planting.jpg）', target.img);
+  if (img === null) return;
+  var desc = prompt('请输入环节说明', target.desc);
+  if (desc === null) return;
+
+  target.icon = icon.trim();
+  target.title = title.trim();
+  // 允许填完整相对路径或纯文件名，统一存为 images/xxx 形式
+  var imgRaw = img.trim();
+  target.img = !imgRaw ? '' : (/^images\//i.test(imgRaw) || /^(https?:|data:)/i.test(imgRaw) ? imgRaw : 'images/' + imgRaw.replace(/^\.?\/?images\//i, ''));
+  target.desc = desc.trim();
+
+  if (saveCStages(list)) {
+    renderCStages();
+    showToast('环节已保存，C 端实时生效');
+  }
+}
+
+/* Tab 切换（沿用页面现有 Tab 视觉，不影响模板配置原有逻辑） */
+function initConfigTabs() {
+  document.querySelectorAll('#configTabs .tab-item').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      document.querySelectorAll('#configTabs .tab-item').forEach(function (t) { t.classList.remove('active'); });
+      this.classList.add('active');
+      var name = this.dataset.tab;
+      document.getElementById('tab-template').classList.toggle('active', name === 'template');
+      document.getElementById('tab-cstage').classList.toggle('active', name === 'cstage');
+    });
+  });
+}
 
 // 点击遮罩关闭弹窗
 document.querySelectorAll('.modal-overlay').forEach(overlay => {

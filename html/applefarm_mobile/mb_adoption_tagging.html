@@ -56,6 +56,7 @@
     .tag-record-sub { font-size: var(--font-xs); color: var(--text-light); margin-top: 2px; }
     .tag-record-code { font-size: var(--font-xs); font-weight: 600; color: var(--primary); flex-shrink: 0; }
     .tag-empty { text-align: center; color: var(--text-light); font-size: var(--font-sm); padding: var(--space-3) 0; }
+    .tag-archived-tag { display: inline-block; padding: 0 6px; border-radius: var(--radius-sm); background: var(--gray-100); color: var(--text-light); font-size: var(--font-xs); line-height: 1.6; vertical-align: middle; margin-left: 4px; }
   </style>
 </head>
 <body>
@@ -235,10 +236,14 @@
         box.innerHTML = '<div class="tag-empty">暂无挂牌记录，提交挂牌后将显示在这里</div>';
         return;
       }
+      // 图片已被归档（超大跳过 / 被挤出上限）的挂牌编号集合
+      var archivedCodes = {};
+      readTagArchive().forEach(function (a) { if (a && a.code) archivedCodes[a.code] = true; });
       box.innerHTML = arr.map(function (it) {
+        var archivedTag = archivedCodes[it.code] ? '<span class="tag-archived-tag">图片已归档</span>' : '';
         return '<div class="tag-record-item">' +
             '<div>' +
-              '<div class="tag-record-main">' + esc(it.treeNo || '未命名') + ' · ' + esc(it.adopter || '—') + '</div>' +
+              '<div class="tag-record-main">' + esc(it.treeNo || '未命名') + ' · ' + esc(it.adopter || '—') + archivedTag + '</div>' +
               '<div class="tag-record-sub">' + esc(it.location || '—') + ' · ' + esc(MobileStore.fmtTime(it.tagTime || it.createTime)) + ' · 材质:' + esc(it.material || '—') + '</div>' +
             '</div>' +
             '<div class="tag-record-code">' + esc(it.code || '') + '</div>' +
@@ -279,6 +284,104 @@
       document.getElementById('successModal').classList.add('show');
     }
 
+    /* ============================================================
+     * 挂牌 PNG 缓存的容量治理
+     * ------------------------------------------------------------
+     * 为什么要限流：Canvas 生成的挂牌以 base64 dataURL（约体积的 4/3）
+     * 完整存入 localStorage，而 localStorage 单域配额仅约 5MB，
+     * 一张挂牌 50~200KB，几十条就会写满并触发 QuotaExceededError，
+     * 之后所有 localStorage 写入（含农事记录、挂牌元数据）都会失败。
+     * 长期方案：挂牌 PNG 改存对象存储/文件服务，localStorage 只留 URL。
+     * 当前过渡策略：
+     *   1) 单条上限 300KB，超限只留元数据（png 置空，skipped=true）
+     *   2) 总条数上限最近 10 条，新的在前
+     *   3) setItem 异常兜底：清空全部 png 后重写一次，并提示用户
+     * ============================================================ */
+    var PNG_STORE_KEY = 'mb_adoption_tagging_png';
+    var PNG_MAX_SIZE = 300 * 1024;   // 单条 300KB 上限
+    var PNG_MAX_COUNT = 10;          // 最多保留最近 10 条
+
+    // 被挤出/被跳过挂牌记录的元数据归档（不含 base64，避免二次撑爆配额）
+    var PNG_ARCHIVE_KEY = 'smartorchard_adoption_tag_archive';
+    var ARCHIVE_MAX_COUNT = 100;     // 归档清单最多保留最近 100 条
+
+    // 读取历史挂牌 PNG 缓存，损坏数据按空数组处理，绝不让页面崩溃
+    function readPngCache() {
+      try {
+        var raw = localStorage.getItem(PNG_STORE_KEY);
+        if (!raw) return [];
+        var v = JSON.parse(raw);
+        return Array.isArray(v) ? v : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    // 读取挂牌归档清单（仅元数据）
+    function readTagArchive() {
+      try {
+        var raw = localStorage.getItem(PNG_ARCHIVE_KEY);
+        if (!raw) return [];
+        var v = JSON.parse(raw);
+        return Array.isArray(v) ? v : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    // 把一条记录（不含 base64）追加进归档清单，最新的在前，并限长
+    function archiveTagRecord(rec, reason) {
+      if (!rec) return;
+      var entry = {
+        code: rec.code || '',
+        treeNo: rec.treeNo || '',
+        adopter: rec.adopter || '',
+        time: rec.time || new Date().toISOString(),
+        size: rec.size || 0,
+        reason: reason
+      };
+      var list = readTagArchive();
+      list.unshift(entry);
+      if (list.length > ARCHIVE_MAX_COUNT) list = list.slice(0, ARCHIVE_MAX_COUNT);
+      try { localStorage.setItem(PNG_ARCHIVE_KEY, JSON.stringify(list)); } catch (e) {}
+    }
+
+    // 写入挂牌 PNG 缓存（带单条上限、条数上限与配额兜底）
+    function writePngCache(record) {
+      var list = readPngCache();
+      list.unshift(record);
+      if (list.length > PNG_MAX_COUNT) {
+        // 被挤出保留上限的记录：图片丢弃、元数据归档
+        list.slice(PNG_MAX_COUNT).forEach(function (it) {
+          archiveTagRecord(it, '超出保留上限');
+        });
+        list = list.slice(0, PNG_MAX_COUNT);
+      }
+      // 单张过大被跳过的记录：图片未缓存，元数据归档
+      if (record.skipped) archiveTagRecord(record, '单张过大');
+
+      try {
+        localStorage.setItem(PNG_STORE_KEY, JSON.stringify(list));
+        return true;
+      } catch (e) {
+        // 配额已满：清空所有 base64 图片、只保留元数据后重试一次
+        try {
+          var metaOnly = list.map(function (it) {
+            return {
+              code: it.code, treeNo: it.treeNo, adopter: it.adopter,
+              png: '', time: it.time, size: it.size, skipped: true
+            };
+          });
+          localStorage.setItem(PNG_STORE_KEY, JSON.stringify(metaOnly));
+          MobileStore.toast('存储空间不足，已清除历史挂牌图片，请及时下载保存', 'warning');
+          return true;
+        } catch (e2) {
+          MobileStore.toast('挂牌图片保存失败，请检查浏览器存储空间', 'warning');
+          return false;
+        }
+      }
+    }
+
     // 挂牌 PNG 生成（MB-B-020）：Canvas 绘制 → Blob → 触发下载
     function generateTaggingPng(item) {
       try {
@@ -316,16 +419,28 @@
         c.toBlob(function(blob){
           var reader = new FileReader();
           reader.onload = function(ev){
-            try {
-              var list = JSON.parse(localStorage.getItem('mb_adoption_tagging_png') || '[]');
-              list.unshift({ code: item.code, treeNo: item.treeNo, adopter: item.adopter, png: ev.target.result, time: new Date().toISOString() });
-              localStorage.setItem('mb_adoption_tagging_png', JSON.stringify(list));
-              // 同时下载
-              var a = document.createElement('a');
-              a.href = ev.target.result;
-              a.download = '挂牌_' + (item.treeNo || item.code) + '.png';
-              document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            } catch (e) {}
+            var dataUrl = String(ev.target.result || '');
+            var size = dataUrl.length;
+            var record = {
+              code: item.code,
+              treeNo: item.treeNo,
+              adopter: item.adopter,
+              // 超限只留元数据，避免单条 base64 撑爆配额
+              png: size > PNG_MAX_SIZE ? '' : dataUrl,
+              time: new Date().toISOString(),
+              size: size,
+              skipped: size > PNG_MAX_SIZE
+            };
+            writePngCache(record);
+            // 超限时明确告知用户，图片已通过下载保存
+            if (record.skipped) {
+              MobileStore.toast('挂牌图片较大（' + Math.round(size / 1024) + 'KB），已跳过本地缓存，请查看下载的图片', 'warning');
+            }
+            // 同时下载
+            var a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = '挂牌_' + (item.treeNo || item.code) + '.png';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
           };
           reader.readAsDataURL(blob);
         }, 'image/png');
@@ -343,6 +458,13 @@
       if (el) el.addEventListener('input', updatePreview);
     });
     renderTagRecords();
+    // 跨标签页同步：归档清单或挂牌记录变化时刷新「图片已归档」标识
+    window.addEventListener('storage', function (e) {
+      if (!e || !e.key) return;
+      if (e.key === PNG_ARCHIVE_KEY || (window.MobileStore && e.key === MobileStore.KEYS.adoptionTag)) {
+        renderTagRecords();
+      }
+    });
   </script>
 </body>
 </html>

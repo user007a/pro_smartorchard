@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 认养证书管理</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  /* 统计卡 */
+  .stat-row {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));
+    gap:var(--space-md);
+    margin-bottom:var(--space-lg);
+  }
+  .stat-card {
+    background:var(--bg-card);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-lg);
+    padding:var(--space-lg);
+  }
+  .stat-label { font-size:var(--font-size-sm); color:var(--text-tertiary); margin-bottom:var(--space-xs); }
+  .stat-value {
+    font-size:26px; font-weight:var(--font-weight-bold);
+    color:var(--text-primary); line-height:1.2; font-variant-numeric:tabular-nums;
+  }
+
+  /* 状态标签 */
+  .status-tag {
+    display:inline-block;
+    padding:3px 10px;
+    border-radius:var(--radius-full);
+    font-size:var(--font-size-xs);
+    font-weight:500;
+    white-space:nowrap;
+  }
+  .status-tag.pending  { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .status-tag.issued  { background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); }
+  .status-tag.revoked { background:var(--error-bg);   color:var(--error);   border:1px solid var(--error-border); }
+
+  .type-tag {
+    display:inline-block;
+    padding:3px 10px;
+    border-radius:var(--radius-sm);
+    font-size:var(--font-size-xs);
+    white-space:nowrap;
+    background:var(--gray-100);
+    color:var(--text-secondary);
+  }
+  .type-tag.template   { background:var(--primary-50, #e6f4ff); color:var(--primary-600, #1890ff); }
+
+  /* 表格 cell 通用 */
+  .cell-sub {
+    font-size:var(--font-size-xs);
+    color:var(--text-tertiary);
+    margin-top:2px;
+  }
+
+  /* Tab 切换 */
+  .tab-bar-nav {
+    display:flex;
+    gap:var(--space-md);
+    border-bottom:1px solid var(--border-light);
+    margin-bottom:var(--space-lg);
+  }
+  .tab-bar-nav .tab-item {
+    padding:10px 4px;
+    border-bottom:2px solid transparent;
+    cursor:pointer;
+    color:var(--text-secondary);
+    font-size:var(--font-size-base);
+    font-weight:500;
+    transition:all var(--transition-fast, .2s);
+  }
+  .tab-bar-nav .tab-item.active {
+    color:var(--primary-600, #1890ff);
+    border-color:var(--primary-600, #1890ff);
+  }
+  .tab-bar-nav .tab-item:hover { color:var(--primary-500, #40a9ff); }
+
+  /* 分类标签 */
+  .category-row {
+    display:flex; gap:var(--space-sm); flex-wrap:wrap;
+    margin-bottom:var(--space-lg);
+  }
+  .category-pill {
+    padding:6px 14px;
+    border-radius:var(--radius-full);
+    background:var(--gray-100);
+    color:var(--text-secondary);
+    font-size:var(--font-size-sm);
+    border:1px solid transparent;
+  }
+  .category-pill strong { color:var(--text-primary); margin-left:4px; }
+
+  /* 操作按钮组 */
+  .action-btns { display:flex; gap:6px; flex-wrap:wrap; }
+  .action-btn {
+    padding:4px 10px;
+    font-size:var(--font-size-xs);
+    border:1px solid var(--border-default);
+    border-radius:var(--radius-sm);
+    cursor:pointer;
+    background:var(--bg-card);
+    color:var(--text-secondary);
+  }
+  .action-btn:hover { border-color:var(--primary-500); color:var(--primary-500); }
+  .action-btn.danger { color:var(--error); border-color:var(--error-border); }
+  .action-btn.danger:hover { background:var(--error-bg); }
+  .action-btn.success { color:var(--success); border-color:var(--success-border); }
+  .action-btn.success:hover { background:var(--success-bg); }
+
+  /* 弹窗（页面内自定义，unified-theme.css 不含 display 切换） */
+  .modal-overlay {
+    display:none;
+    position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.5);
+    z-index:1000;
+    justify-content:center; align-items:center;
+    backdrop-filter:blur(4px);
+  }
+  .modal-overlay.show { display:flex; }
+  .modal-box {
+    background:var(--bg-card);
+    border-radius:12px;
+    width:92%;
+    max-width:620px;
+    max-height:85vh;
+    overflow:hidden;
+    box-shadow:0 20px 40px rgba(0,0,0,0.2);
+    animation:modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity:0; transform:scale(0.95) translateY(-20px); }
+    to   { opacity:1; transform:scale(1)   translateY(0); }
+  }
+  .modal-header {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:16px 20px; border-bottom:1px solid var(--border-default);
+  }
+  .modal-title { font-size:16px; font-weight:600; color:#1f1f1f; margin:0; }
+  .modal-close {
+    background:none; border:none; cursor:pointer; padding:4px;
+    font-size:20px; line-height:1; color:var(--text-tertiary);
+  }
+  .modal-close:hover { color:var(--text-secondary); }
+  .modal-body { padding:20px; overflow-y:auto; max-height:calc(85vh - 132px); }
+  .modal-footer {
+    display:flex; justify-content:flex-end; gap:12px;
+    padding:16px 20px; border-top:1px solid var(--border-default);
+  }
+  /* 详情弹窗更宽 */
+  .modal-box.wide { max-width:760px; }
+
+  /* 表单 */
+  .form-row { display:flex; gap:var(--space-md); margin-bottom:var(--space-lg); }
+  .form-field { flex:1; }
+  .form-field label {
+    display:block; font-size:var(--font-size-sm);
+    font-weight:500; color:var(--text-primary); margin-bottom:var(--space-sm);
+  }
+  .form-field input,
+  .form-field select,
+  .form-field textarea {
+    width:100%; padding:10px 14px; border:1.5px solid var(--border-default);
+    border-radius:var(--radius-lg); font-size:var(--font-size-base);
+    font-family:inherit; background:var(--bg-card); box-sizing:border-box;
+    transition:all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .form-field textarea { min-height:84px; resize:vertical; }
+  .form-field input:focus,
+  .form-field select:focus,
+  .form-field textarea:focus {
+    border-color:var(--primary-500);
+    box-shadow:0 0 0 4px rgba(24,144,255,0.12);
+    outline:none;
+  }
+
+  /* 证书预览（详情弹窗里用 HTML 还原版式） */
+  .cert-preview {
+    border:2px solid #d4af37;
+    border-radius:8px;
+    padding:18px 14px;
+    background:linear-gradient(180deg, #fff, #fefcf5);
+    position:relative;
+    text-align:center;
+    color:#333;
+    margin-top:var(--space-md);
+  }
+  .cert-preview::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:6px;
+    background:linear-gradient(90deg,#d4af37,#b8962e,#d4af37);
+  }
+  .cert-preview .cp-title { font-size:20px; font-weight:700; color:#b8962e; letter-spacing:4px; }
+  .cert-preview .cp-sub   { font-size:11px; color:#999; letter-spacing:2px; margin-top:4px; }
+  .cert-preview .cp-icon  { font-size:36px; margin-bottom:6px; }
+  .cert-preview .cp-rows  {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:6px 8px; border-bottom:1px dashed rgba(212,175,55,.3);
+    font-size:13px;
+  }
+  .cert-preview .cp-rows:last-child { border-bottom:none; }
+  .cert-preview .cp-label { color:#777; }
+  .cert-preview .cp-value { color:#333; font-weight:600; }
+
+  /* 通用空态 */
+  .empty-state {
+    padding:var(--space-2xl) 0; text-align:center;
+    color:var(--text-tertiary); font-size:var(--font-size-sm);
+  }
+
+  /* 撤销原因框在详情弹窗里更醒目 */
+  .revoke-tip {
+    background:var(--error-bg); border:1px solid var(--error-border);
+    border-radius:var(--radius-md); padding:10px 14px;
+    color:var(--error); font-size:var(--font-size-sm);
+    margin-top:var(--space-md);
+  }
+</style>
+</head>
+<body data-active-menu="adoption" data-active-submenu="adoption-cert">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">认养证书管理</div>
+        <div class="page-subtitle">消费类凭证（与溯源合格证分离）；签发、撤销、移动端查看均依赖此数据</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn jg-btn-primary" onclick="openCertEdit()">新增证书</button>
+        <button class="jg-btn" onclick="openTplEdit()">新增模板</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">证书总数</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">待签发</div>
+        <div class="stat-value" id="statPending">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已签发</div>
+        <div class="stat-value" id="statIssued">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已撤销</div>
+        <div class="stat-value" id="statRevoked">0</div>
+      </div>
+    </div>
+
+    <div class="tab-bar-nav">
+      <div class="tab-item active" data-tab="list" onclick="switchTab('list', this)">证书列表</div>
+      <div class="tab-item" data-tab="tpl" onclick="switchTab('tpl', this)">证书模板</div>
+    </div>
+
+    <!-- ====== 证书列表 ====== -->
+    <section id="tab-list">
+      <div class="page-section search-section">
+        <div class="search-bar">
+          <select class="search-select" id="searchStatus">
+            <option value="">全部状态</option>
+            <option value="pending">待签发</option>
+            <option value="issued">已签发</option>
+            <option value="revoked">已撤销</option>
+          </select>
+          <input type="text" class="search-input" id="searchKw" placeholder="搜索证书编号 / 果树编号 / 认养人...">
+          <div class="search-actions">
+            <button class="jg-btn jg-btn-primary" onclick="renderCertTable()">搜索</button>
+            <button class="jg-btn" onclick="resetCertSearch()">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-section data-section">
+        <div class="data-table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:60px;">序号</th>
+                <th>证书编号</th>
+                <th>果树编号</th>
+                <th>认养人</th>
+                <th>认养期限</th>
+                <th>品种</th>
+                <th>预估产量</th>
+                <th style="width:90px;">状态</th>
+                <th style="width:230px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="certBody"></tbody>
+          </table>
+        </div>
+        <div id="certEmpty" class="empty-state" style="display:none;">暂无证书数据</div>
+      </div>
+    </section>
+
+    <!-- ====== 证书模板 ====== -->
+    <section id="tab-tpl" style="display:none;">
+      <div class="page-section data-section">
+        <div class="data-table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:60px;">序号</th>
+                <th>模板名称</th>
+                <th>签发机构</th>
+                <th>落款单位</th>
+                <th style="width:90px;">状态</th>
+                <th style="width:230px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="tplBody"></tbody>
+          </table>
+        </div>
+        <div id="tplEmpty" class="empty-state" style="display:none;">暂无证书模板</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ====== 新增/编辑证书 ====== -->
+<div class="modal-overlay" id="certEditModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="certEditTitle">新增证书</h3>
+      <button class="modal-close" onclick="closeCertEdit()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>证书编号</label>
+          <input type="text" id="certEditNo" placeholder="自动生成（AD+年份+6位）">
+        </div>
+        <div class="form-field">
+          <label>发证日期</label>
+          <input type="date" id="certEditIssueDate">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>果树编号<span style="color:var(--error);">*</span></label>
+          <select id="certEditTree">
+            <option value="">请选择果树</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>认养人<span style="color:var(--error);">*</span></label>
+          <input type="text" id="certEditAdopter" placeholder="如 张三">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>认养起始</label>
+          <input type="date" id="certEditPeriodStart">
+        </div>
+        <div class="form-field">
+          <label>认养结束</label>
+          <input type="date" id="certEditPeriodEnd">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>品种</label>
+          <input type="text" id="certEditVariety" placeholder="如 花牛苹果">
+        </div>
+        <div class="form-field">
+          <label>预估产量</label>
+          <input type="text" id="certEditYield" placeholder="如 约80斤">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>基地</label>
+          <input type="text" id="certEditBase" placeholder="如 麦积区基地 A区">
+        </div>
+        <div class="form-field">
+          <label>地块</label>
+          <input type="text" id="certEditPlot" placeholder="如 3号地块">
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>证书模板</label>
+        <select id="certEditTpl">
+          <option value="">不指定</option>
+        </select>
+        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:4px;">可在「证书模板」Tab 维护</div>
+      </div>
+      <div class="form-field">
+        <label>状态</label>
+        <select id="certEditStatus">
+          <option value="pending">待签发</option>
+          <option value="issued">已签发</option>
+        </select>
+        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:4px;">撤销操作不在此处（避免误操作）</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeCertEdit()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitCertEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 证书详情（含预览） ====== -->
+<div class="modal-overlay" id="certDetailModal">
+  <div class="modal-box wide">
+    <div class="modal-header">
+      <h3 class="modal-title">证书详情</h3>
+      <button class="modal-close" onclick="closeCertDetail()">&times;</button>
+    </div>
+    <div class="modal-body" id="certDetailBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeCertDetail()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 签发 / 撤销 确认 ====== -->
+<div class="modal-overlay" id="certActionModal">
+  <div class="modal-box" style="max-width:480px;">
+    <div class="modal-header">
+      <h3 class="modal-title" id="certActionTitle">签发证书</h3>
+      <button class="modal-close" onclick="closeCertAction()">&times;</button>
+    </div>
+    <div class="modal-body" id="certActionBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeCertAction()">取消</button>
+      <button class="jg-btn jg-btn-primary" id="certActionSubmit" onclick="submitCertAction()">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 新增/编辑模板 ====== -->
+<div class="modal-overlay" id="tplEditModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="tplEditTitle">新增证书模板</h3>
+      <button class="modal-close" onclick="closeTplEdit()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>模板名称<span style="color:var(--error);">*</span></label>
+          <input type="text" id="tplEditName" placeholder="如 标准认养证书">
+        </div>
+        <div class="form-field">
+          <label>签发机构<span style="color:var(--error);">*</span></label>
+          <input type="text" id="tplEditIssuer" placeholder="如 智慧果园运营中心">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>落款单位</label>
+          <input type="text" id="tplEditOrg" placeholder="如 麦积区花牛镇基地">
+        </div>
+        <div class="form-field">
+          <label>启用状态</label>
+          <select id="tplEditEnabled">
+            <option value="true">启用</option>
+            <option value="false">停用</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeTplEdit()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitTplEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * 认养证书管理（消费类凭证）
+ * 数据源：localStorage['adoption_certs']            证书主表
+ *       localStorage['adoption_cert_templates']   证书模板
+ *       localStorage['snzg_adoptions']            果树编号来源（H5 认养记录）
+ *
+ * 字段见任务说明。本页面与 cert_manage.html（溯源合格证）
+ * 是两套不同数据，签发机构/字段/生命周期都不同。
+ * ============================================================ */
+
+var CERT_KEY = 'adoption_certs';
+var TPL_KEY  = 'adoption_cert_templates';
+var H5_ADOPT_KEY = 'snzg_adoptions';
+
+/* 默认种子数据：首次访问写入，确保页面可独立运行 */
+var DEFAULT_TEMPLATES = [
+  { id: 'TPL-001', name: '标准认养证书', issuer: '智慧果园运营中心', orgName: '麦积区花牛镇基地', enabled: true },
+  { id: 'TPL-002', name: '高端专属认养证书', issuer: '智慧果园运营中心', orgName: '甘肃天水果业集团', enabled: true },
+  { id: 'TPL-003', name: '纪念版认养证书', issuer: '智慧果园运营中心', orgName: '智慧果园', enabled: false }
+];
+
+var DEFAULT_CERTS = [
+  {
+    certNo: 'AD20260315001',
+    treeNo: 'A025', treeFull: 'AD-A025',
+    adopter: '张三',
+    periodStart: '2026-03-15', periodEnd: '2027-03-14',
+    variety: '花牛苹果', expectedYield: '约80斤',
+    base: '麦积区基地 A区', plot: '3号地块',
+    issueDate: '2026-03-15',
+    status: 'issued',
+    issuedBy: '管理员', issueTime: '2026-03-15 10:30',
+    revokeReason: '', templateId: 'TPL-001',
+    createTime: '2026-03-15 10:25'
+  }
+];
+
+var STATUS_TEXT = { pending: '待签发', issued: '已签发', revoked: '已撤销' };
+
+var editingCertNo = null;   // 当前编辑的证书编号（新增时为 null）
+var editingTplId  = null;   // 当前编辑的模板 id
+var pendingCertNo = null;   // 当前签发/撤销操作的证书编号
+var pendingAction = null;   // 'issue' | 'revoke'
+
+/* ---------- 通用工具 ---------- */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+  });
+}
+
+function readJSON(key, fallback) {
+  try {
+    var raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    var v = JSON.parse(raw);
+    if (!Array.isArray(v)) return fallback;
+    return v;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+function writeJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+  catch (e) { Toast.error('本地存储写入失败'); return false; }
+}
+
+/* ---------- 数据：模板 ---------- */
+function readTemplates() {
+  var list = readJSON(TPL_KEY, null);
+  if (!list || list.length === 0) {
+    list = DEFAULT_TEMPLATES.map(function (t) { return Object.assign({}, t); });
+    writeJSON(TPL_KEY, list);
+  }
+  return list;
+}
+function writeTemplates(list) { return writeJSON(TPL_KEY, list); }
+
+function genTplId() {
+  var list = readTemplates();
+  var max = 0;
+  list.forEach(function (t) {
+    var n = parseInt(String(t.id || '').replace(/\D/g, ''), 10);
+    if (!isNaN(n) && n > max) max = n;
+  });
+  return 'TPL-' + String(max + 1).padStart(3, '0');
+}
+
+/* ---------- 数据：证书 ---------- */
+function readCerts() {
+  var list = readJSON(CERT_KEY, null);
+  if (!list || list.length === 0) {
+    list = DEFAULT_CERTS.map(function (c) { return Object.assign({}, c); });
+    writeJSON(CERT_KEY, list);
+  }
+  return list;
+}
+function writeCerts(list) { return writeJSON(CERT_KEY, list); }
+
+/* 自动生成证书编号：AD + 年份 + 6 位序列 */
+function genCertNo() {
+  var list = readCerts();
+  var year = new Date().getFullYear();
+  var prefix = 'AD' + year;
+  var max = 0;
+  list.forEach(function (c) {
+    var no = String(c.certNo || '');
+    if (no.indexOf(prefix) !== 0) return;
+    var num = parseInt(no.slice(prefix.length), 10);
+    if (!isNaN(num) && num > max) max = num;
+  });
+  return prefix + String(max + 1).padStart(6, '0');
+}
+
+/* 从 H5 认养记录读取果树编号（strip 'AD-' 前缀） */
+function readH5Trees() {
+  var list = readJSON(H5_ADOPT_KEY, []);
+  var out = [];
+  list.forEach(function (a) {
+    if (!a || typeof a !== 'object') return;
+    var code = String(a.id || '').trim().replace(/^AD-/i, '');
+    if (!code) return;
+    out.push({
+      code: code,
+      full: String(a.id || '').trim(),
+      adopter: a.adopter || a.name || '',
+      variety: a.variety || ''
+    });
+  });
+  return out;
+}
+
+/* 把可选果树追加到下拉框（含一些常用演示项，避免空） */
+function refreshTreeOptions() {
+  var sel = document.getElementById('certEditTree');
+  if (!sel) return;
+  var current = sel.value;
+  var trees = readH5Trees();
+  var html = '<option value="">请选择果树</option>';
+  trees.forEach(function (t) {
+    var label = t.code + (t.variety ? ' · ' + t.variety : '') + (t.adopter ? ' / ' + t.adopter : '');
+    html += '<option value="' + esc(t.code) + '" data-full="' + esc(t.full) + '" data-adopter="' + esc(t.adopter) + '" data-variety="' + esc(t.variety) + '">' + esc(label) + '</option>';
+  });
+  sel.innerHTML = html;
+  if (current) sel.value = current;
+}
+
+/* 同步刷新认养人/品种（果树选择变化时） */
+document.addEventListener('change', function (e) {
+  if (!e.target || e.target.id !== 'certEditTree') return;
+  var opt = e.target.options[e.target.selectedIndex];
+  if (!opt) return;
+  var full = opt.getAttribute('data-full') || '';
+  if (full) document.getElementById('certEditAdopter').value = opt.getAttribute('data-adopter') || '';
+  if (opt.getAttribute('data-variety')) document.getElementById('certEditVariety').value = opt.getAttribute('data-variety');
+});
+
+/* ---------- 模板下拉框 ---------- */
+function refreshTplOptions() {
+  var sel = document.getElementById('certEditTpl');
+  if (!sel) return;
+  var list = readTemplates();
+  var enabled = list.filter(function (t) { return t.enabled; });
+  var html = '<option value="">不指定</option>';
+  enabled.forEach(function (t) {
+    html += '<option value="' + esc(t.id) + '">' + esc(t.name) + '（' + esc(t.issuer) + '）</option>';
+  });
+  sel.innerHTML = html;
+}
+
+/* ---------- 统计 / 渲染 ---------- */
+function renderStats() {
+  var list = readCerts();
+  var pending = 0, issued = 0, revoked = 0;
+  list.forEach(function (c) {
+    if (c.status === 'pending') pending++;
+    else if (c.status === 'issued') issued++;
+    else if (c.status === 'revoked') revoked++;
+  });
+  document.getElementById('statTotal').textContent   = list.length;
+  document.getElementById('statPending').textContent = pending;
+  document.getElementById('statIssued').textContent  = issued;
+  document.getElementById('statRevoked').textContent = revoked;
+}
+
+function renderCertTable() {
+  var list = readCerts();
+  var kw = (document.getElementById('searchKw').value || '').trim().toLowerCase();
+  var st = document.getElementById('searchStatus').value;
+  var filtered = list.filter(function (c) {
+    if (st && c.status !== st) return false;
+    if (kw) {
+      var hay = (c.certNo + '|' + c.treeNo + '|' + (c.adopter || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+  var tbody = document.getElementById('certBody');
+  var empty = document.getElementById('certEmpty');
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = filtered.map(function (c, i) {
+    var period = (c.periodStart || '-') + ' ~ ' + (c.periodEnd || '-');
+    return ''
+      + '<tr>'
+      +   '<td>' + (i + 1) + '</td>'
+      +   '<td><strong>' + esc(c.certNo) + '</strong>'
+      +     (c.templateId ? '<div class="cell-sub">' + esc(getTplName(c.templateId)) + '</div>' : '')
+      +   '</td>'
+      +   '<td>' + esc(c.treeNo || '-') + '</td>'
+      +   '<td>' + esc(c.adopter || '-') + '</td>'
+      +   '<td>' + esc(period) + '</td>'
+      +   '<td>' + esc(c.variety || '-') + '</td>'
+      +   '<td>' + esc(c.expectedYield || '-') + '</td>'
+      +   '<td><span class="status-tag ' + esc(c.status) + '">' + esc(STATUS_TEXT[c.status] || c.status) + '</span></td>'
+      +   '<td>'
+      +     '<div class="action-btns">'
+      +       '<button class="action-btn" onclick="openCertDetail(\'' + esc(c.certNo) + '\')">详情</button>'
+      +       '<button class="action-btn" onclick="openCertEdit(\'' + esc(c.certNo) + '\')">编辑</button>'
+      +       (c.status === 'pending' ? '<button class="action-btn success" onclick="openCertAction(\'issue\', \'' + esc(c.certNo) + '\')">签发</button>' : '')
+      +       (c.status === 'issued' ? '<button class="action-btn danger" onclick="openCertAction(\'revoke\', \'' + esc(c.certNo) + '\')">撤销</button>' : '')
+      +       '<button class="action-btn danger" onclick="deleteCert(\'' + esc(c.certNo) + '\')">删除</button>'
+      +     '</div>'
+      +   '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function getTplName(id) {
+  var list = readTemplates();
+  for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].name;
+  return '';
+}
+
+function renderTplTable() {
+  var list = readTemplates();
+  var tbody = document.getElementById('tplBody');
+  var empty = document.getElementById('tplEmpty');
+  if (!list.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = list.map(function (t, i) {
+    var statusText = t.enabled ? '启用' : '停用';
+    var tagCls = t.enabled ? 'issued' : 'disabled';
+    return ''
+      + '<tr>'
+      +   '<td>' + (i + 1) + '</td>'
+      +   '<td><span class="type-tag template">模板</span> ' + esc(t.name) + '</td>'
+      +   '<td>' + esc(t.issuer || '-') + '</td>'
+      +   '<td>' + esc(t.orgName || '-') + '</td>'
+      +   '<td><span class="status-tag ' + tagCls + '">' + statusText + '</span></td>'
+      +   '<td>'
+      +     '<div class="action-btns">'
+      +       '<button class="action-btn" onclick="openTplEdit(\'' + esc(t.id) + '\')">编辑</button>'
+      +       '<button class="action-btn" onclick="toggleTpl(\'' + esc(t.id) + '\')">' + (t.enabled ? '停用' : '启用') + '</button>'
+      +       '<button class="action-btn danger" onclick="deleteTpl(\'' + esc(t.id) + '\')">删除</button>'
+      +     '</div>'
+      +   '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+/* ---------- Tab ---------- */
+function switchTab(name, el) {
+  document.querySelectorAll('.tab-bar-nav .tab-item').forEach(function (i) { i.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  document.getElementById('tab-list').style.display = name === 'list' ? '' : 'none';
+  document.getElementById('tab-tpl').style.display  = name === 'tpl'  ? '' : 'none';
+  if (name === 'list') renderCertTable();
+  if (name === 'tpl')  renderTplTable();
+}
+
+/* ---------- 证书：新增 / 编辑 ---------- */
+function openCertEdit(certNo) {
+  refreshTreeOptions();
+  refreshTplOptions();
+  editingCertNo = certNo || null;
+  document.getElementById('certEditTitle').textContent = certNo ? '编辑证书' : '新增证书';
+  var list = readCerts();
+  var item = certNo ? list.filter(function (c) { return c.certNo === certNo; })[0] : null;
+  document.getElementById('certEditNo').value = (item && item.certNo) || genCertNo();
+  document.getElementById('certEditIssueDate').value = (item && item.issueDate) || todayStr();
+  document.getElementById('certEditTree').value = (item && item.treeNo) || '';
+  document.getElementById('certEditAdopter').value = (item && item.adopter) || '';
+  document.getElementById('certEditPeriodStart').value = (item && item.periodStart) || '';
+  document.getElementById('certEditPeriodEnd').value   = (item && item.periodEnd)   || '';
+  document.getElementById('certEditVariety').value = (item && item.variety) || '';
+  document.getElementById('certEditYield').value   = (item && item.expectedYield) || '';
+  document.getElementById('certEditBase').value    = (item && item.base)    || '';
+  document.getElementById('certEditPlot').value    = (item && item.plot)    || '';
+  document.getElementById('certEditTpl').value     = (item && item.templateId) || '';
+  document.getElementById('certEditStatus').value  = (item && item.status) || 'pending';
+  document.getElementById('certEditModal').classList.add('show');
+}
+function closeCertEdit() {
+  document.getElementById('certEditModal').classList.remove('show');
+  editingCertNo = null;
+}
+function submitCertEdit() {
+  var treeNo = (document.getElementById('certEditTree').value || '').trim();
+  var adopter = (document.getElementById('certEditAdopter').value || '').trim();
+  if (!treeNo) { Toast.warning('请选择果树编号'); return; }
+  if (!adopter) { Toast.warning('请输入认养人'); return; }
+  var certNo = (document.getElementById('certEditNo').value || '').trim() || genCertNo();
+  var list = readCerts();
+  // 编号重复检测
+  var dup = list.filter(function (c) { return c.certNo === certNo && c.certNo !== editingCertNo; })[0];
+  if (dup) { Toast.error('证书编号已存在：' + certNo); return; }
+
+  var data = {
+    certNo: certNo,
+    treeNo: treeNo,
+    treeFull: 'AD-' + treeNo,
+    adopter: adopter,
+    periodStart: document.getElementById('certEditPeriodStart').value || '',
+    periodEnd:   document.getElementById('certEditPeriodEnd').value || '',
+    variety:     document.getElementById('certEditVariety').value || '',
+    expectedYield: document.getElementById('certEditYield').value || '',
+    base: document.getElementById('certEditBase').value || '',
+    plot: document.getElementById('certEditPlot').value || '',
+    issueDate: document.getElementById('certEditIssueDate').value || todayStr(),
+    status: document.getElementById('certEditStatus').value || 'pending',
+    templateId: document.getElementById('certEditTpl').value || ''
+  };
+  if (editingCertNo) {
+    var idx = list.findIndex(function (c) { return c.certNo === editingCertNo; });
+    if (idx >= 0) {
+      var old = list[idx];
+      data.issuedBy = old.issuedBy || '';
+      data.issueTime = old.issueTime || '';
+      data.revokeReason = old.revokeReason || '';
+      data.createTime = old.createTime || new Date().toISOString();
+      list[idx] = Object.assign({}, old, data);
+    } else {
+      data.createTime = new Date().toISOString();
+      list.unshift(data);
+    }
+    Toast.success('已保存');
+  } else {
+    data.createTime = new Date().toISOString();
+    list.unshift(data);
+    Toast.success('已新增');
+  }
+  writeCerts(list);
+  closeCertEdit();
+  renderStats();
+  renderCertTable();
+}
+
+function deleteCert(certNo) {
+  ConfirmDialog.show({
+    title: '删除证书',
+    message: '确认删除证书 ' + certNo + ' 吗？该操作不可恢复。',
+    onConfirm: function () {
+      var list = readCerts().filter(function (c) { return c.certNo !== certNo; });
+      writeCerts(list);
+      Toast.success('已删除');
+      renderStats();
+      renderCertTable();
+    }
+  });
+}
+
+/* ---------- 证书：详情 ---------- */
+function findCert(certNo) {
+  var list = readCerts();
+  for (var i = 0; i < list.length; i++) if (list[i].certNo === certNo) return list[i];
+  return null;
+}
+function openCertDetail(certNo) {
+  var c = findCert(certNo);
+  if (!c) { Toast.error('证书不存在'); return; }
+  var body = document.getElementById('certDetailBody');
+  var tplName = c.templateId ? getTplName(c.templateId) : '';
+  var previewHTML = ''
+    + '<div class="cert-preview">'
+    +   '<div class="cp-icon">🏆</div>'
+    +   '<div class="cp-title">苹果树认养证书</div>'
+    +   '<div class="cp-sub">ADOPTION CERTIFICATE</div>'
+    +   '<div style="margin:14px 0 8px;color:#666;font-size:13px;">此证书郑重证明</div>'
+    +   '<div style="color:#333;font-size:14px;"><b>' + esc(c.adopter) + '</b> 已成功认养</div>'
+    +   '<div style="color:#b8962e;font-weight:700;font-size:18px;margin:6px 0;">' + esc((c.variety || '') + ' #' + (c.treeNo || '')) + '</div>'
+    +   '<div style="color:#666;font-size:12px;">认养期限：' + esc((c.periodStart || '-') + ' ~ ' + (c.periodEnd || '-')) + '</div>'
+    +   '<div style="margin:14px 4px 0;border-top:1px dashed rgba(212,175,55,.4);padding-top:10px;text-align:left;">'
+    +     '<div class="cp-rows"><span class="cp-label">认养编号</span><span class="cp-value">' + esc(c.certNo) + '</span></div>'
+    +     '<div class="cp-rows"><span class="cp-label">认养人</span><span class="cp-value">' + esc(c.adopter) + '</span></div>'
+    +     '<div class="cp-rows"><span class="cp-label">品种</span><span class="cp-value">' + esc(c.variety || '-') + '</span></div>'
+    +     '<div class="cp-rows"><span class="cp-label">预估产量</span><span class="cp-value">' + esc(c.expectedYield || '-') + '</span></div>'
+    +     '<div class="cp-rows"><span class="cp-label">认养基地</span><span class="cp-value">' + esc((c.base || '-') + (c.plot ? ' ' + c.plot : '')) + '</span></div>'
+    +   '</div>'
+    +   '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:flex-end;color:#999;font-size:11px;">'
+    +     '<div>发证日期<br><b style="color:#333;">' + esc(c.issueDate || '-') + '</b></div>'
+    +     '<div style="border:1px solid #d4af37;border-radius:50%;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:#b8962e;font-size:12px;">智慧果园</div>'
+    +   '</div>'
+    + '</div>';
+
+  var html = ''
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;font-size:13px;margin-bottom:8px;">'
+    +   '<div>证书编号：<b>' + esc(c.certNo) + '</b></div>'
+    +   '<div>状态：<span class="status-tag ' + esc(c.status) + '">' + esc(STATUS_TEXT[c.status] || c.status) + '</span></div>'
+    +   '<div>果树编号：' + esc(c.treeNo || '-') + '</div>'
+    +   '<div>认养人：' + esc(c.adopter || '-') + '</div>'
+    +   '<div>认养期限：' + esc((c.periodStart || '-') + ' ~ ' + (c.periodEnd || '-')) + '</div>'
+    +   '<div>品种：' + esc(c.variety || '-') + '</div>'
+    +   '<div>预估产量：' + esc(c.expectedYield || '-') + '</div>'
+    +   '<div>基地/地块：' + esc((c.base || '-') + (c.plot ? ' / ' + c.plot : '')) + '</div>'
+    +   '<div>发证日期：' + esc(c.issueDate || '-') + '</div>'
+    +   '<div>签发时间：' + esc(c.issueTime || '-') + '</div>'
+    +   '<div>签发人：' + esc(c.issuedBy || '-') + '</div>'
+    +   '<div>使用模板：' + esc(tplName || '不指定') + '</div>'
+    +   '<div>创建时间：' + esc(c.createTime || '-') + '</div>'
+    + '</div>'
+    + previewHTML
+    + (c.status === 'revoked' && c.revokeReason ? '<div class="revoke-tip">已撤销 · 原因：' + esc(c.revokeReason) + '</div>' : '');
+
+  body.innerHTML = html;
+  document.getElementById('certDetailModal').classList.add('show');
+}
+function closeCertDetail() { document.getElementById('certDetailModal').classList.remove('show'); }
+
+/* ---------- 证书：签发 / 撤销 ---------- */
+function openCertAction(action, certNo) {
+  var c = findCert(certNo);
+  if (!c) { Toast.error('证书不存在'); return; }
+  pendingAction = action;
+  pendingCertNo = certNo;
+  if (action === 'issue') {
+    document.getElementById('certActionTitle').textContent = '签发证书';
+    document.getElementById('certActionBody').innerHTML = ''
+      + '<div style="font-size:13px;color:var(--text-secondary);line-height:1.7;">'
+      +   '确认签发证书 <b>' + esc(c.certNo) + '</b> ？签发后认养人即可在移动端查看完整证书并下载分享。'
+      + '</div>'
+      + '<div class="form-field" style="margin-top:14px;">'
+      +   '<label>签发人</label>'
+      +   '<input type="text" id="certActionIssuer" placeholder="如 管理员" value="' + esc((USER_OPTIONS[0] || '管理员')) + '">'
+      + '</div>';
+    document.getElementById('certActionSubmit').textContent = '确认签发';
+    document.getElementById('certActionSubmit').classList.remove('jg-btn-danger');
+    document.getElementById('certActionSubmit').classList.add('jg-btn-primary');
+  } else {
+    document.getElementById('certActionTitle').textContent = '撤销证书';
+    document.getElementById('certActionBody').innerHTML = ''
+      + '<div style="font-size:13px;color:var(--text-secondary);line-height:1.7;">'
+      +   '撤销证书 <b>' + esc(c.certNo) + '</b> 后，移动端将看到置灰状态与撤销提示。'
+      + '</div>'
+      + '<div class="form-field" style="margin-top:14px;">'
+      +   '<label>撤销原因<span style="color:var(--error);">*</span></label>'
+      +   '<textarea id="certActionReason" placeholder="请填写撤销原因，必填..."></textarea>'
+      + '</div>';
+    document.getElementById('certActionSubmit').textContent = '确认撤销';
+    document.getElementById('certActionSubmit').classList.remove('jg-btn-primary');
+    document.getElementById('certActionSubmit').classList.add('jg-btn-danger');
+  }
+  document.getElementById('certActionModal').classList.add('show');
+}
+function closeCertAction() {
+  document.getElementById('certActionModal').classList.remove('show');
+  pendingAction = null;
+  pendingCertNo = null;
+}
+function submitCertAction() {
+  if (pendingAction === 'issue') {
+    var issuer = (document.getElementById('certActionIssuer').value || '').trim();
+    if (!issuer) { Toast.warning('请填写签发人'); return; }
+    var list = readCerts();
+    var idx = list.findIndex(function (c) { return c.certNo === pendingCertNo; });
+    if (idx < 0) return;
+    list[idx].status = 'issued';
+    list[idx].issuedBy = issuer;
+    list[idx].issueTime = formatNow();
+    writeCerts(list);
+    Toast.success('已签发');
+    closeCertAction();
+    renderStats();
+    renderCertTable();
+  } else if (pendingAction === 'revoke') {
+    var reason = (document.getElementById('certActionReason').value || '').trim();
+    if (!reason) { Toast.warning('请填写撤销原因'); return; }
+    var list2 = readCerts();
+    var idx2 = list2.findIndex(function (c) { return c.certNo === pendingCertNo; });
+    if (idx2 < 0) return;
+    list2[idx2].status = 'revoked';
+    list2[idx2].revokeReason = reason;
+    writeCerts(list2);
+    Toast.success('已撤销');
+    closeCertAction();
+    renderStats();
+    renderCertTable();
+  }
+}
+
+/* ---------- 模板 CRUD ---------- */
+function openTplEdit(id) {
+  editingTplId = id || null;
+  document.getElementById('tplEditTitle').textContent = id ? '编辑证书模板' : '新增证书模板';
+  var list = readTemplates();
+  var item = id ? list.filter(function (t) { return t.id === id; })[0] : null;
+  document.getElementById('tplEditName').value    = (item && item.name)    || '';
+  document.getElementById('tplEditIssuer').value  = (item && item.issuer)  || '';
+  document.getElementById('tplEditOrg').value     = (item && item.orgName) || '';
+  document.getElementById('tplEditEnabled').value = item ? (item.enabled ? 'true' : 'false') : 'true';
+  document.getElementById('tplEditModal').classList.add('show');
+}
+function closeTplEdit() {
+  document.getElementById('tplEditModal').classList.remove('show');
+  editingTplId = null;
+}
+function submitTplEdit() {
+  var name = (document.getElementById('tplEditName').value || '').trim();
+  var issuer = (document.getElementById('tplEditIssuer').value || '').trim();
+  if (!name) { Toast.warning('请填写模板名称'); return; }
+  if (!issuer) { Toast.warning('请填写签发机构'); return; }
+  var data = {
+    name: name,
+    issuer: issuer,
+    orgName: (document.getElementById('tplEditOrg').value || '').trim(),
+    enabled: document.getElementById('tplEditEnabled').value === 'true'
+  };
+  var list = readTemplates();
+  if (editingTplId) {
+    var idx = list.findIndex(function (t) { return t.id === editingTplId; });
+    if (idx >= 0) list[idx] = Object.assign({}, list[idx], data);
+    Toast.success('已保存');
+  } else {
+    data.id = genTplId();
+    list.unshift(data);
+    Toast.success('已新增');
+  }
+  writeTemplates(list);
+  closeTplEdit();
+  renderTplTable();
+  refreshTplOptions();
+}
+function toggleTpl(id) {
+  var list = readTemplates();
+  var idx = list.findIndex(function (t) { return t.id === id; });
+  if (idx < 0) return;
+  list[idx].enabled = !list[idx].enabled;
+  writeTemplates(list);
+  Toast.success(list[idx].enabled ? '已启用' : '已停用');
+  renderTplTable();
+  refreshTplOptions();
+}
+function deleteTpl(id) {
+  ConfirmDialog.show({
+    title: '删除模板',
+    message: '确认删除该证书模板吗？删除后已使用该模板的证书将失去模板引用。',
+    onConfirm: function () {
+      var list = readTemplates().filter(function (t) { return t.id !== id; });
+      writeTemplates(list);
+      Toast.success('已删除');
+      renderTplTable();
+      refreshTplOptions();
+    }
+  });
+}
+
+/* ---------- 工具 ---------- */
+function todayStr() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function formatNow() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+    + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function resetCertSearch() {
+  document.getElementById('searchStatus').value = '';
+  document.getElementById('searchKw').value = '';
+  renderCertTable();
+}
+
+/* ---------- 初始化 ---------- */
+document.addEventListener('DOMContentLoaded', function () {
+  renderStats();
+  renderCertTable();
+  renderTplTable();
+  refreshTplOptions();
+  refreshTreeOptions();
+});
+</script>
+<script src="js/search-helper.js"></script>
+</body>
+</html>

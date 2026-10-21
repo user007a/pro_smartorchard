@@ -96,6 +96,17 @@
       gap: var(--space-2);
       margin-top: var(--space-4);
     }
+  /* 环节已被后台停用时的友好提示 */
+    .stage-offline-tip {
+      background: var(--bg-white);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: var(--space-6, 24px);
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: var(--font-sm);
+      line-height: 1.8;
+    }
   </style>
 </head>
 <body>
@@ -142,6 +153,7 @@
     </div>
   </div>
 
+  <script src="js/trace-stages.js"></script>
   <script>
     var traceDetails = {
       planting: { title: '种植管理', date: '2026.09.15', content: 'A1区花牛苹果果园位于海拔1200米的高原地带，年均气温12°C，昼夜温差大，非常适合苹果糖分积累。果园采用有机种植方式，施用发酵牛羊粪有机肥，每亩施用量达3吨。灌溉水源来自山顶无污染的山泉水，确保水源纯净。果园通过有机认证转换期，2026年正式获得有机产品认证证书。', location: 'A1区花牛苹果果园', worker: '张师傅', img: 'images/trace_planting.jpg', tags: ['有机认证', '绿色种植'] },
@@ -164,6 +176,31 @@
     function setHtml(id, value) {
       var el = document.getElementById(id);
       if (el) el.innerHTML = value;
+    }
+
+    /* 环节是否已在后台「C 端展示配置」中停用（停用后仍可看详情，仅作提示；未知环节则不提示） */
+    function isStageDisabled(key) {
+      try {
+        if (!window.TraceStages || typeof TraceStages.get !== 'function') return false;
+        var s = TraceStages.get(key);
+        return !!s && s.enabled === false;
+      } catch (e) { return false; }
+    }
+
+    function showOfflineTip(key, detail) {
+      var content = document.querySelector('.detail-content');
+      if (!content) return;
+      content.innerHTML =
+        '<div class="stage-offline-tip">' +
+          '<div style="font-size:28px;margin-bottom:8px;">🌱</div>' +
+          '<div style="font-weight:600;color:var(--text);margin-bottom:6px;">该环节已停止对外展示</div>' +
+          '<div>「' + (detail && detail.title ? detail.title : key) + '」当前未在溯源流程中开放，' +
+          '若需查看完整履历，请返回溯源页查看已开放的环节。</div>' +
+          '<div style="margin-top:14px;">' +
+            '<button onclick="history.back()" ' +
+            'style="background:var(--primary);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;">返回溯源页</button>' +
+          '</div>' +
+        '</div>';
     }
 
     /* 环节日期与列表页保持同一推算规则：以批次采收日期为基准（详见 trace_h5.html DAY_OFFSET） */
@@ -190,7 +227,22 @@
       var params = new URLSearchParams(window.location.search);
       var type = params.get('type') || 'planting';
       var detail = traceDetails[type];
-      if (!detail) return;
+      if (!detail) {
+        // 未知环节：给出兜底提示，避免白屏
+        var contentEl = document.querySelector('.detail-content');
+        if (contentEl) {
+          contentEl.innerHTML = '<div class="stage-offline-tip">未找到该溯源环节的信息，请返回溯源页重新选择。</div>';
+        }
+        setText('pageTitle', '溯源环节');
+        return;
+      }
+
+      // 环节已在后台停用：保留标题信息，正文替换为友好提示
+      if (isStageDisabled(type)) {
+        setText('pageTitle', detail.title);
+        showOfflineTip(type, detail);
+        return;
+      }
 
       var code = params.get('code') || '';
       var harvestDate = null;

@@ -786,11 +786,34 @@
      * 演示账号表。原型无后端，凭据校验在本机完成；
      * 生产环境必须改为服务端校验并由服务端颁发令牌。
      * ------------------------------------------------------------ */
-    var ACCOUNTS = {
+    var DEFAULT_ACCOUNTS = {
       'demo':         { pwd: 'demo123',  name: '演示用户',   role: '访客', phone: '13800000001' },
       'zhangjianguo': { pwd: '123456',   name: '张建国',     role: '果农', phone: '13800000002' },
       'admin':        { pwd: 'admin123', name: '系统管理员', role: '管理员', phone: '13800000000' }
     };
+
+    /* 优先读取后台「移动端运营 / 作业人员账号」维护的账号表，
+       未初始化时回退到内置演示账号。已停用账号不可登录。 */
+    var ACCOUNTS = (function loadAccounts() {
+      try {
+        var saved = JSON.parse(localStorage.getItem('mb_staff_accounts') || 'null');
+        if (Array.isArray(saved) && saved.length) {
+          var map = {};
+          saved.forEach(function (a) {
+            map[String(a.username).toLowerCase()] = {
+              pwd: a.pwd, name: a.name, role: a.role,
+              phone: a.phone, disabled: a.status === 'disabled'
+            };
+          });
+          return map;
+        }
+      } catch (e) { /* 读取失败回退默认 */ }
+      var fallback = {};
+      Object.keys(DEFAULT_ACCOUNTS).forEach(function (k) {
+        fallback[k] = Object.assign({ disabled: false }, DEFAULT_ACCOUNTS[k]);
+      });
+      return fallback;
+    })();
     var MAX_ATTEMPTS = 5;
     var LOCK_MS = 30000;
     var failCount = 0;
@@ -903,6 +926,11 @@
         showErrorToast('账号不存在');
         return;
       }
+      if (account.disabled) {
+        setError('usernameGroup', 'usernameError', '账号已停用');
+        showErrorToast('账号已停用，请联系管理员');
+        return;
+      }
       if (account.pwd !== pass) {
         setError('passwordGroup', 'passwordError', '密码错误');
         failCount++;
@@ -956,6 +984,10 @@
         return;
       }
       var acc = ACCOUNTS[matchedKey];
+      if (acc.disabled) {
+        showErrorToast('账号已停用，请联系管理员');
+        return;
+      }
       doLogin(document.getElementById('btnWechat'), acc.name, acc.role);
     });
 

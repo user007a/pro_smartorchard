@@ -384,6 +384,39 @@
   }
   .silence-status.on { background:var(--warning-bg); color:#ad8b00; border-color:var(--warning-border); }
   .silence-status.off { background:var(--success-bg); color:var(--success); border-color:var(--success-border); }
+  /* SLA 分级配置 */
+  .sla-grid { display:flex; flex-direction:column; gap:var(--space-md); }
+  .sla-row {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:var(--space-lg);
+    padding:12px 14px;
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-lg);
+    background:var(--gray-50);
+  }
+  .sla-row-head { display:flex; align-items:center; gap:8px; min-width:150px; }
+  .sla-level { font-size:var(--font-size-base); font-weight:600; color:var(--text-primary); }
+  .sla-row .form-group { margin-bottom:0; flex:0 0 auto; min-width:140px; }
+  .sla-actions { display:flex; margin-left:auto; }
+  /* 预警源接入状态 */
+  .source-list { display:flex; flex-direction:column; gap:var(--space-md); }
+  .source-item {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:var(--space-lg);
+    padding:10px 14px;
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-md);
+    background:var(--gray-50);
+  }
+  .source-name { font-size:var(--font-size-sm); font-weight:600; color:var(--text-primary); }
+  .source-desc { font-size:var(--font-size-xs); color:var(--text-tertiary); margin-top:2px; }
+  .source-badge { display:inline-flex; align-items:center; padding:3px 10px; border-radius:var(--radius-full); font-size:var(--font-size-xs); font-weight:500; white-space:nowrap; }
+  .source-badge.connected { background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); }
+  .source-badge.pending { background:var(--gray-100); color:var(--text-tertiary); border:1px solid var(--border-default); }
   /* 阈值可视化区间组件 */
   .range-comp { padding-top:4px; }
   .range-track {
@@ -564,6 +597,29 @@
           </div>
           <div class="silence-status" id="silenceStatus">静默时段：22:00 - 07:00 · 生效范围：全部预警</div>
         </div>
+
+        <!-- SLA 分级配置 -->
+        <div class="settings-card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--primary-500);"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            SLA 分级配置
+          </h3>
+          <div class="sla-grid" id="slaGrid"></div>
+          <div style="margin-top:var(--space-lg);">
+            <button class="jg-btn jg-btn-primary" id="btnSaveSla">保存 SLA 配置</button>
+            <button class="jg-btn" id="btnResetSla">恢复默认</button>
+          </div>
+        </div>
+
+        <!-- 预警源类型与共享数据源接入状态 -->
+        <div class="settings-card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--success);"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+            预警源类型
+          </h3>
+          <div class="source-list" id="alertSourceList"></div>
+          <div class="silence-status" style="margin-top:var(--space-lg);">共享数据源 AlertStore 当前仅支持 device（设备类）与 farming（农事类），环境类 / 灾害类 / 质量类待接入。</div>
+        </div>
                 <div class="search-section">
           <div class="search-bar">
             <select class="search-select" id="typeSelect">
@@ -622,6 +678,8 @@
                   <th>规则名称</th>
                   <th style="width:120px;">预警类型</th>
                   <th style="width:140px;">阈值设置</th>
+                  <th style="width:100px;">响应时限</th>
+                  <th style="width:100px;">处置时限</th>
                   <th style="width:140px;">通知方式</th>
                   <th style="width:100px;">启用状态</th>
                   <th style="width:160px;">操作</th>
@@ -664,6 +722,14 @@
       <div class="detail-row">
         <div class="detail-label">阈值设置</div>
         <div class="detail-value" id="detailThreshold">-</div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">响应时限</div>
+        <div class="detail-value" id="detailRespondSla">-</div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">处置时限</div>
+        <div class="detail-value" id="detailHandleSla">-</div>
       </div>
       <div class="detail-row">
         <div class="detail-label">通知方式</div>
@@ -907,30 +973,40 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
+  // SLA 分级默认时限（紧急 / 重要 / 提醒 / 通知）
+  const SLA_DEFAULT = {
+    critical: { respondSla: '15 分钟', handleSla: '2 小时' },
+    high:     { respondSla: '30 分钟', handleSla: '4 小时' },
+    medium:   { respondSla: '2 小时',  handleSla: '24 小时' },
+    reminder: { respondSla: '2 小时',  handleSla: '24 小时' },
+    notice:   { respondSla: '4 小时',  handleSla: '无时限' },
+    low:      { respondSla: '4 小时',  handleSla: '无时限' }
+  };
+
   const mockData = [
-    { id: 'W001', code: 'W001', name: '低温霜冻预警', type: 'weather', typeText: '气象预警', threshold: '温度 < 5°C', notify: '站内+短信', level: 'high', levelText: '高', users: '惠加宁, 黄忠坚', status: 'active', statusText: '启用', createTime: '2026-09-15 10:30', desc: '当温度低于5°C时触发预警，提醒做好防寒措施。' },
-    { id: 'W002', code: 'W002', name: '设备离线预警', type: 'device', typeText: '设备预警', threshold: '离线 > 10分钟', notify: '站内+推送', level: 'critical', levelText: '紧急', users: '运维组', status: 'active', statusText: '启用', createTime: '2026-09-16 14:20', desc: '设备离线超过10分钟自动触发预警通知。' },
-    { id: 'W003', code: 'W003', name: '农资库存告急', type: 'inventory', typeText: '库存预警', threshold: '库存 < 安全线', notify: '站内', level: 'reminder', levelText: '提醒', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-18 09:10', desc: '农资库存低于安全线时自动预警。' },
-    { id: 'W004', code: 'W004', name: '农事任务逾期', type: 'farming', typeText: '农事预警', threshold: '超时 > 24小时', notify: '站内+短信', level: 'medium', levelText: '中', users: '任务负责人', status: 'inactive', statusText: '停用', createTime: '2026-09-20 11:30', desc: '农事任务逾期超过24小时触发预警。' },
-    { id: 'W005', code: 'W005', name: '病虫害风险预警', type: 'farming', typeText: '农事预警', threshold: '虫情数量 > 阈值', notify: '站内+推送', level: 'high', levelText: '高', users: '植保组', status: 'active', statusText: '启用', createTime: '2026-09-22 16:45', desc: '病虫害监测数据超过阈值时触发预警。' },
-    { id: 'W006', code: 'W006', name: '土壤湿度异常', type: 'device', typeText: '设备预警', threshold: '湿度 < 20%', notify: '站内', level: 'notice', levelText: '通知', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-25 10:00', desc: '土壤湿度低于20%时触发预警。' },
-    { id: 'W007', code: 'W007', name: '高温预警', type: 'weather', typeText: '气象预警', threshold: '温度 > 35°C', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-01 08:30', desc: '温度超过35°C时触发高温预警。' },
-    { id: 'W008', code: 'W008', name: '设备故障预警', type: 'device', typeText: '设备预警', threshold: '故障码触发', notify: '站内+短信', level: 'critical', levelText: '紧急', users: '运维组', status: 'active', statusText: '启用', createTime: '2026-09-05 13:20', desc: '设备检测到故障码时自动触发预警。' },
-    { id: 'W009', code: 'W009', name: '肥料库存预警', type: 'inventory', typeText: '库存预警', threshold: '库存 < 50kg', notify: '站内', level: 'medium', levelText: '中', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-10 15:00', desc: '肥料库存低于50kg时触发预警。' },
-    { id: 'W010', code: 'W010', name: '暴雨预警', type: 'weather', typeText: '气象预警', threshold: '降雨量 > 50mm', notify: '站内+短信', level: 'high', levelText: '高', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-15 09:45', desc: '预计降雨量超过50mm时触发暴雨预警。' },
-    { id: 'W011', code: 'W011', name: '灌溉异常预警', type: 'device', typeText: '设备预警', threshold: '流量异常', notify: '站内+推送', level: 'medium', levelText: '中', users: '技术员', status: 'inactive', statusText: '停用', createTime: '2026-09-20 14:10', desc: '灌溉系统流量异常时触发预警。' },
-    { id: 'W012', code: 'W012', name: '农药库存预警', type: 'inventory', typeText: '库存预警', threshold: '库存 < 安全线', notify: '站内', level: 'medium', levelText: '中', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-25 11:20', desc: '农药库存低于安全线时触发预警。' },
-    { id: 'W013', code: 'W013', name: '大风预警', type: 'weather', typeText: '气象预警', threshold: '风速 > 15m/s', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-01 16:30', desc: '风速超过15m/s时触发大风预警。' },
-    { id: 'W014', code: 'W014', name: '设备维护提醒', type: 'device', typeText: '设备预警', threshold: '运行时长 > 5000h', notify: '站内', level: 'low', levelText: '低', users: '运维组', status: 'active', statusText: '启用', createTime: '2026-09-05 10:00', desc: '设备运行时长超过5000小时提醒维护。' },
-    { id: 'W015', code: 'W015', name: '授粉期提醒', type: 'farming', typeText: '农事预警', threshold: '花期时间触发', notify: '站内+短信', level: 'low', levelText: '低', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-10 08:15', desc: '苹果花期自动提醒授粉。' },
-    { id: 'W016', code: 'W016', name: '收获期提醒', type: 'farming', typeText: '农事预警', threshold: '成熟度 > 90%', notify: '站内+短信', level: 'low', levelText: '低', users: '采摘组', status: 'active', statusText: '启用', createTime: '2026-09-15 13:40', desc: '果实成熟度超过90%时提醒收获。' },
-    { id: 'W017', code: 'W017', name: '土壤肥力预警', type: 'device', typeText: '设备预警', threshold: 'N/P/K < 阈值', notify: '站内', level: 'medium', levelText: '中', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-20 15:20', desc: '土壤N/P/K含量低于阈值时预警。' },
-    { id: 'W018', code: 'W018', name: '冰雹预警', type: 'weather', typeText: '气象预警', threshold: '雷达回波触发', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-25 09:30', desc: '雷达检测到冰雹回波时触发预警。' },
-    { id: 'W019', code: 'W019', name: '包装箱库存预警', type: 'inventory', typeText: '库存预警', threshold: '库存 < 1000个', notify: '站内', level: 'low', levelText: '低', users: '仓库管理员', status: 'inactive', statusText: '停用', createTime: '2026-09-01 11:00', desc: '包装箱库存低于1000个时预警。' },
-    { id: 'W020', code: 'W020', name: '温湿度异常预警', type: 'device', typeText: '设备预警', threshold: '超出正常范围', notify: '站内+推送', level: 'medium', levelText: '中', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-05 14:30', desc: '温湿度超出正常范围时预警。' },
-    { id: 'W021', code: 'W021', name: '鸟害预警', type: 'farming', typeText: '农事预警', threshold: '监测设备触发', notify: '站内', level: 'low', levelText: '低', users: '植保组', status: 'active', statusText: '启用', createTime: '2026-09-10 10:15', desc: '鸟害监测设备触发时预警。' },
-    { id: 'W022', code: 'W022', name: '雷电预警', type: 'weather', typeText: '气象预警', threshold: '雷电活动检测', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-15 16:00', desc: '检测到雷电活动时触发预警。' },
-    { id: 'W023', code: 'W023', name: '仓储温度预警', type: 'device', typeText: '设备预警', threshold: '温度 > 25°C', notify: '站内+短信', level: 'high', levelText: '高', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-20 08:45', desc: '仓储温度超过25°C时预警。' }
+    { id: 'W001', code: 'W001', name: '低温霜冻预警', type: 'weather', typeText: '气象预警', threshold: '温度 < 5°C', notify: '站内+短信', level: 'high', levelText: '高', respondSla: '30 分钟', handleSla: '4 小时', users: '惠加宁, 黄忠坚', status: 'active', statusText: '启用', createTime: '2026-09-15 10:30', desc: '当温度低于5°C时触发预警，提醒做好防寒措施。' },
+    { id: 'W002', code: 'W002', name: '设备离线预警', type: 'device', typeText: '设备预警', threshold: '离线 > 10分钟', notify: '站内+推送', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '运维组', status: 'active', statusText: '启用', createTime: '2026-09-16 14:20', desc: '设备离线超过10分钟自动触发预警通知。' },
+    { id: 'W003', code: 'W003', name: '农资库存告急', type: 'inventory', typeText: '库存预警', threshold: '库存 < 安全线', notify: '站内', level: 'reminder', levelText: '提醒', respondSla: '2 小时', handleSla: '24 小时', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-18 09:10', desc: '农资库存低于安全线时自动预警。' },
+    { id: 'W004', code: 'W004', name: '农事任务逾期', type: 'farming', typeText: '农事预警', threshold: '超时 > 24小时', notify: '站内+短信', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '任务负责人', status: 'inactive', statusText: '停用', createTime: '2026-09-20 11:30', desc: '农事任务逾期超过24小时触发预警。' },
+    { id: 'W005', code: 'W005', name: '病虫害风险预警', type: 'farming', typeText: '农事预警', threshold: '虫情数量 > 阈值', notify: '站内+推送', level: 'high', levelText: '高', respondSla: '30 分钟', handleSla: '4 小时', users: '植保组', status: 'active', statusText: '启用', createTime: '2026-09-22 16:45', desc: '病虫害监测数据超过阈值时触发预警。' },
+    { id: 'W006', code: 'W006', name: '土壤湿度异常', type: 'device', typeText: '设备预警', threshold: '湿度 < 20%', notify: '站内', level: 'notice', levelText: '通知', respondSla: '4 小时', handleSla: '无时限', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-25 10:00', desc: '土壤湿度低于20%时触发预警。' },
+    { id: 'W007', code: 'W007', name: '高温预警', type: 'weather', typeText: '气象预警', threshold: '温度 > 35°C', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-01 08:30', desc: '温度超过35°C时触发高温预警。' },
+    { id: 'W008', code: 'W008', name: '设备故障预警', type: 'device', typeText: '设备预警', threshold: '故障码触发', notify: '站内+短信', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '运维组', status: 'active', statusText: '启用', createTime: '2026-09-05 13:20', desc: '设备检测到故障码时自动触发预警。' },
+    { id: 'W009', code: 'W009', name: '肥料库存预警', type: 'inventory', typeText: '库存预警', threshold: '库存 < 50kg', notify: '站内', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-10 15:00', desc: '肥料库存低于50kg时触发预警。' },
+    { id: 'W010', code: 'W010', name: '暴雨预警', type: 'weather', typeText: '气象预警', threshold: '降雨量 > 50mm', notify: '站内+短信', level: 'high', levelText: '高', respondSla: '30 分钟', handleSla: '4 小时', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-15 09:45', desc: '预计降雨量超过50mm时触发暴雨预警。' },
+    { id: 'W011', code: 'W011', name: '灌溉异常预警', type: 'device', typeText: '设备预警', threshold: '流量异常', notify: '站内+推送', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '技术员', status: 'inactive', statusText: '停用', createTime: '2026-09-20 14:10', desc: '灌溉系统流量异常时触发预警。' },
+    { id: 'W012', code: 'W012', name: '农药库存预警', type: 'inventory', typeText: '库存预警', threshold: '库存 < 安全线', notify: '站内', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-25 11:20', desc: '农药库存低于安全线时触发预警。' },
+    { id: 'W013', code: 'W013', name: '大风预警', type: 'weather', typeText: '气象预警', threshold: '风速 > 15m/s', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-01 16:30', desc: '风速超过15m/s时触发大风预警。' },
+    { id: 'W014', code: 'W014', name: '设备维护提醒', type: 'device', typeText: '设备预警', threshold: '运行时长 > 5000h', notify: '站内', level: 'low', levelText: '低', respondSla: '4 小时', handleSla: '无时限', users: '运维组', status: 'active', statusText: '启用', createTime: '2026-09-05 10:00', desc: '设备运行时长超过5000小时提醒维护。' },
+    { id: 'W015', code: 'W015', name: '授粉期提醒', type: 'farming', typeText: '农事预警', threshold: '花期时间触发', notify: '站内+短信', level: 'low', levelText: '低', respondSla: '4 小时', handleSla: '无时限', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-10 08:15', desc: '苹果花期自动提醒授粉。' },
+    { id: 'W016', code: 'W016', name: '收获期提醒', type: 'farming', typeText: '农事预警', threshold: '成熟度 > 90%', notify: '站内+短信', level: 'low', levelText: '低', respondSla: '4 小时', handleSla: '无时限', users: '采摘组', status: 'active', statusText: '启用', createTime: '2026-09-15 13:40', desc: '果实成熟度超过90%时提醒收获。' },
+    { id: 'W017', code: 'W017', name: '土壤肥力预警', type: 'device', typeText: '设备预警', threshold: 'N/P/K < 阈值', notify: '站内', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-20 15:20', desc: '土壤N/P/K含量低于阈值时预警。' },
+    { id: 'W018', code: 'W018', name: '冰雹预警', type: 'weather', typeText: '气象预警', threshold: '雷达回波触发', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-25 09:30', desc: '雷达检测到冰雹回波时触发预警。' },
+    { id: 'W019', code: 'W019', name: '包装箱库存预警', type: 'inventory', typeText: '库存预警', threshold: '库存 < 1000个', notify: '站内', level: 'low', levelText: '低', respondSla: '4 小时', handleSla: '无时限', users: '仓库管理员', status: 'inactive', statusText: '停用', createTime: '2026-09-01 11:00', desc: '包装箱库存低于1000个时预警。' },
+    { id: 'W020', code: 'W020', name: '温湿度异常预警', type: 'device', typeText: '设备预警', threshold: '超出正常范围', notify: '站内+推送', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-05 14:30', desc: '温湿度超出正常范围时预警。' },
+    { id: 'W021', code: 'W021', name: '鸟害预警', type: 'farming', typeText: '农事预警', threshold: '监测设备触发', notify: '站内', level: 'low', levelText: '低', respondSla: '4 小时', handleSla: '无时限', users: '植保组', status: 'active', statusText: '启用', createTime: '2026-09-10 10:15', desc: '鸟害监测设备触发时预警。' },
+    { id: 'W022', code: 'W022', name: '雷电预警', type: 'weather', typeText: '气象预警', threshold: '雷电活动检测', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-15 16:00', desc: '检测到雷电活动时触发预警。' },
+    { id: 'W023', code: 'W023', name: '仓储温度预警', type: 'device', typeText: '设备预警', threshold: '温度 > 25°C', notify: '站内+短信', level: 'high', levelText: '高', respondSla: '30 分钟', handleSla: '4 小时', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-20 08:45', desc: '仓储温度超过25°C时预警。' }
   ];
 
   let filteredData = [...mockData];
@@ -939,6 +1015,12 @@
   let currentDetailId = null;
 
   document.addEventListener('DOMContentLoaded', function() {
+    renderSlaConfig();
+    renderAlertSources();
+    applySlaToRules();
+    document.getElementById('btnSaveSla').addEventListener('click', saveSlaConfig);
+    document.getElementById('btnResetSla').addEventListener('click', resetSlaConfig);
+
     Pagination.init({
       currentPage: 1,
       pageSize: 10,
@@ -1060,7 +1142,11 @@
       if (document.getElementById('notifySms').checked) notifyParts.push('短信');
       if (document.getElementById('notifyPush').checked) notifyParts.push('推送');
       const notify = notifyParts.join('+') || '站内';
-      
+      // 时限跟随所选级别（SLA 分级配置）
+      const levelCfg = slaConfig[SLA_LEVEL_KEY_MAP[levelStored] || 'notice'];
+      const respondSla = levelCfg ? levelCfg.respond : '4 小时';
+      const handleSla = levelCfg ? levelCfg.handle : '无时限';
+
       if (!name || !threshold) {
         showToast('请填写规则名称和阈值条件', 'warning');
         return;
@@ -1076,6 +1162,8 @@
           item.threshold = threshold;
           item.level = levelStored;
           item.levelText = levelText;
+          item.respondSla = respondSla;
+          item.handleSla = handleSla;
           item.notify = notify;
           item.users = users;
           item.desc = desc;
@@ -1089,7 +1177,7 @@
         const pad = n => n < 10 ? '0' + n : n;
         const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
         filteredData.unshift({
-          id: newId, code: newId, name, type, typeText, threshold, level: levelStored, levelText, notify, users, status, statusText, createTime: timeStr, desc
+          id: newId, code: newId, name, type, typeText, threshold, level: levelStored, levelText, respondSla, handleSla, notify, users, status, statusText, createTime: timeStr, desc
         });
         showToast('规则创建成功', 'success');
       }
@@ -1253,6 +1341,132 @@
     showToast('静默时段设置已保存', 'success');
   }
 
+  // ---------- SLA 分级配置（localStorage: snzg_alert_sla_config）----------
+  const SLA_KEY = 'snzg_alert_sla_config';
+  const SLA_LEVELS = [
+    { key: 'urgent', label: '紧急', respond: '15 分钟', handle: '2 小时', escalate: '技术总监' },
+    { key: 'important', label: '重要', respond: '30 分钟', handle: '4 小时', escalate: '园区主任' },
+    { key: 'reminder', label: '提醒', respond: '2 小时', handle: '24 小时', escalate: '值班长' },
+    { key: 'notice', label: '通知', respond: '4 小时', handle: '无时限', escalate: '不升级' }
+  ];
+  const SLA_ESCALATE_OPTIONS = ['值班长', '园区主任', '技术总监', '不升级'];
+
+  function defaultSlaConfig() {
+    const cfg = {};
+    SLA_LEVELS.forEach(l => { cfg[l.key] = { respond: l.respond, handle: l.handle, escalate: l.escalate }; });
+    return cfg;
+  }
+
+  function readSlaConfig() {
+    const def = defaultSlaConfig();
+    try {
+      const raw = localStorage.getItem(SLA_KEY);
+      if (!raw) return def;
+      const saved = JSON.parse(raw);
+      SLA_LEVELS.forEach(l => {
+        if (saved && saved[l.key]) {
+          def[l.key].respond = saved[l.key].respond || l.respond;
+          def[l.key].handle = saved[l.key].handle || l.handle;
+          def[l.key].escalate = saved[l.key].escalate || l.escalate;
+        }
+      });
+    } catch (e) { /* 本地存储不可用时使用默认值 */ }
+    return def;
+  }
+
+  let slaConfig = readSlaConfig();
+
+  function renderSlaConfig() {
+    const grid = document.getElementById('slaGrid');
+    if (!grid) return;
+    grid.innerHTML = SLA_LEVELS.map(l => `
+      <div class="sla-row">
+        <div class="sla-row-head"><span class="sla-level">${l.label}</span></div>
+        <div class="form-group">
+          <label>响应时限</label>
+          <input type="text" class="form-input" id="slaRespond-${l.key}" value="${slaConfig[l.key].respond}">
+        </div>
+        <div class="form-group">
+          <label>处置时限</label>
+          <input type="text" class="form-input" id="slaHandle-${l.key}" value="${slaConfig[l.key].handle}">
+        </div>
+        <div class="form-group">
+          <label>升级至</label>
+          <select class="form-select" id="slaEscalate-${l.key}">
+            ${SLA_ESCALATE_OPTIONS.map(o => `<option value="${o}"${slaConfig[l.key].escalate === o ? ' selected' : ''}>${o}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function collectSlaConfig() {
+    const next = defaultSlaConfig();
+    SLA_LEVELS.forEach(l => {
+      const respond = document.getElementById('slaRespond-' + l.key);
+      const handle = document.getElementById('slaHandle-' + l.key);
+      const escalate = document.getElementById('slaEscalate-' + l.key);
+      if (respond && respond.value) next[l.key].respond = respond.value;
+      if (handle && handle.value) next[l.key].handle = handle.value;
+      if (escalate && escalate.value) next[l.key].escalate = escalate.value;
+    });
+    return next;
+  }
+
+  // 级别 → SLA 分级键
+  const SLA_LEVEL_KEY_MAP = { critical: 'urgent', high: 'important', medium: 'reminder', reminder: 'reminder', notice: 'notice', low: 'notice' };
+
+  // 按级别把 SLA 时限回写到规则表
+  function applySlaToRules() {
+    mockData.forEach(item => {
+      const cfg = slaConfig[SLA_LEVEL_KEY_MAP[item.level] || 'notice'];
+      if (!cfg) return;
+      item.respondSla = cfg.respond;
+      item.handleSla = cfg.handle;
+    });
+  }
+
+  // 保存 SLA：写回存储并按级别刷新规则表的响应/处置时限
+  function saveSlaConfig() {
+    slaConfig = collectSlaConfig();
+    try { localStorage.setItem(SLA_KEY, JSON.stringify(slaConfig)); } catch (e) { /* 忽略存储异常 */ }
+    applySlaToRules();
+    Pagination.updateData(filteredData);
+    showToast('SLA 分级配置已保存', 'success');
+  }
+
+  function resetSlaConfig() {
+    slaConfig = defaultSlaConfig();
+    try { localStorage.removeItem(SLA_KEY); } catch (e) { /* 忽略存储异常 */ }
+    renderSlaConfig();
+    applySlaToRules();
+    Pagination.updateData(filteredData);
+    showToast('已恢复默认 SLA 配置', 'success');
+  }
+
+  // ---------- 预警源类型与共享数据源接入状态 ----------
+  const ALERT_SOURCES = [
+    { name: '设备类', storeType: 'device', connected: true, desc: '设备离线 / 故障 / 环境指标越限' },
+    { name: '农事类', storeType: 'farming', connected: true, desc: '农事任务逾期 / 病虫害风险 / 采收提醒' },
+    { name: '环境类', storeType: 'environment', connected: false, desc: '气象预警（温雨风）' },
+    { name: '灾害类', storeType: 'disaster', connected: false, desc: '冰雹 / 雷电 / 暴雨等灾害性天气' },
+    { name: '质量类', storeType: 'quality', connected: false, desc: '检测报告 / 溯源批次质量异常' }
+  ];
+
+  function renderAlertSources() {
+    const box = document.getElementById('alertSourceList');
+    if (!box) return;
+    box.innerHTML = ALERT_SOURCES.map(s => `
+      <div class="source-item">
+        <div>
+          <div class="source-name">${s.name}</div>
+          <div class="source-desc">${s.desc} · AlertStore 类型：${s.storeType}</div>
+        </div>
+        <span class="source-badge ${s.connected ? 'connected' : 'pending'}">${s.connected ? '已接入' : '待接入'}</span>
+      </div>
+    `).join('');
+  }
+
   // ---------- 阈值可视化上下限区间组件 ----------
   function initRangeComponent() {
     var rMin = document.getElementById('editRangeMin');
@@ -1331,6 +1545,8 @@
         <td><strong>${item.name}</strong></td>
         <td><span class="status-tag ${getTypeClass(item.type)}">${item.typeText}</span></td>
         <td>${item.threshold}</td>
+        <td>${item.respondSla || '—'}</td>
+        <td>${item.handleSla || '无时限'}</td>
         <td>${item.notify}</td>
         <td><span class="status-tag ${item.status}">${item.statusText}</span></td>
         <td>
@@ -1353,6 +1569,8 @@
     document.getElementById('detailName').textContent = item.name;
     document.getElementById('detailType').textContent = item.typeText;
     document.getElementById('detailThreshold').textContent = item.threshold;
+    document.getElementById('detailRespondSla').textContent = item.respondSla || '—';
+    document.getElementById('detailHandleSla').textContent = item.handleSla || '无时限';
     document.getElementById('detailNotify').textContent = item.notify;
     document.getElementById('detailLevel').textContent = item.levelText;
     document.getElementById('detailUsers').textContent = item.users;

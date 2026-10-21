@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - C端订单管理</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label { font-size: var(--font-size-sm); color: var(--text-tertiary); margin-bottom: var(--space-xs); }
+  .stat-value {
+    font-size: 26px; font-weight: var(--font-weight-bold);
+    color: var(--text-primary); line-height: 1.2; font-variant-numeric: tabular-nums;
+  }
+  .notice-bar {
+    display: flex; align-items: flex-start; gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--info-bg); border: 1px solid var(--info-border);
+    border-radius: var(--radius-lg); font-size: var(--font-size-sm);
+    color: var(--text-secondary); margin-bottom: var(--space-lg);
+  }
+  .notice-bar svg { flex-shrink: 0; margin-top: 2px; color: var(--info); }
+  .status-tabs {
+    display: flex; gap: var(--space-sm); flex-wrap: wrap;
+    margin-bottom: var(--space-lg); border-bottom: 1px solid var(--border-light);
+    padding-bottom: var(--space-md);
+  }
+  .status-tab {
+    padding: 6px 16px; border-radius: var(--radius-full); cursor: pointer;
+    font-size: var(--font-size-sm); color: var(--text-secondary);
+    background: var(--gray-100); border: none; font-family: inherit;
+    transition: all 0.2s;
+  }
+  .status-tab:hover { color: var(--primary-500); }
+  .status-tab.active { background: var(--primary-500); color: #fff; }
+  .status-tab .tab-count { opacity: 0.75; margin-left: 4px; font-size: var(--font-size-xs); }
+  .goods-cell { display: flex; align-items: center; gap: var(--space-md); }
+  .goods-img {
+    width: 44px; height: 44px; border-radius: var(--radius-md);
+    object-fit: cover; background: var(--gray-100); flex-shrink: 0;
+  }
+  .goods-name { font-weight: var(--font-weight-semibold, 600); color: var(--text-primary); }
+  .goods-sub { font-size: var(--font-size-xs); color: var(--text-tertiary); }
+  .addr-cell { font-size: var(--font-size-xs); color: var(--text-secondary); line-height: 1.6; max-width: 220px; }
+  .addr-cell strong { color: var(--text-primary); font-weight: var(--font-weight-semibold, 600); }
+  .amount-cell { color: var(--error); font-weight: var(--font-weight-semibold, 600); font-variant-numeric: tabular-nums; }
+  .status-tag {
+    display: inline-block; padding: 3px 10px; border-radius: var(--radius-full);
+    font-size: var(--font-size-xs); white-space: nowrap;
+  }
+  .status-tag.pending { background: var(--warning-bg); color: var(--warning); }
+  .status-tag.paid { background: var(--info-bg); color: var(--info); }
+  .status-tag.shipped { background: var(--primary-50); color: var(--primary-600); }
+  .status-tag.completed { background: var(--success-bg); color: var(--success); }
+  .status-tag.cancelled { background: var(--gray-100); color: var(--text-secondary); }
+  .modal-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5); z-index: 1000;
+    justify-content: center; align-items: center; backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card); border-radius: 12px; width: 94%; max-width: 700px;
+    max-height: 85vh; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer; padding: 4px;
+    font-size: 20px; line-height: 1; color: var(--text-tertiary);
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body { padding: 20px; overflow-y: auto; max-height: calc(85vh - 132px); }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 12px;
+    padding: 16px 20px; border-top: 1px solid var(--border-default);
+  }
+  .detail-block { margin-bottom: var(--space-lg); }
+  .detail-label {
+    font-size: var(--font-size-sm); color: var(--text-tertiary);
+    margin-bottom: var(--space-xs); font-weight: var(--weight-medium, 500);
+  }
+  .detail-value {
+    font-size: var(--font-size-sm); color: var(--text-primary);
+    background: var(--gray-50, #fafafa); border: 1px solid var(--border-light);
+    border-radius: var(--radius-md); padding: var(--space-md); line-height: 1.7;
+    word-break: break-all;
+  }
+  .detail-goods { display: flex; align-items: center; gap: var(--space-md); padding: 8px 0; border-bottom: 1px solid var(--border-light); }
+  .detail-goods:last-child { border-bottom: none; }
+  .form-field { margin-bottom: var(--space-lg); }
+  .form-field label {
+    display: block; font-size: var(--font-size-sm);
+    font-weight: var(--weight-medium, 500); color: var(--text-primary); margin-bottom: var(--space-sm);
+  }
+  .form-field input, .form-field select {
+    width: 100%; padding: 10px 14px; border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg); font-size: var(--font-size-base);
+    font-family: inherit; background: var(--bg-card); box-sizing: border-box;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .form-field input:focus, .form-field select:focus {
+    border-color: var(--primary-500); box-shadow: 0 0 0 4px rgba(24,144,255,0.12); outline: none;
+  }
+  .empty-state { padding: var(--space-2xl) 0; text-align: center; color: var(--text-tertiary); font-size: var(--font-size-sm); }
+</style>
+</head>
+<body data-active-menu="mall" data-active-submenu="mall-order">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">C端订单管理</div>
+        <div class="page-subtitle">消费者 H5 商城真实订单的统一管理与发货处理</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="renderTable()">刷新</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">订单总数</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">待付款</div>
+        <div class="stat-value" id="statPending">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">待发货</div>
+        <div class="stat-value" id="statPaid">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已完成</div>
+        <div class="stat-value" id="statCompleted">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">消费总额</div>
+        <div class="stat-value" id="statAmount">¥0</div>
+      </div>
+    </div>
+
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <input type="text" class="search-input" placeholder="搜索订单号 / 收货人 / 商品名..." id="searchInput">
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="renderTable()">搜索</button>
+          <button class="jg-btn" onclick="resetFilter()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-tabs" id="statusTabs"></div>
+
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="checkbox-col" style="width:60px;">序号</th>
+              <th style="width:150px;">订单号</th>
+              <th style="width:150px;">下单时间</th>
+              <th>商品</th>
+              <th style="width:100px;">金额</th>
+              <th style="width:90px;">支付方式</th>
+              <th style="width:200px;">收货地址</th>
+              <th style="width:90px;">状态</th>
+              <th style="width:150px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="orderBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无订单</div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== 详情弹窗 ===== -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">订单详情</h3>
+      <button class="modal-close" onclick="closeModal('detailModal')">&times;</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 发货弹窗 ===== -->
+<div class="modal-overlay" id="shipModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">确认发货</h3>
+      <button class="modal-close" onclick="closeModal('shipModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-block">
+        <div class="detail-label">发货订单</div>
+        <div class="detail-value" id="shipInfo">—</div>
+      </div>
+      <div class="form-field">
+        <label>快递公司</label>
+        <select id="shipCompany">
+          <option value="顺丰速运">顺丰速运</option>
+          <option value="京东物流">京东物流</option>
+          <option value="中通快递">中通快递</option>
+          <option value="圆通速递">圆通速递</option>
+          <option value="韵达快递">韵达快递</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label>运单号<span style="color:var(--error);">*</span></label>
+        <input type="text" id="shipTracking" placeholder="请输入运单号">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('shipModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="confirmShip()">确认发货</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * C端订单管理（商城管理）
+ * 数据源：localStorage['h5_orders']（H5 下单写入）
+ *   订单字段：{ id, no, items[], subtotal, discount, total, payment, invoice,
+ *               address{name,phone,region,detail}, couponCode,
+ *               status, statusCode, createdAt, logistics[] }
+ *   statusCode 枚举：pending / paid / shipped / completed / cancelled
+ * 发货：写 h5_sales_orders（{ orderNo, tracking, company, shippedAt }）
+ *       并把 h5_orders 对应订单推进为「待收货」，与 sales_order.html 一致
+ * ============================================================ */
+var ORDERS_KEY = 'h5_orders';
+var SHIP_KEY = 'h5_sales_orders';
+var COUPONS_KEY = 'mall_coupons';
+
+/* 状态 Tab：与 H5 h5_order.html 的 statusOf() 判定口径一致 */
+var TABS = [
+  { key: 'all', text: '全部' },
+  { key: 'pending', text: '待付款' },
+  { key: 'paid', text: '待发货' },
+  { key: 'shipped', text: '待收货' },
+  { key: 'completed', text: '已完成' },
+  { key: 'cancelled', text: '已取消' }
+];
+
+var STATUS_TEXT = { pending: '待付款', paid: '待发货', shipped: '待收货', completed: '已完成', cancelled: '已取消' };
+
+var COMPANY_TEXT = { sf: '顺丰速运', jd: '京东物流', yd: '圆通速递', yt: '韵达快递', zt: '中通快递' };
+
+var currentTab = 'all';
+var currentNo = null;
+
+function readArr(key) {
+  try {
+    var v = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function writeArr(key, list) {
+  try {
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch (e) {
+    Toast.error('本地存储写入失败，操作未能保存');
+  }
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso).slice(0, 16);
+  var p = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+/* 券码快照 → 券名（券可能在后台被删除，届时仅显示券码） */
+function couponText(code) {
+  if (!code) return '未使用';
+  var list = readArr(COUPONS_KEY);
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].code === code) {
+      var c = list[i];
+      var rule = c.type === 'cash' ? '减 ¥' + c.value : (Number(c.value) / 10).toFixed(1) + ' 折';
+      return esc(c.name || code) + '（' + rule + '，券码 ' + esc(code) + '）';
+    }
+  }
+  return '券码 ' + esc(code) + '（券已下架）';
+}
+
+/* 状态归一化：优先 statusCode，缺失时回退中文 status；
+   「待收货」由 h5_sales_orders 中存在运单记录推断（与 H5 h5_order.html 的 statusOf 同口径） */
+function statusOf(o, shipped) {
+  var code = o.statusCode;
+  if (!STATUS_TEXT[code]) {
+    var map = { '待付款': 'pending', '已取消': 'cancelled', '待发货': 'paid', '待收货': 'shipped', '已完成': 'completed' };
+    code = map[o.status] || 'pending';
+  }
+  if (shipped && code === 'paid') code = 'shipped';
+  return code;
+}
+
+/* 构建行数据：兼容脏数据，缺字段一律给默认值 */
+function buildRows() {
+  var ships = readArr(SHIP_KEY);
+  return readArr(ORDERS_KEY).filter(function (o) { return o && typeof o === 'object'; }).map(function (o) {
+    var no = o.no || o.id || '';
+    var ship = null;
+    for (var i = 0; i < ships.length; i++) {
+      if (ships[i] && (ships[i].orderNo === no || ships[i].orderNo === o.id)) { ship = ships[i]; break; }
+    }
+    var items = Array.isArray(o.items) ? o.items.filter(function (x) { return x && typeof x === 'object'; }) : [];
+    var total = Number(o.total);
+    if (isNaN(total)) {
+      total = items.reduce(function (s, x) { return s + (Number(x.price) || 0) * (Number(x.qty) || 1); }, 0);
+    }
+    var addr = (o.address && typeof o.address === 'object') ? o.address : null;
+    return {
+      no: no,
+      raw: o,
+      items: items,
+      subtotal: Number(o.subtotal) || 0,
+      discount: Number(o.discount) || 0,
+      total: total,
+      payment: o.payment || '在线支付',
+      invoice: !!o.invoice,
+      invoiceNo: o.invoiceNo || '',
+      couponCode: o.couponCode || '',
+      address: addr,
+      createdAt: o.createdAt || '',
+      status: statusOf(o, !!ship),
+      ship: ship,
+      logistics: Array.isArray(o.logistics) ? o.logistics : []
+    };
+  }).sort(function (a, b) {
+    return (new Date(b.createdAt || 0).getTime() || 0) - (new Date(a.createdAt || 0).getTime() || 0);
+  });
+}
+
+function renderStats(rows) {
+  var pending = 0, paid = 0, completed = 0, amount = 0;
+  rows.forEach(function (r) {
+    if (r.status === 'pending') pending++;
+    else if (r.status === 'paid') paid++;
+    else if (r.status === 'completed') completed++;
+    if (r.status !== 'cancelled') amount += r.total;
+  });
+  document.getElementById('statTotal').textContent = rows.length;
+  document.getElementById('statPending').textContent = pending;
+  document.getElementById('statPaid').textContent = paid;
+  document.getElementById('statCompleted').textContent = completed;
+  document.getElementById('statAmount').textContent = '¥' + amount.toLocaleString('zh-CN');
+}
+
+function renderTabs(rows) {
+  var counts = { all: rows.length, pending: 0, paid: 0, shipped: 0, completed: 0, cancelled: 0 };
+  rows.forEach(function (r) { counts[r.status] = (counts[r.status] || 0) + 1; });
+  document.getElementById('statusTabs').innerHTML = TABS.map(function (t) {
+    return '<button class="status-tab' + (currentTab === t.key ? ' active' : '') + '" onclick="switchTab(\'' + t.key + '\')">' +
+      esc(t.text) + '<span class="tab-count">' + (counts[t.key] || 0) + '</span></button>';
+  }).join('');
+}
+
+function switchTab(key) {
+  currentTab = key;
+  renderTable();
+}
+
+function filteredRows() {
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  return buildRows().filter(function (r) {
+    if (currentTab !== 'all' && r.status !== currentTab) return false;
+    if (!kw) return true;
+    var names = r.items.map(function (x) { return x.name || ''; }).join(' ');
+    var hay = ((r.no || '') + ' ' + (r.address ? (r.address.name || '') : '') + ' ' + names).toLowerCase();
+    return hay.indexOf(kw) !== -1;
+  });
+}
+
+function addrText(r) {
+  if (!r.address || (!r.address.name && !r.address.detail)) return '<span style="color:var(--text-tertiary);">未记录</span>';
+  return '<strong>' + esc(r.address.name || '') + '</strong> ' + esc(r.address.phone || '') + '<br>' +
+    esc([r.address.region, r.address.detail].filter(Boolean).join(' '));
+}
+
+function renderTable() {
+  var all = buildRows();
+  var rows = filteredRows();
+  renderStats(all);
+  renderTabs(all);
+
+  var body = document.getElementById('orderBody');
+  var emptyHint = document.getElementById('emptyHint');
+
+  if (!rows.length) {
+    body.innerHTML = '';
+    emptyHint.textContent = all.length ? '该状态下暂无订单' : '暂无订单';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+
+  body.innerHTML = rows.map(function (r, i) {
+    var first = r.items[0] || {};
+    var moreCount = r.items.length - 1;
+    var goods = '<div class="goods-cell">' +
+      '<img class="goods-img" src="../applefarm_h5/' + esc(first.img || '') + '" alt="" onerror="this.style.visibility=\'hidden\'">' +
+      '<div><div class="goods-name">' + esc(first.name || '商品') + '</div>' +
+      '<div class="goods-sub">' + esc(first.spec || first.desc || '标准装') + ' × ' + (Number(first.qty) || 1) +
+        (moreCount > 0 ? ' · 另 ' + moreCount + ' 件' : '') + '</div></div></div>';
+    var btns = '<button class="action-btn detail" onclick="openDetail(\'' + esc(r.no) + '\')">查看详情</button>';
+    if (r.status === 'paid') {
+      btns += '<button class="action-btn ship" onclick="openShip(\'' + esc(r.no) + '\')">发货</button>';
+    }
+    return '<tr>' +
+      '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td class="text-mono"><strong>' + esc(r.no) + '</strong>' +
+        (r.invoice ? '<div class="goods-sub">已申请发票</div>' : '') + '</td>' +
+      '<td class="text-mono" style="font-size:var(--font-size-xs);">' + esc(fmtTime(r.createdAt)) + '</td>' +
+      '<td>' + goods + '</td>' +
+      '<td class="amount-cell">¥' + r.total.toLocaleString('zh-CN') + '</td>' +
+      '<td style="font-size:var(--font-size-sm);">' + esc(r.payment) + '</td>' +
+      '<td><div class="addr-cell">' + addrText(r) + '</div></td>' +
+      '<td><span class="status-tag ' + esc(r.status) + '">' + (STATUS_TEXT[r.status] || r.status) + '</span></td>' +
+      '<td><div class="action-btns">' + btns + '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function resetFilter() {
+  document.getElementById('searchInput').value = '';
+  currentTab = 'all';
+  renderTable();
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+  currentNo = null;
+}
+
+function findByNo(no) {
+  var rows = buildRows();
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].no === no) return rows[i];
+  }
+  return null;
+}
+
+function openDetail(no) {
+  var r = findByNo(no);
+  if (!r) { Toast.error('未找到该订单'); return; }
+
+  var goodsHtml = r.items.length
+    ? r.items.map(function (x) {
+        return '<div class="detail-goods">' +
+          '<img class="goods-img" src="../applefarm_h5/' + esc(x.img || '') + '" alt="" onerror="this.style.visibility=\'hidden\'">' +
+          '<div style="flex:1;"><div class="goods-name">' + esc(x.name || '商品') + '</div>' +
+          '<div class="goods-sub">' + esc(x.spec || x.desc || '标准装') + '</div></div>' +
+          '<div style="text-align:right;"><div class="amount-cell">¥' + ((Number(x.price) || 0) * (Number(x.qty) || 1)) + '</div>' +
+          '<div class="goods-sub">单价 ¥' + (Number(x.price) || 0) + ' × ' + (Number(x.qty) || 1) + '</div></div>' +
+        '</div>';
+      }).join('')
+    : '<div style="color:var(--text-tertiary);font-size:var(--font-size-sm);">该订单无商品明细</div>';
+
+  var shipHtml = r.ship
+    ? '<div class="detail-value">承运：' + esc(r.ship.company ? (COMPANY_TEXT[r.ship.company] || r.ship.company) : '—') +
+      '<br>运单号：' + esc(r.ship.tracking || '—') +
+      '<br>发货时间：' + esc(fmtTime(r.ship.shippedAt)) + '</div>'
+    : (r.logistics.length
+      ? '<div class="detail-value">承运：' + esc(r.logistics[0].company || '—') +
+        '<br>运单号：' + esc(r.logistics[0].tracking || '—') +
+        '<br>发货时间：' + esc(fmtTime(r.logistics[0].shippedAt)) + '</div>'
+      : '<div style="color:var(--text-tertiary);font-size:var(--font-size-sm);">暂无物流信息</div>');
+
+  document.getElementById('detailBody').innerHTML =
+    '<div class="detail-block"><div class="detail-label">商品清单</div>' +
+      '<div class="detail-value" style="padding:8px 12px;">' + goodsHtml + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">金额构成</div>' +
+      '<div class="detail-value">商品金额 ¥' + r.subtotal.toLocaleString('zh-CN') +
+      ' − 优惠 ¥' + r.discount.toLocaleString('zh-CN') + ' = 实付 <strong>¥' + r.total.toLocaleString('zh-CN') + '</strong></div></div>' +
+    '<div class="detail-block"><div class="detail-label">收货地址快照</div>' +
+      '<div class="detail-value">' + (r.address ? (esc(r.address.name || '') + ' ' + esc(r.address.phone || '') +
+        '<br>' + esc([r.address.region, r.address.detail].filter(Boolean).join(' '))) : '该订单未记录地址快照') + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">优惠券</div>' +
+      '<div class="detail-value">' + couponText(r.couponCode) + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">发票信息</div>' +
+      '<div class="detail-value">' + (r.invoice ? '已申请发票' + (r.invoiceNo ? '（发票号 ' + esc(r.invoiceNo) + '）' : '') : '未申请发票') + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">支付与下单</div>' +
+      '<div class="detail-value">支付方式：' + esc(r.payment) + '<br>下单时间：' + esc(fmtTime(r.createdAt)) + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">物流信息</div>' + shipHtml + '</div>';
+
+  document.getElementById('detailModal').classList.add('show');
+}
+
+/* 发货：写 h5_sales_orders + 推进 h5_orders 状态为「待收货」 */
+function openShip(no) {
+  var r = findByNo(no);
+  if (!r) { Toast.error('未找到该订单'); return; }
+  currentNo = no;
+  var who = r.address && r.address.name ? r.address.name : 'H5 消费者';
+  document.getElementById('shipInfo').textContent = r.no + ' · ' + who + ' · ¥' + r.total.toLocaleString('zh-CN');
+  document.getElementById('shipCompany').value = '顺丰速运';
+  document.getElementById('shipTracking').value = '';
+  document.getElementById('shipModal').classList.add('show');
+}
+
+function confirmShip() {
+  var tracking = document.getElementById('shipTracking').value.trim();
+  if (!tracking) { Toast.warning('请填写运单号'); return; }
+  var no = currentNo;
+  var company = document.getElementById('shipCompany').value;
+  var shippedAt = new Date().toISOString();
+
+  var ships = readArr(SHIP_KEY).filter(function (s) { return !(s && (s.orderNo === no)); });
+  ships.unshift({ orderNo: no, tracking: tracking, company: company, shippedAt: shippedAt });
+  writeArr(SHIP_KEY, ships);
+
+  var orders = readArr(ORDERS_KEY);
+  var hit = false;
+  orders.forEach(function (o) {
+    if (!o || (o.no || o.id) !== no) return;
+    // 待付款订单在发货时一并推进为待发货，与 sales_order.html 行为一致
+    if (o.statusCode === 'pending' || o.status === '待付款') { o.statusCode = 'paid'; o.status = '待发货'; }
+    if (o.statusCode === 'paid' || o.status === '待发货') { o.statusCode = 'shipped'; o.status = '待收货'; hit = true; }
+    if (!Array.isArray(o.logistics)) o.logistics = [];
+    o.logistics.push({ company: company, tracking: tracking, shippedAt: shippedAt });
+  });
+  if (hit) writeArr(ORDERS_KEY, orders);
+
+  closeModal('shipModal');
+  renderTable();
+  if (hit) Toast.success('已发货，运单号：' + tracking);
+  else Toast.warning('物流已记录，但订单状态未推进（可能已取消）');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') renderTable();
+  });
+  renderTable();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 社区审核</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label { font-size: var(--font-size-sm); color: var(--text-tertiary); margin-bottom: var(--space-xs); }
+  .stat-value {
+    font-size: 26px; font-weight: var(--font-weight-bold);
+    color: var(--text-primary); line-height: 1.2; font-variant-numeric: tabular-nums;
+  }
+  .notice-bar {
+    display: flex; align-items: flex-start; gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--warning-bg); border: var(--warning-border);
+    border: 1px solid var(--warning-border);
+    border-radius: var(--radius-lg); font-size: var(--font-size-sm);
+    color: var(--text-secondary); margin-bottom: var(--space-lg);
+  }
+  .notice-bar svg { flex-shrink: 0; margin-top: 2px; color: var(--warning); }
+  .author-cell { display: flex; align-items: center; gap: var(--space-md); }
+  .author-avatar {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, var(--primary-500), var(--success));
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: var(--font-size-sm); font-weight: var(--font-weight-bold);
+  }
+  .cell-name { font-weight: var(--font-weight-semibold, 600); color: var(--text-primary); }
+  .cell-sub { font-size: var(--font-size-xs); color: var(--text-tertiary); }
+  .content-cell {
+    color: var(--text-secondary); font-size: var(--font-size-sm);
+    max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .metric-cell { font-variant-numeric: tabular-nums; }
+  .metric-cell.like { color: var(--error); font-weight: var(--font-weight-semibold, 600); }
+  .metric-cell.cmt { color: var(--primary-500); font-weight: var(--font-weight-semibold, 600); }
+  .detail-block { margin-bottom: var(--space-lg); }
+  .detail-label {
+    font-size: var(--font-size-sm); color: var(--text-tertiary);
+    margin-bottom: var(--space-xs); font-weight: var(--weight-medium, 500);
+  }
+  .detail-value {
+    font-size: var(--font-size-sm); color: var(--text-primary);
+    background: var(--gray-50, #fafafa); border: 1px solid var(--border-light);
+    border-radius: var(--radius-md); padding: var(--space-md); line-height: 1.7;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .comment-item {
+    border-left: 2px solid var(--primary-500); padding: 8px 12px; margin-bottom: 10px;
+    background: var(--gray-50, #fafafa); border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  }
+  .comment-text { font-size: var(--font-size-sm); color: var(--text-primary); line-height: 1.6; word-break: break-all; }
+  .comment-time { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-top: 4px; }
+  .modal-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5); z-index: 1000;
+    justify-content: center; align-items: center; backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card); border-radius: 12px; width: 92%; max-width: 620px;
+    max-height: 85vh; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer; padding: 4px;
+    font-size: 20px; line-height: 1; color: var(--text-tertiary);
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body { padding: 20px; overflow-y: auto; max-height: calc(85vh - 132px); }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 12px;
+    padding: 16px 20px; border-top: 1px solid var(--border-default);
+  }
+  .empty-state { padding: var(--space-2xl) 0; text-align: center; color: var(--text-tertiary); font-size: var(--font-size-sm); }
+</style>
+</head>
+<body data-active-menu="mall" data-active-submenu="mall-community">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">社区审核</div>
+        <div class="page-subtitle">查看消费者 H5 社区的真实动态与互动数据，处理违规内容</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="renderTable()">刷新</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">帖子总数</div>
+        <div class="stat-value" id="statPosts">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">评论总数</div>
+        <div class="stat-value" id="statComments">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">累计点赞</div>
+        <div class="stat-value" id="statLikes">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">今日新增</div>
+        <div class="stat-value" id="statToday">0</div>
+      </div>
+    </div>
+
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <input type="text" class="search-input" placeholder="搜索作者 / 动态内容..." id="searchInput">
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="renderTable()">搜索</button>
+          <button class="jg-btn" onclick="resetFilter()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="checkbox-col" style="width:60px;">序号</th>
+              <th style="width:110px;">发布时间</th>
+              <th style="width:140px;">作者</th>
+              <th>动态内容</th>
+              <th style="width:80px;">点赞数</th>
+              <th style="width:80px;">评论数</th>
+              <th style="width:160px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="postBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无社区内容</div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== 详情弹窗 ===== -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">动态详情</h3>
+      <button class="modal-close" onclick="closeDetailModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeDetailModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * 社区审核（商城管理）
+ * 数据源（H5 端 h5_community.html 写入）：
+ *   h5_community_posts    数组，{ id: 'P'+时间戳, author, content, time }
+ *   h5_community_comments 对象，{ [postId]: [{ text, time }] }
+ *   h5_community_likes    对象，{ [postId]: number }
+ *   注：后两者是对象而非数组，读取必须容错
+ * ============================================================ */
+var POSTS_KEY = 'h5_community_posts';
+var COMMENTS_KEY = 'h5_community_comments';
+var LIKES_KEY = 'h5_community_likes';
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function readPosts() {
+  try {
+    var v = JSON.parse(localStorage.getItem(POSTS_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function writePosts(list) {
+  try {
+    localStorage.setItem(POSTS_KEY, JSON.stringify(list));
+  } catch (e) {
+    Toast.error('本地存储写入失败，动态未能保存');
+  }
+}
+
+/* 评论 / 点赞为对象映射，需容错 null 与非对象 */
+function readMap(key) {
+  try {
+    var v = JSON.parse(localStorage.getItem(key) || '{}');
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function commentsOf(id) {
+  var map = readMap(COMMENTS_KEY);
+  var arr = map[id];
+  return Array.isArray(arr) ? arr : [];
+}
+
+function likesOf(id) {
+  var n = Number(readMap(LIKES_KEY)[id]);
+  return isNaN(n) || n < 0 ? 0 : n;
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso).slice(0, 16);
+  var p = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+function todayStr() {
+  var d = new Date();
+  var p = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+/* 汇总行：按时间倒序（无法解析时间的排在最后） */
+function buildRows() {
+  var likes = readMap(LIKES_KEY);
+  var cmts = readMap(COMMENTS_KEY);
+  return readPosts().filter(function (p) { return p && typeof p === 'object'; }).map(function (p) {
+    var lc = Number(likes[p.id]);
+    var cc = Array.isArray(cmts[p.id]) ? cmts[p.id].length : 0;
+    return {
+      id: p.id,
+      author: p.author || '匿名用户',
+      content: p.content || '',
+      time: p.time || '',
+      likes: isNaN(lc) || lc < 0 ? 0 : lc,
+      comments: cc,
+      ts: new Date(p.time || 0).getTime() || 0
+    };
+  }).sort(function (a, b) { return b.ts - a.ts; });
+}
+
+function renderStats(rows) {
+  var likes = 0, comments = 0, today = 0;
+  var t = todayStr();
+  rows.forEach(function (r) {
+    likes += r.likes;
+    comments += r.comments;
+    if (r.time && fmtTime(r.time).slice(0, 10) === t) today++;
+  });
+  document.getElementById('statPosts').textContent = rows.length;
+  document.getElementById('statComments').textContent = comments;
+  document.getElementById('statLikes').textContent = likes;
+  document.getElementById('statToday').textContent = today;
+}
+
+function filteredRows() {
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  return buildRows().filter(function (r) {
+    if (!kw) return true;
+    var hay = ((r.author || '') + ' ' + (r.content || '') + ' ' + (r.id || '')).toLowerCase();
+    return hay.indexOf(kw) !== -1;
+  });
+}
+
+function renderTable() {
+  var all = buildRows();
+  var rows = filteredRows();
+  renderStats(all);
+
+  var body = document.getElementById('postBody');
+  var emptyHint = document.getElementById('emptyHint');
+
+  if (!rows.length) {
+    body.innerHTML = '';
+    emptyHint.textContent = all.length ? '未找到匹配的动态' : '暂无社区内容';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+
+  body.innerHTML = rows.map(function (r, i) {
+    var initial = esc((r.author || '我').charAt(0));
+    return '<tr>' +
+      '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td class="text-mono" style="font-size:var(--font-size-xs);">' + esc(fmtTime(r.time)) + '</td>' +
+      '<td><div class="author-cell"><div class="author-avatar">' + initial + '</div>' +
+          '<div><div class="cell-name">' + esc(r.author) + '</div>' +
+          '<div class="cell-sub text-mono">' + esc(r.id) + '</div></div></div></td>' +
+      '<td><div class="content-cell" title="' + esc(r.content) + '">' + esc(r.content || '（无内容）') + '</div></td>' +
+      '<td class="metric-cell like">' + r.likes + '</td>' +
+      '<td class="metric-cell cmt">' + r.comments + '</td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn detail" onclick="openDetail(\'' + esc(r.id) + '\')">查看详情</button>' +
+        '<button class="action-btn delete" onclick="removePost(\'' + esc(r.id) + '\')">删除</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function resetFilter() {
+  document.getElementById('searchInput').value = '';
+  renderTable();
+}
+
+function openDetail(id) {
+  var r = null;
+  var rows = buildRows();
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].id === id) { r = rows[i]; break; }
+  }
+  if (!r) { Toast.error('未找到该动态'); return; }
+
+  var list = commentsOf(id);
+  var commentsHtml = list.length
+    ? list.map(function (c) {
+        var o = c || {};
+        return '<div class="comment-item">' +
+          '<div class="comment-text">' + esc(o.text || '') + '</div>' +
+          '<div class="comment-time">' + esc(fmtTime(o.time)) + '</div>' +
+        '</div>';
+      }).join('')
+    : '<div style="color:var(--text-tertiary);font-size:var(--font-size-sm);padding:8px 0;">该动态暂无评论</div>';
+
+  document.getElementById('detailBody').innerHTML =
+    '<div class="detail-block"><div class="detail-label">作者</div>' +
+      '<div class="detail-value">' + esc(r.author) + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">发布时间</div>' +
+      '<div class="detail-value">' + esc(fmtTime(r.time)) + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">动态内容</div>' +
+      '<div class="detail-value">' + esc(r.content || '（无内容）') + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">互动数据</div>' +
+      '<div class="detail-value">点赞 ' + r.likes + ' 次 · 评论 ' + r.comments + ' 条</div></div>' +
+    '<div class="detail-block"><div class="detail-label">评论列表（' + list.length + '）</div>' + commentsHtml + '</div>';
+
+  document.getElementById('detailModal').classList.add('show');
+}
+
+function closeDetailModal() {
+  document.getElementById('detailModal').classList.remove('show');
+}
+
+function removePost(id) {
+  ConfirmDialog.show({
+    title: '删除动态',
+    message: '确定删除动态「' + id + '」吗？删除后 H5 社区页将不再展示该内容及其评论，此操作不可撤销。',
+    onConfirm: function () {
+      var list = readPosts().filter(function (p) { return p && p.id !== id; });
+      writePosts(list);
+      renderTable();
+      Toast.success('动态已删除');
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') renderTable();
+  });
+  renderTable();
+});
+</script>
+</body>
+</html>

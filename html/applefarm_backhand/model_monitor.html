@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 模型监控</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 统计卡 */
+  .stat-card-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-xl);
+    transition: box-shadow var(--transition-normal);
+  }
+  .stat-card:hover { box-shadow: var(--shadow-md); }
+  .stat-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; }
+  .stat-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-value .unit { font-size: 13px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; }
+  .stat-sub { margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
+
+  .data-table { min-width: 800px; }
+  .empty-row td { text-align: center; color: var(--text-tertiary); padding: 40px 0; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="数据运营" data-active-submenu="模型监控">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 统计卡 -->
+        <div class="stat-card-row" id="statCards"></div>
+
+        <!-- 调用量趋势 -->
+        <div class="chart-section">
+          <h2 class="section-title">近 14 天模型调用量（万次）</h2>
+          <div id="chart-model-calls" style="height:300px;"></div>
+        </div>
+
+        <!-- 模型监控表 -->
+        <div class="action-bar">
+          <div class="action-left">
+            <button class="jg-btn jg-btn-primary" id="btnCreate">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+                <path d="M8 3V13M3 8H13"/>
+              </svg>
+              新增模型
+            </button>
+            <button class="jg-btn" id="btnExport">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+                <path d="M3 10V13C3 13.55 3.45 14 4 14H12C12.55 14 13 13.55 13 13V10"/><path d="M2 6H14M6 6V3C6 2.45 6.45 2 7 2H9C9.55 2 10 2.45 10 3V6"/>
+              </svg>
+              导出
+            </button>
+          </div>
+          <div class="action-right">
+            <span class="selected-info" id="totalInfo"></span>
+          </div>
+        </div>
+
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>模型名称</th>
+                  <th>调用次数</th>
+                  <th>命中率</th>
+                  <th>响应时长</th>
+                  <th>版本</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/page-actions.js"></script>
+<script src="js/components/chart.js"></script>
+<script src="js/shared/data-store.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  function fmt(n){
+    n = Number(n) || 0;
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  function esc(v){
+    return String(v === undefined || v === null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  var els = {
+    statCards : document.getElementById('statCards'),
+    tbody     : document.getElementById('tableBody'),
+    totalInfo : document.getElementById('totalInfo')
+  };
+
+  function renderStats(){
+    var s = DataStore.summary();
+    els.statCards.innerHTML =
+      '<div class="stat-card">' +
+        '<div class="stat-label">模型总数</div>' +
+        '<div class="stat-value">' + fmt(s.modelTotal) + '<span class="unit">个</span></div>' +
+        '<div class="stat-sub">已接入监控的 AI 模型</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">在线模型</div>' +
+        '<div class="stat-value">' + fmt(s.onlineModels) + '<span class="unit">个</span></div>' +
+        '<div class="stat-sub">在线率 ' + (s.modelTotal ? Math.round(s.onlineModels / s.modelTotal * 1000) / 10 : 0) + '%</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">模型总调用</div>' +
+        '<div class="stat-value">' + fmt(s.totalCallsWan) + '<span class="unit">万次</span></div>' +
+        '<div class="stat-sub">折合 ' + fmt(s.totalCalls) + ' 次</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">平均命中率</div>' +
+        '<div class="stat-value">' + fmt(s.avgHit) + '<span class="unit">%</span></div>' +
+        '<div class="stat-sub">平均响应 ' + fmt(s.avgResp) + ' ms</div>' +
+      '</div>';
+  }
+
+  function renderTable(){
+    var list = DataStore.models();
+    els.totalInfo.textContent = '共 ' + list.length + ' 条记录';
+
+    if (!list.length){
+      els.tbody.innerHTML = '<tr class="empty-row"><td colspan="7">暂无模型数据</td></tr>';
+      return;
+    }
+
+    els.tbody.innerHTML = list.map(function(x){
+      var online = x.status === 'online';
+      return '<tr data-id="' + esc(x.id) + '">' +
+        '<td><strong>' + esc(x.name) + '</strong></td>' +
+        '<td class="num">' + fmt(x.calls) + '</td>' +
+        '<td class="num">' + fmt(x.hitRate) + '%</td>' +
+        '<td class="num">' + fmt(x.response) + ' ms</td>' +
+        '<td>' + esc(x.version || '-') + '</td>' +
+        '<td><span class="status-tag ' + (online ? 'enabled' : 'disabled') + '">' + esc(online ? (x.statusText || '在线') : (x.statusText || '离线')) + '</span></td>' +
+        '<td><div class="action-btns">' +
+          '<button class="action-btn edit" data-act="edit" data-id="' + esc(x.id) + '">编辑</button>' +
+          '<button class="action-btn" data-act="toggle" data-id="' + esc(x.id) + '">' + (online ? '下线' : '上线') + '</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderChart(){
+    var calls = DataStore.modelCalls();
+    Chart.bar('#chart-model-calls', {
+      categories: calls.map(function(x){ return x.date; }),
+      series: [{
+        name: '调用量（万次）',
+        data: calls.map(function(x){ return x.value; }),
+        color: '#1890ff'
+      }]
+    });
+  }
+
+  function modelFields(){
+    return [
+      { name: 'name',     label: '模型名称',   type: 'text',   required: true },
+      { name: 'calls',    label: '调用次数',   type: 'number', required: true },
+      { name: 'hitRate',  label: '命中率(%)',  type: 'number', required: true },
+      { name: 'response', label: '响应时长(ms)', type: 'number', required: true },
+      { name: 'version',  label: '版本号',     type: 'text',   required: true },
+      { name: 'status',   label: '状态',       type: 'select', required: true,
+        options: [
+          { value: 'online',  label: '在线' },
+          { value: 'offline', label: '离线' }
+        ] }
+    ];
+  }
+
+  function openModelModal(item){
+    var isEdit = !!item;
+    Modal.form({
+      title: isEdit ? '编辑模型' : '新增模型',
+      fields: modelFields(),
+      values: item || { status: 'online' },
+      submitText: '保存',
+      width: '640px',
+      onSubmit: function(formData){
+        if (!formData.name){ Toast.show('请填写模型名称', 'warning'); return false; }
+        var status = formData.status === 'online' ? 'online' : 'offline';
+        DataStore.upsertModel({
+          id: isEdit ? item.id : 'MD' + String(Date.now()).slice(-3),
+          name: formData.name,
+          calls: Number(formData.calls) || 0,
+          hitRate: Number(formData.hitRate) || 0,
+          response: Number(formData.response) || 0,
+          version: formData.version || 'v1.0',
+          status: status,
+          statusText: status === 'online' ? '在线' : '离线'
+        });
+        Toast.show(isEdit ? '保存成功' : '新增成功', 'success');
+        return true;
+      }
+    });
+  }
+
+  function handleEdit(id){
+    var item = DataStore.models().filter(function(x){ return x.id === id; })[0];
+    if (!item){ Toast.show('模型不存在', 'error'); return; }
+    openModelModal(item);
+  }
+
+  function handleToggle(id){
+    var item = DataStore.models().filter(function(x){ return x.id === id; })[0];
+    if (!item){ Toast.show('模型不存在', 'error'); return; }
+    var next = item.status === 'online' ? 'offline' : 'online';
+    DataStore.upsertModel({
+      id: item.id,
+      status: next,
+      statusText: next === 'online' ? '在线' : '离线'
+    });
+    Toast.show(next === 'online' ? '模型已上线' : '模型已下线', 'success');
+  }
+
+  function exportCsv(){
+    var list = DataStore.models();
+    var headers = ['模型名称', '调用次数', '命中率(%)', '响应时长(ms)', '版本', '状态'];
+    var rows = list.map(function(x){
+      return [x.name, x.calls, x.hitRate, x.response, x.version, x.statusText || ''];
+    });
+    var csv = [headers.join(',')].concat(rows.map(function(r){ return r.join(','); })).join('\n');
+    try {
+      var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = '模型监控_' + new Date().toISOString().split('T')[0] + '.csv';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      Toast.show('导出成功，共 ' + list.length + ' 条', 'success');
+    } catch(e){
+      Toast.show('导出失败', 'error');
+    }
+  }
+
+  document.getElementById('btnCreate').addEventListener('click', function(){ openModelModal(null); });
+  document.getElementById('btnExport').addEventListener('click', exportCsv);
+
+  els.tbody.addEventListener('click', function(e){
+    var btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    var id = btn.getAttribute('data-id');
+    if (btn.getAttribute('data-act') === 'edit') handleEdit(id);
+    else handleToggle(id);
+  });
+
+  DataStore.subscribe(function(){
+    renderStats();
+    renderTable();
+    renderChart();
+  });
+})();
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

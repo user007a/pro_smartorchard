@@ -289,36 +289,265 @@
     // 已选图片状态
     var uploadedFile = { name: '', dataUrl: '' };
 
-    // 演示识别规则：文件名关键词 → 结果（非真实模型推理）
-    var DEMO_RULES = [
-      { keys: ['rot', 'fub', '腐烂'], name: '苹果腐烂病', risk: '高风险', riskClass: 'error', icon: 'danger', conf: 91,
-        tips: '1. 及时刮除病斑并涂抹杀菌剂（如戊唑醇）<br>2. 剪除病枝集中烧毁，减少侵染源<br>3. 增施有机肥、控制负载，增强树势<br>4. 冬季清园，树干涂白防冻防病' },
-      { keys: ['ring', 'lunwen', '轮纹'], name: '苹果轮纹病', risk: '高风险', riskClass: 'error', icon: 'danger', conf: 92,
-        tips: '1. 及时清除病枝病果<br>2. 春季发芽前喷布波尔多液<br>3. 谢花后喷施甲基托布津<br>4. 加强果园排水通风' },
-      { keys: ['spot', 'leaf', '斑点', '落叶'], name: '苹果斑点落叶病', risk: '中风险', riskClass: 'warning', icon: 'warning', conf: 88,
-        tips: '1. 清除落叶与病枝，减少病原<br>2. 谢花后喷多抗霉素或代森锰锌<br>3. 生长期视病情间隔 10~15 天连喷 2~3 次<br>4. 平衡施肥，避免偏施氮肥' },
-      { keys: ['red', 'spider', 'mite', 'hongzhizhu', '红蜘蛛'], name: '红蜘蛛虫害', risk: '高风险', riskClass: 'error', icon: 'danger', conf: 90,
-        tips: '1. 冬季刮除粗老树皮、清除越冬螨卵<br>2. 萌芽前喷石硫合剂或矿物油<br>3. 发生期喷阿维菌素、螺螨酯，注意轮换<br>4. 保护捕食螨、草蛉等天敌' },
-      { keys: ['aphid', 'ya', '蚜虫'], name: '蚜虫虫害', risk: '中风险', riskClass: 'warning', icon: 'warning', conf: 86,
-        tips: '1. 剪除虫梢，减少虫源<br>2. 发生期喷吡虫啉、噻虫嗪<br>3. 保护瓢虫、草蛉等天敌<br>4. 避免偏施氮肥，防止徒长诱蚜' },
-      { keys: ['anthracnose', '炭疽'], name: '苹果炭疽病', risk: '中风险', riskClass: 'warning', icon: 'warning', conf: 85,
-        tips: '1. 清除病果、病枝，集中处理<br>2. 套袋前喷保护性杀菌剂<br>3. 生长期喷多菌灵、咪鲜胺等<br>4. 加强通风透光，降低果园湿度' },
-      { keys: ['healthy', 'normal', 'ok', '健康', '正常'], name: '未发现明显病害', risk: '低风险', riskClass: 'success', icon: 'success', conf: 94,
-        tips: '1. 叶片、果面未见典型病斑<br>2. 建议保持现有水肥与通风管理<br>3. 定期巡园，早发现早防治<br>4. 关注后续天气变化，做好预防' }
+    /* ====================================================================
+     * 病害识别规则（T13 接入）
+     *
+     * 数据源：localStorage['mb_disease_rules']
+     *   单条结构（由后台 mb_disease_config.html 维护）：
+     *     { id, keyword: [str], disease, risk: 'high'|'medium'|'low',
+     *       confidence: Number, prevent: [str], enabled: Boolean }
+     *
+     * 移动端原先硬编码的 DEMO_RULES 作为本地内置默认值；
+     * 一旦后台写入 mb_disease_rules，将以存储内容为准。
+     * 为保持移动端独立运行：未读到存储或存储损坏时回退到 DEMO_RULES。
+     * ==================================================================== */
+    var RISK_META = {
+      high:   { risk: '高风险', riskClass: 'error',   icon: 'danger'  },
+      medium: { risk: '中风险', riskClass: 'warning', icon: 'warning' },
+      low:    { risk: '低风险', riskClass: 'success', icon: 'success' }
+    };
+
+    var BUILTIN_RULES = [
+      { keys: ['rot', 'fub', '腐烂'],
+        disease: '苹果腐烂病', risk: 'high',
+        prevent: [
+          '及时刮除病斑并涂抹杀菌剂（如戊唑醇）',
+          '剪除病枝集中烧毁，减少侵染源',
+          '增施有机肥、控制负载，增强树势',
+          '冬季清园，树干涂白防冻防病'
+        ],
+        confidence: 91, enabled: true },
+      { keys: ['ring', 'lunwen', '轮纹'],
+        disease: '苹果轮纹病', risk: 'high',
+        prevent: [
+          '及时清除病枝病果',
+          '春季发芽前喷布波尔多液',
+          '谢花后喷施甲基托布津',
+          '加强果园排水通风'
+        ],
+        confidence: 92, enabled: true },
+      { keys: ['spot', 'leaf', '斑点', '落叶'],
+        disease: '苹果斑点落叶病', risk: 'medium',
+        prevent: [
+          '清除落叶与病枝，减少病原',
+          '谢花后喷多抗霉素或代森锰锌',
+          '生长期视病情间隔 10~15 天连喷 2~3 次',
+          '平衡施肥，避免偏施氮肥'
+        ],
+        confidence: 88, enabled: true },
+      { keys: ['red', 'spider', 'mite', 'hongzhizhu', '红蜘蛛'],
+        disease: '红蜘蛛虫害', risk: 'high',
+        prevent: [
+          '冬季刮除粗老树皮、清除越冬螨卵',
+          '萌芽前喷石硫合剂或矿物油',
+          '发生期喷阿维菌素、螺螨酯，注意轮换',
+          '保护捕食螨、草蛉等天敌'
+        ],
+        confidence: 90, enabled: true },
+      { keys: ['aphid', 'ya', '蚜虫'],
+        disease: '蚜虫虫害', risk: 'medium',
+        prevent: [
+          '剪除虫梢，减少虫源',
+          '发生期喷吡虫啉、噻虫嗪',
+          '保护瓢虫、草蛉等天敌',
+          '避免偏施氮肥，防止徒长诱蚜'
+        ],
+        confidence: 86, enabled: true },
+      { keys: ['anthracnose', '炭疽'],
+        disease: '苹果炭疽病', risk: 'medium',
+        prevent: [
+          '清除病果、病枝，集中处理',
+          '套袋前喷保护性杀菌剂',
+          '生长期喷多菌灵、咪鲜胺等',
+          '加强通风透光，降低果园湿度'
+        ],
+        confidence: 85, enabled: true },
+      { keys: ['healthy', 'normal', 'ok', '健康', '正常'],
+        disease: '未发现明显病害', risk: 'low',
+        prevent: [
+          '叶片、果面未见典型病斑',
+          '建议保持现有水肥与通风管理',
+          '定期巡园，早发现早防治',
+          '关注后续天气变化，做好预防'
+        ],
+        confidence: 94, enabled: true }
     ];
 
-    function identifyByFile(name) {
-      var t = String(name || '').toLowerCase();
-      for (var i = 0; i < DEMO_RULES.length; i++) {
-        for (var j = 0; j < DEMO_RULES[i].keys.length; j++) {
-          if (t.indexOf(DEMO_RULES[i].keys[j]) >= 0) return DEMO_RULES[i];
+    /**
+     * 把后台规则统一转换为移动端内部的 matches 格式（keys/name/risk/riskClass/icon/conf/tips）。
+     * 兼容 BUILTIN_RULES 的简写：仅做映射补全。
+     */
+    function adaptRule(r) {
+      var meta = RISK_META[r.risk] || RISK_META.medium;
+      return {
+        keys: Array.isArray(r.keyword) ? r.keyword : (r.keys || []),
+        name: r.disease || r.name || '未知病害',
+        risk: meta.risk,
+        riskClass: meta.riskClass,
+        icon: meta.icon,
+        conf: Number(r.confidence || r.conf || 85),
+        // 后台传字符串数组 → 渲染为 <ul><li>；原 HTML 富文本（兼容历史）也照常支持
+        tips: r.prevent && r.prevent.length
+          ? '<ul>' + r.prevent.map(function (p) { return '<li>' + String(p) + '</li>'; }).join('') + '</ul>'
+          : (r.tips || '')
+      };
+    }
+
+    /**
+     * 读取后台配置；损坏或缺失时回退到内置 BUILTIN_RULES。
+     * 注意：禁用规则（enabled=false）会被剔除，不参与匹配与无命中回退。
+     */
+    function loadActiveRules() {
+      var raw = null;
+      try { raw = localStorage.getItem('mb_disease_rules'); } catch (e) { raw = null; }
+      if (!raw) return BUILTIN_RULES.slice().filter(function (r) { return r.enabled !== false; }).map(adaptRule);
+      try {
+        var v = JSON.parse(raw);
+        if (!Array.isArray(v)) throw new Error('not array');
+        var cleaned = [];
+        v.forEach(function (r) {
+          if (!r || typeof r !== 'object') return;
+          if (r.enabled === false) return;
+          cleaned.push(adaptRule(r));
+        });
+        return cleaned;
+      } catch (e) {
+        return BUILTIN_RULES.slice().filter(function (r) { return r.enabled !== false; }).map(adaptRule);
+      }
+    }
+
+    /** 兼容旧引用：保持变量名 DEMO_RULES 可被任何依赖它的代码继续使用 */
+    var DEMO_RULES = loadActiveRules();
+
+    /** 后台修改后，重新刷新内部规则表（若后台停用了某规则，立即生效） */
+    function refreshDemoRules() {
+      DEMO_RULES = loadActiveRules();
+    }
+    window.addEventListener('storage', function (e) {
+      if (e.key === 'mb_disease_rules') refreshDemoRules();
+    });
+
+    /* ====================================================================
+     * 图像特征分析（L-8）
+     * 原实现按「上传文件名」做关键词 / 哈希启发式，属演示占位。现改为直接读取
+     * 图片真实像素：把图片缩到 96×96 后统计暗褐斑、深黑、白粉、锈橙、失绿黄化、
+     * 健康绿等区域的占比，据此判定症状类别，再匹配后台「识别规则配置」中的病害条目。
+     * 规则库仍由后台维护，本页只负责从像素得到特征与症状类别。
+     * ==================================================================== */
+    var CATEGORY_DEFS = {
+      healthy:     { label: '未见明显病斑',   kw: ['健康', '正常', '明显病害'] },
+      powdery:     { label: '白色粉状霉层',   kw: ['白粉'] },
+      rust:        { label: '橙黄色锈斑',     kw: ['锈'] },
+      rot:         { label: '暗褐色腐烂斑块', kw: ['腐烂'] },
+      ring:        { label: '同心轮纹病斑',   kw: ['轮纹'] },
+      anthracnose: { label: '深褐色凹陷病斑', kw: ['炭疽'] },
+      mite:        { label: '细密失绿黄白点', kw: ['红蜘蛛', '螨'] },
+      aphid:       { label: '嫩梢密集虫体',   kw: ['蚜虫'] },
+      spot:        { label: '褐色斑点 / 落叶', kw: ['斑点', '落叶'] }
+    };
+
+    /**
+     * 读取图片像素并统计颜色特征占比。
+     * 回调参数 f = { green, yellow, brown, dark, white, orange, red, avgLum }（占比 0~1）；
+     * 无法读取像素（极端环境 / 非图片）时回传 null，由上层降级处理。
+     */
+    function analyzePixels(dataUrl, done) {
+      var img = new Image();
+      img.onload = function () {
+        var side = 96;   // 统一缩到 96×96 采样，兼顾速度与代表性
+        var canvas = document.createElement('canvas');
+        canvas.width = side;
+        canvas.height = side;
+        var ctx = canvas.getContext('2d');
+        var f = { green: 0, yellow: 0, brown: 0, dark: 0, white: 0, orange: 0, red: 0, avgLum: 0 };
+        try {
+          ctx.drawImage(img, 0, 0, side, side);
+          var px = ctx.getImageData(0, 0, side, side).data;
+          var n = side * side, lum = 0;
+          for (var i = 0; i < px.length; i += 4) {
+            var r = px[i], g = px[i + 1], b = px[i + 2];
+            var max = Math.max(r, g, b), min = Math.min(r, g, b);
+            var v = max / 255;
+            var s = max === 0 ? 0 : (max - min) / max;
+            lum += v;
+            if (v < 0.22) { f.dark++; continue; }                                     // 深黑（坏死）
+            if (r > 130 && g < 100 && b < 100) { f.red++; continue; }                  // 鲜红（螨类聚集）
+            if (v > 0.74 && s < 0.18) { f.white++; continue; }                         // 白粉 / 霉层
+            if (r > 150 && g > 90 && g < 175 && b < 100 && (r - g) > 35) { f.orange++; continue; } // 锈橙
+            if (g > r + 10 && g > b + 10) { f.green++; continue; }                     // 健康绿
+            if (r > 135 && g > 115 && b < 115 && Math.abs(r - g) < 65) { f.yellow++; continue; }   // 失绿黄化
+            if (v < 0.55 && r >= g && g >= b && (r - b) > 15) { f.brown++; }           // 暗褐病斑
+          }
+          Object.keys(f).forEach(function (k) { if (k !== 'avgLum') f[k] = f[k] / n; });
+          f.avgLum = lum / n;
+        } catch (e) {
+          done(null);
+          return;
+        }
+        done(f);
+      };
+      img.onerror = function () { done(null); };
+      img.src = dataUrl;
+    }
+
+    /** 由颜色特征占比判定症状类别（按病斑严重度从高到低短路判断） */
+    function classifyImage(f) {
+      var lesion = f.brown + f.dark + f.orange + f.white + f.red;
+      if (f.green >= 0.45 && lesion < 0.14) return { cat: 'healthy', score: f.green };
+      if (f.white >= 0.16) return { cat: 'powdery', score: f.white };
+      if (f.orange >= 0.12) return { cat: 'rust', score: f.orange };
+      if (f.dark >= 0.10) return { cat: 'anthracnose', score: f.dark };
+      if (f.red >= 0.10) return { cat: 'mite', score: f.red };
+      if (f.yellow >= 0.22) return { cat: 'mite', score: f.yellow };
+      if (f.brown >= 0.16) return { cat: 'rot', score: f.brown };
+      if (f.brown >= 0.08) return { cat: 'ring', score: f.brown };
+      if (f.brown >= 0.03) return { cat: 'spot', score: f.brown };
+      return { cat: 'healthy', score: Math.max(f.green, 0.3) };
+    }
+
+    /** 症状类别 → 后台规则条目：优先按病害名称关键词命中，未命中则就近回退 */
+    function ruleByCategory(cat) {
+      var kws = (CATEGORY_DEFS[cat] || {}).kw || [];
+      var i, j;
+      for (i = 0; i < DEMO_RULES.length; i++) {
+        var name = DEMO_RULES[i].name || '';
+        for (j = 0; j < kws.length; j++) {
+          if (name.indexOf(kws[j]) >= 0) return DEMO_RULES[i];
         }
       }
-      // 无命中：按文件名哈希稳定映射到一种常见病害
-      var h = 0;
-      for (var k = 0; k < t.length; k++) { h = (h * 31 + t.charCodeAt(k)) >>> 0; }
-      var pool = DEMO_RULES.slice(0, 6);
-      return pool[h % pool.length];
+      if (cat === 'healthy') {
+        for (i = 0; i < DEMO_RULES.length; i++) {
+          if (DEMO_RULES[i].riskClass === 'success') return DEMO_RULES[i];
+        }
+      }
+      // 无对应条目时回退到通用叶斑类，再回退到首个非健康规则
+      for (i = 0; i < DEMO_RULES.length; i++) {
+        if ((DEMO_RULES[i].name || '').indexOf('斑点') >= 0) return DEMO_RULES[i];
+      }
+      var pool = DEMO_RULES.filter(function (r) { return r.riskClass !== 'success'; });
+      if (!pool.length) pool = DEMO_RULES;
+      return pool[0];
+    }
+
+    /** 识别入口：图像特征分析 → 症状类别 → 规则匹配，异步回调 { rule, conf, note } */
+    function identifyByImage(dataUrl, done) {
+      analyzePixels(dataUrl, function (f) {
+        if (!f) {
+          var guard = DEMO_RULES.filter(function (r) { return r.riskClass === 'success'; })[0] || DEMO_RULES[0];
+          done({ rule: guard, conf: 60, note: '图像分析 · 当前环境无法读取图片像素，请更换图片后重试' });
+          return;
+        }
+        var res = classifyImage(f);
+        var def = CATEGORY_DEFS[res.cat] || { label: '' };
+        var rule = ruleByCategory(res.cat);
+        // 置信度由特征强度换算（非硬编码），并限制在 60~96 之间
+        var conf = Math.round(Math.max(60, Math.min(96, 52 + res.score * 120)));
+        var pct = function (x) { return (x * 100).toFixed(1) + '%'; };
+        var note = '图像分析 · 症状特征「' + def.label + '」（暗褐斑 ' + pct(f.brown) +
+          ' · 深黑 ' + pct(f.dark) + ' · 白粉 ' + pct(f.white) + ' · 锈橙 ' + pct(f.orange) +
+          ' · 黄化 ' + pct(f.yellow) + ' · 健康绿 ' + pct(f.green) + '）';
+        done({ rule: rule, conf: conf, note: note });
+      });
     }
 
     function handleUpload(e) {
@@ -353,13 +582,18 @@
       }
       var modal = document.getElementById('loadingModal');
       modal.classList.add('show');
-      setTimeout(function () {
+
+      var MIN_MS = 900;              // 保留最短“识别中”反馈，避免结果一闪而过
+      var timerDone = false, outcome = null;
+
+      function render() {
+        if (!outcome || !timerDone) return;
         modal.classList.remove('show');
-        var r = identifyByFile(uploadedFile.name);
+        var r = outcome.rule;
         document.getElementById('resultIcon').className = 'result-icon ' + r.icon;
         document.getElementById('resultName').textContent = r.name;
-        document.getElementById('resultConfidence').textContent = '置信度：' + r.conf + '%';
-        document.getElementById('resultNote').textContent = '演示识别 · 依据“' + uploadedFile.name + '”启发式判断';
+        document.getElementById('resultConfidence').textContent = '置信度：' + outcome.conf + '%';
+        document.getElementById('resultNote').textContent = outcome.note;
         var tag = document.getElementById('resultTag');
         tag.className = 'mb-tag mb-tag-lg ' + r.riskClass;
         tag.textContent = r.risk;
@@ -367,7 +601,13 @@
         var resultArea = document.getElementById('resultArea');
         resultArea.style.display = 'block';
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }, 1200);
+      }
+
+      setTimeout(function () { timerDone = true; render(); }, MIN_MS);
+      identifyByImage(uploadedFile.dataUrl, function (res) {
+        outcome = res;
+        render();
+      });
     }
 
     // 骨架屏加载模拟

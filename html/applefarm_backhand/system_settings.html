@@ -656,6 +656,21 @@
                 </svg>
                 <input type="text" placeholder="搜索用户名/手机号..." id="userSearchInput" onkeyup="searchUsers()">
               </div>
+              <select class="form-select" id="userDeptSelect" style="width:auto;min-width:120px;" onchange="searchUsers()">
+                <option value="">全部部门</option>
+                <option value="种植部">种植部</option>
+                <option value="技术部">技术部</option>
+                <option value="仓储部">仓储部</option>
+                <option value="销售部">销售部</option>
+                <option value="行政部">行政部</option>
+              </select>
+              <select class="form-select" id="userJobSelect" style="width:auto;min-width:130px;" onchange="searchUsers()">
+                <option value="">全部岗位</option>
+                <option value="管理">管理</option>
+                <option value="技术">技术</option>
+                <option value="作业">作业</option>
+                <option value="销售">销售</option>
+              </select>
               <button class="primary-btn" onclick="openAddUserModal()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 5v14"/><path d="M5 12h14"/>
@@ -665,9 +680,11 @@
             </div>
           </div>
           <div class="panel-body">
+            <!-- 员工规模统计卡（按岗位分类） -->
+            <div class="stats-row" id="userStatsRow"></div>
             <table class="data-grid">
               <thead>
-                <tr><th>用户名</th><th>姓名</th><th>角色</th><th>手机号</th><th>所属基地</th><th>状态</th><th>最后登录</th><th>操作</th></tr>
+                <tr><th>用户名</th><th>姓名</th><th>角色</th><th>部门</th><th>岗位分类</th><th>手机号</th><th>所属基地</th><th>状态</th><th>最后登录</th><th>操作</th></tr>
               </thead>
               <tbody id="userTableBody"></tbody>
             </table>
@@ -799,6 +816,25 @@
                 </label>
               </div>
             </div>
+
+            <!-- 数据源接入（只读展示，维护入口在「数据运营 → 数据源接入」） -->
+            <div class="config-section" id="sec-datasource">
+              <div class="config-section-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                </svg>
+                数据源接入配置
+                <span style="margin-left:auto;font-size:12px;font-weight:normal;color:var(--text-tertiary);">前往『数据运营 → 数据源接入』维护</span>
+              </div>
+              <table class="data-grid">
+                <thead>
+                  <tr><th style="width:60px;">序号</th><th>数据源名称</th><th>类型</th><th>协议</th><th>接入地址</th><th>采集频率</th><th>状态</th></tr>
+                </thead>
+                <tbody id="sourceTableBody"></tbody>
+              </table>
+              <div id="sourceEmpty" style="display:none;padding:32px;text-align:center;color:var(--text-tertiary);font-size:var(--font-size-sm);">暂无数据源，请前往『数据运营 → 数据源接入』接入</div>
+            </div>
+
             <div class="config-section">
               <div class="config-section-header">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -922,29 +958,30 @@
     </div>
   </div>
 </div>
+<script src="js/shared/data-store.js"></script>
 <script>
 const mockUsers = [
-  { id: 1, username: 'admin', realName: '超级用户', role: 'admin', phone: '13800000000', base: '全部基地', status: 'active', lastLogin: '2026-09-20 10:30' },
-  { id: 2, username: 'huijianing', realName: '惠加宁', role: 'manager', phone: '13307912585', base: '天水麦积区基地', status: 'active', lastLogin: '2026-09-20 09:15' },
-  { id: 3, username: 'huangzhongjian', realName: '黄忠坚', role: 'manager', phone: '13979412180', base: '天水麦积区基地', status: 'active', lastLogin: '2026-09-20 08:40' },
-  { id: 4, username: 'xushuiying', realName: '徐水应', role: 'operator', phone: '13879418637', base: '招远基地', status: 'active', lastLogin: '2026-09-19 16:45' },
-  { id: 5, username: 'zhuquanlong', realName: '朱泉龙', role: 'operator', phone: '18296452648', base: '招远基地', status: 'active', lastLogin: '2026-09-19 15:20' },
-  { id: 6, username: 'chenxiaozhong', realName: '陈小忠', role: 'operator', phone: '18779417899', base: '天水甘谷基地', status: 'active', lastLogin: '2026-09-20 11:20' },
-  { id: 7, username: 'liaochunliang', realName: '廖春亮', role: 'operator', phone: '13767679075', base: '天水秦州基地', status: 'active', lastLogin: '2026-09-19 14:30' },
-  { id: 8, username: 'lijianming', realName: '李建明', role: 'manager', phone: '13970432567', base: '青岛崂山基地', status: 'active', lastLogin: '2026-09-20 10:00' },
-  { id: 9, username: 'ligen', realName: '李根', role: 'operator', phone: '13030587809', base: '天水福山基地', status: 'active', lastLogin: '2026-09-18 09:00' },
-  { id: 10, username: 'zhangcaisun', realName: '张才孙', role: 'operator', phone: '15079427679', base: '潍坊寿光基地', status: 'active', lastLogin: '2026-09-20 08:30' },
-  { id: 11, username: 'liuquanguo', realName: '刘全国', role: 'manager', phone: '13870409283', base: '临沂沂水基地', status: 'active', lastLogin: '2026-09-19 11:45' },
-  { id: 12, username: 'maodingwei', realName: '毛定卫', role: 'operator', phone: '15979580151', base: '泰安肥城基地', status: 'active', lastLogin: '2026-09-17 15:20' },
-  { id: 13, username: 'yesandong', realName: '叶三东', role: 'operator', phone: '13307946219', base: '济宁曲阜基地', status: 'active', lastLogin: '2026-09-20 09:50' },
-  { id: 14, username: 'zhoucaigui', realName: '周才贵', role: 'operator', phone: '13307043277', base: '济南历城基地', status: 'active', lastLogin: '2026-09-19 17:30' },
-  { id: 15, username: 'chengminggao', realName: '程名高', role: 'operator', phone: '13879411631', base: '淄博临淄基地', status: 'active', lastLogin: '2026-09-18 14:00' },
-  { id: 16, username: 'dengxiaohua', realName: '邓小华', role: 'operator', phone: '15179450918', base: '东营河口基地', status: 'active', lastLogin: '2026-09-20 10:00' },
-  { id: 17, username: 'zhouchengyou', realName: '周成友', role: 'operator', phone: '13407945529', base: '滨州无棣基地', status: 'active', lastLogin: '2026-09-20 10:15' },
-  { id: 18, username: 'weihongwei', realName: '危红卫', role: 'operator', phone: '13870456916', base: '德州乐陵基地', status: 'active', lastLogin: '2026-09-19 08:45' },
-  { id: 19, username: 'fangchao', realName: '方超', role: 'operator', phone: '13437942227', base: '聊城高唐基地', status: 'active', lastLogin: '2026-09-18 16:30' },
-  { id: 20, username: 'caohongying', realName: '曹红英', role: 'operator', phone: '15179480005', base: '菏泽曹县基地', status: 'active', lastLogin: '2026-09-17 09:20' },
-  { id: 21, username: 'cuixingen', realName: '崔新根', role: 'operator', phone: '13970402086', base: '枣庄滕州基地', status: 'disabled', lastLogin: '2026-09-01 10:00' }
+  { id: 1, username: 'admin', realName: '超级用户', role: 'admin', dept: '行政部', jobType: '管理', phone: '13800000000', base: '全部基地', status: 'active', lastLogin: '2026-09-20 10:30' },
+  { id: 2, username: 'huijianing', realName: '惠加宁', role: 'manager', dept: '种植部', jobType: '管理', phone: '13307912585', base: '天水麦积区基地', status: 'active', lastLogin: '2026-09-20 09:15' },
+  { id: 3, username: 'huangzhongjian', realName: '黄忠坚', role: 'manager', dept: '种植部', jobType: '管理', phone: '13979412180', base: '天水麦积区基地', status: 'active', lastLogin: '2026-09-20 08:40' },
+  { id: 4, username: 'xushuiying', realName: '徐水应', role: 'operator', dept: '技术部', jobType: '技术', phone: '13879418637', base: '招远基地', status: 'active', lastLogin: '2026-09-19 16:45' },
+  { id: 5, username: 'zhuquanlong', realName: '朱泉龙', role: 'operator', dept: '种植部', jobType: '作业', phone: '18296452648', base: '招远基地', status: 'active', lastLogin: '2026-09-19 15:20' },
+  { id: 6, username: 'chenxiaozhong', realName: '陈小忠', role: 'operator', dept: '技术部', jobType: '技术', phone: '18779417899', base: '天水甘谷基地', status: 'active', lastLogin: '2026-09-20 11:20' },
+  { id: 7, username: 'liaochunliang', realName: '廖春亮', role: 'operator', dept: '种植部', jobType: '作业', phone: '13767679075', base: '天水秦州基地', status: 'active', lastLogin: '2026-09-19 14:30' },
+  { id: 8, username: 'lijianming', realName: '李建明', role: 'manager', dept: '销售部', jobType: '销售', phone: '13970432567', base: '青岛崂山基地', status: 'active', lastLogin: '2026-09-20 10:00' },
+  { id: 9, username: 'ligen', realName: '李根', role: 'operator', dept: '仓储部', jobType: '作业', phone: '13030587809', base: '天水福山基地', status: 'active', lastLogin: '2026-09-18 09:00' },
+  { id: 10, username: 'zhangcaisun', realName: '张才孙', role: 'operator', dept: '销售部', jobType: '销售', phone: '15079427679', base: '潍坊寿光基地', status: 'active', lastLogin: '2026-09-20 08:30' },
+  { id: 11, username: 'liuquanguo', realName: '刘全国', role: 'manager', dept: '销售部', jobType: '管理', phone: '13870409283', base: '临沂沂水基地', status: 'active', lastLogin: '2026-09-19 11:45' },
+  { id: 12, username: 'maodingwei', realName: '毛定卫', role: 'operator', dept: '种植部', jobType: '作业', phone: '15979580151', base: '泰安肥城基地', status: 'active', lastLogin: '2026-09-17 15:20' },
+  { id: 13, username: 'yesandong', realName: '叶三东', role: 'operator', dept: '技术部', jobType: '技术', phone: '13307946219', base: '济宁曲阜基地', status: 'active', lastLogin: '2026-09-20 09:50' },
+  { id: 14, username: 'zhoucaigui', realName: '周才贵', role: 'operator', dept: '仓储部', jobType: '作业', phone: '13307043277', base: '济南历城基地', status: 'active', lastLogin: '2026-09-19 17:30' },
+  { id: 15, username: 'chengminggao', realName: '程名高', role: 'operator', dept: '技术部', jobType: '技术', phone: '13879411631', base: '淄博临淄基地', status: 'active', lastLogin: '2026-09-18 14:00' },
+  { id: 16, username: 'dengxiaohua', realName: '邓小华', role: 'operator', dept: '仓储部', jobType: '作业', phone: '15179450918', base: '东营河口基地', status: 'active', lastLogin: '2026-09-20 10:00' },
+  { id: 17, username: 'zhouchengyou', realName: '周成友', role: 'operator', dept: '销售部', jobType: '销售', phone: '13407945529', base: '滨州无棣基地', status: 'active', lastLogin: '2026-09-20 10:15' },
+  { id: 18, username: 'weihongwei', realName: '危红卫', role: 'operator', dept: '技术部', jobType: '技术', phone: '13870456916', base: '德州乐陵基地', status: 'active', lastLogin: '2026-09-19 08:45' },
+  { id: 19, username: 'fangchao', realName: '方超', role: 'operator', dept: '种植部', jobType: '作业', phone: '13437942227', base: '聊城高唐基地', status: 'active', lastLogin: '2026-09-18 16:30' },
+  { id: 20, username: 'caohongying', realName: '曹红英', role: 'operator', dept: '销售部', jobType: '销售', phone: '15179480005', base: '菏泽曹县基地', status: 'active', lastLogin: '2026-09-17 09:20' },
+  { id: 21, username: 'cuixingen', realName: '崔新根', role: 'operator', dept: '仓储部', jobType: '作业', phone: '13970402086', base: '枣庄滕州基地', status: 'disabled', lastLogin: '2026-09-01 10:00' }
 ];
 const mockRoles = [
   { id: 1, name: '超级管理员', code: 'admin', userCount: 1, desc: '系统最高权限，可管理所有功能', status: 'active' },
@@ -962,7 +999,7 @@ const mockDicts = [
   { id: 3, type: '基地类型', code: 'BASE_TYPE', name: '基地类型分类', value: '自营基地,合作基地,示范基地', sort: 3, status: 'active' },
   { id: 4, type: '预警类型', code: 'ALERT_TYPE', name: '预警信息分类', value: '低温预警,高温预警,旱情预警,虫情预警', sort: 4, status: 'active' },
   { id: 5, type: '设备状态', code: 'DEVICE_STATUS', name: '设备运行状态', value: '在线,离线,故障,维护中', sort: 5, status: 'active' },
-  { id: 6, type: '农事类型', code: 'FARMING_TYPE', name: '农事作业类型', value: '施肥,浇水,修剪,喷药,授粉,采收', sort: 6, status: 'active' },
+  { id: 6, type: '农事类型', code: 'FARMING_TYPE', name: '农事作业类型', value: '疏果,套袋,喷药,灌溉,施肥,修剪,环剥,除草,授粉', sort: 6, status: 'active' },
   { id: 7, type: '季节类型', code: 'SEASON_TYPE', name: '季节分类', value: '春季,夏季,秋季,冬季', sort: 7, status: 'active' },
   { id: 8, type: '土壤类型', code: 'SOIL_TYPE', name: '土壤类型分类', value: '砂质土,壤质土,黏质土,盐碱土', sort: 8, status: 'active' },
   { id: 9, type: '病虫害类型', code: 'PEST_TYPE', name: '病虫害分类', value: '红蜘蛛,蚜虫,白粉病,腐烂病', sort: 9, status: 'active' },
@@ -1089,6 +1126,31 @@ function goToPage(paginationId, page) {
   renderTable(data, body, render, page, data.length);
   renderPagination(paginationId, page, data.length);
 }
+// 员工规模统计卡：员工总数 + 按岗位分类的人数与百分比
+const JOB_TYPES = ['管理', '技术', '作业', '销售'];
+function renderUserStats(list) {
+  var box = document.getElementById('userStatsRow');
+  if (!box) return;
+  var data = list || mockUsers;
+  var total = data.length;
+  var items = JOB_TYPES.map(function (j) {
+    var n = data.filter(function (u) { return u.jobType === j; }).length;
+    var pct = total > 0 ? Math.round(n / total * 1000) / 10 : 0;
+    return '<div class="stat-item"><div class="stat-value">' + n + ' 人</div><div class="stat-label">' + j + ' · ' + pct.toFixed(1) + '%</div></div>';
+  }).join('');
+  box.innerHTML =
+    '<div class="stat-card blue">' +
+      '<div class="stat-header">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>' +
+        '<span class="stat-title">员工总数</span>' +
+      '</div>' +
+      '<div class="stat-content">' +
+        '<div class="stat-item"><div class="stat-value">' + total + '</div><div class="stat-label">在册账号</div></div>' +
+        items +
+      '</div>' +
+    '</div>';
+}
+
 function renderUserRow(user) {
   const roleMap = { admin: '超级管理员', enterprise: '企业管理员', manager: '基地管理员', operator: '农事操作员', warehouse: '仓库管理员', equipment: '设备管理员', marketing: '营销专员', finance: '财务管理员' };
   const roleClass = { admin: 'admin', enterprise: 'manager', manager: 'manager', operator: 'operator', warehouse: 'operator', equipment: 'operator', marketing: 'manager', finance: 'manager' };
@@ -1103,7 +1165,11 @@ function renderUserRow(user) {
   } else {
     actions = '<button class="action-btn edit" onclick="openEditUserModal(' + user.id + ')">编辑</button><button class="action-btn reset" onclick="openResetPasswordModal(' + user.id + ')">重置密码</button><button class="action-btn delete" onclick="openDisableUserModal(' + user.id + ')">禁用</button>';
   }
-  return '<tr><td><strong>' + user.username + '</strong></td><td>' + user.realName + '</td><td><span class="role-badge ' + roleClass[user.role] + '">' + roleMap[user.role] + '</span></td><td>' + user.phone + '</td><td>' + user.base + '</td><td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td><td>' + user.lastLogin + '</td><td><div class="action-group">' + actions + '</div></td></tr>';
+  return '<tr><td><strong>' + user.username + '</strong></td><td>' + user.realName + '</td><td><span class="role-badge ' + roleClass[user.role] + '">' + roleMap[user.role] + '</span></td><td>' + (user.dept || '-') + '</td><td><span class="status-badge ' + jobBadge(user.jobType) + '">' + (user.jobType || '-') + '</span></td><td>' + user.phone + '</td><td>' + user.base + '</td><td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td><td>' + user.lastLogin + '</td><td><div class="action-group">' + actions + '</div></td></tr>';
+}
+// 岗位分类标签色
+function jobBadge(job) {
+  return { '管理': 'info', '技术': 'active', '作业': 'warning', '销售': 'disabled' }[job] || 'disabled';
 }
 function renderRoleRow(role) {
   const statusClass = role.status === 'active' ? 'active' : 'disabled';
@@ -1114,6 +1180,43 @@ function renderRoleRow(role) {
   }
   return '<tr><td><strong>' + role.name + '</strong></td><td>' + role.code + '</td><td>' + role.userCount + '</td><td>' + role.desc + '</td><td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td><td><div class="action-group">' + actions + '</div></td></tr>';
 }
+/* ============================================================
+ * 数据字典持久化
+ * localStorage key: smartorchard_data_dict
+ *   存储结构：字典条目数组 [{ id, type, code, name, value, sort, status }]
+ *   用途：供移动端跨端读取（如 mb_record_task.html 的「农事类型」九宫格），
+ *         后台字典的增 / 删 / 改后写回该 key，移动端通过 storage 事件同步。
+ * ============================================================ */
+var DICT_STORAGE_KEY = 'smartorchard_data_dict';
+
+// 把当前字典数组完整写回 localStorage
+function saveDicts() {
+  try { localStorage.setItem(DICT_STORAGE_KEY, JSON.stringify(mockDicts)); } catch (e) { /* 忽略写入异常 */ }
+}
+
+// 初始化：key 不存在时用 mockDicts 完整播种；已存在则加载回当前数组
+function initDictStorage() {
+  var raw = null;
+  try { raw = localStorage.getItem(DICT_STORAGE_KEY); } catch (e) { raw = null; }
+  if (raw) {
+    try {
+      var loaded = JSON.parse(raw);
+      if (loaded && loaded.length) {
+        mockDicts.length = 0;
+        for (var i = 0; i < loaded.length; i++) { mockDicts.push(loaded[i]); }
+        return;
+      }
+    } catch (e) { /* 解析失败则重新播种 */ }
+  }
+  saveDicts();
+}
+
+// 增删改后刷新字典表格
+function refreshDictTable() {
+  renderTable(mockDicts, 'dictTableBody', renderDictRow, currentDictPage, mockDicts.length);
+  renderPagination('dictPagination', currentDictPage, mockDicts.length);
+}
+
 function renderDictRow(dict) {
   const statusClass = dict.status === 'active' ? 'active' : 'disabled';
   const statusText = dict.status === 'active' ? '启用' : '停用';
@@ -1129,12 +1232,20 @@ function renderLogRow(log) {
 }
 function searchUsers() {
   const keyword = document.getElementById('userSearchInput').value.toLowerCase();
+  const deptEl = document.getElementById('userDeptSelect');
+  const jobEl = document.getElementById('userJobSelect');
+  const dept = deptEl ? deptEl.value : '';
+  const job = jobEl ? jobEl.value : '';
   const filtered = mockUsers.filter(function(u) {
-    return u.username.toLowerCase().includes(keyword) || u.phone.includes(keyword) || u.realName.toLowerCase().includes(keyword);
+    const matchKeyword = !keyword || u.username.toLowerCase().includes(keyword) || u.phone.includes(keyword) || u.realName.toLowerCase().includes(keyword);
+    const matchDept = !dept || u.dept === dept;
+    const matchJob = !job || u.jobType === job;
+    return matchKeyword && matchDept && matchJob;
   });
   currentUserPage = 1;
   renderTable(filtered, 'userTableBody', renderUserRow, 1, filtered.length);
   renderPagination('userPagination', 1, filtered.length);
+  renderUserStats(mockUsers);
 }
 function searchDicts() {
   const keyword = document.getElementById('dictSearchInput').value.toLowerCase();
@@ -1144,6 +1255,7 @@ function searchDicts() {
   currentDictPage = 1;
   renderTable(filtered, 'dictTableBody', renderDictRow, 1, filtered.length);
   renderPagination('dictPagination', 1, filtered.length);
+  saveDicts(); // 搜索后同步回写 localStorage（smartorchard_data_dict）
 }
 function searchLogs() {
   const keyword = document.getElementById('logSearchInput').value.toLowerCase();
@@ -1272,6 +1384,7 @@ function openAddDictModal() {
 }
 function openEditDictModal(dictId) {
   const dict = mockDicts.find(function(d) { return d.id === dictId; });
+  window.__currentDictId = dictId; // 编辑提交时定位目标条目
   // 解析字典值字符串为表格行（支持 JSON 数组 或 逗号分隔字符串）
   let rows = [];
   try {
@@ -1366,6 +1479,7 @@ function collectDictValueRows() {
 }
 function openDeleteDictModal(dictId) {
   const dict = mockDicts.find(function(d) { return d.id === dictId; });
+  window.__currentDictId = dictId; // 删除提交时定位目标条目
   const body = '<div class="confirm-warning"><p>确认要删除字典 <strong>' + dict.name + '</strong> 吗？此操作不可恢复。</p></div>';
   const footer = '<button class="btn btn-secondary" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="deleteDict()">确定删除</button>';
   openModal('删除字典', body, footer);
@@ -1467,28 +1581,44 @@ function savePermission() {
   closeModal();
 }
 function addDict() {
-  var key = (document.getElementById('dictKey') || {}).value || '';
-  var val = (document.getElementById('dictVal') || {}).value || '';
-  if (!key || !val) { alert('请填写字典键与值'); return; }
-  try {
-    var list = JSON.parse(localStorage.getItem('snzg_dict') || '{}');
-    list[key] = val;
-    localStorage.setItem('snzg_dict', JSON.stringify(list));
-  } catch (e) {}
-  alert('新增字典成功：' + key + ' = ' + val);
+  var type = ((document.getElementById('modalDictType') || {}).value || '').trim();
+  var code = ((document.getElementById('modalDictCode') || {}).value || '').trim();
+  var name = ((document.getElementById('modalDictName') || {}).value || '').trim();
+  if (!type || !code || !name) { alert('请填写字典类型、编码与名称'); return; }
+  var sort = parseInt((document.getElementById('modalDictSort') || {}).value, 10) || (mockDicts.length + 1);
+  var newId = 1;
+  mockDicts.forEach(function(d) { if (d.id >= newId) newId = d.id + 1; });
+  mockDicts.push({ id: newId, type: type, code: code.toUpperCase(), name: name, value: collectDictValueRows(), sort: sort, status: 'active' });
+  saveDicts();
+  refreshDictTable();
   closeModal();
+  alert('新增字典成功：' + code);
 }
-function editDict() { closeModal(); alert('编辑字典成功'); }
-function deleteDict() {
-  var key = window.__currentDictKey || '';
-  if (!key) { alert('请选择要删除的字典'); return; }
-  try {
-    var list = JSON.parse(localStorage.getItem('snzg_dict') || '{}');
-    delete list[key];
-    localStorage.setItem('snzg_dict', JSON.stringify(list));
-  } catch (e) {}
-  alert('字典已删除：' + key);
+function editDict() {
+  var dict = null;
+  for (var i = 0; i < mockDicts.length; i++) { if (mockDicts[i].id === window.__currentDictId) { dict = mockDicts[i]; break; } }
+  if (!dict) { closeModal(); return; }
+  var type = ((document.getElementById('modalDictType') || {}).value || '').trim();
+  var name = ((document.getElementById('modalDictName') || {}).value || '').trim();
+  if (type) dict.type = type;
+  if (name) dict.name = name;
+  dict.sort = parseInt((document.getElementById('modalDictSort') || {}).value, 10) || dict.sort;
+  dict.status = (document.getElementById('modalDictStatus') || {}).value || dict.status;
+  dict.value = collectDictValueRows();
+  saveDicts();
+  refreshDictTable();
   closeModal();
+  alert('编辑字典成功：' + dict.code);
+}
+function deleteDict() {
+  var idx = -1;
+  for (var i = 0; i < mockDicts.length; i++) { if (mockDicts[i].id === window.__currentDictId) { idx = i; break; } }
+  if (idx < 0) { closeModal(); return; }
+  var removed = mockDicts.splice(idx, 1)[0];
+  saveDicts();
+  refreshDictTable();
+  closeModal();
+  alert('字典已删除：' + removed.code);
 }
 function switchTab(event, tabId) {
   document.querySelectorAll('.system-tab').forEach(function(tab) { tab.classList.remove('active'); });
@@ -1496,9 +1626,141 @@ function switchTab(event, tabId) {
   event.currentTarget.classList.add('active');
   document.getElementById('tab-' + tabId).classList.add('active');
 }
+
+/* ============================================================
+ * 数据源接入（数据来自共享 Store：js/shared/data-store.js）
+ *   DataStore.subscribe 注册时立即回调一次，渲染逻辑放在回调里
+ * ============================================================ */
+var SOURCE_TYPE_OPTIONS = ['业务库', 'IoT 网关', '区块链', '移动端'];
+var SOURCE_PROTO_OPTIONS = ['REST API', 'MQTT', 'WebSocket', 'HTTPS'];
+var SOURCE_FREQ_OPTIONS = ['实时', '5分钟', '10分钟', '15分钟', '30分钟', '1小时', '每日'];
+var SOURCE_STATUS = [
+  { value: 'online', label: '运行中', badge: 'active' },
+  { value: 'warning', label: '延迟偏高', badge: 'warning' },
+  { value: 'offline', label: '已离线', badge: 'disabled' }
+];
+
+function sourceStatusBadge(status) {
+  var found = SOURCE_STATUS.filter(function (s) { return s.value === status; })[0];
+  return found
+    ? '<span class="status-badge ' + found.badge + '">' + found.label + '</span>'
+    : '<span class="status-badge disabled">' + (status || '-') + '</span>';
+}
+
+function renderSources() {
+  var body = document.getElementById('sourceTableBody');
+  if (!body) return;
+  var list = (typeof DataStore !== 'undefined' && DataStore.sources) ? DataStore.sources() : [];
+  var emptyEl = document.getElementById('sourceEmpty');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  body.innerHTML = list.map(function (x, i) {
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td><strong>' + escSource(x.name) + '</strong></td>' +
+      '<td>' + escSource(x.type) + '</td>' +
+      '<td>' + escSource(x.protocol) + '</td>' +
+      '<td class="text-mono">' + escSource(x.endpoint) + '</td>' +
+      '<td>' + escSource(x.freq) + '</td>' +
+      '<td>' + sourceStatusBadge(x.status) + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function escSource(v) {
+  return String(v === undefined || v === null ? '-' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function sourceFormHtml(item) {
+  var v = item || {};
+  function opts(list, cur) {
+    return list.map(function (o) {
+      return '<option value="' + o.value + '"' + (o.value === cur ? ' selected' : '') + '>' + o.label + '</option>';
+    }).join('');
+  }
+  var statusOpts = opts(SOURCE_STATUS.map(function (s) { return { value: s.value, label: s.label }; }), v.status || 'online');
+  return '<div class="form-row">' +
+      '<div class="form-group half"><label class="form-label">数据源名称</label><input type="text" class="form-input" id="srcName" value="' + escSource(v.name || '') + '"></div>' +
+      '<div class="form-group half"><label class="form-label">类型</label><select class="form-select" id="srcType">' + opts(SOURCE_TYPE_OPTIONS.map(function (t) { return { value: t, label: t }; }), v.type || '业务库') + '</select></div>' +
+      '<div class="form-group half"><label class="form-label">协议</label><select class="form-select" id="srcProto">' + opts(SOURCE_PROTO_OPTIONS.map(function (t) { return { value: t, label: t }; }), v.protocol || 'REST API') + '</select></div>' +
+      '<div class="form-group half"><label class="form-label">采集频率</label><select class="form-select" id="srcFreq">' + opts(SOURCE_FREQ_OPTIONS.map(function (t) { return { value: t, label: t }; }), v.freq || '5分钟') + '</select></div>' +
+      '<div class="form-group half"><label class="form-label">状态</label><select class="form-select" id="srcStatus">' + statusOpts + '</select></div>' +
+      '<div class="form-group full"><label class="form-label">接入地址</label><input type="text" class="form-input" id="srcEndpoint" value="' + escSource(v.endpoint || '') + '" placeholder="如 /api/v1/xxx 或 mqtt://host:1883/topic"></div>' +
+    '</div>';
+}
+
+function openSourceModal(item) {
+  var isEdit = !!item;
+  openModal(isEdit ? '编辑数据源' : '新增数据源', sourceFormHtml(item),
+    '<button class="btn btn-secondary" onclick="closeModal()">取消</button>' +
+    '<button class="btn btn-primary" onclick="saveSource(' + (isEdit ? '\'' + item.id + '\'' : 'null') + ')">确定</button>');
+}
+
+function saveSource(id) {
+  var name = (document.getElementById('srcName') || {}).value || '';
+  if (!name.trim()) { alert('请填写数据源名称'); return; }
+  var status = (document.getElementById('srcStatus') || {}).value || 'online';
+  var statusLabel = (SOURCE_STATUS.filter(function (s) { return s.value === status; })[0] || {}).label || '运行中';
+
+  DataStore.upsertSource({
+    id: id || ('DS' + Date.now().toString().slice(-4)),
+    name: name.trim(),
+    type: (document.getElementById('srcType') || {}).value || '业务库',
+    protocol: (document.getElementById('srcProto') || {}).value || 'REST API',
+    endpoint: (document.getElementById('srcEndpoint') || {}).value || '',
+    freq: (document.getElementById('srcFreq') || {}).value || '5分钟',
+    status: status,
+    statusText: statusLabel,
+    updatedAt: nowText()
+  });
+  closeModal();
+  alert(id ? '数据源已更新' : '数据源已新增');
+}
+
+function editSource(id) {
+  var item = DataStore.sources().filter(function (x) { return x.id === id; })[0];
+  if (!item) { alert('数据源不存在'); return; }
+  openSourceModal(item);
+}
+
+function deleteSource(id) {
+  var item = DataStore.sources().filter(function (x) { return x.id === id; })[0];
+  if (!item) { alert('数据源不存在'); return; }
+  openModal('删除数据源',
+    '<div class="confirm-warning"><p>确认要删除数据源「' + escSource(item.name) + '」吗？此操作不可撤销。</p></div>',
+    '<button class="btn btn-secondary" onclick="closeModal()">取消</button>' +
+    '<button class="btn btn-primary" onclick="confirmDeleteSource(\'' + id + '\')">确定删除</button>');
+}
+
+function confirmDeleteSource(id) {
+  DataStore.removeSource(id);
+  closeModal();
+  alert('数据源已删除');
+}
+
+function nowText() {
+  var d = new Date();
+  function p(n) { return String(n).padStart(2, '0'); }
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+if (typeof DataStore !== 'undefined' && DataStore.subscribe) {
+  DataStore.subscribe(function () { renderSources(); });
+} else {
+  renderSources();
+}
 document.addEventListener('DOMContentLoaded', function() {
+  initDictStorage(); // 播种 / 载入 smartorchard_data_dict，供移动端读取
   renderTable(mockUsers, 'userTableBody', renderUserRow, currentUserPage, mockUsers.length);
   renderPagination('userPagination', currentUserPage, mockUsers.length);
+  renderUserStats(mockUsers);
   renderTable(mockRoles, 'roleTableBody', renderRoleRow, currentRolePage, mockRoles.length);
 
   // 权限矩阵渲染（PC-B-054）

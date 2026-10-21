@@ -258,6 +258,18 @@
         </div>
       </div>
 
+      <!-- 发票管理 -->
+      <div class="info-card">
+        <div class="info-card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          发票管理
+        </div>
+        <div class="info-row">
+          <span class="info-label">发票记录</span>
+          <span class="info-value info-edit" onclick="viewInvoices()">查看发票 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></span>
+        </div>
+      </div>
+
     <!-- 底部导航 -->
     <nav class="mb-tab-bar">
       <div class="mb-tab-item" onclick="navigateTo('index.html')">
@@ -382,17 +394,36 @@
       showToast('地址已删除');
     }
 
+    var INVOICE_STATUS = { pending: '待开票', issued: '已开票', rejected: '已驳回' };
+
     function viewInvoices() {
+      // 发票申请由结算页（h5_checkout.html）下单时写入 h5_invoices，开票/驳回状态由后台「发票管理」回写
       var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_invoices') || '[]'); } catch (e) {}
+      try {
+        list = JSON.parse(localStorage.getItem('h5_invoices') || '[]');
+        if (!Array.isArray(list)) list = [];
+      } catch (e) { list = []; }
       var html = '';
       if (!list.length) {
-        html = '<p style="text-align:center;color:#999;margin:24px 0;">暂无发票记录，发票将在订单完成后自动生成</p>';
+        html = '<p style="text-align:center;color:#999;margin:24px 0;">暂无发票记录，结算时勾选「需要发票」即可申请</p>';
       } else {
         html = list.map(function(inv){
+          inv = inv || {};
+          var st = INVOICE_STATUS[inv.status] || '待开票';
+          var extra = '';
+          if (inv.status === 'issued' && inv.invoiceNo) {
+            extra = '<div style="color:#666;font-size:13px;margin-top:4px;">发票号：' + (inv.invoiceNo || '-') + '</div>';
+          } else if (inv.status === 'rejected' && inv.rejectReason) {
+            extra = '<div style="color:#d9534f;font-size:13px;margin-top:4px;">驳回原因：' + (inv.rejectReason || '-') + '</div>';
+          }
           return '<div style="border:1px solid #eee;border-radius:8px;padding:12px;margin:8px 0;">' +
-            '<div><strong>' + (inv.title || '') + '</strong></div>' +
+            '<div style="display:flex;justify-content:space-between;gap:8px;">' +
+              '<strong>' + (inv.title || '未填写抬头') + '</strong>' +
+              '<span style="color:var(--primary);font-size:12px;white-space:nowrap;">' + st + '</span>' +
+            '</div>' +
             '<div style="color:#666;font-size:13px;margin-top:4px;">金额：¥' + (inv.amount || 0) + ' · 类型：' + (inv.type || '电子普通发票') + '</div>' +
+            (inv.orderNo ? '<div style="color:#999;font-size:12px;margin-top:4px;">关联订单：' + inv.orderNo + '</div>' : '') +
+            extra +
             '</div>';
         }).join('');
       }

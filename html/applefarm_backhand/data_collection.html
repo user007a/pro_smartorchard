@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 数据归集</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 统计卡 */
+  .stat-card-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-xl);
+    transition: box-shadow var(--transition-normal);
+  }
+  .stat-card:hover { box-shadow: var(--shadow-md); }
+  .stat-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; }
+  .stat-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-value .unit { font-size: 13px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; }
+  .stat-sub { margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
+
+  /* 左右分栏：归集明细 + 来源占比 */
+  .collection-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+    align-items: start;
+  }
+  @media (max-width: 1280px) { .collection-grid { grid-template-columns: 1fr; } }
+
+  .data-table { min-width: 760px; }
+  .empty-row td { text-align: center; color: var(--text-tertiary); padding: 40px 0; }
+
+  /* 占比进度条 */
+  .ratio-row { padding: 12px 0; border-bottom: 1px dashed var(--border-light); }
+  .ratio-row:last-child { border-bottom: none; }
+  .ratio-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .ratio-name { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+  .ratio-val { font-size: 12.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+  .ratio-val strong { color: var(--text-primary); font-size: 13px; }
+  .ratio-bar { height: 8px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
+  .ratio-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--primary-500);
+    transition: width 0.5s ease;
+  }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="数据运营" data-active-submenu="数据归集">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 统计卡 -->
+        <div class="stat-card-row" id="statCards"></div>
+
+        <!-- 归集趋势 -->
+        <div class="chart-section">
+          <h2 class="section-title">近 12 月数据归集趋势（万条）</h2>
+          <div id="chart-collection-trend" style="height:300px;"></div>
+        </div>
+
+        <!-- 归集明细 + 来源占比 -->
+        <div class="collection-grid">
+          <div class="data-section">
+            <h2 class="section-title" style="padding:0 4px;">归集明细</h2>
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>数据来源</th>
+                    <th>归集量（条）</th>
+                    <th>占比</th>
+                    <th>同比</th>
+                    <th>合格率</th>
+                  </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="data-section" style="padding:24px;">
+            <h2 class="section-title">五类来源占比</h2>
+            <div id="ratioList"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/page-actions.js"></script>
+<script src="js/components/chart.js"></script>
+<script src="js/shared/data-store.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  function fmt(n){
+    n = Number(n) || 0;
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  // 保留 1 位小数（用于占比 / 比率显示）
+  function pct(n){ return Math.round((Number(n) || 0) * 10) / 10; }
+  // 归集量占比（%），保留 1 位小数
+  function shareOf(amount, total){ return total ? pct((Number(amount) || 0) / total * 100) : 0; }
+  function esc(v){
+    return String(v === undefined || v === null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  var els = {
+    statCards : document.getElementById('statCards'),
+    tbody     : document.getElementById('tableBody'),
+    ratioList : document.getElementById('ratioList')
+  };
+
+  function renderStats(){
+    var s = DataStore.summary();
+    els.statCards.innerHTML =
+      '<div class="stat-card">' +
+        '<div class="stat-label">累计归集量</div>' +
+        '<div class="stat-value">' + fmt(s.totalAmountYi) + '<span class="unit">亿条</span></div>' +
+        '<div class="stat-sub">折合 ' + fmt(s.totalAmount) + ' 条</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">数据质量合格率</div>' +
+        '<div class="stat-value">' + fmt(s.avgRate) + '<span class="unit">%</span></div>' +
+        '<div class="stat-sub">各来源平均值</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">数据来源数</div>' +
+        '<div class="stat-value">' + fmt(s.sourceTotal) + '<span class="unit">个</span></div>' +
+        '<div class="stat-sub">在线 ' + fmt(s.onlineSources) + ' 个</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">数字化覆盖地块</div>' +
+        '<div class="stat-value">' + fmt(s.plotCoverage) + '<span class="unit">个</span></div>' +
+        '<div class="stat-sub">标准化地块全覆盖</div>' +
+      '</div>';
+  }
+
+  function renderTable(){
+    var list  = DataStore.collections();
+    var total = list.reduce(function(sum, x){ return sum + (x.amount || 0); }, 0);
+
+    if (!list.length){
+      els.tbody.innerHTML = '<tr class="empty-row"><td colspan="5">暂无归集数据</td></tr>';
+      return;
+    }
+
+    els.tbody.innerHTML = list.map(function(x){
+      var ratio = shareOf(x.amount, total);
+      var yoy = Number(x.yoy) || 0;
+      var rate = Number(x.rate) || 0;
+      var yoyCls = yoy >= 0 ? 'text-success' : 'text-danger';
+      return '<tr>' +
+        '<td><strong>' + esc(x.source) + '</strong></td>' +
+        '<td class="num">' + fmt(x.amount) + '</td>' +
+        '<td class="num">' + fmt(ratio) + '%</td>' +
+        '<td class="num ' + yoyCls + '">' + (yoy >= 0 ? '+' : '') + fmt(yoy) + '%</td>' +
+        '<td class="num">' + fmt(rate) + '%</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderRatio(){
+    var list  = DataStore.collections();
+    var total = list.reduce(function(sum, x){ return sum + (x.amount || 0); }, 0);
+    if (!list.length || !total){
+      els.ratioList.innerHTML = '<div class="empty-state"><div class="empty-text">暂无来源数据</div></div>';
+      return;
+    }
+    els.ratioList.innerHTML = list.map(function(x){
+      var ratio = shareOf(x.amount, total);
+      var width = Math.max(2, ratio);
+      return '<div class="ratio-row">' +
+          '<div class="ratio-head">' +
+            '<span class="ratio-name">' + esc(x.source) + '（' + esc(x.category || '-') + '）</span>' +
+            '<span class="ratio-val"><strong>' + fmt(ratio) + '%</strong> · ' + fmt(x.amount) + ' 条</span>' +
+          '</div>' +
+          '<div class="ratio-bar"><div class="ratio-bar-fill" style="width:' + width + '%;"></div></div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderChart(){
+    var trend = DataStore.collectionTrend();
+    Chart.line('#chart-collection-trend', {
+      categories: trend.map(function(x){ return x.month; }),
+      series: [{
+        name: '归集量（万条）',
+        data: trend.map(function(x){ return x.value; }),
+        color: '#1890ff',
+        area: true
+      }]
+    });
+  }
+
+  function renderAll(){
+    renderStats();
+    renderTable();
+    renderRatio();
+    renderChart();
+  }
+
+  DataStore.subscribe(function(){
+    renderAll();
+  });
+})();
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

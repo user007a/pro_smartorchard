@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 意见反馈审核</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-xs);
+  }
+  .stat-value {
+    font-size: 26px;
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card.is-pending .stat-value { color: var(--warning); }
+  .stat-card.is-done .stat-value { color: var(--success); }
+  .status-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--weight-medium, 500);
+    white-space: nowrap;
+  }
+  .status-tag.pending { background: var(--warning-bg); color: var(--warning); }
+  .status-tag.processing { background: var(--info-bg); color: var(--info); }
+  .status-tag.passed { background: var(--success-bg); color: var(--success); }
+  .status-tag.rejected { background: var(--error-bg); color: var(--error); }
+  .type-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+  }
+  .type-tag.suggestion { background: var(--primary-50); color: var(--primary-600); }
+  .type-tag.problem { background: var(--error-bg); color: var(--error); }
+  .type-tag.other { background: var(--gray-100); color: var(--text-secondary); }
+  .cell-title {
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .cell-sub {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .reply-box {
+    margin-top: var(--space-sm);
+    padding: 10px 12px;
+    background: var(--gray-50);
+    border-left: 3px solid var(--primary-300);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+  }
+  .reject-box {
+    margin-top: var(--space-sm);
+    padding: 10px 12px;
+    background: var(--error-bg);
+    border-left: 3px solid var(--error);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+  }
+  .modal-field { margin-bottom: var(--space-lg); }
+  .modal-field label {
+    display: block;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--text-primary);
+    margin-bottom: var(--space-sm);
+  }
+  .modal-field textarea, .modal-field input, .modal-field select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--bg-card);
+  }
+  .modal-field textarea { min-height: 100px; resize: vertical; line-height: var(--line-height-relaxed); }
+  .modal-field textarea:focus, .modal-field input:focus, .modal-field select:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.12);
+    outline: none;
+  }
+  .detail-row {
+    display: flex;
+    gap: var(--space-md);
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-light);
+    font-size: var(--font-size-sm);
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-label { color: var(--text-tertiary); min-width: 76px; flex-shrink: 0; }
+  .detail-value { color: var(--text-primary); flex: 1; word-break: break-all; }
+  .empty-state {
+    padding: var(--space-2xl) 0;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+  }
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card);
+    border-radius: 12px;
+    width: 92%;
+    max-width: 620px;
+    max-height: 85vh;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer;
+    padding: 4px; font-size: 20px; line-height: 1;
+    color: var(--text-tertiary); transition: color 0.2s;
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(85vh - 132px);
+  }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-default);
+  }
+</style>
+</head>
+<body data-active-menu="mobile-ops" data-active-submenu="feedback-review">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">意见反馈审核</div>
+        <div class="page-subtitle">受理移动端作业人员提交的功能建议、问题反馈与驳回重提</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="refreshList()">刷新</button>
+      </div>
+    </div>
+
+    <!-- 统计区 -->
+    <div class="stat-row">
+      <div class="stat-card is-pending">
+        <div class="stat-label">待审核</div>
+        <div class="stat-value" id="statPending">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">处理中</div>
+        <div class="stat-value" id="statProcessing">0</div>
+      </div>
+      <div class="stat-card is-done">
+        <div class="stat-label">已完结</div>
+        <div class="stat-value" id="statClosed">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">累计反馈</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+    </div>
+
+    <!-- 搜索栏区 -->
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <select class="search-select" id="statusSelect">
+          <option value="">全部状态</option>
+          <option value="pending">待审核</option>
+          <option value="processing">处理中</option>
+          <option value="passed">已通过</option>
+          <option value="rejected">已驳回</option>
+        </select>
+        <select class="search-select" id="typeSelect">
+          <option value="">全部类型</option>
+          <option value="suggestion">建议</option>
+          <option value="problem">问题</option>
+          <option value="other">其他</option>
+        </select>
+        <input type="text" class="search-input" placeholder="搜索标题或内容..." id="searchInput">
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="refreshList()">搜索</button>
+          <button class="jg-btn" onclick="resetFilter()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据列表区 -->
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="checkbox-col" style="width:60px;">序号</th>
+              <th>反馈标题</th>
+              <th style="width:90px;">类型</th>
+              <th style="width:110px;">状态</th>
+              <th style="width:130px;">提交人</th>
+              <th style="width:140px;">提交时间</th>
+              <th style="width:180px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="feedbackBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无反馈记录</div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== 回复弹窗 ===== -->
+<div class="modal-overlay" id="replyModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="replyTitle">反馈处理</h3>
+      <button class="modal-close" onclick="closeReplyModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-row">
+        <div class="detail-label">反馈标题</div>
+        <div class="detail-value" id="replyFbTitle"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">反馈内容</div>
+        <div class="detail-value" id="replyFbContent"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">当前状态</div>
+        <div class="detail-value" id="replyFbStatus"></div>
+      </div>
+      <div class="detail-row" id="replyFbRejectWrap" style="display:none;">
+        <div class="detail-label">上次驳回</div>
+        <div class="detail-value" id="replyFbReject"></div>
+      </div>
+      <div class="modal-field" style="margin-top:var(--space-lg);">
+        <label>处理结论</label>
+        <select id="replyDecision">
+          <option value="processing">采纳处理中</option>
+          <option value="passed">采纳已完成</option>
+          <option value="rejected">驳回</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>官方回复<span id="replyRequired" style="color:var(--error);">*</span></label>
+        <textarea id="replyContent" placeholder="填写给作业人员的答复内容，移动端意见反馈页可见"></textarea>
+      </div>
+      <div class="modal-field" id="rejectReasonWrap" style="display:none;">
+        <label>驳回原因<span style="color:var(--error);">*</span></label>
+        <textarea id="rejectReasonText" placeholder="驳回后作业人员可「修改重提」，请写明需补充的信息"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeReplyModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitReply()">提交处理</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * 意见反馈审核
+ * 数据源：localStorage['smartorchard_feedbacks']
+ *   写入方 = 移动端 mb_feedback.html
+ *   字段：{ id, title, content, type, status, createTime, reply?, rejectReason? }
+ *   status 枚举：pending 待审核 / processing 处理中 / passed 已通过 / rejected 已驳回
+ * ============================================================ */
+var FEEDBACK_KEY = 'smartorchard_feedbacks';
+
+var STATUS_TEXT = {
+  pending: '待审核',
+  processing: '处理中',
+  passed: '已通过',
+  rejected: '已驳回'
+};
+
+var TYPE_TEXT = {
+  suggestion: '建议',
+  problem: '问题',
+  other: '其他'
+};
+
+var currentId = null;
+
+/* 移动端播种的种子数据：后台首次打开时保持一致，避免空列表 */
+var SEED_FEEDBACKS = [
+  { id: 1, title: '建议增加病虫害识别功能', content: '希望能增加拍照识别病虫害的功能，这样果农可以快速判断果树问题。', type: 'suggestion', status: 'processing', createTime: '2026-09-21 10:30', reply: '感谢您的建议，我们正在开发中，预计下月上线。' },
+  { id: 2, title: '数据同步异常', content: '农事记录同步到云端时经常失败，网络正常的情况下也会出现。', type: 'problem', status: 'pending', createTime: '2026-09-20 15:20' },
+  { id: 3, title: '优化地块绘制', content: '画地块时希望能支持更精确的坐标定位。', type: 'suggestion', status: 'passed', createTime: '2026-09-19 09:15', reply: '已优化，在最新版本中已上线。' },
+  { id: 4, title: '施肥建议不准确', content: '系统给出的施肥建议和实际需求有差异。', type: 'problem', status: 'rejected', createTime: '2026-09-18 14:00', rejectReason: '请提供具体地块信息，我们重新分析。' }
+];
+
+function readAll() {
+  try {
+    var raw = localStorage.getItem(FEEDBACK_KEY);
+    if (!raw) return null;
+    var v = JSON.parse(raw);
+    return Array.isArray(v) ? v : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function readList() {
+  var list = readAll();
+  if (!list || !list.length) {
+    // 首次访问：沿用移动端种子数据，并回写以保持两端一致
+    list = SEED_FEEDBACKS.slice();
+    writeList(list);
+    return list;
+  }
+  return list;
+}
+
+function writeList(list) {
+  try {
+    localStorage.setItem(FEEDBACK_KEY, JSON.stringify(list));
+  } catch (e) {
+    Toast.error('本地存储写入失败，处理结果未能保存');
+  }
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function renderStats(list) {
+  var pending = 0, processing = 0, closed = 0;
+  list.forEach(function (f) {
+    if (f.status === 'pending') pending++;
+    else if (f.status === 'processing') processing++;
+    else closed++;
+  });
+  document.getElementById('statPending').textContent = pending;
+  document.getElementById('statProcessing').textContent = processing;
+  document.getElementById('statClosed').textContent = closed;
+  document.getElementById('statTotal').textContent = list.length;
+}
+
+function filteredList() {
+  var status = document.getElementById('statusSelect').value;
+  var type = document.getElementById('typeSelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  return readList().filter(function (f) {
+    if (status && f.status !== status) return false;
+    if (type && f.type !== type) return false;
+    if (kw) {
+      var hay = ((f.title || '') + ' ' + (f.content || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable() {
+  var list = filteredList();
+  renderStats(readList());
+
+  var body = document.getElementById('feedbackBody');
+  var emptyHint = document.getElementById('emptyHint');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+
+  body.innerHTML = list.map(function (f, i) {
+    var extra = '';
+    if (f.status === 'rejected' && f.rejectReason) {
+      extra = '<div class="reject-box">驳回原因：' + esc(f.rejectReason) + '</div>';
+    } else if (f.reply) {
+      extra = '<div class="reply-box">官方回复：' + esc(f.reply) + '</div>';
+    }
+    return '<tr>' +
+      '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td><div class="cell-title">' + esc(f.title) + '</div>' +
+          '<div class="cell-sub">' + esc(f.content) + '</div>' + extra + '</td>' +
+      '<td><span class="type-tag ' + esc(f.type) + '">' + (TYPE_TEXT[f.type] || f.type) + '</span></td>' +
+      '<td><span class="status-tag ' + esc(f.status) + '">' + (STATUS_TEXT[f.status] || f.status) + '</span></td>' +
+      '<td>' + esc(f.operator || '移动端用户') + '</td>' +
+      '<td class="text-mono">' + esc(f.createTime || '') + '</td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn detail" onclick="openReply(' + f.id + ')">处理</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function refreshList() {
+  renderTable();
+}
+
+function resetFilter() {
+  document.getElementById('statusSelect').value = '';
+  document.getElementById('typeSelect').value = '';
+  document.getElementById('searchInput').value = '';
+  renderTable();
+}
+
+function openReply(id) {
+  var list = readList();
+  var f = null;
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].id) === String(id)) { f = list[i]; break; }
+  }
+  if (!f) { Toast.error('未找到该反馈记录'); return; }
+
+  currentId = f.id;
+  document.getElementById('replyTitle').textContent = '反馈处理';
+  document.getElementById('replyFbTitle').textContent = f.title || '';
+  document.getElementById('replyFbContent').textContent = f.content || '';
+  document.getElementById('replyFbStatus').innerHTML =
+    '<span class="status-tag ' + esc(f.status) + '">' + (STATUS_TEXT[f.status] || f.status) + '</span>';
+
+  var rejectWrap = document.getElementById('replyFbRejectWrap');
+  if (f.rejectReason) {
+    rejectWrap.style.display = '';
+    document.getElementById('replyFbReject').textContent = f.rejectReason;
+  } else {
+    rejectWrap.style.display = 'none';
+  }
+
+  // 默认动作：未完结的给「采纳处理中」，已驳回重提的默认「采纳处理中」
+  document.getElementById('replyDecision').value = 'processing';
+  document.getElementById('replyContent').value = f.reply || '';
+  document.getElementById('rejectReasonText').value = '';
+  syncDecisionUI();
+
+  document.getElementById('replyModal').classList.add('show');
+}
+
+function syncDecisionUI() {
+  var decision = document.getElementById('replyDecision').value;
+  var isReject = decision === 'rejected';
+  document.getElementById('rejectReasonWrap').style.display = isReject ? '' : 'none';
+  document.getElementById('replyRequired').style.display = isReject ? 'none' : '';
+}
+
+function closeReplyModal() {
+  document.getElementById('replyModal').classList.remove('show');
+  currentId = null;
+}
+
+function submitReply() {
+  var decision = document.getElementById('replyDecision').value;
+  var reply = document.getElementById('replyContent').value.trim();
+  var rejectReason = document.getElementById('rejectReasonText').value.trim();
+
+  if (decision === 'rejected' && !rejectReason) {
+    Toast.warning('驳回时必须填写驳回原因');
+    return;
+  }
+
+  var list = readList();
+  var target = null;
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].id) === String(currentId)) { target = list[i]; break; }
+  }
+  if (!target) { Toast.error('未找到该反馈记录'); return; }
+
+  target.status = decision;
+  if (reply) {
+    target.reply = reply;
+  }
+  if (decision === 'rejected') {
+    target.rejectReason = rejectReason;
+  } else {
+    delete target.rejectReason;
+  }
+  target.reviewTime = new Date().toLocaleString('zh-CN', { hour12: false });
+
+  writeList(list);
+  closeReplyModal();
+  renderTable();
+  Toast.success('处理结果已保存，移动端可查看');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('replyDecision').addEventListener('change', syncDecisionUI);
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') renderTable();
+  });
+  renderTable();
+});
+</script>
+</body>
+</html>

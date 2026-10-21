@@ -50,6 +50,24 @@
     .plot-status.normal { background: var(--success-bg); color: var(--success); }
     .plot-status.warning { background: var(--orange-bg); color: var(--orange); }
     .plot-status.overdue { background: var(--error-bg); color: var(--error); }
+    /* 图例作为状态筛选控件：可点击过滤，激活态高亮 */
+    .legend-item { cursor: pointer; border-radius: var(--radius-sm); padding: 2px 4px; }
+    .legend-item.active { background: rgba(46, 158, 90, 0.12); font-weight: 600; }
+    /* 列表顶部的当前选中地块坐标 */
+    .list-coord { font-size: var(--font-sm); color: var(--text-light); margin-bottom: var(--space-2); }
+    .plot-item.active { background: rgba(46, 158, 90, 0.06); border-radius: var(--radius-md); }
+    /* 地块详情底部弹层 */
+    .plot-modal-overlay { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: rgba(0, 0, 0, 0.45); display: none; align-items: flex-end; justify-content: center; z-index: var(--z-modal); }
+    .plot-modal-overlay.show { display: flex; }
+    .plot-sheet { width: 100%; max-width: 750px; background: var(--bg-white); border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: var(--space-4); max-height: 78vh; overflow-y: auto; }
+    .plot-sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-3); }
+    .plot-sheet-title { font-size: var(--font-lg); font-weight: 700; color: var(--text); }
+    .plot-sheet-close { width: 32px; height: 32px; border-radius: 50%; background: rgba(0, 0, 0, 0.05); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .plot-sheet-close svg { width: 16px; height: 16px; color: var(--text-secondary); }
+    .detail-info-row { display: flex; padding: var(--space-2) 0; border-bottom: 1px solid var(--border-light); }
+    .detail-info-row:last-child { border-bottom: none; }
+    .detail-info-label { width: 80px; flex-shrink: 0; font-size: var(--font-sm); color: var(--text-secondary); }
+    .detail-info-value { flex: 1; font-size: var(--font-sm); color: var(--text); }
   </style>
 </head>
 <body>
@@ -70,18 +88,18 @@
       <div class="map-placeholder"><iframe id="mapFrame" class="map-frame" src="https://www.openstreetmap.org/export/embed.html?bbox=106.05%2C34.20%2C106.30%2C34.50&layer=mapnik&marker=34.35%2C106.18" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="天水市麦积区 红崖村花牛苹果基地地图"></iframe></div>
 
       <div class="map-legend">
-        <div class="legend-title">图例</div>
-        <div class="legend-item">
+        <div class="legend-title">图例 · 点击筛选</div>
+        <div class="legend-item" data-status="normal" title="只看正常地块" onclick="toggleStatusFilter('normal')">
           <span class="legend-dot normal"></span>
           <span>正常</span>
         </div>
-        <div class="legend-item">
+        <div class="legend-item" data-status="warning" title="只看预警地块" onclick="toggleStatusFilter('warning')">
           <span class="legend-dot warning"></span>
-          <span>待执行</span>
+          <span>预警</span>
         </div>
-        <div class="legend-item">
+        <div class="legend-item" data-status="danger" title="只看危险地块" onclick="toggleStatusFilter('danger')">
           <span class="legend-dot overdue"></span>
-          <span>已逾期</span>
+          <span>危险</span>
         </div>
       </div>
 
@@ -103,37 +121,56 @@
 
     <div class="plot-list">
       <div class="list-title">地块列表</div>
-      <div class="plot-item" onclick="openPlotDetail('地块A1区')">
-        <span class="plot-dot normal"></span>
-        <div class="plot-info">
-          <div class="plot-name">地块A1区</div>
-          <div class="plot-meta">花牛苹果 · 5年 · 15亩</div>
+      <div class="list-coord" id="listCoord">未选择地块，点击下方地块可定位</div>
+      <div id="plotListItems">
+        <div class="plot-item" onclick="openPlotDetail(FALLBACK_PLOTS[0])">
+          <span class="plot-dot normal"></span>
+          <div class="plot-info">
+            <div class="plot-name">地块A1区</div>
+            <div class="plot-meta">花牛苹果 · 5年 · 15亩</div>
+          </div>
+          <span class="plot-status normal">正常</span>
         </div>
-        <span class="plot-status normal">正常</span>
+        <div class="plot-item" onclick="openPlotDetail(FALLBACK_PLOTS[1])">
+          <span class="plot-dot warning"></span>
+          <div class="plot-info">
+            <div class="plot-name">地块A2区</div>
+            <div class="plot-meta">花牛苹果 · 5年 · 18亩</div>
+          </div>
+          <span class="plot-status warning">预警</span>
+        </div>
+        <div class="plot-item" onclick="openPlotDetail(FALLBACK_PLOTS[2])">
+          <span class="plot-dot overdue"></span>
+          <div class="plot-info">
+            <div class="plot-name">地块B1区</div>
+            <div class="plot-meta">花牛苹果 · 8年 · 22亩</div>
+          </div>
+          <span class="plot-status overdue">危险</span>
+        </div>
+        <div class="plot-item" onclick="openPlotDetail(FALLBACK_PLOTS[3])">
+          <span class="plot-dot normal"></span>
+          <div class="plot-info">
+            <div class="plot-name">地块B2区</div>
+            <div class="plot-meta">秦冠 · 10年 · 25亩</div>
+          </div>
+          <span class="plot-status normal">正常</span>
+        </div>
       </div>
-      <div class="plot-item" onclick="openPlotDetail('地块A2区')">
-        <span class="plot-dot warning"></span>
-        <div class="plot-info">
-          <div class="plot-name">地块A2区</div>
-          <div class="plot-meta">花牛苹果 · 5年 · 18亩</div>
+    </div>
+
+    <!-- 地块详情底部弹层：展示编号 / 基地 / 面积 / 品种 / 树龄 / 负责人 / 经纬度 -->
+    <div class="plot-modal-overlay" id="plotDetailModal">
+      <div class="plot-sheet">
+        <div class="plot-sheet-head">
+          <div class="plot-sheet-title" id="plotDetailTitle">地块详情</div>
+          <div class="plot-sheet-close" role="button" aria-label="关闭" onclick="closePlotDetail()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </div>
         </div>
-        <span class="plot-status warning">待执行</span>
-      </div>
-      <div class="plot-item" onclick="openPlotDetail('地块B1区')">
-        <span class="plot-dot overdue"></span>
-        <div class="plot-info">
-          <div class="plot-name">地块B1区</div>
-          <div class="plot-meta">花牛苹果 · 8年 · 22亩</div>
-        </div>
-        <span class="plot-status overdue">已逾期</span>
-      </div>
-      <div class="plot-item" onclick="openPlotDetail('地块B2区')">
-        <span class="plot-dot normal"></span>
-        <div class="plot-info">
-          <div class="plot-name">地块B2区</div>
-          <div class="plot-meta">秦冠 · 10年 · 25亩</div>
-        </div>
-        <span class="plot-status normal">正常</span>
+        <div id="plotDetailBody"></div>
       </div>
     </div>
 
@@ -178,8 +215,163 @@
     function navigateTo(page) {
       window.location.href = page;
     }
-    function openPlotDetail(name) {
-      window.location.href = 'mb_plot.html' + (name ? ('?plot=' + encodeURIComponent(name)) : '');
+    /* ============================================================
+     * 果园地图 · 读取后台地块主数据
+     * localStorage key: smartorchard_plot_master（由后台 enterprise_plot.html 落库）
+     * 字段：id / code / name / enterprise / area / variety / year / status / statusText / manager / lng / lat
+     * 与移动端手绘地块键 smartorchard_plots 互不相干，本页只读主数据
+     * ============================================================ */
+    var PLOT_MASTER_KEY = 'smartorchard_plot_master';
+
+    // 状态 → 本页既有样式类（normal / warning / overdue）
+    var STATUS_CLASS = { normal: 'normal', warning: 'warning', danger: 'overdue' };
+    var STATUS_LABEL = { normal: '正常', warning: '预警', danger: '危险' };
+
+    // 读不到主数据时的兜底地块，保证列表不空白
+    var FALLBACK_PLOTS = [
+      { id: 'FB-A1', code: '—', name: '地块A1区', enterprise: '天水麦积区基地', area: 15, variety: '花牛苹果', year: 2021, status: 'normal', statusText: '正常', manager: '张三', lng: 106.18, lat: 34.35 },
+      { id: 'FB-A2', code: '—', name: '地块A2区', enterprise: '天水麦积区基地', area: 18, variety: '花牛苹果', year: 2021, status: 'warning', statusText: '预警', manager: '张三', lng: 106.19, lat: 34.36 },
+      { id: 'FB-B1', code: '—', name: '地块B1区', enterprise: '天水麦积区基地', area: 22, variety: '花牛苹果', year: 2018, status: 'danger', statusText: '危险', manager: '李四', lng: 106.17, lat: 34.34 },
+      { id: 'FB-B2', code: '—', name: '地块B2区', enterprise: '天水麦积区基地', area: 25, variety: '秦冠', year: 2016, status: 'normal', statusText: '正常', manager: '李四', lng: 106.20, lat: 34.33 }
+    ];
+
+    var PLOT_LIST = [];        // 当前渲染的地块数组（列表 onclick 通过下标引用）
+    var statusFilter = '';     // '' 全部 / normal / warning / danger
+    var selectedPlotId = '';   // 当前选中地块 id
+
+    function escPlot(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function readPlotMaster() {
+      try {
+        var arr = JSON.parse(localStorage.getItem(PLOT_MASTER_KEY) || 'null');
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function statusClass(s) { return STATUS_CLASS[s] || 'normal'; }
+    function statusLabel(p) { return p.statusText || STATUS_LABEL[p.status] || '正常'; }
+    function treeAge(year) {
+      var y = parseInt(year, 10);
+      if (isNaN(y) || !y) return '—';
+      var age = new Date().getFullYear() - y;
+      return (age > 0 ? age : 1) + '年';
+    }
+
+    // 按状态筛选后的列表；无主数据时回退 4 条兜底
+    function currentPlots() {
+      var all = readPlotMaster();
+      if (!all.length) all = FALLBACK_PLOTS;
+      if (!statusFilter) return all;
+      return all.filter(function (p) { return p.status === statusFilter; });
+    }
+
+    // 渲染地块列表（名称 / 面积 / 品种 / 状态 / 树龄）
+    function renderPlotList() {
+      var wrap = document.getElementById('plotListItems');
+      if (!wrap) return;
+      PLOT_LIST = currentPlots();
+      if (!PLOT_LIST.length) {
+        wrap.innerHTML = '<div class="plot-meta" style="padding:var(--space-3) 0;">当前筛选条件下暂无地块</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < PLOT_LIST.length; i++) {
+        var p = PLOT_LIST[i];
+        var cls = statusClass(p.status);
+        var activeCls = (String(p.id) === String(selectedPlotId)) ? ' active' : '';
+        html +=
+          '<div class="plot-item' + activeCls + '" onclick="openPlotDetail(PLOT_LIST[' + i + '])">' +
+            '<span class="plot-dot ' + cls + '"></span>' +
+            '<div class="plot-info">' +
+              '<div class="plot-name">' + escPlot(p.name || '未命名地块') + '</div>' +
+              '<div class="plot-meta">' + escPlot(p.variety || '未标注') + ' · ' + escPlot(treeAge(p.year)) + ' · ' + escPlot(p.area) + '亩</div>' +
+            '</div>' +
+            '<span class="plot-status ' + cls + '">' + escPlot(statusLabel(p)) + '</span>' +
+          '</div>';
+      }
+      wrap.innerHTML = html;
+    }
+
+    // 用 bbox + marker 把 OSM 内嵌地图定位到该地块
+    function buildMapSrc(lng, lat) {
+      var dLng = 0.012, dLat = 0.009;
+      var bbox = (lng - dLng).toFixed(5) + ',' + (lat - dLat).toFixed(5) + ',' +
+                 (lng + dLng).toFixed(5) + ',' + (lat + dLat).toFixed(5);
+      return 'https://www.openstreetmap.org/export/embed.html?bbox=' + encodeURIComponent(bbox) +
+             '&layer=mapnik&marker=' + lat + ',' + lng;
+    }
+
+    // 选中地块：更新地图中心点 + 列表顶部坐标
+    function selectPlot(rec) {
+      if (!rec) return;
+      selectedPlotId = (rec.id != null) ? rec.id : '';
+      var coordEl = document.getElementById('listCoord');
+      var name = rec.name || '地块';
+      if (rec.lng != null && rec.lat != null) {
+        var lng = Number(rec.lng), lat = Number(rec.lat);
+        if (coordEl) coordEl.textContent = '当前选中：' + name + '（经度 ' + lng.toFixed(4) + '，纬度 ' + lat.toFixed(4) + '）';
+        var frame = document.getElementById('mapFrame');
+        if (frame) frame.src = buildMapSrc(lng, lat);
+      } else if (coordEl) {
+        coordEl.textContent = '当前选中：' + name + '（暂无坐标）';
+      }
+      renderPlotList();
+    }
+
+    // 点击地块：定位到地图并在详情弹层展示完整字段
+    function openPlotDetail(plot) {
+      var rec = (plot && typeof plot === 'object') ? plot : { name: plot };
+      selectPlot(rec);
+
+      var titleEl = document.getElementById('plotDetailTitle');
+      if (titleEl) titleEl.textContent = rec.name || '地块详情';
+
+      var coord = (rec.lng != null && rec.lat != null)
+        ? (Number(rec.lng).toFixed(4) + ', ' + Number(rec.lat).toFixed(4)) : '—';
+      var rows = [
+        ['地块编号', rec.code || '—'],
+        ['所属基地', rec.enterprise || '—'],
+        ['面积', (rec.area != null && rec.area !== '') ? (rec.area + ' 亩') : '—'],
+        ['品种', rec.variety || '—'],
+        ['树龄', treeAge(rec.year)],
+        ['负责人', rec.manager || '—'],
+        ['经纬度', coord],
+        ['状态', statusLabel(rec)]
+      ];
+      var html = '';
+      for (var i = 0; i < rows.length; i++) {
+        html += '<div class="detail-info-row">' +
+          '<div class="detail-info-label">' + rows[i][0] + '</div>' +
+          '<div class="detail-info-value">' + escPlot(rows[i][1]) + '</div>' +
+        '</div>';
+      }
+      var body = document.getElementById('plotDetailBody');
+      if (body) body.innerHTML = html;
+      var modal = document.getElementById('plotDetailModal');
+      if (modal) modal.classList.add('show');
+    }
+
+    function closePlotDetail() {
+      var modal = document.getElementById('plotDetailModal');
+      if (modal) modal.classList.remove('show');
+    }
+
+    // 图例即筛选控件：点击按状态过滤，再次点击取消
+    function toggleStatusFilter(status) {
+      statusFilter = (statusFilter === status) ? '' : status;
+      var items = document.querySelectorAll('.legend-item');
+      for (var i = 0; i < items.length; i++) {
+        var st = items[i].getAttribute('data-status');
+        if (statusFilter && st === statusFilter) items[i].classList.add('active');
+        else items[i].classList.remove('active');
+      }
+      renderPlotList();
     }
 
     // 地图缩放：控制地图区域缩放级别，到边界禁用并提示
@@ -211,6 +403,16 @@
       mapZoom = Math.max(ZOOM_MIN, mapZoom - ZOOM_STEP);
       applyZoom();
     }
+
+    // 跨页同步：后台改地块（其它标签页 / iframe 写入）后刷新本页列表
+    window.addEventListener('storage', function (e) {
+      if (e && e.key && e.key !== PLOT_MASTER_KEY) return;
+      renderPlotList();
+    });
+    // 从后台切回本页时兜底刷新
+    window.addEventListener('focus', renderPlotList);
+
+    renderPlotList();
     applyZoom();
   </script>
 </body>

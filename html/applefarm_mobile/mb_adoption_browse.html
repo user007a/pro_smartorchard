@@ -33,6 +33,10 @@
     .card-badge { position: absolute; top: var(--space-3); left: var(--space-3); font-size: var(--font-xs); padding: var(--space-1) var(--space-3); border-radius: var(--radius-md); }
     .badge-available { background: var(--primary-600); color: var(--bg-white); }
     .badge-reserved { background: var(--orange); color: var(--bg-white); }
+    .badge-disabled { background: var(--gray-400); color: var(--bg-white); }
+    /* 实景监控入口（卡片内） */
+    .card-monitor { display: flex; align-items: center; gap: 4px; font-size: var(--font-xs); color: var(--primary-600); margin-bottom: var(--space-2); cursor: pointer; }
+    .card-monitor.off { color: var(--text-light); cursor: default; }
     .card-body { padding: var(--space-3); }
     .card-name { font-size: var(--font-md); font-weight: 600; color: var(--text); margin-bottom: var(--space-2); }
     .card-meta { font-size: var(--font-sm); color: var(--text-secondary); margin-bottom: var(--space-2); }
@@ -124,7 +128,7 @@
     <div class="filter-section">
       <div class="filter-scroll">
         <div class="filter-tag active" onclick="filterByVariety(this, 'all')">全部</div>
-        <div class="filter-tag" onclick="filterByVariety(this, 'hongfushi')">花牛苹果</div>
+        <div class="filter-tag" onclick="filterByVariety(this, 'huaniu')">花牛苹果</div>
         <div class="filter-tag" onclick="filterByVariety(this, 'qinguang')">秦冠</div>
         <div class="filter-tag" onclick="filterByVariety(this, 'jonagold')">乔纳金</div>
         <div class="filter-tag" onclick="filterByVariety(this, 'xinredstar')">新红星</div>
@@ -155,8 +159,8 @@
         </div>
       </div>
       
-      <div class="tree-grid">
-        <div class="tree-card" data-variety="hongfushi" onclick="showTreeDetail('A001')">
+      <div class="tree-grid" id="treeGrid">
+        <div class="tree-card" data-variety="huaniu" onclick="showTreeDetail('A001')">
           <div class="card-photo">
             <span class="card-photo-icon">🍎</span>
             <span class="card-badge badge-available">可认养</span>
@@ -171,7 +175,7 @@
           </div>
         </div>
         
-        <div class="tree-card" data-variety="hongfushi" onclick="showTreeDetail('A025')">
+        <div class="tree-card" data-variety="huaniu" onclick="showTreeDetail('A025')">
           <div class="card-photo">
             <span class="card-photo-icon">🍎</span>
             <span class="card-badge badge-available">可认养</span>
@@ -310,7 +314,7 @@
       <div class="detail-content">
         <div class="detail-name" id="detailName">花牛苹果 #A001</div>
         <div class="detail-tags">
-          <span class="detail-tag">可认养</span>
+          <span class="detail-tag" id="detailStatus">可认养</span>
           <span class="detail-tag">优质果园</span>
           <span class="detail-tag">实时监控</span>
         </div>
@@ -318,11 +322,11 @@
         <div class="detail-info-grid">
           <div class="info-card">
             <div class="info-label">品种</div>
-            <div class="info-value">花牛苹果</div>
+            <div class="info-value" id="detailVariety">花牛苹果</div>
           </div>
           <div class="info-card">
             <div class="info-label">树龄</div>
-            <div class="info-value">8年</div>
+            <div class="info-value" id="detailAge">8年</div>
           </div>
           <div class="info-card">
             <div class="info-label">预估产量</div>
@@ -369,7 +373,7 @@
       
       <div class="detail-bottom">
         <div class="detail-price">
-          <div class="price-value">¥399</div>
+          <div class="price-value" id="detailPrice">¥399</div>
           <div class="price-unit">/年</div>
         </div>
         <button class="adopt-btn" onclick="startAdopt()">立即认养</button>
@@ -381,7 +385,7 @@
   <div class="mb-modal-overlay is-sheet" id="guideModal">
     <div class="mb-modal is-sheet">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);">
-        <div class="mb-modal-title" style="margin-bottom:0;text-align:left;">果树认养指南</div>
+        <div class="mb-modal-title" id="guideTitle" style="margin-bottom:0;text-align:left;">果树认养指南</div>
         <div class="detail-back" style="position:static;width:32px;height:32px;background:var(--gray-100);" onclick="closeGuide()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/>
@@ -390,6 +394,7 @@
         </div>
       </div>
 
+      <div id="guideBody">
       <div class="guide-subtitle" style="margin-top:0;">认养流程</div>
       <div class="guide-step">
         <div class="guide-step-num">1</div>
@@ -437,6 +442,8 @@
         <div>• 冷链配送到家服务</div>
       </div>
 
+      </div>
+
       <div class="mb-modal-actions">
         <button class="mb-btn mb-btn-secondary" onclick="closeGuide()">我知道了</button>
         <button class="mb-btn mb-btn-primary" onclick="closeGuide();startAdopt();">去认养</button>
@@ -454,11 +461,23 @@
     }
     
     function filterByVariety(el, variety) {
-      document.querySelectorAll('.filter-tag').forEach(tag => tag.classList.remove('active'));
-      el.classList.add('active');
+      if (variety !== undefined) currentVariety = variety || 'all';
+      if (el) {
+        document.querySelectorAll('.filter-tag').forEach(function (tag) { tag.classList.remove('active'); });
+        el.classList.add('active');
+      }
+      applyVarietyFilter();
+    }
+
+    /* 按当前激活的品种 + 搜索关键字筛选卡片显隐（动态渲染后需重新调用） */
+    function applyVarietyFilter() {
+      var v = currentVariety || 'all';
+      var kw = (currentKeyword || '').toLowerCase();
       var visible = 0;
-      document.querySelectorAll('.tree-card').forEach(card => {
-        var match = variety === 'all' || card.dataset.variety === variety;
+      document.querySelectorAll('.tree-card').forEach(function (card) {
+        var matchV = v === 'all' || card.dataset.variety === v;
+        var matchK = !kw || String(card.textContent || '').toLowerCase().indexOf(kw) !== -1;
+        var match = matchV && matchK;
         card.style.display = match ? '' : 'none';
         if (match) visible++;
       });
@@ -476,8 +495,22 @@
 
     function showTreeDetail(treeCode) {
       window.__curTreeCode = treeCode;
-      document.getElementById('detailName').textContent = '花牛苹果 #' + treeCode;
+      var t = adoptionTreeMap[treeCode];
+      var variety = (t && (t.varietyName || VARIETY_NAME_FALLBACK[t.variety] || t.variety)) || '花牛苹果';
+      document.getElementById('detailName').textContent = variety + ' #' + treeCode;
+      /* 动态数据可用时同步详情面板；无数据（静态卡片兜底）时保留原硬编码内容 */
+      if (t) {
+        var vEl = document.getElementById('detailVariety'); if (vEl) vEl.textContent = variety;
+        var aEl = document.getElementById('detailAge');     if (aEl) aEl.textContent = (t.treeAge != null && t.treeAge !== '' ? t.treeAge : '-') + '年';
+        var sEl = document.getElementById('detailStatus');  if (sEl) sEl.textContent = (STATUS_BADGE[t.status] || STATUS_BADGE.available).text;
+        var pEl = document.getElementById('detailPrice');   if (pEl) pEl.textContent = '¥' + (t.price != null && t.price !== '' ? t.price : 0);
+      }
       document.getElementById('detailModal').classList.add('show');
+    }
+
+    /* 卡片「实景监控」入口：跳转到该果树详情页（含实时监控） */
+    function openTreeMonitor(treeCode) {
+      window.location.href = 'mb_adoption_detail.html' + (treeCode ? ('?tree=' + encodeURIComponent(treeCode)) : '');
     }
 
     function closeDetail() {
@@ -487,6 +520,282 @@
     function startAdopt() {
       var code = window.__curTreeCode || '';
       window.location.href = 'mb_adoption_detail.html' + (code ? ('?tree=' + encodeURIComponent(code)) : '');
+    }
+
+    /* ============================================================
+     * 动态数据层：与后台 applefarm_backhand/adoption_browse.html 同源
+     *   adoption_browse_trees —— 在册展示果树（数组）
+     *     字段：treeNo, variety, varietyName, treeAge, price,
+     *           status(available/adopted/disabled), cameraId, openMonitor
+     *   adoption_guide —— 认养指南文案（对象）
+     *     字段：title, content, updatedAt
+     * 读不到数据时整体回退到页面硬编码的 6 张卡片与指南文案
+     * ============================================================ */
+    var ADOPTION_TREE_KEY  = 'adoption_browse_trees';
+    var ADOPTION_GUIDE_KEY = 'adoption_guide';
+
+    /* 品种代码 → 中文名 兜底映射（后台未给 varietyName 时使用） */
+    var VARIETY_NAME_FALLBACK = {
+      huaniu: '花牛苹果',
+      qinguang: '秦冠',
+      jonagold: '乔纳金',
+      xinredstar: '新红星',
+      gala: '嘎啦'
+    };
+
+    /* 状态 → 卡片角标 class / 文案 */
+    var STATUS_BADGE = {
+      available: { cls: 'badge-available', text: '可认养' },
+      adopted:   { cls: 'badge-reserved',  text: '已认养' },
+      disabled:  { cls: 'badge-disabled',  text: '不可认养' }
+    };
+
+    var adoptionTreeMap = {};   /* treeNo → 果树数据，供详情弹窗读取 */
+    var currentVariety = 'all'; /* 当前激活的品种筛选 */
+    var currentKeyword = '';    /* 当前搜索关键字 */
+    var fallbackGridHtml = '';  /* 页面硬编码卡片的原始 HTML（兜底快照） */
+    var varietyFallbackHtml = ''; /* 硬编码筛选标签的原始 HTML（兜底快照） */
+
+    /* ---------- 工具 ---------- */
+    function escHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function readLocalJSON(key) {
+      try {
+        var raw = localStorage.getItem(key);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (e) { return null; }
+    }
+
+    /* ---------- 果树卡片 ---------- */
+    function readAdoptionTrees() {
+      var list = readLocalJSON(ADOPTION_TREE_KEY);
+      if (!list || !list.length) return null; /* 无数据 → 走兜底 */
+      /* 兼容后台尚未迁移的历史数据：hongfushi 实际指「花牛苹果」，读入时归一为 huaniu */
+      list.forEach(function (t) { if (t && t.variety === 'hongfushi') t.variety = 'huaniu'; });
+      return list;
+    }
+
+    function buildTreeCard(t) {
+      var no = t.treeNo != null ? String(t.treeNo) : '';
+      var variety = t.variety != null ? String(t.variety) : '';
+      var name = t.varietyName || VARIETY_NAME_FALLBACK[variety] || variety || '苹果树';
+      var st = STATUS_BADGE[t.status] || STATUS_BADGE.available;
+      var price = (t.price != null && t.price !== '') ? t.price : 0;
+      var age = (t.treeAge != null && t.treeAge !== '') ? t.treeAge : '-';
+      var btnText = st.text;
+      var btnStyle = (t.status === 'available') ? '' : ' style="background:#ccc;"';
+      adoptionTreeMap[no] = t;
+
+      var monitorHtml;
+      if (t.openMonitor && t.cameraId) {
+        monitorHtml = '<div class="card-monitor" onclick="event.stopPropagation();openTreeMonitor(\'' + escHtml(no) + '\')">'
+          + '<span>📹</span><span>实景监控</span></div>';
+      } else {
+        monitorHtml = '<div class="card-monitor off"><span>📵</span><span>暂无监控</span></div>';
+      }
+
+      return ''
+        + '<div class="tree-card" data-variety="' + escHtml(variety) + '" onclick="showTreeDetail(\'' + escHtml(no) + '\')">'
+        +   '<div class="card-photo">'
+        +     '<span class="card-photo-icon">🍎</span>'
+        +     '<span class="card-badge ' + st.cls + '">' + escHtml(st.text) + '</span>'
+        +   '</div>'
+        +   '<div class="card-body">'
+        +     '<div class="card-name">' + escHtml(name) + ' #' + escHtml(no) + '</div>'
+        +     '<div class="card-meta">树龄' + escHtml(String(age)) + '年</div>'
+        +     monitorHtml
+        +     '<div class="card-footer">'
+        +       '<div class="card-price">¥' + escHtml(String(price)) + '<span class="card-price-unit">/年</span></div>'
+        +       '<div class="card-btn"' + btnStyle + '>' + escHtml(btnText) + '</div>'
+        +     '</div>'
+        +   '</div>'
+        + '</div>';
+    }
+
+    function renderTreeCards() {
+      var grid = document.getElementById('treeGrid');
+      if (!grid) return false;
+      if (!fallbackGridHtml) fallbackGridHtml = grid.innerHTML; /* 首次调用时快照硬编码卡片 */
+
+      var list = readAdoptionTrees();
+      if (!list) {
+        /* 无数据：若已被动态替换过则恢复硬编码卡片，保证页面不空白 */
+        if (grid.getAttribute('data-dynamic') === '1') {
+          grid.innerHTML = fallbackGridHtml;
+          grid.removeAttribute('data-dynamic');
+          adoptionTreeMap = {};
+        }
+        return false;
+      }
+
+      adoptionTreeMap = {};
+      var html = list.map(buildTreeCard).join('');
+      html += '<div id="varietyEmpty" style="display:none;padding:32px 0;text-align:center;color:var(--text-tertiary);font-size:13px;">该品种暂无可认养果树</div>';
+      grid.innerHTML = html;
+      grid.setAttribute('data-dynamic', '1');
+      return true;
+    }
+
+    /* ---------- 品种筛选标签（按后台数据动态聚合） ---------- */
+    /* 从 adoption_browse_trees 聚合去重，code 用 variety、文案用 varietyName */
+    function readVarietyTags() {
+      var list = readAdoptionTrees();
+      if (!list) return null; /* 无数据 → 走硬编码兜底 */
+      var seen = {};
+      var out = [];
+      list.forEach(function (t) {
+        if (!t) return;
+        var code = t.variety != null ? String(t.variety) : '';
+        if (!code || seen[code]) return;
+        seen[code] = true;
+        var name = (t.varietyName != null && String(t.varietyName).trim()) || code;
+        out.push({ code: code, name: name });
+      });
+      return out;
+    }
+
+    function renderVarietyTags() {
+      var scroll = document.querySelector('.filter-scroll');
+      if (!scroll) return false;
+      if (!varietyFallbackHtml) varietyFallbackHtml = scroll.innerHTML; /* 首次调用快照硬编码标签 */
+
+      var tags = readVarietyTags();
+      if (!tags) {
+        /* 无数据：若已被动态替换过则恢复硬编码标签 */
+        if (scroll.getAttribute('data-dynamic') === '1') {
+          scroll.innerHTML = varietyFallbackHtml;
+          scroll.removeAttribute('data-dynamic');
+        }
+        return false;
+      }
+
+      /* 当前筛选若已不存在于新数据中，回退到「全部」 */
+      var valid = currentVariety === 'all';
+      tags.forEach(function (tg) { if (tg.code === currentVariety) valid = true; });
+      if (!valid) currentVariety = 'all';
+
+      var html = '<div class="filter-tag' + (currentVariety === 'all' ? ' active' : '') + '"'
+        + ' onclick="filterByVariety(this, \'all\')">全部</div>';
+      tags.forEach(function (tg) {
+        html += '<div class="filter-tag' + (currentVariety === tg.code ? ' active' : '') + '"'
+          + ' onclick="filterByVariety(this, \'' + escHtml(tg.code) + '\')">' + escHtml(tg.name) + '</div>';
+      });
+      scroll.innerHTML = html;
+      scroll.setAttribute('data-dynamic', '1');
+      return true;
+    }
+
+    /* ---------- 认养指南文案 ---------- */
+    function readAdoptionGuide() {
+      var g = readLocalJSON(ADOPTION_GUIDE_KEY);
+      if (!g || typeof g !== 'object' || !g.content) return null; /* 无数据 → 走兜底 */
+      return g;
+    }
+
+    /* 将纯文本指南解析为「小节标题 / 步骤 / 权益」结构，复用既有 class */
+    function buildGuideHtml(content) {
+      var lines = String(content).split(/\r?\n/);
+      var html = '';
+      var rights = [];
+      var stepIndex = 0;
+      var firstSubtitle = true;
+
+      function flushRights() {
+        if (!rights.length) return;
+        html += '<div class="guide-rights">' + rights.map(function (r) {
+          return '<div>• ' + r + '</div>';
+        }).join('') + '</div>';
+        rights = [];
+      }
+
+      lines.forEach(function (raw) {
+        var line = String(raw).replace(/\s+$/, '');
+        if (!line.trim()) return;
+
+        var step = line.match(/^\s*\d+[.、]\s*(.+)$/);
+        if (step) {
+          flushRights();
+          var bodyText = step[1].trim();
+          var sep = bodyText.indexOf('：');
+          if (sep < 0) sep = bodyText.indexOf(':');
+          var stitle = sep >= 0 ? bodyText.slice(0, sep).trim() : bodyText;
+          var sdesc = sep >= 0 ? bodyText.slice(sep + 1).trim() : '';
+          stepIndex++;
+          html += '<div class="guide-step">'
+            +   '<div class="guide-step-num">' + stepIndex + '</div>'
+            +   '<div class="guide-step-main">'
+            +     '<div class="guide-step-title">' + escHtml(stitle) + '</div>'
+            +     (sdesc ? '<div class="guide-step-desc">' + escHtml(sdesc) + '</div>' : '')
+            +   '</div>'
+            + '</div>';
+          return;
+        }
+
+        var bullet = line.match(/^\s*[•·\-\*]\s*(.+)$/);
+        if (bullet) { rights.push(escHtml(bullet[1].trim())); return; }
+
+        /* 其余非空行视为小节标题 */
+        flushRights();
+        html += '<div class="guide-subtitle"' + (firstSubtitle ? ' style="margin-top:0;"' : '') + '>'
+          + escHtml(line.trim()) + '</div>';
+        firstSubtitle = false;
+      });
+
+      flushRights();
+      /* 无法识别结构时整体按正文呈现，避免内容丢失 */
+      return html || ('<div class="guide-rights">' + escHtml(String(content)) + '</div>');
+    }
+
+    function renderAdoptionGuide() {
+      var g = readAdoptionGuide();
+      if (!g) return false; /* 无数据 → 保留硬编码文案 */
+      var body = document.getElementById('guideBody');
+      if (!body) return false;
+      var titleEl = document.getElementById('guideTitle');
+      if (titleEl && g.title) titleEl.textContent = g.title;
+      body.innerHTML = buildGuideHtml(g.content);
+      return true;
+    }
+
+    /* ---------- 跨标签页同步 ---------- */
+    function onAdoptionStorage(e) {
+      if (!e || !e.key) return;
+      if (e.key === ADOPTION_TREE_KEY) {
+        renderTreeCards();
+        renderVarietyTags();
+        applyVarietyFilter();
+      } else if (e.key === ADOPTION_GUIDE_KEY) {
+        renderAdoptionGuide();
+      }
+    }
+
+    /* ---------- 搜索框（按当前卡片文案过滤，覆盖全部动态品种） ---------- */
+    function bindSearch() {
+      var el = document.querySelector('.search-input');
+      if (!el) return;
+      el.addEventListener('input', function () {
+        currentKeyword = String(this.value || '').trim();
+        applyVarietyFilter();
+      });
+    }
+
+    function initAdoptionBrowse() {
+      renderTreeCards();      /* 有数据则替换为动态卡片，否则保留硬编码 */
+      renderVarietyTags();    /* 有数据则按数据聚合品种标签，否则保留硬编码 */
+      applyVarietyFilter();   /* 按当前激活筛选恢复显隐 */
+      renderAdoptionGuide();  /* 有数据则替换指南文案 */
+      bindSearch();
+      window.addEventListener('storage', onAdoptionStorage);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initAdoptionBrowse);
+    } else {
+      initAdoptionBrowse();
     }
   </script>
 </body>

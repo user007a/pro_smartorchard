@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 经营指标</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 统计卡 */
+  .stat-card-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-xl);
+    transition: box-shadow var(--transition-normal);
+  }
+  .stat-card:hover { box-shadow: var(--shadow-md); }
+  .stat-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; }
+  .stat-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-value .unit { font-size: 13px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; }
+  .stat-sub { margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
+
+  /* 口径说明 */
+  .caliber-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    margin-bottom: var(--space-xl);
+    background: var(--primary-50);
+    border: 1px solid var(--primary-100);
+    border-radius: var(--radius-md);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .caliber-strip .caliber-icon {
+    width: 22px; height: 22px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--primary-500);
+    color: #fff;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .caliber-strip strong { color: var(--primary-600); }
+
+  .data-table { min-width: 720px; }
+  .empty-row td { text-align: center; color: var(--text-tertiary); padding: 40px 0; }
+
+  /* 环比箭头 */
+  .qoq-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .qoq-arrow { font-weight: 700; margin-right: 4px; }
+  .qoq-good { color: var(--success); font-weight: 600; }
+  .qoq-bad  { color: var(--error);   font-weight: 600; }
+  .qoq-flat { color: var(--text-tertiary); font-weight: 600; }
+
+  /* 指标横向对比：表格 + 进度条（单位不同，不用同一 Y 轴图表） */
+  .metric-cmp { margin-top: var(--space-xl); }
+  .cmp-row {
+    display: grid;
+    grid-template-columns: 120px 1fr 160px;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px dashed var(--border-light);
+  }
+  .cmp-row:last-child { border-bottom: none; }
+  .cmp-name { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+  .cmp-name .cmp-range { display: block; font-size: 11.5px; color: var(--text-tertiary); font-weight: 400; margin-top: 2px; }
+  .cmp-bar { height: 10px; background: var(--border-light); border-radius: 5px; overflow: hidden; }
+  .cmp-bar-fill {
+    height: 100%;
+    border-radius: 5px;
+    background: var(--primary-500);
+    transition: width 0.5s ease;
+  }
+  .cmp-val {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .cmp-val .unit { font-size: 12px; font-weight: 500; color: var(--text-tertiary); margin-left: 2px; }
+  @media (max-width: 1024px) {
+    .cmp-row { grid-template-columns: 100px 1fr 120px; gap: 10px; }
+  }
+
+  /* 表格上方口径说明 */
+  .table-note {
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    background: var(--gray-50);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+  }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="经营分析" data-active-submenu="经营指标">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 页面标题区 -->
+        <div class="page-header">
+          <div>
+            <div class="page-title">经营指标</div>
+            <div class="page-subtitle" id="pageSubtitle">以毛利、周转、坪效、人效四类口径衡量经营质量</div>
+          </div>
+          <div class="page-actions" id="actionBar" style="margin-bottom:0;">
+            <button class="jg-btn jg-btn-primary" data-act="edit">维护经营指标</button>
+          </div>
+        </div>
+
+        <!-- 关键经营指标口径 -->
+        <div class="caliber-strip" id="caliberStrip"></div>
+
+        <!-- 统计卡 -->
+        <div class="stat-card-row" id="statCards"></div>
+
+        <!-- 经营指标明细 -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>指标名称</th>
+                  <th>当前值</th>
+                  <th>环比变化</th>
+                  <th>向好方向</th>
+                  <th>评价口径</th>
+                </tr>
+              </thead>
+              <tbody id="metricBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 指标横向对比：单位不同，改用表格 + 进度条而非同一 Y 轴图表 -->
+        <div class="chart-section metric-cmp">
+          <h2 class="section-title">指标横向对比（各自量程内的相对水位）</h2>
+          <div id="cmpList"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/page-actions.js"></script>
+<script src="js/components/chart.js"></script>
+<script src="js/shared/biz-store.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  // 各指标合理区间（上下界，用于进度条水位计算；单位各不相同，禁止同轴作图）
+  var RANGES = {
+    '毛利率':   { max: 60,   unitText: '0 - 60%' },
+    '净利率':   { max: 30,   unitText: '0 - 30%' },
+    '应收周转': { max: 60,   unitText: '0 - 60 天' },
+    '库存周转': { max: 30,   unitText: '0 - 30 天' },
+    '坪效产值': { max: 3,    unitText: '0 - 3 万元/亩' },
+    '人均产值': { max: 150,  unitText: '0 - 150 万元/人' }
+  };
+
+  function fmt(n){
+    n = Number(n) || 0;
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  // 保留 1 位小数
+  function pct(n){ return Math.round((Number(n) || 0) * 10) / 10; }
+  function esc(v){
+    return String(v === undefined || v === null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  // 按 name 取指标项
+  function pick(list, name){
+    var hit = list.filter(function(x){ return x.name === name; })[0];
+    return hit || null;
+  }
+
+  var els = {
+    subtitle    : document.getElementById('pageSubtitle'),
+    caliberStrip: document.getElementById('caliberStrip'),
+    statCards   : document.getElementById('statCards'),
+    metricBody  : document.getElementById('metricBody'),
+    cmpList      : document.getElementById('cmpList'),
+    actionBar   : document.getElementById('actionBar')
+  };
+
+  // 环比判断：结合 better 方向，得出「好 / 差 / 持平」
+  function qoqJudge(m){
+    var q = Number(m.qoq) || 0;
+    if (!q) return 'flat';
+    var betterUp = m.better !== 'down';
+    return (q > 0) === betterUp ? 'good' : 'bad';
+  }
+  function qoqCls(m){
+    var j = qoqJudge(m);
+    return j === 'good' ? 'qoq-good' : j === 'bad' ? 'qoq-bad' : 'qoq-flat';
+  }
+  function qoqArrow(m){
+    var q = Number(m.qoq) || 0;
+    if (!q) return '—';
+    return q > 0 ? '↑' : '↓';
+  }
+  function betterText(m){
+    return m.better === 'down' ? '下降为好' : '上升为好';
+  }
+
+  function renderCaliber(){
+    var s = BizStore.summary();
+    els.caliberStrip.innerHTML =
+      '<span class="caliber-icon">i</span>' +
+      '<div><strong>关键经营指标口径：</strong>统计期间为 ' + esc(s.fiscalYear) +
+        '，环比变化均以「环比上季」为基准；毛利率、净利率按营收口径计算，' +
+        '应收周转与库存周转以「天数」计（天数越低越好），坪效产值与人均产值按当前营收与基地、员工规模折算。</div>';
+  }
+
+  function renderStats(){
+    var list = BizStore.metrics();
+    var gross = pick(list, '毛利率');
+    var net   = pick(list, '净利率');
+    var perA  = pick(list, '坪效产值');
+    var perP  = pick(list, '人均产值');
+
+    els.subtitle.textContent = BizStore.summary().fiscalYear + ' · 以毛利、周转、坪效、人效四类口径衡量经营质量';
+
+    function card(m, sub){
+      if (!m) return '';
+      return '<div class="stat-card">' +
+        '<div class="stat-label">' + esc(m.name) + '</div>' +
+        '<div class="stat-value">' + fmt(m.value) + '<span class="unit">' + esc(m.unit) + '</span></div>' +
+        '<div class="stat-sub">' + sub + '</div>' +
+      '</div>';
+    }
+    function subOf(m){
+      if (!m) return '';
+      return '环比 ' + qoqArrow(m) + ' ' + fmt(pct(Math.abs(Number(m.qoq) || 0))) + ' · ' + betterText(m);
+    }
+
+    els.statCards.innerHTML =
+      card(gross, subOf(gross)) +
+      card(net,   subOf(net)) +
+      card(perA,  subOf(perA)) +
+      card(perP,  subOf(perP));
+  }
+
+  function renderTable(){
+    var list = BizStore.metrics();
+
+    if (!list.length){
+      els.metricBody.innerHTML = '<tr class="empty-row"><td colspan="5">暂无经营指标数据</td></tr>';
+      return;
+    }
+
+    els.metricBody.innerHTML = list.map(function(m){
+      var q = Number(m.qoq) || 0;
+      return '<tr>' +
+        '<td><strong>' + esc(m.name) + '</strong></td>' +
+        '<td class="num">' + fmt(m.value) + ' ' + esc(m.unit) + '</td>' +
+        '<td class="qoq-cell ' + qoqCls(m) + '">' +
+          '<span class="qoq-arrow">' + qoqArrow(m) + '</span>' +
+          (qoqJudge(m) === 'flat' ? '持平' : (q > 0 ? '+' : '') + fmt(pct(q))) +
+        '</td>' +
+        '<td>' + esc(betterText(m)) + '</td>' +
+        '<td>环比上季（' + esc(BizStore.summary().fiscalYear) + '）</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  // 横向对比：表格 + 进度条（各指标按自身量程折算，避免单位混淆）
+  function renderCompare(){
+    var list = BizStore.metrics();
+
+    if (!list.length){
+      els.cmpList.innerHTML = '<div class="empty-state"><div class="empty-text">暂无经营指标数据</div></div>';
+      return;
+    }
+
+    els.cmpList.innerHTML = list.map(function(m){
+      var range = RANGES[m.name] || { max: 1, unitText: '-' };
+      var ratio = Math.max(2, Math.min(100, (Number(m.value) || 0) / range.max * 100));
+      return '<div class="cmp-row">' +
+        '<div class="cmp-name">' + esc(m.name) +
+          '<span class="cmp-range">量程 ' + esc(range.unitText) + '</span>' +
+        '</div>' +
+        '<div class="cmp-bar"><div class="cmp-bar-fill" style="width:' + ratio.toFixed(1) + '%;"></div></div>' +
+        '<div class="cmp-val">' + fmt(m.value) + '<span class="unit">' + esc(m.unit) + '</span></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderAll(){
+    renderCaliber();
+    renderStats();
+    renderTable();
+    renderCompare();
+  }
+
+  /* ---------------- 维护经营指标 ---------------- */
+
+  function openEditModal(){
+    var list = BizStore.metrics();
+    var fields = [];
+    var values = {};
+
+    list.forEach(function(m, i){
+      fields.push({
+        name: 'v' + i, label: m.name + ' 当前值（' + m.unit + '）',
+        type: 'number', required: true, placeholder: '如 ' + m.value, hint: '非负数'
+      });
+      fields.push({
+        name: 'q' + i, label: m.name + ' 环比变化（' + m.unit + '）',
+        type: 'number', required: true, placeholder: '如 ' + m.qoq, hint: '可填负数表示下降'
+      });
+      values['v' + i] = m.value;
+      values['q' + i] = m.qoq;
+    });
+
+    Modal.form({
+      title: '维护经营指标',
+      fields: fields,
+      values: values,
+      submitText: '保存',
+      width: '640px',
+      onSubmit: function(formData){
+        var next = list.map(function(m, i){
+          var rv = formData['v' + i];
+          var rq = formData['q' + i];
+          var nv = Number(rv);
+          var nq = Number(rq);
+
+          if (rv === '' || rv === undefined || isNaN(nv) || nv < 0){
+            Toast.show('「' + m.name + '」当前值必须为非负数字', 'warning');
+            return null;
+          }
+          if (rq === '' || rq === undefined || isNaN(nq)){
+            Toast.show('「' + m.name + '」环比变化必须为数字', 'warning');
+            return null;
+          }
+
+          return {
+            name: m.name,
+            value: Math.abs(nv) < 1000 ? pct(nv) : Math.round(nv),
+            unit: m.unit,
+            qoq: Math.abs(nq) < 1000 ? pct(nq) : Math.round(nq),
+            better: m.better
+          };
+        });
+
+        if (next.some(function(x){ return x === null; })) return false;
+
+        BizStore.setMetrics(next);
+        Toast.show('保存成功', 'success');
+        return true;
+      }
+    });
+  }
+
+  // 顶部操作按钮：一次性事件委托
+  els.actionBar.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    if (btn.getAttribute('data-act') === 'edit') openEditModal();
+  });
+
+  BizStore.subscribe(function(){
+    renderAll();
+  });
+})();
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

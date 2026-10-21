@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 商品管理</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label { font-size: var(--font-size-sm); color: var(--text-tertiary); margin-bottom: var(--space-xs); }
+  .stat-value {
+    font-size: 26px; font-weight: var(--font-weight-bold);
+    color: var(--text-primary); line-height: 1.2; font-variant-numeric: tabular-nums;
+  }
+  .notice-bar {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--info-bg);
+    border: 1px solid var(--info-border);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-lg);
+  }
+  .notice-bar svg { flex-shrink: 0; margin-top: 2px; color: var(--info); }
+  .sku-cell { display: flex; align-items: center; gap: var(--space-md); }
+  .sku-img {
+    width: 44px; height: 44px; border-radius: var(--radius-md);
+    object-fit: cover; background: var(--gray-100); flex-shrink: 0;
+  }
+  .sku-name { font-weight: var(--font-weight-semibold, 600); color: var(--text-primary); }
+  .sku-sid { font-size: var(--font-size-xs); color: var(--text-tertiary); font-family: 'SF Mono', Consolas, monospace; }
+  .cat-tag {
+    display: inline-block; padding: 3px 10px; border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs); white-space: nowrap;
+  }
+  .cat-tag.fruit { background: var(--primary-50); color: var(--primary-600); }
+  .cat-tag.gift { background: var(--warning-bg); color: var(--warning); }
+  .cat-tag.adopt { background: var(--success-bg); color: var(--success); }
+  .status-tag {
+    display: inline-block; padding: 3px 10px; border-radius: var(--radius-full);
+    font-size: var(--font-size-xs); white-space: nowrap;
+  }
+  .status-tag.on { background: var(--success-bg); color: var(--success); }
+  .status-tag.off { background: var(--gray-100); color: var(--text-secondary); }
+  .price-cell { color: var(--error); font-weight: var(--font-weight-semibold, 600); }
+  .price-original { color: var(--text-tertiary); text-decoration: line-through; margin-left: 6px; font-weight: 400; font-size: var(--font-size-xs); }
+  .modal-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5); z-index: 1000;
+    justify-content: center; align-items: center; backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card); border-radius: 12px; width: 92%; max-width: 640px;
+    max-height: 85vh; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer; padding: 4px;
+    font-size: 20px; line-height: 1; color: var(--text-tertiary);
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body { padding: 20px; overflow-y: auto; max-height: calc(85vh - 132px); }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 12px;
+    padding: 16px 20px; border-top: 1px solid var(--border-default);
+  }
+  .form-row { display: flex; gap: var(--space-md); margin-bottom: var(--space-lg); }
+  .form-field { flex: 1; }
+  .form-field label {
+    display: block; font-size: var(--font-size-sm);
+    font-weight: var(--weight-medium, 500); color: var(--text-primary); margin-bottom: var(--space-sm);
+  }
+  .form-field input, .form-field select, .form-field textarea {
+    width: 100%; padding: 10px 14px; border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg); font-size: var(--font-size-base);
+    font-family: inherit; background: var(--bg-card);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); box-sizing: border-box;
+  }
+  .form-field textarea { min-height: 76px; resize: vertical; line-height: var(--line-height-relaxed); }
+  .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
+    border-color: var(--primary-500); box-shadow: 0 0 0 4px rgba(24,144,255,0.12); outline: none;
+  }
+  .empty-state { padding: var(--space-2xl) 0; text-align: center; color: var(--text-tertiary); font-size: var(--font-size-sm); }
+</style>
+</head>
+<body data-active-menu="mall" data-active-submenu="mall-product">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">商品管理</div>
+        <div class="page-subtitle">维护消费者 H5 商城「花牛苹果」的上架 SKU、价格与上下架状态</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="resetToH5Default()">恢复 H5 默认</button>
+        <button class="jg-btn jg-btn-primary" onclick="openEdit()">新增商品</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">商品总数</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">在售</div>
+        <div class="stat-value" id="statOn">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已下架</div>
+        <div class="stat-value" id="statOff">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">认养类</div>
+        <div class="stat-value" id="statAdopt">0</div>
+      </div>
+    </div>
+
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <select class="search-select" id="catSelect">
+          <option value="">全部分类</option>
+          <option value="fruit">水果</option>
+          <option value="gift">礼盒</option>
+          <option value="adopt">认养</option>
+        </select>
+        <select class="search-select" id="statusSelect">
+          <option value="">全部状态</option>
+          <option value="on">在售</option>
+          <option value="off">已下架</option>
+        </select>
+        <input type="text" class="search-input" placeholder="搜索商品名称或 SKU..." id="searchInput">
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="renderTable()">搜索</button>
+          <button class="jg-btn" onclick="resetFilter()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="checkbox-col" style="width:60px;">序号</th>
+              <th>商品</th>
+              <th style="width:100px;">分类</th>
+              <th style="width:130px;">售价</th>
+              <th style="width:100px;">状态</th>
+              <th style="width:150px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="productBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无商品</div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== 编辑弹窗 ===== -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="editModalTitle">新增商品</h3>
+      <button class="modal-close" onclick="closeEditModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>SKU 编码<span style="color:var(--error);">*</span></label>
+          <input type="text" id="editSid" placeholder="如 redFuji">
+        </div>
+        <div class="form-field">
+          <label>商品分类</label>
+          <select id="editCat">
+            <option value="fruit">水果</option>
+            <option value="gift">礼盒</option>
+            <option value="adopt">认养</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>商品名称<span style="color:var(--error);">*</span></label>
+        <input type="text" id="editName" placeholder="如 花牛苹果 5斤装">
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>卖点描述</label>
+        <input type="text" id="editDesc" placeholder="如 脆甜多汁 · 新鲜采摘">
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>售价（元）<span style="color:var(--error);">*</span></label>
+          <input type="number" id="editPrice" min="0" step="1" placeholder="68">
+        </div>
+        <div class="form-field">
+          <label>划线原价（元）</label>
+          <input type="number" id="editOriginal" min="0" step="1" placeholder="0 表示无原价">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>主图路径</label>
+          <input type="text" id="editImg" placeholder="images/thumb_redfuji.jpg">
+        </div>
+        <div class="form-field">
+          <label>上架状态</label>
+          <select id="editStatus">
+            <option value="on">在售</option>
+            <option value="off">已下架</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeEditModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * 商品管理（商城管理）
+ * 数据源：localStorage['mall_products']
+ *   初始值 = H5 端 h5_store.html 的 productData（6 个 SKU）
+ *   字段：{ id, name, desc, price, original, img, cat, status }
+ * ============================================================ */
+var PRODUCT_KEY = 'mall_products';
+
+var CAT_TEXT = { fruit: '水果', gift: '礼盒', adopt: '认养' };
+
+/* 与 H5 端 h5_store.html productData 保持一致 */
+var H5_DEFAULT_PRODUCTS = [
+  { id: 'redFuji',  name: '花牛苹果 5斤装',    desc: '脆甜多汁 · 新鲜采摘', price: 68,   original: 88,   img: 'images/thumb_redfuji.jpg', cat: 'fruit', status: 'on' },
+  { id: 'gala',     name: '红富士苹果 5斤装',  desc: '酸甜可口 · 皮薄肉嫩', price: 58,   original: 78,   img: 'images/thumb_gala.jpg',    cat: 'fruit', status: 'on' },
+  { id: 'giftBox',  name: '精品礼盒装 8斤',    desc: '送礼佳品 · 品质保证', price: 168,  original: 198,  img: 'images/thumb_giftbox.jpg', cat: 'gift',  status: 'on' },
+  { id: 'adopt3yr', name: '认养果树3年套餐',   desc: '专属果树 · 全程溯源', price: 1888, original: 0,    img: 'images/thumb_tree.jpg',    cat: 'adopt', status: 'on' },
+  { id: 'adopt1',   name: '花牛苹果认养1棵',   desc: '3年认养 · 专属标识', price: 1888, original: 0,    img: 'images/thumb_tree.jpg',    cat: 'adopt', status: 'on' },
+  { id: 'adopt2',   name: '花牛苹果认养2棵',   desc: '3年认养 · 优惠价',   price: 3588, original: 0,    img: 'images/thumb_tree.jpg',    cat: 'adopt', status: 'off' }
+];
+
+var editingId = null;
+
+function readList() {
+  try {
+    var raw = localStorage.getItem(PRODUCT_KEY);
+    if (!raw) return null;
+    var v = JSON.parse(raw);
+    return Array.isArray(v) && v.length ? v : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function readAll() {
+  var list = readList();
+  if (!list) {
+    list = H5_DEFAULT_PRODUCTS.map(function (p) { return Object.assign({}, p); });
+    writeList(list);
+  }
+  return list;
+}
+
+function writeList(list) {
+  try {
+    localStorage.setItem(PRODUCT_KEY, JSON.stringify(list));
+  } catch (e) {
+    Toast.error('本地存储写入失败，商品未能保存');
+  }
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function renderStats() {
+  var list = readAll();
+  var on = 0, off = 0, adopt = 0;
+  list.forEach(function (p) {
+    if (p.status === 'on') on++; else off++;
+    if (p.cat === 'adopt') adopt++;
+  });
+  document.getElementById('statTotal').textContent = list.length;
+  document.getElementById('statOn').textContent = on;
+  document.getElementById('statOff').textContent = off;
+  document.getElementById('statAdopt').textContent = adopt;
+}
+
+function filteredList() {
+  var cat = document.getElementById('catSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  return readAll().filter(function (p) {
+    if (cat && p.cat !== cat) return false;
+    if (status && p.status !== status) return false;
+    if (kw) {
+      var hay = ((p.name || '') + ' ' + (p.id || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable() {
+  var list = filteredList();
+  renderStats();
+
+  var body = document.getElementById('productBody');
+  var emptyHint = document.getElementById('emptyHint');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+
+  body.innerHTML = list.map(function (p, i) {
+    var original = p.original > 0
+      ? '<span class="price-original">¥' + p.original + '</span>'
+      : '';
+    return '<tr>' +
+      '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td><div class="sku-cell">' +
+          '<img class="sku-img" src="../applefarm_h5/' + esc(p.img) + '" alt="" onerror="this.style.visibility=\'hidden\'">' +
+          '<div><div class="sku-name">' + esc(p.name) + '</div>' +
+          '<div class="sku-sid">' + esc(p.id) + '</div></div>' +
+        '</div></td>' +
+      '<td><span class="cat-tag ' + esc(p.cat) + '">' + (CAT_TEXT[p.cat] || p.cat) + '</span></td>' +
+      '<td class="price-cell">¥' + p.price + original + '</td>' +
+      '<td><span class="status-tag ' + esc(p.status) + '">' + (p.status === 'on' ? '在售' : '已下架') + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn detail" onclick="openEdit(\'' + esc(p.id) + '\')">编辑</button>' +
+        '<button class="action-btn ' + (p.status === 'on' ? 'delete' : 'download') + '" onclick="toggleStatus(\'' + esc(p.id) + '\')">' +
+          (p.status === 'on' ? '下架' : '上架') + '</button>' +
+        '<button class="action-btn delete" onclick="removeProduct(\'' + esc(p.id) + '\')">删除</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function resetFilter() {
+  document.getElementById('catSelect').value = '';
+  document.getElementById('statusSelect').value = '';
+  document.getElementById('searchInput').value = '';
+  renderTable();
+}
+
+function openEdit(id) {
+  editingId = id || null;
+  var list = readAll();
+  var p = null;
+  if (id) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === id) { p = list[i]; break; }
+    }
+    if (!p) { Toast.error('未找到该商品'); return; }
+  }
+
+  document.getElementById('editModalTitle').textContent = p ? '编辑商品' : '新增商品';
+  document.getElementById('editSid').value = p ? p.id : '';
+  document.getElementById('editSid').disabled = !!p;
+  document.getElementById('editName').value = p ? p.name : '';
+  document.getElementById('editDesc').value = p ? p.desc : '';
+  document.getElementById('editPrice').value = p ? p.price : '';
+  document.getElementById('editOriginal').value = p ? (p.original || 0) : 0;
+  document.getElementById('editImg').value = p ? (p.img || '') : '';
+  document.getElementById('editCat').value = p ? p.cat : 'fruit';
+  document.getElementById('editStatus').value = p ? p.status : 'on';
+
+  document.getElementById('editModal').classList.add('show');
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('show');
+  editingId = null;
+}
+
+function submitEdit() {
+  var sid = document.getElementById('editSid').value.trim();
+  var name = document.getElementById('editName').value.trim();
+  var price = document.getElementById('editPrice').value;
+
+  if (!sid) { Toast.warning('请填写 SKU 编码'); return; }
+  if (!name) { Toast.warning('请填写商品名称'); return; }
+  if (price === '' || isNaN(Number(price)) || Number(price) < 0) {
+    Toast.warning('请填写正确的售价');
+    return;
+  }
+
+  var list = readAll();
+  var payload = {
+    id: sid,
+    name: name,
+    desc: document.getElementById('editDesc').value.trim(),
+    price: Number(price),
+    original: Number(document.getElementById('editOriginal').value) || 0,
+    img: document.getElementById('editImg').value.trim(),
+    cat: document.getElementById('editCat').value,
+    status: document.getElementById('editStatus').value
+  };
+
+  if (editingId) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === editingId) {
+        list[i] = payload;
+        break;
+      }
+    }
+  } else {
+    for (var j = 0; j < list.length; j++) {
+      if (list[j].id === sid) {
+        Toast.warning('SKU 编码已存在');
+        return;
+      }
+    }
+    list.push(payload);
+  }
+
+  writeList(list);
+  closeEditModal();
+  renderTable();
+  Toast.success(editingId ? '商品已更新' : '商品已新增');
+}
+
+function toggleStatus(id) {
+  var list = readAll();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].id === id) {
+      list[i].status = list[i].status === 'on' ? 'off' : 'on';
+      writeList(list);
+      renderTable();
+      Toast.success(list[i].status === 'on' ? '商品已上架' : '商品已下架');
+      return;
+    }
+  }
+}
+
+function removeProduct(id) {
+  ConfirmDialog.show({
+    title: '删除商品',
+    message: '确定删除商品「' + id + '」吗？此操作不可撤销。',
+    onConfirm: function () {
+      var list = readAll().filter(function (p) { return p.id !== id; });
+      writeList(list);
+      renderTable();
+      Toast.success('商品已删除');
+    }
+  });
+}
+
+function resetToH5Default() {
+  ConfirmDialog.show({
+    title: '恢复默认',
+    message: '将丢弃后台所有改动，恢复为 H5 端内置商品清单。是否继续？',
+    onConfirm: function () {
+      localStorage.removeItem(PRODUCT_KEY);
+      renderTable();
+      Toast.success('已恢复 H5 默认商品');
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') renderTable();
+  });
+  renderTable();
+});
+</script>
+</body>
+</html>

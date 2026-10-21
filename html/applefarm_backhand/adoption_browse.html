@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 认养展示配置</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));
+    gap:var(--space-md);
+    margin-bottom:var(--space-lg);
+  }
+  .stat-card {
+    background:var(--bg-card);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-lg);
+    padding:var(--space-lg);
+  }
+  .stat-label { font-size:var(--font-size-sm); color:var(--text-tertiary); margin-bottom:var(--space-xs); }
+  .stat-value {
+    font-size:26px; font-weight:var(--font-weight-bold);
+    color:var(--text-primary); line-height:1.2; font-variant-numeric:tabular-nums;
+  }
+
+  /* 状态标签 */
+  .status-tag {
+    display:inline-block;
+    padding:3px 10px;
+    border-radius:var(--radius-full);
+    font-size:var(--font-size-xs);
+    font-weight:500;
+    white-space:nowrap;
+  }
+  .status-tag.available { background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); }
+  .status-tag.adopted   { background:var(--warning-bg); color:#ad8b00;        border:1px solid var(--warning-border); }
+  .status-tag.disabled  { background:var(--gray-100);  color:var(--text-tertiary); border:1px solid var(--border-default); }
+
+  /* Switch 开关 */
+  .switch {
+    position:relative;
+    display:inline-block;
+    width:40px;
+    height:22px;
+    vertical-align:middle;
+  }
+  .switch input { opacity:0; width:0; height:0; }
+  .switch .slider {
+    position:absolute; cursor:pointer; inset:0;
+    background-color:#d9d9d9;
+    border-radius:22px;
+    transition:.2s;
+  }
+  .switch .slider::before {
+    content:''; position:absolute; height:18px; width:18px;
+    left:2px; top:2px; background:#fff; border-radius:50%;
+    transition:.2s;
+  }
+  .switch input:checked + .slider { background-color:var(--success, #52c41a); }
+  .switch input:checked + .slider::before { transform:translateX(18px); }
+  .switch-cell { text-align:center; }
+
+  /* Tab 切换 */
+  .tab-bar-nav {
+    display:flex; gap:var(--space-md);
+    border-bottom:1px solid var(--border-light);
+    margin-bottom:var(--space-lg);
+  }
+  .tab-bar-nav .tab-item {
+    padding:10px 4px;
+    border-bottom:2px solid transparent;
+    cursor:pointer;
+    color:var(--text-secondary);
+    font-size:var(--font-size-base);
+    font-weight:500;
+  }
+  .tab-bar-nav .tab-item.active {
+    color:var(--primary-600, #1890ff);
+    border-color:var(--primary-600, #1890ff);
+  }
+
+  /* 操作按钮组 */
+  .action-btns { display:flex; gap:6px; flex-wrap:wrap; }
+  .action-btn {
+    padding:4px 10px;
+    font-size:var(--font-size-xs);
+    border:1px solid var(--border-default);
+    border-radius:var(--radius-sm);
+    cursor:pointer;
+    background:var(--bg-card);
+    color:var(--text-secondary);
+  }
+  .action-btn:hover { border-color:var(--primary-500); color:var(--primary-500); }
+  .action-btn.danger { color:var(--error); border-color:var(--error-border); }
+  .action-btn.danger:hover { background:var(--error-bg); }
+
+  /* 弹窗 */
+  .modal-overlay {
+    display:none; position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.5); z-index:1000;
+    justify-content:center; align-items:center; backdrop-filter:blur(4px);
+  }
+  .modal-overlay.show { display:flex; }
+  .modal-box {
+    background:var(--bg-card); border-radius:12px;
+    width:92%; max-width:560px; max-height:85vh; overflow:hidden;
+    box-shadow:0 20px 40px rgba(0,0,0,0.2);
+    animation:modalFadeIn 0.2s ease-out;
+  }
+  .modal-box.wide { max-width:720px; }
+  @keyframes modalFadeIn {
+    from { opacity:0; transform:scale(0.95) translateY(-20px); }
+    to   { opacity:1; transform:scale(1)   translateY(0); }
+  }
+  .modal-header {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:16px 20px; border-bottom:1px solid var(--border-default);
+  }
+  .modal-title { font-size:16px; font-weight:600; color:#1f1f1f; margin:0; }
+  .modal-close {
+    background:none; border:none; cursor:pointer; padding:4px;
+    font-size:20px; line-height:1; color:var(--text-tertiary);
+  }
+  .modal-close:hover { color:var(--text-secondary); }
+  .modal-body { padding:20px; overflow-y:auto; max-height:calc(85vh - 132px); }
+  .modal-footer {
+    display:flex; justify-content:flex-end; gap:12px;
+    padding:16px 20px; border-top:1px solid var(--border-default);
+  }
+
+  /* 表单 */
+  .form-row { display:flex; gap:var(--space-md); margin-bottom:var(--space-lg); }
+  .form-field { flex:1; }
+  .form-field label {
+    display:block; font-size:var(--font-size-sm);
+    font-weight:500; color:var(--text-primary); margin-bottom:var(--space-sm);
+  }
+  .form-field input,
+  .form-field select,
+  .form-field textarea {
+    width:100%; padding:10px 14px; border:1.5px solid var(--border-default);
+    border-radius:var(--radius-lg); font-size:var(--font-size-base);
+    font-family:inherit; background:var(--bg-card); box-sizing:border-box;
+  }
+  .form-field textarea { min-height:140px; resize:vertical; line-height:1.6; }
+  .form-field input:focus,
+  .form-field select:focus,
+  .form-field textarea:focus {
+    border-color:var(--primary-500);
+    box-shadow:0 0 0 4px rgba(24,144,255,0.12); outline:none;
+  }
+
+  .empty-state {
+    padding:var(--space-2xl) 0; text-align:center;
+    color:var(--text-tertiary); font-size:var(--font-size-sm);
+  }
+
+  /* 资讯预览 */
+  .guide-preview {
+    background:var(--bg-card);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-md);
+    padding:14px 18px;
+    font-size:13px;
+    color:var(--text-secondary);
+    white-space:pre-wrap;
+    line-height:1.7;
+    margin-top:var(--space-sm);
+    max-height:200px;
+    overflow-y:auto;
+  }
+</style>
+</head>
+<body data-active-menu="adoption" data-active-submenu="adoption-browse">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">认养展示配置</div>
+        <div class="page-subtitle">移动端「实景监控 / 认养指南」页 (mb_adoption_browse.html) 数据源</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn jg-btn-primary" onclick="openTreeEdit()">新增果树</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">果树总数</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">可认养</div>
+        <div class="stat-value" id="statAvailable">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已认养</div>
+        <div class="stat-value" id="statAdopted">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">开放实景</div>
+        <div class="stat-value" id="statMonitor">0</div>
+      </div>
+    </div>
+
+    <div class="tab-bar-nav">
+      <div class="tab-item active" data-tab="tree" onclick="switchTab('tree', this)">果树池</div>
+      <div class="tab-item" data-tab="guide" onclick="switchTab('guide', this)">展示配置</div>
+    </div>
+
+    <!-- ====== 果树池 ====== -->
+    <section id="tab-tree">
+      <div class="page-section search-section">
+        <div class="search-bar">
+          <select class="search-select" id="searchVariety">
+            <option value="">全部品种</option>
+          </select>
+          <select class="search-select" id="searchStatus">
+            <option value="">全部状态</option>
+            <option value="available">可认养</option>
+            <option value="adopted">已认养</option>
+            <option value="disabled">不可认养</option>
+          </select>
+          <input type="text" class="search-input" id="searchKw" placeholder="搜索果树编号 / 品种...">
+          <div class="search-actions">
+            <button class="jg-btn jg-btn-primary" onclick="renderTreeTable()">搜索</button>
+            <button class="jg-btn" onclick="resetSearch()">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-section data-section">
+        <div class="data-table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:60px;">序号</th>
+                <th>果树编号</th>
+                <th>品种</th>
+                <th style="width:80px;">树龄</th>
+                <th style="width:100px;">年费</th>
+                <th style="width:90px;">状态</th>
+                <th>关联摄像头</th>
+                <th style="width:90px;">开放实景</th>
+                <th style="width:170px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="treeBody"></tbody>
+          </table>
+        </div>
+        <div id="treeEmpty" class="empty-state" style="display:none;">暂无可认养果树</div>
+      </div>
+    </section>
+
+    <!-- ====== 展示配置 ====== -->
+    <section id="tab-guide" style="display:none;">
+      <div class="page-section data-section">
+        <div class="page-header" style="padding:0;border:none;margin-bottom:var(--space-md);">
+          <div>
+            <div class="page-title" style="font-size:16px;">认养指南文案</div>
+            <div class="page-subtitle">移动端引导弹窗显示的内容</div>
+          </div>
+          <div class="page-actions">
+            <button class="jg-btn jg-btn-primary" onclick="openGuideEdit()">编辑文案</button>
+          </div>
+        </div>
+        <div style="background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:var(--space-lg);">
+          <div style="font-size:var(--font-size-base);font-weight:600;color:var(--text-primary);margin-bottom:var(--space-sm);">
+            <span id="guidePreviewTitle">认养指南</span>
+            <span id="guideUpdatedAt" style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-left:8px;font-weight:400;"></span>
+          </div>
+          <div class="guide-preview" id="guidePreviewContent">（暂无内容）</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ====== 新增/编辑 果树 ====== -->
+<div class="modal-overlay" id="treeEditModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="treeEditTitle">新增果树</h3>
+      <button class="modal-close" onclick="closeTreeEdit()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>果树编号<span style="color:var(--error);">*</span></label>
+          <input type="text" id="editTreeNo" placeholder="如 A001">
+        </div>
+        <div class="form-field">
+          <label>品种代码<span style="color:var(--error);">*</span></label>
+          <input type="text" id="editVarietyCode" placeholder="如 huaniu（移动端 data-variety）">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>品种中文名<span style="color:var(--error);">*</span></label>
+          <input type="text" id="editVarietyName" placeholder="如 花牛苹果">
+        </div>
+        <div class="form-field">
+          <label>树龄（年）</label>
+          <input type="number" id="editTreeAge" min="0" placeholder="如 8">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>年费价格（元）<span style="color:var(--error);">*</span></label>
+          <input type="number" id="editPrice" min="0" placeholder="如 399">
+        </div>
+        <div class="form-field">
+          <label>状态</label>
+          <select id="editStatus">
+            <option value="available">可认养</option>
+            <option value="adopted">已认养</option>
+            <option value="disabled">不可认养</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field" style="flex:2;">
+          <label>关联摄像头编号</label>
+          <input type="text" id="editCameraId" placeholder="如 CAM-008（如无可留空）">
+          <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:4px;">当前未对接设备主数据，手工填写</div>
+        </div>
+        <div class="form-field" style="flex:1;display:flex;align-items:flex-end;">
+          <label class="switch-cell" style="display:flex;align-items:center;gap:8px;padding-bottom:6px;">
+            <span class="switch"><input type="checkbox" id="editOpenMonitor"><span class="slider"></span></span>
+            <span>开放实景</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeTreeEdit()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitTreeEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 编辑展示文案 ====== -->
+<div class="modal-overlay" id="guideEditModal">
+  <div class="modal-box wide">
+    <div class="modal-header">
+      <h3 class="modal-title">编辑认养指南</h3>
+      <button class="modal-close" onclick="closeGuideEdit()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>标题<span style="color:var(--error);">*</span></label>
+        <input type="text" id="editGuideTitle" placeholder="如 果树认养指南">
+      </div>
+      <div class="form-field">
+        <label>正文<span style="color:var(--error);">*</span></label>
+        <textarea id="editGuideContent" placeholder="请填写认养指南正文，将完整推送到移动端指南弹窗..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeGuideEdit()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitGuideEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * 认养展示配置（移动端 mb_adoption_browse.html 数据源）
+ * ============================================================ */
+
+var TREE_KEY = 'adoption_browse_trees';
+var GUIDE_KEY = 'adoption_guide';
+
+/* 种子：来自原硬编码 6 张卡片 */
+var DEFAULT_TREES = [
+  { treeNo:'A001', variety:'huaniu',    varietyName:'花牛苹果', treeAge:8,  price:399, status:'available', cameraId:'',          openMonitor:true },
+  { treeNo:'A025', variety:'huaniu',    varietyName:'花牛苹果', treeAge:8,  price:429, status:'available', cameraId:'',          openMonitor:true },
+  { treeNo:'G012', variety:'gala',       varietyName:'嘎拉',     treeAge:6,  price:299, status:'adopted',   cameraId:'',          openMonitor:false },
+  { treeNo:'Q008', variety:'qinguang',   varietyName:'秦冠',     treeAge:10, price:459, status:'available', cameraId:'',          openMonitor:true },
+  { treeNo:'J015', variety:'jonagold',   varietyName:'乔纳金',   treeAge:7,  price:359, status:'available', cameraId:'',          openMonitor:true },
+  { treeNo:'X003', variety:'xinredstar', varietyName:'新红星',   treeAge:5,  price:279, status:'available', cameraId:'',          openMonitor:true }
+];
+
+var DEFAULT_GUIDE = {
+  title: '果树认养指南',
+  content:
+    '认养流程\n' +
+    '1. 挑选果树：在实景监控中按品种、树龄、产量筛选心仪的果树。\n' +
+    '2. 在线认养：选择认养年限并支付，认养费用包含全年养护与产出。\n' +
+    '3. 专属挂牌：为果树挂上写有您名字的认养牌，并生成专属认养证书。\n' +
+    '4. 远程守护：随时查看果树视频、实时监控、农事记录与生长报告。\n' +
+    '5. 采摘收获：果实成熟后预约到园采摘，或选择冷链配送到家。\n' +
+    '\n' +
+    '认养权益\n' +
+    '• 果树全年产出归您所有\n' +
+    '• 实时视频监控您的果树\n' +
+    '• 专业果农代为养护\n' +
+    '• 免费采摘体验一次\n' +
+    '• 专属认养证书\n' +
+    '• 冷链配送到家服务',
+  updatedAt: ''
+};
+
+var STATUS_TEXT = { available: '可认养', adopted: '已认养', disabled: '不可认养' };
+
+var editingTreeNo = null;
+var editingCameraIdPrev = null;
+
+/* ---------- 工具 ---------- */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+  });
+}
+function readJSON(key, fallback) {
+  try {
+    var raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    var v = JSON.parse(raw);
+    return Array.isArray(v) ? v : (fallback && typeof fallback === 'object' && !Array.isArray(fallback) ? fallback : fallback);
+  } catch (e) { return fallback; }
+}
+function readObject(key, fallback) {
+  try {
+    var raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    var v = JSON.parse(raw);
+    return v && typeof v === 'object' ? v : fallback;
+  } catch (e) { return fallback; }
+}
+function writeJSON(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+  catch (e) { Toast.error('本地存储写入失败'); return false; }
+}
+
+/* ---------- 数据 ---------- */
+/* 历史数据迁移：早期品种代码 hongfushi 实际指向「花牛苹果」，语义与红富士冲突，
+   统一改为 huaniu；已落库的存量果树在读取时自愈并回写 */
+function migrateLegacyVariety(list) {
+  var changed = false;
+  list.forEach(function (t) {
+    if (t && t.variety === 'hongfushi') { t.variety = 'huaniu'; changed = true; }
+  });
+  return changed;
+}
+
+function readTrees() {
+  var list = readJSON(TREE_KEY, null);
+  if (!list || list.length === 0) {
+    list = DEFAULT_TREES.map(function (t) { return Object.assign({}, t); });
+    writeJSON(TREE_KEY, list);
+  } else if (migrateLegacyVariety(list)) {
+    writeJSON(TREE_KEY, list);
+  }
+  return list;
+}
+function writeTrees(list) { return writeJSON(TREE_KEY, list); }
+
+function readGuide() {
+  var v = readObject(GUIDE_KEY, null);
+  if (!v || !v.title) {
+    v = Object.assign({}, DEFAULT_GUIDE);
+    writeJSON(GUIDE_KEY, v);   /* 与果树池一致：首次访问即落库，供移动端 mb_adoption_browse.html 读取 */
+  }
+  return v;
+}
+function writeGuide(g) { return writeJSON(GUIDE_KEY, g); }
+
+/* 品种筛选项从果树池聚合 */
+function refreshVarietyFilter() {
+  var list = readTrees();
+  var seen = {};
+  list.forEach(function (t) {
+    if (t.variety) seen[t.variety] = t.varietyName || t.variety;
+  });
+  var sel = document.getElementById('searchVariety');
+  var current = sel.value;
+  var html = '<option value="">全部品种</option>';
+  Object.keys(seen).forEach(function (code) {
+    html += '<option value="' + esc(code) + '">' + esc(seen[code]) + '</option>';
+  });
+  sel.innerHTML = html;
+  sel.value = current;
+}
+
+function renderStats() {
+  var list = readTrees();
+  var available = 0, adopted = 0, monitor = 0;
+  list.forEach(function (t) {
+    if (t.status === 'available') available++;
+    else if (t.status === 'adopted') adopted++;
+    if (t.openMonitor) monitor++;
+  });
+  document.getElementById('statTotal').textContent     = list.length;
+  document.getElementById('statAvailable').textContent = available;
+  document.getElementById('statAdopted').textContent   = adopted;
+  document.getElementById('statMonitor').textContent   = monitor;
+}
+
+function renderTreeTable() {
+  var list = readTrees();
+  var variety = document.getElementById('searchVariety').value;
+  var status  = document.getElementById('searchStatus').value;
+  var kw      = (document.getElementById('searchKw').value || '').trim().toLowerCase();
+  var filtered = list.filter(function (t) {
+    if (variety && t.variety !== variety) return false;
+    if (status && t.status !== status) return false;
+    if (kw) {
+      var hay = ((t.treeNo || '') + '|' + (t.variety || '') + '|' + (t.varietyName || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+  var tbody = document.getElementById('treeBody');
+  var empty = document.getElementById('treeEmpty');
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  tbody.innerHTML = filtered.map(function (t, i) {
+    var checked = t.openMonitor ? 'checked' : '';
+    return ''
+      + '<tr>'
+      +   '<td>' + (i + 1) + '</td>'
+      +   '<td><strong>' + esc(t.treeNo) + '</strong></td>'
+      +   '<td>' + esc(t.varietyName || '-') + ' <span style="font-size:var(--font-size-xs);color:var(--text-tertiary);">' + esc(t.variety) + '</span></td>'
+      +   '<td>' + esc(String(t.treeAge != null ? t.treeAge : '-')) + ' 年</td>'
+      +   '<td>¥' + esc(String(t.price != null ? t.price : 0)) + '</td>'
+      +   '<td><span class="status-tag ' + esc(t.status) + '">' + esc(STATUS_TEXT[t.status] || t.status) + '</span></td>'
+      +   '<td style="font-size:var(--font-size-xs);color:var(--text-tertiary);">' + (t.cameraId ? esc(t.cameraId) : '<span style="color:var(--text-light);">未关联</span>') + '</td>'
+      +   '<td class="switch-cell">'
+      +     '<label class="switch">'
+      +       '<input type="checkbox" ' + checked + ' onchange="toggleMonitor(\'' + esc(t.treeNo) + '\', this.checked)">'
+      +       '<span class="slider"></span>'
+      +     '</label>'
+      +   '</td>'
+      +   '<td>'
+      +     '<div class="action-btns">'
+      +       '<button class="action-btn" onclick="openTreeEdit(\'' + esc(t.treeNo) + '\')">编辑</button>'
+      +       '<button class="action-btn danger" onclick="deleteTree(\'' + esc(t.treeNo) + '\')">删除</button>'
+      +     '</div>'
+      +   '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function toggleMonitor(treeNo, val) {
+  var list = readTrees();
+  var idx = list.findIndex(function (t) { return t.treeNo === treeNo; });
+  if (idx < 0) return;
+  list[idx].openMonitor = !!val;
+  writeTrees(list);
+  Toast.success(val ? '已开放实景' : '已关闭实景');
+  renderStats();
+}
+
+function openTreeEdit(treeNo) {
+  editingTreeNo = treeNo || null;
+  document.getElementById('treeEditTitle').textContent = treeNo ? '编辑果树' : '新增果树';
+  var list = readTrees();
+  var item = treeNo ? list.filter(function (t) { return t.treeNo === treeNo; })[0] : null;
+  document.getElementById('editTreeNo').value       = (item && item.treeNo)        || '';
+  document.getElementById('editVarietyCode').value  = (item && item.variety)       || '';
+  document.getElementById('editVarietyName').value  = (item && item.varietyName)   || '';
+  document.getElementById('editTreeAge').value      = (item && item.treeAge != null) ? item.treeAge : '';
+  document.getElementById('editPrice').value        = (item && item.price != null) ? item.price : '';
+  document.getElementById('editStatus').value       = (item && item.status) || 'available';
+  document.getElementById('editCameraId').value     = (item && item.cameraId) || '';
+  document.getElementById('editOpenMonitor').checked = !!(item && item.openMonitor);
+  document.getElementById('treeEditModal').classList.add('show');
+}
+function closeTreeEdit() {
+  document.getElementById('treeEditModal').classList.remove('show');
+  editingTreeNo = null;
+}
+function submitTreeEdit() {
+  var treeNo = (document.getElementById('editTreeNo').value || '').trim();
+  var variety = (document.getElementById('editVarietyCode').value || '').trim();
+  var varietyName = (document.getElementById('editVarietyName').value || '').trim();
+  var price = parseFloat(document.getElementById('editPrice').value);
+  if (!treeNo) { Toast.warning('请填写果树编号'); return; }
+  if (!variety) { Toast.warning('请填写品种代码'); return; }
+  if (!varietyName) { Toast.warning('请填写品种中文名'); return; }
+  if (!price || isNaN(price) || price <= 0) { Toast.warning('请填写有效的价格'); return; }
+  var data = {
+    treeNo: treeNo,
+    variety: variety,
+    varietyName: varietyName,
+    treeAge: parseInt(document.getElementById('editTreeAge').value, 10) || 0,
+    price: price,
+    status: document.getElementById('editStatus').value || 'available',
+    cameraId: (document.getElementById('editCameraId').value || '').trim(),
+    openMonitor: document.getElementById('editOpenMonitor').checked
+  };
+  var list = readTrees();
+  if (editingTreeNo) {
+    var dup = list.filter(function (t) { return t.treeNo === treeNo && t.treeNo !== editingTreeNo; })[0];
+    if (dup) { Toast.error('果树编号已存在：' + treeNo); return; }
+    var idx = list.findIndex(function (t) { return t.treeNo === editingTreeNo; });
+    if (idx >= 0) list[idx] = data;
+    Toast.success('已保存');
+  } else {
+    var dup2 = list.filter(function (t) { return t.treeNo === treeNo; })[0];
+    if (dup2) { Toast.error('果树编号已存在：' + treeNo); return; }
+    list.unshift(data);
+    Toast.success('已新增');
+  }
+  writeTrees(list);
+  closeTreeEdit();
+  refreshVarietyFilter();
+  renderStats();
+  renderTreeTable();
+}
+function deleteTree(treeNo) {
+  ConfirmDialog.show({
+    title: '删除果树',
+    message: '确认从果树池删除 ' + treeNo + ' 吗？',
+    onConfirm: function () {
+      var list = readTrees().filter(function (t) { return t.treeNo !== treeNo; });
+      writeTrees(list);
+      Toast.success('已删除');
+      refreshVarietyFilter();
+      renderStats();
+      renderTreeTable();
+    }
+  });
+}
+
+/* ---------- 展示配置：认养指南 ---------- */
+function renderGuide() {
+  var g = readGuide();
+  document.getElementById('guidePreviewTitle').textContent = g.title || '认养指南';
+  document.getElementById('guidePreviewContent').textContent = g.content || '（暂无内容）';
+  var t = g.updatedAt ? ('更新于 ' + g.updatedAt) : '';
+  document.getElementById('guideUpdatedAt').textContent = t;
+}
+function openGuideEdit() {
+  var g = readGuide();
+  document.getElementById('editGuideTitle').value   = g.title || '';
+  document.getElementById('editGuideContent').value = g.content || '';
+  document.getElementById('guideEditModal').classList.add('show');
+}
+function closeGuideEdit() { document.getElementById('guideEditModal').classList.remove('show'); }
+function submitGuideEdit() {
+  var title = (document.getElementById('editGuideTitle').value || '').trim();
+  var content = (document.getElementById('editGuideContent').value || '').trim();
+  if (!title) { Toast.warning('请填写标题'); return; }
+  if (!content) { Toast.warning('请填写正文'); return; }
+  var g = {
+    title: title,
+    content: content,
+    updatedAt: new Date().toLocaleString('zh-CN', { hour12: false })
+  };
+  writeGuide(g);
+  Toast.success('已保存');
+  closeGuideEdit();
+  renderGuide();
+}
+
+function switchTab(name, el) {
+  document.querySelectorAll('.tab-bar-nav .tab-item').forEach(function (i) { i.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  document.getElementById('tab-tree').style.display  = name === 'tree'  ? '' : 'none';
+  document.getElementById('tab-guide').style.display = name === 'guide' ? '' : 'none';
+  if (name === 'tree') renderTreeTable();
+  if (name === 'guide') renderGuide();
+}
+
+function resetSearch() {
+  document.getElementById('searchVariety').value = '';
+  document.getElementById('searchStatus').value  = '';
+  document.getElementById('searchKw').value = '';
+  renderTreeTable();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  refreshVarietyFilter();
+  renderStats();
+  renderTreeTable();
+  renderGuide();
+});
+</script>
+</body>
+</html>

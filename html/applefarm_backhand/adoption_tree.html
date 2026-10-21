@@ -178,6 +178,64 @@
     border:1px solid var(--error-border);
   }
 
+  /* 在册 / 归档 分段控件 */
+  .record-tabs {
+    display:inline-flex;
+    gap:4px;
+    padding:4px;
+    background:var(--gray-100, #f5f5f5);
+    border-radius:var(--radius-lg);
+    border:1px solid var(--border-light);
+  }
+
+  .record-tab {
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:7px 16px;
+    border:none;
+    background:transparent;
+    color:var(--text-tertiary);
+    font-size:var(--font-size-sm);
+    font-family:inherit;
+    border-radius:var(--radius-md);
+    cursor:pointer;
+    transition:all var(--transition-fast);
+  }
+
+  .record-tab.active {
+    background:var(--bg-card);
+    color:var(--text-primary);
+    font-weight:var(--font-weight-semibold);
+    box-shadow:var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.06));
+  }
+
+  .record-tab .tab-badge {
+    display:inline-block;
+    min-width:18px;
+    padding:0 6px;
+    border-radius:var(--radius-full);
+    background:var(--gray-200, #eeeeee);
+    color:var(--text-secondary);
+    font-size:11px;
+    line-height:16px;
+    text-align:center;
+  }
+
+  .record-tab.active .tab-badge {
+    background:var(--primary-50, #e6f4ff);
+    color:var(--primary-500);
+  }
+
+  /* 归档行整行置灰 */
+  .data-table tbody tr.row-archived,
+  .data-table tbody tr.row-archived td {
+    color:var(--text-tertiary);
+    background:var(--gray-50, #fafafa);
+  }
+  .data-table tbody tr.row-archived strong { color:var(--text-tertiary); }
+  .archive-reason { color:var(--text-tertiary); font-size:var(--font-size-xs); }
+
   /* 操作栏 */
   .action-bar {
     display:flex;
@@ -587,12 +645,21 @@
 </div>
         </div>
 
+        <!-- 在册 / 归档 分组 -->
+        <div class="page-section" style="display:flex;align-items:center;margin-bottom:var(--space-lg);">
+          <div class="record-tabs">
+            <button class="record-tab active" id="tabActive" onclick="switchTab('active')">在册 <span class="tab-badge" id="badgeActive">0</span></button>
+            <button class="record-tab" id="tabArchived" onclick="switchTab('archived')">归档 <span class="tab-badge" id="badgeArchived">0</span></button>
+            <button class="record-tab" id="tabTagArchive" onclick="switchTab('tagarchive')">挂牌归档 <span class="tab-badge" id="badgeTagArchive">0</span></button>
+          </div>
+        </div>
+
         <!-- 数据列表区 -->
         <div class="page-section data-section">
           <div class="data-table-wrapper">
             <table class="data-table">
-              <thead>
-                <tr>
+              <thead id="treeHead">
+                <tr id="treeHeadRow">
                   <th style="width:60px;">序号</th>
                   <th>果树编号</th>
                   <th>果树名称</th>
@@ -611,11 +678,9 @@
           <!-- 分页器 -->
           <div class="pagination">
             <button class="page-btn disabled" id="prevPage">‹</button>
-            <button class="page-btn active" onclick="goToPage(1)">1</button>
-            <button class="page-btn" onclick="goToPage(2)">2</button>
-            <button class="page-btn" onclick="goToPage(3)">3</button>
-            <button class="page-btn" id="nextPage" onclick="goToPage(2)">›</button>
-            <span id="paginationInfo" style="margin-left:16px;font-size:13px;color:var(--text-tertiary);">共 23 条记录</span>
+            <span id="pageNums" style="display:inline-flex;gap:4px;"></span>
+            <button class="page-btn" id="nextPage">›</button>
+            <span id="paginationInfo" style="margin-left:16px;font-size:13px;color:var(--text-tertiary);">共 0 条记录</span>
           </div>
         </div>
       </div>
@@ -850,12 +915,27 @@
   // 全部果树 = 基础数据 + 移动端挂牌记录（FLOW-011 跨端闭环）
   let allTrees = [];
 
+  /* 果树编号归一（L-5）：后台基础数据为 A001/G012/Q008 风格，C 端（H5 认养 + 溯源）
+     为 A1-001 风格。本页统一归到后台既有风格——取编号中的字母前缀 + 末尾 3 位序号，
+     例：A1-001 → A001、AD-A1-001 → A001、A001 → A001。
+     只影响本页展示与查找，不改动 H5 / 溯源侧的原始数据。 */
+  function canonTreeCode(raw) {
+    var s = String(raw == null ? '' : raw).trim().replace(/^AD-/i, '').trim();
+    if (!s) return '';
+    var letters = (s.match(/^[A-Za-z]+/) || [''])[0].toUpperCase();
+    var digits = s.replace(/[^0-9]/g, '');
+    if (!digits) return letters || s;
+    var seq = digits.slice(-3);
+    while (seq.length < 3) seq = '0' + seq;
+    return letters + seq;
+  }
+
   // 把移动端挂牌记录映射为 PC 端果树结构
   function mobileTagRecords() {
     if (typeof MobileBridge === 'undefined') return [];
     return MobileBridge.adoptionTags().map((t, i) => ({
       id: 'TAG-' + (i + 1),
-      code: t.code || ('TAG' + (i + 1)),
+      code: canonTreeCode(t.code) || ('TAG' + String(i + 1).padStart(3, '0')),
       name: t.treeNo || ('挂牌果树-' + (i + 1)),
       variety: '花牛苹果',
       base: t.plot || '麦积区基地',
@@ -867,76 +947,342 @@
     }));
   }
 
+  /* C 端认养记录（localStorage['snzg_adoptions']，H5「我的认养」唯一数据源）
+     编号为 AD-A1-001 形式，本页归一到后台 A001 风格（canonTreeCode） */
+  function h5AdoptionRecords() {
+    try {
+      var raw = localStorage.getItem('snzg_adoptions');
+      if (!raw) return [];
+      var v = JSON.parse(raw);
+      if (!Array.isArray(v)) return [];
+      return v
+        .filter(function (a) { return a && typeof a === 'object'; })
+        .map(function (a, i) {
+          var code = canonTreeCode(a.id || a.treeNo);
+          return {
+            id: 'H5-' + (i + 1),
+            code: code || ('H5认养-' + (i + 1)),
+            name: a.treeName || ('C端认养果树-' + (i + 1)),
+            variety: a.variety || '花牛苹果',
+            base: a.base || a.plotArea || '麦积区基地',
+            status: 'adopted',
+            adopter: a.adopter || 'C端用户',
+            expireDate: a.expireDate || a.period || '-',
+            source: 'h5',
+            location: a.area || a.plotArea || '-'
+          };
+        });
+    } catch (e) {
+      return [];
+    }
+  }
+
   function refreshAllTrees() {
-    allTrees = mockData.concat(mobileTagRecords());
+    allTrees = mockData.concat(mobileTagRecords(), h5AdoptionRecords());
+  }
+
+  /* 统一查找（L-5）：详情 / 编辑 / 删除 / 照片等入口在「基础数据 + 移动端挂牌 + C 端认养」
+     合并结果中查找，避免只查 mockData 导致对移动端挂牌、C 端认养记录无响应。 */
+  function findTree(id) {
+    refreshAllTrees();
+    return allTrees.find(function (d) { return String(d.id) === String(id); }) || null;
+  }
+
+  // ---------- 在册 / 归档 分组 ----------
+  var TODAY_STR = (function () {
+    var d = new Date();
+    function p(n) { return n < 10 ? '0' + n : '' + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  })();
+  var currentTab = 'active';   // active=在册 / archived=归档
+  var viewList = [];           // 当前 Tab 下（已筛选）的记录
+
+  // 到期日是否早于今天（仅识别 YYYY-MM-DD，'-' 等视为未到期）
+  function isExpired(dateStr) {
+    var s = String(dateStr == null ? '' : dateStr).trim();
+    if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return false;
+    return s.slice(0, 10) < TODAY_STR;
+  }
+
+  // 归档判定：已认养 且 认养到期
+  function isArchived(item) {
+    return !!item && item.status === 'adopted' && isExpired(item.expireDate);
+  }
+
+  function statusTextOf(status) {
+    if (status === 'available') return '可认养';
+    if (status === 'adopted') return '已认养';
+    if (status === 'unavailable') return '不可认养';
+    if (status === 'pending_assign') return '待分配';
+    if (status === 'paused') return '已暂停';
+    if (status === 'refunded') return '已退款';
+    return '不可认养';
+  }
+
+  // 挂牌图片归档清单（移动端 mb_adoption_tagging.html 写入，含被挤出/被跳过记录元数据）
+  var TAG_ARCHIVE_KEY = 'smartorchard_adoption_tag_archive';
+  function readTagArchive() {
+    try {
+      var raw = localStorage.getItem(TAG_ARCHIVE_KEY);
+      if (!raw) return [];
+      var v = JSON.parse(raw);
+      return Array.isArray(v) ? v : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // 渲染表头（归档 Tab 多一列「归档原因」）
+  function renderHead(archived) {
+    var headRow = document.getElementById('treeHeadRow');
+    if (!headRow) return;
+    headRow.innerHTML = archived
+      ? '<th style="width:60px;">序号</th>'
+        + '<th>果树编号</th><th>果树名称</th><th>品种</th><th>所属基地</th>'
+        + '<th>认养状态</th><th>认养人</th><th>到期时间</th>'
+        + '<th style="width:100px;">归档原因</th><th>操作</th>'
+      : '<th style="width:60px;">序号</th>'
+        + '<th>果树编号</th><th>果树名称</th><th>品种</th><th>所属基地</th>'
+        + '<th>认养状态</th><th>认养人</th><th>到期时间</th>'
+        + '<th>操作</th>';
   }
 
   // 渲染表格
   function renderTable(data) {
-    const tbody = document.getElementById('treeList');
+    var archived = currentTab === 'archived';
+    renderHead(archived);
+
+    var tbody = document.getElementById('treeList');
     tbody.innerHTML = '';
-    
-    data.forEach((item, __seq) => {
-      const statusText = item.status === 'available' ? '可认养' : item.status === 'adopted' ? '已认养' : item.status === 'unavailable' ? '不可认养' : item.status === 'pending_assign' ? '待分配' : item.status === 'paused' ? '已暂停' : item.status === 'refunded' ? '已退款' : '不可认养';
-      const statusClass = item.status;
-      
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${__seq + 1}</td>
-        <td><strong>${item.code}</strong>${item.source === 'mobile' ? '<span class="source-badge">移动端挂牌</span>' : ''}</td>
-        <td>${item.name}</td>
-        <td>${item.variety}</td>
-        <td>${item.base}</td>
-        <td><span class="status-tag ${statusClass}">${statusText}</span></td>
-        <td>${item.adopter}</td>
-        <td>${item.expireDate}</td>
-        <td>
-          <div class="action-btns">
-            <button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>
-            <button class="action-btn edit" onclick="showEdit('${item.id}')">编辑</button>
-            <button class="action-btn photo" onclick="showPhoto('${item.id}')">照片</button>
-            <button class="action-btn delete" onclick="showDelete('${item.id}')">删除</button>
-          </div>
-        </td>
-      `;
+
+    if (!data || !data.length) {
+      tbody.innerHTML = '<tr><td colspan="' + (archived ? 10 : 9) + '" style="text-align:center;color:var(--text-tertiary);padding:32px 0;">'
+        + (archived ? '暂无归档果树' : '暂无在册果树') + '</td></tr>';
+      return;
+    }
+
+    data.forEach(function (item, __seq) {
+      var statusText = statusTextOf(item.status);
+      var statusClass = item.status;
+
+      var codeCell = '<td><strong>' + item.code + '</strong>'
+        + (item.source === 'mobile' ? '<span class="source-badge">移动端挂牌</span>' : '')
+        + (item.source === 'h5' ? '<span class="source-badge">C端认养</span>' : '') + '</td>';
+
+      var ops = archived
+        ? '<div class="action-btns">'
+            + '<button class="action-btn detail" onclick="showDetail(\'' + item.id + '\')">详情</button>'
+            + '<button class="action-btn photo" onclick="restoreAdoption(\'' + item.id + '\')">恢复认养</button>'
+          + '</div>'
+        : '<div class="action-btns">'
+            + '<button class="action-btn detail" onclick="showDetail(\'' + item.id + '\')">详情</button>'
+            + '<button class="action-btn edit" onclick="showEdit(\'' + item.id + '\')">编辑</button>'
+            + '<button class="action-btn photo" onclick="showPhoto(\'' + item.id + '\')">照片</button>'
+            + '<button class="action-btn delete" onclick="showDelete(\'' + item.id + '\')">删除</button>'
+          + '</div>';
+
+      var row = document.createElement('tr');
+      if (isArchived(item)) row.className = 'row-archived';
+      row.innerHTML = ''
+        + '<td>' + (__seq + 1) + '</td>'
+        + codeCell
+        + '<td>' + item.name + '</td>'
+        + '<td>' + item.variety + '</td>'
+        + '<td>' + item.base + '</td>'
+        + '<td><span class="status-tag ' + statusClass + '">' + statusText + '</span></td>'
+        + '<td>' + item.adopter + '</td>'
+        + '<td>' + item.expireDate + '</td>'
+        + (archived ? '<td><span class="archive-reason">认养到期</span></td>' : '')
+        + '<td>' + ops + '</td>';
       tbody.appendChild(row);
     });
+  }
 
-    // 绑定复选框事件
-    document.querySelectorAll('.tree-checkbox').forEach(checkbox => {
-      checkbox.addEventListener('change', updateSelectedCount);
+  // 挂牌归档时间格式化（YYYY-MM-DD HH:mm）
+  function fmtArchiveTime(ts) {
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) return String(ts == null ? '' : ts) || '-';
+    function p(n) { return n < 10 ? '0' + n : '' + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+      + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  // 渲染挂牌图片归档清单（只读，不受搜索栏影响）
+  function renderTagArchiveTable(data) {
+    var headRow = document.getElementById('treeHeadRow');
+    if (headRow) {
+      headRow.innerHTML = '<th style="width:60px;">序号</th>'
+        + '<th>挂牌编号</th><th>果树编号</th><th>认养人</th>'
+        + '<th>生成时间</th><th>图片大小</th><th>归档原因</th>';
+    }
+
+    var tbody = document.getElementById('treeList');
+    tbody.innerHTML = '';
+
+    if (!data || !data.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-tertiary);padding:32px 0;">暂无归档记录</td></tr>';
+      return;
+    }
+
+    data.forEach(function (item, __seq) {
+      var sizeText = (item.size != null && item.size !== '')
+        ? (Math.round(Number(item.size) / 1024 * 10) / 10 + ' KB') : '-';
+      var row = document.createElement('tr');
+      row.innerHTML = ''
+        + '<td>' + (__seq + 1) + '</td>'
+        + '<td><strong>' + (item.code || '-') + '</strong></td>'
+        + '<td>' + (item.treeNo || '-') + '</td>'
+        + '<td>' + (item.adopter || '-') + '</td>'
+        + '<td>' + fmtArchiveTime(item.time) + '</td>'
+        + '<td>' + sizeText + '</td>'
+        + '<td><span class="archive-reason">' + (item.reason || '-') + '</span></td>';
+      tbody.appendChild(row);
     });
+  }
+
+  // 按搜索栏条件过滤（基础数据 / 移动端挂牌 / C端认养 一视同仁）
+  function getSearchFiltered() {
+    var keyword = (document.getElementById('searchInput').value || '').toLowerCase();
+    var base = document.getElementById('baseSelect').value;
+    var status = document.getElementById('statusSelect').value;
+    var variety = document.getElementById('varietySelect').value;
+
+    return allTrees.filter(function (item) {
+      var matchKeyword = !keyword ||
+        String(item.code || '').toLowerCase().indexOf(keyword) !== -1 ||
+        String(item.name || '').toLowerCase().indexOf(keyword) !== -1;
+      var matchBase = !base || String(item.base || '').indexOf(base) !== -1;
+      var matchStatus = !status || item.status === status;
+      var matchVariety = !variety || String(item.variety || '').indexOf(variety) !== -1;
+      return matchKeyword && matchBase && matchStatus && matchVariety;
+    });
+  }
+
+  // 统一视图刷新：筛选 → 按 Tab 分组 → 分页 → 渲染
+  function applyView() {
+    var filtered = getSearchFiltered();
+    var activeList = [];
+    var archivedList = [];
+    filtered.forEach(function (item) {
+      if (isArchived(item)) archivedList.push(item); else activeList.push(item);
+    });
+
+    document.getElementById('badgeActive').textContent = activeList.length;
+    document.getElementById('badgeArchived').textContent = archivedList.length;
+
+    // 挂牌图片归档清单：只读，不受搜索栏影响
+    var tagArchiveList = readTagArchive();
+    var badgeTag = document.getElementById('badgeTagArchive');
+    if (badgeTag) badgeTag.textContent = tagArchiveList.length;
+
+    if (currentTab === 'tagarchive') {
+      viewList = tagArchiveList;
+      var taPages = Math.max(1, Math.ceil(viewList.length / pageSize));
+      if (currentPage > taPages) currentPage = taPages;
+      var taStart = (currentPage - 1) * pageSize;
+      renderTagArchiveTable(viewList.slice(taStart, taStart + pageSize));
+      updatePagination();
+      return;
+    }
+
+    viewList = currentTab === 'archived' ? archivedList : activeList;
+
+    var totalPages = Math.max(1, Math.ceil(viewList.length / pageSize));
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    var start = (currentPage - 1) * pageSize;
+    renderTable(viewList.slice(start, start + pageSize));
+    updatePagination();
+  }
+
+  // Tab 切换
+  function switchTab(tab) {
+    currentTab = (tab === 'archived' || tab === 'tagarchive') ? tab : 'active';
+    currentPage = 1;
+    document.getElementById('tabActive').classList.toggle('active', currentTab === 'active');
+    document.getElementById('tabArchived').classList.toggle('active', currentTab === 'archived');
+    var tagTab = document.getElementById('tabTagArchive');
+    if (tagTab) tagTab.classList.toggle('active', currentTab === 'tagarchive');
+    applyView();
+  }
+
+  // 恢复认养：到期时间顺延，状态置回已认养
+  function restoreAdoption(id) {
+    var item = null;
+    for (var i = 0; i < allTrees.length; i++) {
+      if (allTrees[i].id === id) { item = allTrees[i]; break; }
+    }
+    if (!item) return;
+    if (!confirm('确认恢复「' + item.code + ' - ' + item.name + '」的认养？到期时间将顺延一年。')) return;
+
+    var future = futureDate(365);
+    item.status = 'adopted';
+    item.expireDate = future;
+
+    // 写回数据源
+    if (item.source === 'h5') {
+      patchLocalRecord('snzg_adoptions', item.code, future, true);
+    } else if (item.source === 'mobile') {
+      patchLocalRecord('smartorchard_adoption_tags', item.code, future, false);
+    }
+    // source 为空 → 基础数据，已就地修改对象
+
+    refreshAllTrees();
+    applyView();
+    alert('已恢复认养，到期时间：' + future);
+  }
+
+  // 未来日期（YYYY-MM-DD）
+  function futureDate(days) {
+    var d = new Date();
+    d.setDate(d.getDate() + days);
+    function p(n) { return n < 10 ? '0' + n : '' + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+
+  // 把恢复结果写回 localStorage 中的跨端记录
+  function patchLocalRecord(key, code, future, stripAdPrefix) {
+    try {
+      var raw = localStorage.getItem(key);
+      if (!raw) return;
+      var arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return;
+      for (var i = 0; i < arr.length; i++) {
+        var c = String(arr[i].code || arr[i].id || '');
+        if (stripAdPrefix) c = c.replace(/^AD-/i, '');
+        if (c === String(code)) {
+          arr[i].expireDate = future;
+          if (arr[i].period) arr[i].period = future;
+          localStorage.setItem(key, JSON.stringify(arr));
+          break;
+        }
+      }
+    } catch (e) {}
   }
 
   // 分页
   function goToPage(page) {
     currentPage = page;
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    const pageData = allTrees.slice(start, end);
-
-    renderTable(pageData);
-    updatePagination();
+    applyView();
   }
 
   // 更新分页状态
   function updatePagination() {
-    const totalPages = Math.ceil(allTrees.length / pageSize);
-    document.getElementById('paginationInfo').textContent = `共 ${allTrees.length} 条记录`;
-    
-    const prevBtn = document.getElementById('prevPage');
-    const nextBtn = document.getElementById('nextPage');
-    
+    var totalPages = Math.max(1, Math.ceil(viewList.length / pageSize));
+    document.getElementById('paginationInfo').textContent = '共 ' + viewList.length + ' 条记录';
+
+    var nums = '';
+    for (var p = 1; p <= totalPages; p++) {
+      nums += '<button class="page-btn' + (p === currentPage ? ' active' : '') + '" onclick="goToPage(' + p + ')">' + p + '</button>';
+    }
+    document.getElementById('pageNums').innerHTML = nums;
+
+    var prevBtn = document.getElementById('prevPage');
+    var nextBtn = document.getElementById('nextPage');
     prevBtn.classList.toggle('disabled', currentPage === 1);
     nextBtn.classList.toggle('disabled', currentPage === totalPages);
-    
-    prevBtn.onclick = currentPage > 1 ? () => goToPage(currentPage - 1) : null;
-    nextBtn.onclick = currentPage < totalPages ? () => goToPage(currentPage + 1) : null;
-    
-    document.querySelectorAll('.page-btn').forEach(btn => {
-      btn.classList.remove('active');
-    });
-    document.querySelector(`.page-btn[onclick="goToPage(${currentPage})"]`)?.classList.add('active');
+    prevBtn.onclick = currentPage > 1 ? function () { goToPage(currentPage - 1); } : null;
+    nextBtn.onclick = currentPage < totalPages ? function () { goToPage(currentPage + 1); } : null;
   }
 
   // 全选功能
@@ -955,23 +1301,10 @@
     const __sc = document.getElementById('selectedCount'); if (__sc) __sc.textContent = checkboxes.length;
   }
 
-  // 搜索功能
+  // 搜索功能（统一走 applyView，兼容在册/归档分组与分页）
   function handleSearch() {
-    const keyword = document.getElementById('searchInput').value.toLowerCase();
-    const base = document.getElementById('baseSelect').value;
-    const status = document.getElementById('statusSelect').value;
-    const variety = document.getElementById('varietySelect').value;
-    
-    let filtered = allTrees.filter(item => {
-      const matchKeyword = !keyword || item.code.toLowerCase().includes(keyword) || item.name.toLowerCase().includes(keyword);
-      const matchBase = !base || item.base.includes(base);
-      const matchStatus = !status || item.status === status;
-      const matchVariety = !variety || item.variety.includes(variety);
-      return matchKeyword && matchBase && matchStatus && matchVariety;
-    });
-    
-    document.getElementById('paginationInfo').textContent = `共 ${filtered.length} 条记录`;
-    renderTable(filtered);
+    currentPage = 1;
+    applyView();
   }
 
   // 弹窗操作
@@ -985,9 +1318,9 @@
 
   // 详情弹窗
   function showDetail(id) {
-    const item = mockData.find(d => d.id === id);
+    const item = findTree(id);
     if (item) {
-      const statusText = item.status === 'available' ? '可认养' : item.status === 'adopted' ? '已认养' : '不可认养';
+      const statusText = statusTextOf(item.status);
       document.getElementById('detailContent').innerHTML = `
         <div class="detail-row"><div class="detail-label">果树编号</div><div class="detail-value">${item.code}</div></div>
         <div class="detail-row"><div class="detail-label">果树名称</div><div class="detail-value">${item.name}</div></div>
@@ -1003,7 +1336,7 @@
 
   // 编辑弹窗
   function showEdit(id) {
-    const item = mockData.find(d => d.id === id);
+    const item = findTree(id);
     if (item) {
       document.getElementById('editCode').value = item.code;
       document.getElementById('editName').value = item.name;
@@ -1026,8 +1359,8 @@
 
   // 删除弹窗
   function showDelete(id) {
-    const item = mockData.find(d => d.id === id);
-    document.getElementById('deleteInfo').textContent = `将删除：${item?.code} - ${item?.name}`;
+    const item = findTree(id) || {};
+    document.getElementById('deleteInfo').textContent = `将删除：${item.code} - ${item.name}`;
     showModal('deleteModal');
   }
 
@@ -1075,7 +1408,7 @@
 
   // 初始化
   refreshAllTrees();
-  goToPage(1);
+  switchTab('active');
 </script>
 
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->

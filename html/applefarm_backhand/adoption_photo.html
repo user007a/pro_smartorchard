@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 认养成长相册</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .notice-bar {
+    display: flex; align-items: flex-start; gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--info-bg); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); font-size: var(--font-size-sm);
+    color: var(--text-secondary); margin-bottom: var(--space-lg);
+  }
+  .notice-bar svg { flex-shrink: 0; margin-top: 2px; color: var(--info); }
+  .notice-bar code {
+    font-family: var(--font-family-mono, monospace);
+    background: rgba(24,144,255,0.08); padding: 1px 5px; border-radius: 4px;
+  }
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label { font-size: var(--font-size-sm); color: var(--text-tertiary); margin-bottom: var(--space-xs); }
+  .stat-value {
+    font-size: 26px; font-weight: var(--font-weight-bold);
+    color: var(--text-primary); line-height: 1.2; font-variant-numeric: tabular-nums;
+  }
+  .stat-card.is-photo .stat-value { color: var(--primary-500); }
+  .stat-card.is-tree  .stat-value { color: var(--success); }
+  .stat-card.is-time  .stat-value { color: var(--warning); font-size: 18px; }
+
+  /* ===== 果树分组卡片 ===== */
+  .tree-group-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: var(--space-md);
+  }
+  .tree-group {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .tree-group-header {
+    display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+    padding: var(--space-md);
+    border-bottom: 1px solid var(--border-light);
+    background: var(--gray-50);
+  }
+  .tree-group-code {
+    font-family: var(--font-family-mono, monospace);
+    font-size: var(--font-size-base); font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+  }
+  .tree-group-count {
+    font-size: var(--font-size-xs); color: var(--text-tertiary);
+    background: var(--bg-card); border: 1px solid var(--border-light);
+    padding: 2px 10px; border-radius: var(--radius-full); white-space: nowrap;
+  }
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+    padding: var(--space-md);
+  }
+  .photo-cell {
+    position: relative;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--border-light);
+    background: var(--gray-50);
+  }
+  .photo-cell-img {
+    width: 100%; height: 92px; object-fit: cover; display: block;
+    cursor: zoom-in; background: var(--gray-100);
+  }
+  .photo-fallback {
+    width: 100%; height: 92px; display: none;
+    align-items: center; justify-content: center;
+    background: var(--gray-100); color: var(--text-tertiary); font-size: 12px;
+  }
+  .photo-cell-meta { padding: 6px 8px; background: var(--bg-card); }
+  .photo-cell-stage {
+    display: inline-block; padding: 1px 8px; border-radius: var(--radius-full);
+    font-size: 11px; background: var(--primary-50); color: var(--primary-600);
+    margin-bottom: 3px;
+  }
+  .photo-cell-time {
+    font-size: 11px; color: var(--text-tertiary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
+  }
+  .photo-del {
+    position: absolute; top: 5px; right: 5px;
+    width: 22px; height: 22px; border-radius: 50%;
+    border: none; background: rgba(0,0,0,0.55); color: #fff;
+    cursor: pointer; font-size: 14px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .photo-cell:hover .photo-del { opacity: 1; }
+  .photo-del:hover { background: var(--error); }
+
+  /* ===== 图片查看器 ===== */
+  .viewer-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.82);
+    z-index: 1200; display: none; align-items: center; justify-content: center;
+  }
+  .viewer-overlay.show { display: flex; }
+  .viewer-box { max-width: 90vw; max-height: 90vh; text-align: center; }
+  .viewer-box img { max-width: 90vw; max-height: 76vh; display: block; border-radius: 8px; }
+  .viewer-box .viewer-cap { color: #fff; font-size: 13px; margin-top: 10px; }
+  .viewer-close {
+    position: absolute; top: 18px; right: 22px;
+    background: rgba(255,255,255,0.2); border: none; color: #fff;
+    width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 20px;
+  }
+
+  /* ===== 空态 ===== */
+  .empty-state {
+    padding: var(--space-2xl) 0; text-align: center;
+    color: var(--text-tertiary); font-size: var(--font-size-sm);
+  }
+
+  /* ===== 弹窗 ===== */
+  .modal-overlay {
+    display: none;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center; align-items: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card);
+    border-radius: 12px;
+    width: 92%; max-width: 560px; max-height: 85vh;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer;
+    padding: 4px; font-size: 20px; line-height: 1;
+    color: var(--text-tertiary); transition: color 0.2s;
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body { padding: 20px; overflow-y: auto; max-height: calc(85vh - 132px); }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 12px;
+    padding: 16px 20px; border-top: 1px solid var(--border-default);
+  }
+  .modal-field { margin-bottom: var(--space-lg); }
+  .modal-field:last-child { margin-bottom: 0; }
+  .modal-field label {
+    display: block; font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--text-primary); margin-bottom: var(--space-sm);
+  }
+  .modal-field textarea, .modal-field input, .modal-field select {
+    width: 100%; padding: 10px 14px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base); font-family: inherit;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--bg-card);
+  }
+  .modal-field input:focus, .modal-field select:focus, .modal-field textarea:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.12);
+    outline: none;
+  }
+  .field-hint { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-top: 6px; }
+</style>
+</head>
+<body data-active-menu="adoption" data-active-submenu="adoption-photo">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">认养成长相册</div>
+        <div class="page-subtitle">上传并管理认养果树的成长照片，H5 端「我的认养 - 查看照片」实时同步展示</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="refreshList()">刷新</button>
+        <button class="jg-btn jg-btn-primary" onclick="openUpload()">上传照片</button>
+      </div>
+    </div>
+
+    <!-- 统计区 -->
+    <div class="stat-row">
+      <div class="stat-card is-tree">
+        <div class="stat-label">果树数量</div>
+        <div class="stat-value" id="statTree">0</div>
+      </div>
+      <div class="stat-card is-photo">
+        <div class="stat-label">照片总数</div>
+        <div class="stat-value" id="statPhoto">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">覆盖果树数</div>
+        <div class="stat-value" id="statCovered">0</div>
+      </div>
+      <div class="stat-card is-time">
+        <div class="stat-label">最近上传</div>
+        <div class="stat-value" id="statLatest">—</div>
+      </div>
+    </div>
+
+    <!-- 搜索栏区 -->
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <input type="text" class="search-input" placeholder="搜索果树编号..." id="searchInput">
+        <select class="search-select" id="stageSelect">
+          <option value="">全部成长阶段</option>
+        </select>
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="refreshList()">搜索</button>
+          <button class="jg-btn" onclick="resetFilter()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据展示区 -->
+    <div class="page-section data-section">
+      <div class="tree-group-grid" id="treeGrid"></div>
+      <div id="emptyHint" class="empty-state" style="display:none;">
+        暂无成长照片，点击右上角「上传照片」为认养果树添加第一张照片
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== 上传弹窗 ===== -->
+<style>
+  /* L-4：真实文件上传控件样式 */
+  #upFile { font-size: 13px; }
+  .up-file-hint { font-size: 12px; color: var(--text-tertiary, #8c8c8c); margin-top: 6px; line-height: 1.5; }
+  .up-file-preview {
+    margin-top: 8px; width: 160px; height: 120px; border: 1px dashed var(--border, #d9d9d9);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    overflow: hidden; background: #fafafa;
+  }
+  .up-file-preview img { width: 100%; height: 100%; object-fit: cover; }
+  .up-file-name { font-size: 12px; color: var(--primary-500, #1890ff); margin-top: 6px; }
+</style>
+<div class="modal-overlay" id="uploadModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">上传成长照片</h3>
+      <button class="modal-close" onclick="closeUpload()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label>选择果树<span style="color:var(--error);">*</span></label>
+        <select id="upTreeSelect"></select>
+      </div>
+      <div class="modal-field" id="upTreeManualWrap" style="display:none;">
+        <label>新果树编号<span style="color:var(--error);">*</span></label>
+        <input type="text" id="upTreeManual" placeholder="如 A1-001">
+      </div>
+      <div class="modal-field">
+        <label>照片文件<span style="color:var(--error);">*</span></label>
+        <input type="file" id="upFile" accept="image/*" onchange="handleFilePick(this)">
+        <div class="up-file-hint">支持 JPG / PNG，单张不超过 8MB。上传后自动等比压缩（长边 1280px），无需任何图片服务即可在 H5 端显示。</div>
+        <div class="up-file-preview" id="upFilePreview"><span class="up-file-hint">未选择图片</span></div>
+        <div class="up-file-name" id="upFileName"></div>
+      </div>
+      <div class="modal-field">
+        <label>成长阶段<span style="color:var(--error);">*</span></label>
+        <select id="upStage"></select>
+      </div>
+      <div class="modal-field">
+        <label>拍摄时间<span style="color:var(--error);">*</span></label>
+        <input type="datetime-local" id="upTime">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeUpload()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitUpload()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 图片查看器 ===== -->
+<div class="viewer-overlay" id="viewerOverlay" onclick="if(event.target===this)closeViewer();">
+  <button class="viewer-close" onclick="closeViewer()">&times;</button>
+  <div class="viewer-box">
+    <img id="viewerImg" src="" alt="照片预览">
+    <div id="viewerFallback" style="display:none;color:#fff;font-size:14px;">图片已失效或无法加载</div>
+    <div class="viewer-cap" id="viewerCap"></div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * 认养成长相册
+ * 数据源：localStorage['h5_adoption_photos']
+ *   结构：对象型（不是数组）：{ [果树编号]: [{ url, time, stage }] }
+ * 写入方 = 本页（后台上传）；读取方 = H5 端 h5_adoption.html「查看照片」
+ * 说明：url 为相对路径（相对 applefarm_h5/）或 base64 dataURL（真实文件上传，
+ *      L-4 改造）。本页展示时相对路径统一补 ../applefarm_h5/ 前缀，dataURL 原样使用。
+ * ============================================================ */
+var PHOTO_KEY = 'h5_adoption_photos';
+var ADOPTION_KEY = 'snzg_adoptions';
+var H5_DIR = '../applefarm_h5/';
+var OTHER_TREE = '__other__';
+
+/* 成长阶段枚举（与 H5 端 stage 字段兼容） */
+var STAGE_OPTIONS = ['生长', '开花', '结果', '成熟', '采摘'];
+
+/* ---------- 数据读写（对象型结构，逐层容错） ---------- */
+function readPhotoMap() {
+  try {
+    var raw = localStorage.getItem(PHOTO_KEY);
+    if (!raw) return {};
+    var v = JSON.parse(raw);
+    // 顶层必须是对象；若被误写成数组则按空处理，避免污染
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+    var out = {};
+    Object.keys(v).forEach(function (k) {
+      var arr = v[k];
+      if (!Array.isArray(arr)) return;   // 跳过脏数据
+      out[k] = arr.filter(function (p) { return p && typeof p === 'object'; })
+        .map(function (p) {
+          return { url: String(p.url || ''), time: p.time || '', stage: p.stage || '' };
+        });
+    });
+    return out;
+  } catch (e) {
+    return {};
+  }
+}
+
+function writePhotoMap(map) {
+  try {
+    localStorage.setItem(PHOTO_KEY, JSON.stringify(map));
+    return true;
+  } catch (e) {
+    Toast.error('本地存储写入失败，照片未能保存');
+    return false;
+  }
+}
+
+function readAdoptions() {
+  try {
+    var raw = localStorage.getItem(ADOPTION_KEY);
+    if (!raw) return [];
+    var v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter(function (x) { return x && typeof x === 'object'; }) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function fmtTime(t) {
+  if (!t) return '—';
+  var d = new Date(t);
+  if (isNaN(d.getTime())) return String(t);
+  var p = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+/* 相对路径转可用于后台页面的 src（相对 applefarm_h5/ 目录）；http(s) 与 dataURL 原样返回 */
+function resolveUrl(url) {
+  var u = String(url || '').trim();
+  if (!u) return '';
+  if (/^(https?:|data:|blob:)/i.test(u)) return u;
+  return H5_DIR + u.replace(/^\.?\//, '');
+}
+
+/* ---------- 统计与渲染 ---------- */
+function renderStats(map) {
+  var keys = Object.keys(map);
+  var photos = 0, covered = 0, latest = 0;
+  keys.forEach(function (k) {
+    var arr = map[k] || [];
+    if (arr.length) covered++;
+    photos += arr.length;
+    arr.forEach(function (p) {
+      var t = new Date(p.time || 0).getTime();
+      if (!isNaN(t) && t > latest) latest = t;
+    });
+  });
+  document.getElementById('statTree').textContent = keys.length;
+  document.getElementById('statPhoto').textContent = photos;
+  document.getElementById('statCovered').textContent = covered;
+  document.getElementById('statLatest').textContent = latest ? fmtTime(latest) : '—';
+}
+
+/* 组内按拍摄时间倒序（与 H5 端照片墙顺序一致），索引与展示顺序保持一致 */
+function sortedPhotos(arr) {
+  return (arr || []).slice().sort(function (a, b) {
+    var ta = new Date(a.time || 0).getTime();
+    var tb = new Date(b.time || 0).getTime();
+    if (isNaN(ta)) ta = 0;
+    if (isNaN(tb)) tb = 0;
+    return tb - ta;
+  });
+}
+
+function photoCellHtml(treeId, idx, p) {
+  var src = resolveUrl(p.url);
+  var img = src
+    ? '<img class="photo-cell-img" src="' + esc(src) + '" alt="成长照片" loading="lazy"' +
+      ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';"' +
+      ' onclick="openViewer(\'' + esc(treeId) + '\',' + idx + ')">'
+    : '';
+  return '<div class="photo-cell">' +
+    img +
+    '<div class="photo-fallback"' + (src ? '' : ' style="display:flex;"' ) + '>' +
+      (src ? '图片已失效' : '未设置图片') + '</div>' +
+    '<button class="photo-del" title="删除照片" onclick="deletePhoto(\'' + esc(treeId) + '\',' + idx + ')">&times;</button>' +
+    '<div class="photo-cell-meta">' +
+      '<span class="photo-cell-stage">' + esc(p.stage || '成长') + '</span>' +
+      '<span class="photo-cell-time">' + esc(fmtTime(p.time)) + '</span>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderList() {
+  var map = readPhotoMap();
+  renderStats(map);
+
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  var stage = document.getElementById('stageSelect').value;
+
+  var keys = Object.keys(map).filter(function (k) {
+    if (kw && k.toLowerCase().indexOf(kw) === -1) return false;
+    if (stage) {
+      var arr = map[k] || [];
+      var hit = arr.some(function (p) { return (p.stage || '成长') === stage; });
+      if (!hit) return false;
+    }
+    return true;
+  }).sort();
+
+  var grid = document.getElementById('treeGrid');
+  var empty = document.getElementById('emptyHint');
+
+  if (!keys.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = Object.keys(map).length
+      ? '没有符合条件的果树照片，试试调整筛选条件'
+      : '暂无成长照片，点击右上角「上传照片」为认养果树添加第一张照片';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = keys.map(function (k) {
+    var arr = sortedPhotos(map[k]);
+    return '<div class="tree-group">' +
+      '<div class="tree-group-header">' +
+        '<span class="tree-group-code">' + esc(k) + '</span>' +
+        '<span class="tree-group-count">' + arr.length + ' 张</span>' +
+      '</div>' +
+      '<div class="photo-grid">' + arr.map(function (p, i) { return photoCellHtml(k, i, p); }).join('') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function refreshList() { renderList(); }
+
+function resetFilter() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('stageSelect').value = '';
+  renderList();
+}
+
+/* ---------- 图片查看 ---------- */
+function openViewer(treeId, idx) {
+  var map = readPhotoMap();
+  var p = sortedPhotos(map[treeId])[idx];
+  if (!p || !p.url) { Toast.warning('照片数据已变更，请刷新后重试'); return; }
+  var img = document.getElementById('viewerImg');
+  img.style.display = '';
+  img.src = resolveUrl(p.url);
+  img.onerror = function () {
+    this.style.display = 'none';
+    document.getElementById('viewerFallback').style.display = 'block';
+  };
+  document.getElementById('viewerFallback').style.display = 'none';
+  document.getElementById('viewerCap').textContent = treeId + ' · ' + (p.stage || '成长') + ' · ' + fmtTime(p.time);
+  document.getElementById('viewerOverlay').classList.add('show');
+}
+
+function closeViewer() {
+  document.getElementById('viewerOverlay').classList.remove('show');
+}
+
+/* ---------- 删除 ---------- */
+function deletePhoto(treeId, idx) {
+  var map = readPhotoMap();
+  var p = sortedPhotos(map[treeId])[idx];
+  if (!p) { Toast.error('未找到该照片'); return; }
+  ConfirmDialog.show({
+    title: '删除照片',
+    message: '将删除 ' + treeId + ' 在「' + (p.stage || '成长') + '」阶段的 1 张照片，删除后不可恢复。',
+    onConfirm: function () {
+      var cur = readPhotoMap();
+      var arr = sortedPhotos(cur[treeId]);
+      arr.splice(idx, 1);
+      if (arr.length) cur[treeId] = arr;
+      else delete cur[treeId];
+      if (writePhotoMap(cur)) {
+        renderList();
+        Toast.success('照片已删除');
+      }
+    }
+  });
+}
+
+/* ---------- 上传 ---------- */
+function initStageSelect() {
+  var stageSelect = document.getElementById('stageSelect');
+  var upStage = document.getElementById('upStage');
+  STAGE_OPTIONS.forEach(function (s) {
+    var o1 = document.createElement('option');
+    o1.value = s; o1.textContent = s;
+    stageSelect.appendChild(o1);
+    var o2 = document.createElement('option');
+    o2.value = s; o2.textContent = s;
+    upStage.appendChild(o2);
+  });
+}
+
+/* 认养编号去 AD- 前缀：snzg_adoptions 为 AD-A1-001 格式，
+   而 h5_adoption_photos 的键与 H5 端展示统一为 A1-001 */
+function stripAdPrefix(id) {
+  return String(id || '').trim().replace(/^AD-/i, '').trim();
+}
+
+/* 果树下拉：已有认养记录（去重）+ 已有照片的果树 + 手工输入新编号 */
+function fillTreeOptions() {
+  var sel = document.getElementById('upTreeSelect');
+  var map = readPhotoMap();
+  var seen = {};
+  var html = '';
+
+  readAdoptions().forEach(function (a) {
+    var id = stripAdPrefix(a.id);
+    if (!id || seen[id]) return;
+    seen[id] = true;
+    html += '<option value="' + esc(id) + '">' + esc(id + ' · ' + (a.treeName || '已认养果树')) + '</option>';
+  });
+  Object.keys(map).forEach(function (k) {
+    if (seen[k]) return;
+    seen[k] = true;
+    html += '<option value="' + esc(k) + '">' + esc(k + '（已有照片）') + '</option>';
+  });
+  html += '<option value="' + OTHER_TREE + '">其他果树（手工输入编号）</option>';
+  sel.innerHTML = html || '<option value="' + OTHER_TREE + '">其他果树（手工输入编号）</option>';
+}
+
+function syncTreeManual() {
+  var isOther = document.getElementById('upTreeSelect').value === OTHER_TREE;
+  document.getElementById('upTreeManualWrap').style.display = isOther ? '' : 'none';
+}
+
+/* ---------- 照片文件选择与压缩（L-4）----------
+   原实现只接受手工填写的图片 URL（file:// 下多为失效链接），现改为真实文件上传：
+   FileReader 读取 → canvas 等比压缩 → base64 dataURL 直存 localStorage，
+   H5 端「查看照片」无需任何图片服务器即可直接显示。
+   容量控制：原图 ≤ 8MB；压缩后长边 ≤ 1280px、JPEG 起始质量 0.82，
+   若仍超 400KB 则逐级降质，避免撑爆 localStorage 配额。 */
+var PICKED_PHOTO = { dataUrl: '', name: '' };
+var MAX_FILE_BYTES = 8 * 1024 * 1024;
+var MAX_DATAURL_BYTES = 400 * 1024;
+var MAX_EDGE = 1280;
+
+function dataUrlBytes(u) {
+  var s = String(u || '');
+  var i = s.indexOf(',');
+  if (i < 0) return 0;
+  return Math.round((s.length - i - 1) * 0.75);
+}
+
+function handleFilePick(input) {
+  PICKED_PHOTO = { dataUrl: '', name: '' };
+  var file = input && input.files && input.files[0];
+  if (!file) { renderFilePreview(); return; }
+  if (!/^image\//i.test(file.type)) {
+    Toast.warning('请选择图片文件（JPG / PNG）');
+    input.value = '';
+    return;
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    Toast.warning('图片过大（超过 8MB），请先压缩后再上传');
+    input.value = '';
+    renderFilePreview();
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function () {
+    compressImage(String(reader.result), function (dataUrl) {
+      if (!dataUrl) { Toast.error('图片处理失败，请更换图片重试'); renderFilePreview(); return; }
+      PICKED_PHOTO = { dataUrl: dataUrl, name: file.name };
+      renderFilePreview();
+    });
+  };
+  reader.onerror = function () { Toast.error('图片读取失败，请重试'); };
+  reader.readAsDataURL(file);
+}
+
+function compressImage(src, done) {
+  var img = new Image();
+  img.onload = function () {
+    try {
+      var w = img.naturalWidth || img.width;
+      var h = img.naturalHeight || img.height;
+      if (!w || !h) { done(''); return; }
+      var scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * scale));
+      var ch = Math.max(1, Math.round(h * scale));
+      var canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';          // 透明 PNG 压成 JPEG 时补白底
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.drawImage(img, 0, 0, cw, ch);
+
+      var quality = 0.82;
+      var out = canvas.toDataURL('image/jpeg', quality);
+      while (dataUrlBytes(out) > MAX_DATAURL_BYTES && quality > 0.4) {
+        quality -= 0.12;
+        out = canvas.toDataURL('image/jpeg', quality);
+      }
+      done(out);
+    } catch (e) {
+      done('');
+    }
+  };
+  img.onerror = function () { done(''); };
+  img.src = src;
+}
+
+function renderFilePreview() {
+  var box = document.getElementById('upFilePreview');
+  var nameEl = document.getElementById('upFileName');
+  if (!box) return;
+  if (PICKED_PHOTO.dataUrl) {
+    box.innerHTML = '<img src="' + PICKED_PHOTO.dataUrl + '" alt="照片预览">';
+    if (nameEl) nameEl.textContent = PICKED_PHOTO.name + ' · 已压缩约 ' + Math.round(dataUrlBytes(PICKED_PHOTO.dataUrl) / 1024) + 'KB';
+  } else {
+    box.innerHTML = '<span class="up-file-hint">未选择图片</span>';
+    if (nameEl) nameEl.textContent = '';
+  }
+}
+
+function openUpload() {
+  fillTreeOptions();
+  syncTreeManual();
+  document.getElementById('upTreeManual').value = '';
+  PICKED_PHOTO = { dataUrl: '', name: '' };
+  var fileInput = document.getElementById('upFile');
+  if (fileInput) fileInput.value = '';
+  renderFilePreview();
+  document.getElementById('upStage').selectedIndex = 0;
+  var d = new Date();
+  var p = function (n) { return String(n).padStart(2, '0'); };
+  document.getElementById('upTime').value =
+    d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  document.getElementById('uploadModal').classList.add('show');
+}
+
+function closeUpload() {
+  document.getElementById('uploadModal').classList.remove('show');
+}
+
+function submitUpload() {
+  var sel = document.getElementById('upTreeSelect').value;
+  var treeId = sel === OTHER_TREE
+    ? document.getElementById('upTreeManual').value.trim().toUpperCase()
+    : sel;
+  var url = PICKED_PHOTO.dataUrl;
+  var stage = document.getElementById('upStage').value || STAGE_OPTIONS[0];
+  var time = document.getElementById('upTime').value;
+
+  if (!treeId) { Toast.warning('请填写果树编号'); return; }
+  if (!url) { Toast.warning('请选择要上传的照片文件'); return; }
+  if (!time) { Toast.warning('请选择拍摄时间'); return; }
+
+  var map = readPhotoMap();
+  if (!Array.isArray(map[treeId])) map[treeId] = [];
+  map[treeId].push({ url: url, time: time, stage: stage });
+
+  if (writePhotoMap(map)) {
+    closeUpload();
+    renderList();
+    Toast.success('照片已上传，H5 端「查看照片」可同步查看');
+  }
+}
+
+/* ---------- 初始化 ---------- */
+document.addEventListener('DOMContentLoaded', function () {
+  initStageSelect();
+  fillTreeOptions();
+  document.getElementById('upTreeSelect').addEventListener('change', syncTreeManual);
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') renderList();
+  });
+  renderList();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 优惠券管理</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label { font-size: var(--font-size-sm); color: var(--text-tertiary); margin-bottom: var(--space-xs); }
+  .stat-value {
+    font-size: 26px; font-weight: var(--font-weight-bold);
+    color: var(--text-primary); line-height: 1.2; font-variant-numeric: tabular-nums;
+  }
+  .notice-bar {
+    display: flex; align-items: flex-start; gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--info-bg); border: 1px solid var(--info-border);
+    border-radius: var(--radius-lg); font-size: var(--font-size-sm);
+    color: var(--text-secondary); margin-bottom: var(--space-lg);
+  }
+  .notice-bar svg { flex-shrink: 0; margin-top: 2px; color: var(--info); }
+  .type-tag {
+    display: inline-block; padding: 3px 10px; border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs); white-space: nowrap;
+  }
+  .type-tag.cash { background: var(--error-bg); color: var(--error); }
+  .type-tag.percent { background: var(--warning-bg); color: var(--warning); }
+  .status-tag {
+    display: inline-block; padding: 3px 10px; border-radius: var(--radius-full);
+    font-size: var(--font-size-xs); white-space: nowrap;
+  }
+  .status-tag.on { background: var(--success-bg); color: var(--success); }
+  .status-tag.off { background: var(--gray-100); color: var(--text-secondary); }
+  .cell-name { font-weight: var(--font-weight-semibold, 600); color: var(--text-primary); }
+  .cell-sub { font-size: var(--font-size-xs); color: var(--text-tertiary); }
+  .rule-text { color: var(--error); font-weight: var(--weight-semibold, 600); }
+  .modal-overlay {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5); z-index: 1000;
+    justify-content: center; align-items: center; backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card); border-radius: 12px; width: 92%; max-width: 620px;
+    max-height: 85vh; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer; padding: 4px;
+    font-size: 20px; line-height: 1; color: var(--text-tertiary);
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body { padding: 20px; overflow-y: auto; max-height: calc(85vh - 132px); }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 12px;
+    padding: 16px 20px; border-top: 1px solid var(--border-default);
+  }
+  .form-row { display: flex; gap: var(--space-md); margin-bottom: var(--space-lg); }
+  .form-field { flex: 1; }
+  .form-field label {
+    display: block; font-size: var(--font-size-sm);
+    font-weight: var(--weight-medium, 500); color: var(--text-primary); margin-bottom: var(--space-sm);
+  }
+  .form-field input, .form-field select {
+    width: 100%; padding: 10px 14px; border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg); font-size: var(--font-size-base);
+    font-family: inherit; background: var(--bg-card); box-sizing: border-box;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .form-field input:focus, .form-field select:focus {
+    border-color: var(--primary-500); box-shadow: 0 0 0 4px rgba(24,144,255,0.12); outline: none;
+  }
+  .empty-state { padding: var(--space-2xl) 0; text-align: center; color: var(--text-tertiary); font-size: var(--font-size-sm); }
+</style>
+</head>
+<body data-active-menu="mall" data-active-submenu="mall-coupon">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">优惠券管理</div>
+        <div class="page-subtitle">维护 H5 商城优惠券规则，购物车与结算页共用同一份券配置</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="resetToH5Default()">恢复 H5 默认</button>
+        <button class="jg-btn jg-btn-primary" onclick="openEdit()">新增优惠券</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">券总数</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">启用中</div>
+        <div class="stat-value" id="statOn">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">满减券</div>
+        <div class="stat-value" id="statCash">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">折扣券</div>
+        <div class="stat-value" id="statPercent">0</div>
+      </div>
+    </div>
+
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <select class="search-select" id="typeSelect">
+          <option value="">全部类型</option>
+          <option value="cash">满减券</option>
+          <option value="percent">折扣券</option>
+        </select>
+        <select class="search-select" id="statusSelect">
+          <option value="">全部状态</option>
+          <option value="on">启用中</option>
+          <option value="off">已停用</option>
+        </select>
+        <input type="text" class="search-input" placeholder="搜索券码 / 名称..." id="searchInput">
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="renderTable()">搜索</button>
+          <button class="jg-btn" onclick="resetFilter()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="checkbox-col" style="width:60px;">序号</th>
+              <th>优惠券</th>
+              <th style="width:100px;">类型</th>
+              <th style="width:110px;">使用门槛</th>
+              <th style="width:100px;">状态</th>
+              <th style="width:190px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="couponBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无优惠券</div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== 编辑弹窗 ===== -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="editModalTitle">新增优惠券</h3>
+      <button class="modal-close" onclick="closeEditModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>券码<span style="color:var(--error);">*</span></label>
+          <input type="text" id="editCode" placeholder="如 cash50">
+          <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:4px;">创建后不可修改</div>
+        </div>
+        <div class="form-field">
+          <label>券类型</label>
+          <select id="editType">
+            <option value="cash">满减券</option>
+            <option value="percent">折扣券</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>券名称<span style="color:var(--error);">*</span></label>
+        <input type="text" id="editName" placeholder="如 满100减10">
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>优惠额度<span style="color:var(--error);">*</span></label>
+          <input type="number" id="editValue" min="0" step="1" placeholder="满减填 10；折扣填 9 表示 9 折">
+        </div>
+        <div class="form-field">
+          <label>使用门槛（元）</label>
+          <input type="number" id="editMin" min="0" step="1" placeholder="0 表示无门槛">
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>使用说明</label>
+        <input type="text" id="editDesc" placeholder="如 订单满 100 元可用">
+      </div>
+      <div class="form-field">
+        <label>状态</label>
+        <select id="editStatus">
+          <option value="on">启用中</option>
+          <option value="off">已停用</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeEditModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * 优惠券管理（商城管理）
+ * 数据源：localStorage['mall_coupons']
+ *   消费方 = H5 h5_cart.html / h5_checkout.html（经 js/mall-coupons.js）
+ *   字段：{ code, name, type, value, min, status, desc }
+ *   type 枚举：cash 满减券 / percent 折扣券（value 为折数，9 = 9折）
+ * ============================================================ */
+var COUPON_KEY = 'mall_coupons';
+
+/* 与 H5 js/mall-coupons.js 的 DEFAULT_COUPONS 保持一致 */
+var DEFAULT_COUPONS = [
+  { code: 'cash10',   name: '满100减10', type: 'cash',    value: 10, min: 100, status: 'on', desc: '订单满 100 元可用' },
+  { code: 'cash30',   name: '满200减30', type: 'cash',    value: 30, min: 200, status: 'on', desc: '订单满 200 元可用' },
+  { code: 'percent9', name: '9折优惠券', type: 'percent', value: 9,  min: 0,   status: 'on', desc: '无门槛，全场 9 折' }
+];
+
+var TYPE_TEXT = { cash: '满减券', percent: '折扣券' };
+
+var editingCode = null;
+
+function readAll() {
+  try {
+    var raw = localStorage.getItem(COUPON_KEY);
+    if (!raw) return null;
+    var v = JSON.parse(raw);
+    return Array.isArray(v) && v.length ? v : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function readCoupons() {
+  var list = readAll();
+  if (!list) {
+    list = DEFAULT_COUPONS.map(function (c) { return Object.assign({}, c); });
+    writeList(list);
+  }
+  return list;
+}
+
+function writeList(list) {
+  try {
+    localStorage.setItem(COUPON_KEY, JSON.stringify(list));
+  } catch (e) {
+    Toast.error('本地存储写入失败，优惠券未能保存');
+  }
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function ruleText(c) {
+  return c.type === 'cash'
+    ? '减 ¥' + c.value
+    : (Number(c.value) / 10).toFixed(1) + ' 折';
+}
+
+function renderStats() {
+  var list = readCoupons();
+  var on = 0, cash = 0, percent = 0;
+  list.forEach(function (c) {
+    if (c.status !== 'off') on++;
+    if (c.type === 'cash') cash++; else percent++;
+  });
+  document.getElementById('statTotal').textContent = list.length;
+  document.getElementById('statOn').textContent = on;
+  document.getElementById('statCash').textContent = cash;
+  document.getElementById('statPercent').textContent = percent;
+}
+
+function filteredList() {
+  var type = document.getElementById('typeSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  return readCoupons().filter(function (c) {
+    if (type && c.type !== type) return false;
+    if (status && c.status !== status) return false;
+    if (kw) {
+      var hay = ((c.code || '') + ' ' + (c.name || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable() {
+  var list = filteredList();
+  renderStats();
+
+  var body = document.getElementById('couponBody');
+  var emptyHint = document.getElementById('emptyHint');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+
+  body.innerHTML = list.map(function (c, i) {
+    return '<tr>' +
+      '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td><div class="cell-name">' + esc(c.name) + '</div>' +
+          '<div class="cell-sub">' + (c.desc || '') + ' · <span class="text-mono">' + esc(c.code) + '</span></div></td>' +
+      '<td><span class="type-tag ' + esc(c.type) + '">' + (TYPE_TEXT[c.type] || c.type) + '</span></td>' +
+      '<td><span class="rule-text">' + ruleText(c) + '</span>' +
+          '<div class="cell-sub">' + (Number(c.min) > 0 ? '满 ¥' + c.min + ' 可用' : '无门槛') + '</div></td>' +
+      '<td><span class="status-tag ' + esc(c.status) + '">' + (c.status === 'off' ? '已停用' : '启用中') + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn detail" onclick="openEdit(\'' + esc(c.code) + '\')">编辑</button>' +
+        '<button class="action-btn ' + (c.status === 'on' ? 'delete' : 'download') + '" onclick="toggleStatus(\'' + esc(c.code) + '\')">' +
+          (c.status === 'on' ? '停用' : '启用') + '</button>' +
+        '<button class="action-btn delete" onclick="removeCoupon(\'' + esc(c.code) + '\')">删除</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function resetFilter() {
+  document.getElementById('typeSelect').value = '';
+  document.getElementById('statusSelect').value = '';
+  document.getElementById('searchInput').value = '';
+  renderTable();
+}
+
+function openEdit(code) {
+  editingCode = code || null;
+  var c = null;
+  if (code) {
+    var list = readCoupons();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].code === code) { c = list[i]; break; }
+    }
+    if (!c) { Toast.error('未找到该优惠券'); return; }
+  }
+
+  document.getElementById('editModalTitle').textContent = c ? '编辑优惠券' : '新增优惠券';
+  document.getElementById('editCode').value = c ? c.code : '';
+  document.getElementById('editCode').disabled = !!c;
+  document.getElementById('editName').value = c ? c.name : '';
+  document.getElementById('editType').value = c ? c.type : 'cash';
+  document.getElementById('editValue').value = c ? c.value : '';
+  document.getElementById('editMin').value = c ? (c.min || 0) : 0;
+  document.getElementById('editDesc').value = c ? (c.desc || '') : '';
+  document.getElementById('editStatus').value = c ? (c.status || 'on') : 'on';
+
+  document.getElementById('editModal').classList.add('show');
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('show');
+  editingCode = null;
+}
+
+function submitEdit() {
+  var code = document.getElementById('editCode').value.trim();
+  var name = document.getElementById('editName').value.trim();
+  var type = document.getElementById('editType').value;
+  var value = Number(document.getElementById('editValue').value);
+  var min = Number(document.getElementById('editMin').value) || 0;
+
+  if (!code) { Toast.warning('请填写券码'); return; }
+  if (!name) { Toast.warning('请填写券名称'); return; }
+  if (isNaN(value) || value <= 0) { Toast.warning('请填写正确的优惠额度'); return; }
+  if (type === 'percent' && value >= 10) { Toast.warning('折扣券的折数需小于 10（如 9 表示 9 折）'); return; }
+  if (type === 'percent' && value <= 0) { Toast.warning('折扣券折数需大于 0'); return; }
+
+  var list = readCoupons();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].code === code && list[i].code !== editingCode) {
+      Toast.warning('券码已存在');
+      return;
+    }
+  }
+
+  var payload = {
+    code: code,
+    name: name,
+    type: type,
+    value: value,
+    min: min,
+    status: document.getElementById('editStatus').value,
+    desc: document.getElementById('editDesc').value.trim()
+  };
+
+  if (editingCode) {
+    for (var k = 0; k < list.length; k++) {
+      if (list[k].code === editingCode) { list[k] = payload; break; }
+    }
+  } else {
+    list.push(payload);
+  }
+
+  writeList(list);
+  closeEditModal();
+  renderTable();
+  Toast.success(editingCode ? '优惠券已更新' : '优惠券已新增');
+}
+
+function toggleStatus(code) {
+  var list = readCoupons();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].code === code) {
+      list[i].status = list[i].status === 'on' ? 'off' : 'on';
+      writeList(list);
+      renderTable();
+      Toast.success(list[i].status === 'on' ? '优惠券已启用' : '优惠券已停用');
+      return;
+    }
+  }
+}
+
+function removeCoupon(code) {
+  ConfirmDialog.show({
+    title: '删除优惠券',
+    message: '确定删除券「' + code + '」吗？删除后 H5 端购物车将不再显示该券。',
+    onConfirm: function () {
+      var list = readCoupons().filter(function (c) { return c.code !== code; });
+      writeList(list);
+      renderTable();
+      Toast.success('优惠券已删除');
+    }
+  });
+}
+
+function resetToH5Default() {
+  ConfirmDialog.show({
+    title: '恢复默认',
+    message: '将丢弃后台所有改动，恢复为 H5 端内置的 3 张默认券。是否继续？',
+    onConfirm: function () {
+      localStorage.removeItem(COUPON_KEY);
+      renderTable();
+      Toast.success('已恢复 H5 默认优惠券');
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') renderTable();
+  });
+  renderTable();
+});
+</script>
+</body>
+</html>

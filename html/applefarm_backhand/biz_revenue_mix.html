@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 收入构成</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 统计卡 */
+  .stat-card-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-xl);
+    transition: box-shadow var(--transition-normal);
+  }
+  .stat-card:hover { box-shadow: var(--shadow-md); }
+  .stat-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; }
+  .stat-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-value .unit { font-size: 13px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; }
+  .stat-sub { margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
+  .stat-sub.ok { color: var(--success); }
+  .stat-sub.miss { color: var(--error); }
+
+  /* 两栏区：饼图 + 趋势 */
+  .mix-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+    align-items: start;
+  }
+  @media (max-width: 1280px) { .mix-grid { grid-template-columns: 1fr; } }
+
+  /* 峰值提示行 */
+  .peak-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    background: var(--primary-50);
+    border: 1px solid var(--primary-100);
+    border-radius: var(--radius-md);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .peak-note strong { color: var(--primary-600); font-variant-numeric: tabular-nums; }
+
+  .data-table { min-width: 680px; }
+  .empty-row td { text-align: center; color: var(--text-tertiary); padding: 40px 0; }
+
+  /* 表格内占比进度条 */
+  .cell-ratio { width: 200px; }
+  .cell-ratio-bar { height: 8px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
+  .cell-ratio-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--primary-500);
+    transition: width 0.5s ease;
+  }
+  .cell-ratio-text {
+    margin-top: 5px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .cell-ratio-text strong { color: var(--text-primary); font-size: 13px; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="经营分析" data-active-submenu="收入构成">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 页面标题区 -->
+        <div class="page-header">
+          <div>
+            <div class="page-title">收入构成</div>
+            <div class="page-subtitle" id="pageSubtitle">按收入类型拆解年度营收结构与月度走势</div>
+          </div>
+          <div class="page-actions" id="actionBar" style="margin-bottom:0;">
+            <button class="jg-btn" data-act="reset">恢复默认</button>
+            <button class="jg-btn jg-btn-primary" data-act="edit">维护收入构成</button>
+          </div>
+        </div>
+
+        <!-- 统计卡 -->
+        <div class="stat-card-row" id="statCards"></div>
+
+        <!-- 饼图 + 趋势图 -->
+        <div class="mix-grid">
+          <div class="chart-section">
+            <h2 class="section-title">收入构成占比（万元）</h2>
+            <div id="chart-revenue-mix" style="height:300px;"></div>
+          </div>
+
+          <div class="chart-section">
+            <h2 class="section-title">近 12 月营收趋势（万元）</h2>
+            <div class="peak-note" id="peakNote"></div>
+            <div id="chart-revenue-trend" style="height:300px;"></div>
+          </div>
+        </div>
+
+        <!-- 收入构成明细 -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>收入类型</th>
+                  <th>金额（万元）</th>
+                  <th>占比</th>
+                  <th>渠道说明</th>
+                </tr>
+              </thead>
+              <tbody id="mixBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/page-actions.js"></script>
+<script src="js/components/chart.js"></script>
+<script src="js/shared/biz-store.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  var PIE_COLORS = ['#1890ff', '#52c41a', '#ff6b35', '#722ed1'];
+
+  function fmt(n){
+    n = Number(n) || 0;
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  // 保留 1 位小数
+  function pct(n){ return Math.round((Number(n) || 0) * 10) / 10; }
+  // 金额占比（%），保留 1 位小数
+  function shareOf(amount, total){ return total ? pct((Number(amount) || 0) / total * 100) : 0; }
+  function esc(v){
+    return String(v === undefined || v === null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  var els = {
+    subtitle  : document.getElementById('pageSubtitle'),
+    statCards : document.getElementById('statCards'),
+    peakNote  : document.getElementById('peakNote'),
+    mixBody   : document.getElementById('mixBody'),
+    actionBar : document.getElementById('actionBar')
+  };
+
+  function renderStats(){
+    var s = BizStore.summary();
+    var mix = BizStore.revenueMix();
+    var reached = s.completeRate >= 100;
+
+    els.subtitle.textContent = s.fiscalYear + ' · 按收入类型拆解年度营收结构与月度走势';
+
+    els.statCards.innerHTML =
+      '<div class="stat-card">' +
+        '<div class="stat-label">年度营收</div>' +
+        '<div class="stat-value">' + fmt(s.totalRevenue) + '<span class="unit">万元</span></div>' +
+        '<div class="stat-sub">四类收入合计 ' + fmt(s.mixSum) + ' 万元</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">年度目标</div>' +
+        '<div class="stat-value">' + fmt(s.revenueTarget) + '<span class="unit">万元</span></div>' +
+        '<div class="stat-sub">' + esc(s.fiscalYear) + ' 经营预算</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">目标完成率</div>' +
+        '<div class="stat-value">' + fmt(s.completeRate) + '<span class="unit">%</span></div>' +
+        '<div class="stat-sub ' + (reached ? 'ok' : 'miss') + '">' +
+          (reached
+            ? '已达成，超目标 ' + fmt(pct(s.totalRevenue - s.revenueTarget)) + ' 万元'
+            : '未达成，缺口 ' + fmt(pct(s.revenueTarget - s.totalRevenue)) + ' 万元') +
+        '</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">收入类型数</div>' +
+        '<div class="stat-value">' + fmt(mix.length) + '<span class="unit">类</span></div>' +
+        '<div class="stat-sub">鲜果销售 / 认养 / 农资 / 冷链</div>' +
+      '</div>';
+  }
+
+  function renderTable(){
+    var list  = BizStore.revenueMix();
+    var total = BizStore.summary().mixSum;
+
+    if (!list.length){
+      els.mixBody.innerHTML = '<tr class="empty-row"><td colspan="4">暂无收入构成数据</td></tr>';
+      return;
+    }
+
+    els.mixBody.innerHTML = list.map(function(x){
+      var ratio = shareOf(x.value, total);
+      var width = Math.max(2, ratio);
+      return '<tr>' +
+        '<td><strong>' + esc(x.name) + '</strong></td>' +
+        '<td class="num">' + fmt(pct(x.value)) + '</td>' +
+        '<td class="cell-ratio">' +
+          '<div class="cell-ratio-bar"><div class="cell-ratio-fill" style="width:' + width + '%;"></div></div>' +
+          '<div class="cell-ratio-text"><strong>' + fmt(ratio) + '%</strong></div>' +
+        '</td>' +
+        '<td>' + esc(x.channel || '-') + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderCharts(){
+    var mix = BizStore.revenueMix();
+    Chart.pie('#chart-revenue-mix', {
+      series: mix.map(function(x, i){
+        return { name: x.name, value: Number(x.value) || 0, color: PIE_COLORS[i % PIE_COLORS.length] };
+      })
+    });
+
+    var trend = BizStore.revenueTrend();
+    Chart.line('#chart-revenue-trend', {
+      categories: trend.map(function(x){ return x.month; }),
+      series: [{
+        name: '月度营收（万元）',
+        data: trend.map(function(x){ return x.value; }),
+        color: '#1890ff',
+        area: true
+      }]
+    });
+  }
+
+  // 峰值月提示（直接用文字说明，不做 markPoint）
+  function renderPeak(){
+    var trend = BizStore.revenueTrend();
+    if (!trend.length){
+      els.peakNote.innerHTML = '暂无营收趋势数据';
+      return;
+    }
+    var peak = trend.reduce(function(best, x){
+      return (Number(x.value) || 0) > (Number(best.value) || 0) ? x : best;
+    }, trend[0]);
+    els.peakNote.innerHTML =
+      '峰值月：<strong>' + esc(peak.month) + '</strong> · 营收 <strong>' + fmt(pct(peak.value)) + '</strong> 万元';
+  }
+
+  function renderAll(){
+    renderStats();
+    renderTable();
+    renderPeak();
+    renderCharts();
+  }
+
+  /* ---------------- 维护收入构成 ---------------- */
+
+  function openEditModal(){
+    var list = BizStore.revenueMix();
+    var fields = list.map(function(x, i){
+      return {
+        name: 'v' + i,
+        label: x.name + '（万元）',
+        type: 'number',
+        required: true,
+        placeholder: '如 1221.8',
+        hint: '保留 1 位小数，金额需为非负数'
+      };
+    });
+    var values = {};
+    list.forEach(function(x, i){ values['v' + i] = pct(x.value); });
+
+    Modal.form({
+      title: '维护收入构成',
+      fields: fields,
+      values: values,
+      submitText: '保存',
+      width: '560px',
+      onSubmit: function(formData){
+        var next = list.map(function(x, i){
+          var raw = formData['v' + i];
+          var n = Number(raw);
+          if (raw === '' || raw === undefined || isNaN(n) || n < 0){
+            Toast.show('「' + x.name + '」金额必须为非负数字', 'warning');
+            return null;
+          }
+          return { name: x.name, value: pct(n), channel: x.channel };
+        });
+
+        if (next.some(function(x){ return x === null; })) return false;
+
+        var total = BizStore.setRevenueMix(next);
+        Toast.show('保存成功，年度营收更新为 ' + fmt(total) + ' 万元', 'success');
+        return true;
+      }
+    });
+  }
+
+  function handleReset(){
+    Confirm.open('确定要恢复收入构成的默认数据吗？当前的维护结果将被覆盖。', {
+      title: '恢复默认',
+      confirmText: '恢复默认',
+      danger: true
+    }).then(function(ok){
+      if (!ok) return;
+      BizStore.reset();
+      Toast.show('已恢复默认数据', 'success');
+    });
+  }
+
+  // 顶部操作按钮：一次性事件委托
+  els.actionBar.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+    if (act === 'edit') openEditModal();
+    if (act === 'reset') handleReset();
+  });
+
+  BizStore.subscribe(function(){
+    renderAll();
+  });
+})();
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

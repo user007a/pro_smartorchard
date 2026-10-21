@@ -299,6 +299,82 @@
     font-size:14px;
     color:var(--text-primary);
   }
+
+  /* ===== T2 移动端领用申请接入 ===== */
+  .mb-section-title {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin:8px 0 16px;
+  }
+  .mb-section-title h3 {
+    font-size:16px;
+    font-weight:600;
+    color:var(--text-primary);
+    margin:0;
+  }
+  .mb-stat-row {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+    gap:var(--space-md);
+    margin-bottom:var(--space-lg);
+  }
+  .mb-stat-card {
+    background:var(--bg-card);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-lg);
+    padding:var(--space-lg);
+  }
+  .mb-stat-card .stat-label {
+    font-size:var(--font-size-sm);
+    color:var(--text-tertiary);
+    margin-bottom:var(--space-xs);
+  }
+  .mb-stat-card .stat-value {
+    font-size:26px;
+    font-weight:var(--font-weight-bold);
+    color:var(--text-primary);
+    line-height:1.2;
+    font-variant-numeric:tabular-nums;
+  }
+  .mb-stat-card.is-pending .stat-value { color:var(--warning); }
+  .mb-stat-card.is-approved .stat-value { color:var(--success); }
+  .mb-stat-card.is-rejected .stat-value { color:var(--error); }
+  /* 审批状态标签（移动端申请区专用，不影响原表配色） */
+  .mb-status {
+    display:inline-block;
+    padding:4px 12px;
+    border-radius:20px;
+    font-size:12px;
+    font-weight:500;
+    white-space:nowrap;
+  }
+  .mb-status.审批中 { background:var(--warning-bg); color:var(--warning); }
+  .mb-status.已审批 { background:var(--success-bg); color:var(--success); }
+  .mb-status.已驳回 { background:var(--error-bg); color:var(--error); }
+  .mb-approve-box {
+    margin-top:6px;padding:8px 10px;background:var(--gray-50);
+    border-left:3px solid var(--primary-300);border-radius:4px;
+    font-size:12px;color:var(--text-secondary);
+  }
+  .mb-source-tip {
+    font-size:12px;color:var(--text-tertiary);margin-bottom:12px;
+    padding:8px 12px;background:var(--gray-50);border-radius:6px;
+  }
+  /* T18 库存单一数据源说明条 */
+  .notice-bar {
+    display:flex;align-items:flex-start;gap:10px;
+    padding:10px 14px;margin-bottom:16px;
+    background:var(--info-bg);border:1px solid var(--border-light);
+    border-left:3px solid var(--primary-500);border-radius:6px;
+    font-size:13px;line-height:1.7;color:var(--text-secondary);
+  }
+  .notice-bar svg { flex-shrink:0; margin-top:3px; width:16px; height:16px; color:var(--primary-500); }
+  .notice-bar b { color:var(--text-primary); }
+  .empty-state {
+    padding:40px 0;text-align:center;color:var(--text-tertiary);font-size:13px;
+  }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -322,6 +398,16 @@
 
     <main class="main-content">
       <div class="content-wrapper">
+        <div class="page-header">
+          <div>
+            <div class="page-title">农资使用</div>
+            <div class="page-subtitle">记录农资使用情况，并审批移动端提交的领用申请（审批通过时统一扣减后台库存）</div>
+          </div>
+          <div class="page-actions">
+            <button class="jg-btn" onclick="refreshMobileApplies()">刷新申请</button>
+          </div>
+        </div>
+
         <div class="usage-stats">
           <div class="usage-stat-card">
             <div class="stat-header">
@@ -407,8 +493,134 @@
           <div class="pagination" id="pagination">
           </div>
         </div>
+
+        <!-- ===== T2：移动端领用申请审批区 ===== -->
+        <div class="page-section" id="mobileApplySection" style="margin-top:28px;">
+          <div class="mb-section-title">
+            <h3>移动端领用申请</h3>
+            <button class="jg-btn" onclick="refreshMobileApplies()">刷新</button>
+          </div>
+
+          <div class="mb-stat-row">
+            <div class="mb-stat-card is-pending">
+              <div class="stat-label">待审批</div>
+              <div class="stat-value" id="statPending">0</div>
+            </div>
+            <div class="mb-stat-card is-approved">
+              <div class="stat-label">已审批</div>
+              <div class="stat-value" id="statApproved">0</div>
+            </div>
+            <div class="mb-stat-card is-rejected">
+              <div class="stat-label">已驳回</div>
+              <div class="stat-value" id="statRejected">0</div>
+            </div>
+            <div class="mb-stat-card">
+              <div class="stat-label">申请总数</div>
+              <div class="stat-value" id="statTotal">0</div>
+            </div>
+          </div>
+
+          <div class="page-section search-section">
+            <div class="search-bar">
+              <select class="search-select" id="maStatusSelect">
+                <option value="">全部状态</option>
+                <option value="pending">待审批</option>
+                <option value="已审批">已审批</option>
+                <option value="已驳回">已驳回</option>
+              </select>
+              <input type="text" class="search-input" placeholder="搜索农资名称或申领人..." id="maSearchInput">
+              <div class="search-actions">
+                <button class="jg-btn jg-btn-primary" onclick="renderMobileApplies()">搜索</button>
+                <button class="jg-btn" onclick="resetMobileApplyFilter()">重置</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="data-section">
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th class="checkbox-col" style="width:60px;">序号</th>
+                    <th>农资名称</th>
+                    <th style="width:90px;">数量</th>
+                    <th style="width:150px;">申领时间</th>
+                    <th>使用地块</th>
+                    <th style="width:90px;">申领人</th>
+                    <th>备注</th>
+                    <th style="width:90px;">状态</th>
+                    <th style="width:140px;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="mobileApplyBody"></tbody>
+              </table>
+            </div>
+            <div id="mobileApplyEmpty" class="empty-state" style="display:none;">暂无移动端领用申请</div>
+          </div>
+        </div>
       </div>
     </main>
+  </div>
+</div>
+
+<!-- 移动端领用审批弹窗 -->
+<div class="modal-overlay" id="mobileApproveModal">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3 class="modal-title">领用申请审批</h3>
+      <button class="modal-close" onclick="closeMobileApproveModal()">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
+          <path d="M5 5L13 13M13 5L5 13"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-content">
+        <div class="detail-row">
+          <span class="detail-label">农资名称</span>
+          <span class="detail-value" id="maName">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">后台编号</span>
+          <span class="detail-value" id="maCode">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">后台当前库存</span>
+          <span class="detail-value" id="maStock">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">领用数量</span>
+          <span class="detail-value" id="maQty">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">使用地块</span>
+          <span class="detail-value" id="maPlot">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">申请时间</span>
+          <span class="detail-value" id="maTime">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">申请备注</span>
+          <span class="detail-value" id="maRemark">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">审批结论</span>
+          <span class="detail-value" id="maStatus">-</span>
+        </div>
+        <div class="form-row" style="margin-top:16px;display:block;">
+          <div class="form-item">
+            <label>审批意见</label>
+            <textarea id="maApproveRemark" placeholder="填写审批意见，移动端申领人可见"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeMobileApproveModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitMobileApprove('已审批')">同意</button>
+      <button class="jg-btn" style="color:var(--error);" onclick="submitMobileApprove('已驳回')">驳回</button>
+    </div>
   </div>
 </div>
 
@@ -517,6 +729,7 @@
 </div>
 
 <script src="js/material-store.js"></script>
+<script src="js/shared/mobile-bridge.js"></script>
 <script>
 // 农资使用数据
 const usageData = [
@@ -762,6 +975,256 @@ function rejectUsage(id) {
 }
 
 init();
+
+/* ============================================================
+ * T2 农资领用审批（移动端领用申请接入）
+ * 数据源：MobileBridge.materialLogs()
+ *   写入方 = 移动端农资领用页 mb_material.html
+ *   字段：{ id, name, qty, plot, remark, status:'pending', time, createTime, operator? }
+ * 审批后回写同一 localStorage 记录，移动端申请列表即刻可见
+ * 无移动端数据时，上方原 usageData 表格保持原样展示（向后兼容）
+ * ============================================================ */
+
+var currentApplyId = null;
+
+/* HTML 转义，所有用户数据渲染前必须走这里 */
+function escMobile(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* 读取移动端领用申请，读取失败回退空数组 */
+function readMobileApplies() {
+  try {
+    if (typeof MobileBridge === 'undefined') return [];
+    var list = MobileBridge.materialLogs();
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/* 移动端时间兼容：MobileStore.fmtTime 写的是 'HH:mm'，补充完整日期展示 */
+function formatApplyTime(item) {
+  return item.time || item.createTime || '-';
+}
+
+/* 状态归一：pending → 审批中，其余保持中文状态 */
+function applyStatusText(item) {
+  return item.status === 'pending' ? '审批中' : (item.status || '审批中');
+}
+
+function renderMobileStats(all) {
+  var pending = 0, approved = 0, rejected = 0;
+  all.forEach(function (i) {
+    var s = applyStatusText(i);
+    if (s === '审批中') pending++;
+    else if (s === '已审批') approved++;
+    else if (s === '已驳回') rejected++;
+  });
+  document.getElementById('statPending').textContent = pending;
+  document.getElementById('statApproved').textContent = approved;
+  document.getElementById('statRejected').textContent = rejected;
+  document.getElementById('statTotal').textContent = all.length;
+}
+
+function renderMobileApplies() {
+  var all = readMobileApplies();
+  renderMobileStats(all);
+
+  var status = document.getElementById('maStatusSelect').value;
+  var kw = document.getElementById('maSearchInput').value.trim().toLowerCase();
+
+  var list = all.filter(function (item) {
+    if (status) {
+      /* 下拉框中 pending 表示「审批中」，其余直接匹配中文状态 */
+      var want = status === 'pending' ? '审批中' : status;
+      if (applyStatusText(item) !== want) return false;
+    }
+    if (kw) {
+      var hay = ((item.name || '') + ' ' + (item.operator || '') + ' ' + (item.plot || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+
+  var body = document.getElementById('mobileApplyBody');
+  var emptyHint = document.getElementById('mobileApplyEmpty');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+
+  body.innerHTML = list.map(function (item, i) {
+    var st = applyStatusText(item);
+    var isPending = st === '审批中';
+    var extra = '';
+    if (!isPending && (item.approveRemark || item.approveTime)) {
+      extra = '<div class="mb-approve-box">审批意见：' + escMobile(item.approveRemark || '-') +
+        (item.approveTime ? '<br>审批时间：' + escMobile(item.approveTime) : '') + '</div>';
+    }
+    var actions = '<div class="action-btns">' +
+      '<button class="action-btn detail" onclick="openMobileApproveModal(\'' + escMobile(item.id) + '\')">' + (isPending ? '审批' : '查看') + '</button>' +
+      '</div>';
+
+    return '<tr>' +
+      '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td><strong>' + escMobile(item.name) + '</strong></td>' +
+      '<td>' + escMobile(item.qty) + '</td>' +
+      '<td class="text-mono">' + escMobile(formatApplyTime(item)) + '</td>' +
+      '<td>' + escMobile(item.plot || '-') + '</td>' +
+      '<td>' + escMobile(item.operator || '现场人员') + '</td>' +
+      '<td>' + escMobile(item.remark || '-') + extra + '</td>' +
+      '<td><span class="mb-status ' + escMobile(st) + '">' + escMobile(st) + '</span></td>' +
+      '<td>' + actions + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function resetMobileApplyFilter() {
+  document.getElementById('maStatusSelect').value = '';
+  document.getElementById('maSearchInput').value = '';
+  renderMobileApplies();
+}
+
+function refreshMobileApplies() {
+  renderMobileApplies();
+  if (typeof Toast !== 'undefined') Toast.success('领用申请已刷新');
+}
+
+function openMobileApproveModal(id) {
+  var all = readMobileApplies();
+  var target = null;
+  for (var i = 0; i < all.length; i++) {
+    if (String(all[i].id) === String(id)) { target = all[i]; break; }
+  }
+  if (!target) {
+    if (typeof Toast !== 'undefined') Toast.error('未找到该领用申请');
+    return;
+  }
+
+  currentApplyId = target.id;
+  document.getElementById('maName').textContent = target.name || '-';
+  document.getElementById('maCode').textContent = target.code || (target.backName ? target.backName + '（未带编号）' : '未在后台登记');
+  /* 展示后台实时库存，便于审批人核对是否够扣 */
+  var stockView = '-';
+  if (typeof MaterialStore !== 'undefined') {
+    var m = MaterialStore.get(target.code || target.name);
+    if (m) stockView = m.stock + ' ' + (m.unit || '');
+  }
+  document.getElementById('maStock').textContent = stockView;
+  document.getElementById('maQty').textContent = target.qty != null ? target.qty : '-';
+  document.getElementById('maPlot').textContent = target.plot || '-';
+  document.getElementById('maTime').textContent = formatApplyTime(target);
+  document.getElementById('maRemark').textContent = target.remark || '-';
+  var st = applyStatusText(target);
+  document.getElementById('maStatus').innerHTML =
+    '<span class="mb-status ' + escMobile(st) + '">' + escMobile(st) + '</span>';
+  document.getElementById('maApproveRemark').value = target.approveRemark || '';
+
+  document.getElementById('mobileApproveModal').classList.add('show');
+}
+
+function closeMobileApproveModal() {
+  document.getElementById('mobileApproveModal').classList.remove('show');
+  currentApplyId = null;
+}
+
+/* 提交审批：同意 → 已审批，驳回 → 已驳回；驳回需二次确认 */
+function submitMobileApprove(decision) {
+  var remark = document.getElementById('maApproveRemark').value.trim();
+  var isReject = decision === '已驳回';
+
+  if (isReject) {
+    if (!remark) {
+      if (typeof Toast !== 'undefined') Toast.warning('驳回时请填写驳回原因');
+      return;
+    }
+    if (typeof ConfirmDialog !== 'undefined') {
+      ConfirmDialog.show({
+        title: '驳回领用申请',
+        message: '确定要驳回该领用申请吗？驳回后移动端将标记为「已驳回」，且不可恢复。',
+        onConfirm: function () { doMobileApprove(decision, remark); }
+      });
+      return;
+    }
+  }
+  doMobileApprove(decision, remark);
+}
+
+function doMobileApprove(decision, remark) {
+  if (typeof MobileBridge === 'undefined') {
+    if (typeof Toast !== 'undefined') Toast.error('数据桥接未加载，无法保存审批结果');
+    return;
+  }
+
+  /* T18 治理：审批通过时由本环节统一扣减后台真实库存（移动端提交申请不扣减） */
+  if (decision === '已审批') {
+    var target = findApplyById(currentApplyId);
+    if (!target) {
+      if (typeof Toast !== 'undefined') Toast.error('未找到该领用申请');
+      return;
+    }
+    var deduct = deductStockForApply(target);
+    if (!deduct.ok) {
+      /* 扣减失败必须阻断，绝不静默通过 */
+      if (typeof Toast !== 'undefined') Toast.error(deduct.message);
+      return;
+    }
+  }
+
+  var ok = MobileBridge.updateRecord(MobileBridge.KEYS.material, currentApplyId, {
+    status: decision,
+    approveRemark: remark,
+    approveTime: MobileBridge.stampNow(),
+    stockDeducted: decision === '已审批' ? true : undefined
+  });
+
+  if (!ok) {
+    if (typeof Toast !== 'undefined') Toast.error('审批结果保存失败，请刷新后重试');
+    return;
+  }
+  closeMobileApproveModal();
+  renderMobileApplies();
+  if (typeof Toast !== 'undefined') {
+    Toast.success(decision === '已审批'
+      ? '审批通过，库存已扣减，移动端可查看'
+      : '审批结果已保存（' + decision + '），移动端可查看');
+  }
+}
+
+/* 按 id 找回领用申请记录 */
+function findApplyById(id) {
+  var all = readMobileApplies();
+  for (var i = 0; i < all.length; i++) {
+    if (String(all[i].id) === String(id)) return all[i];
+  }
+  return null;
+}
+
+/* T18：按记录中的后台编号（优先）或品名扣减库存，库存不足时返回 ok:false 并阻断审批 */
+function deductStockForApply(item) {
+  if (typeof MaterialStore === 'undefined') {
+    return { ok: false, message: '农资库存模块未加载，无法扣减库存，审批已中止' };
+  }
+  var qty = Number(item.qty);
+  if (!isFinite(qty) || qty <= 0) {
+    return { ok: false, message: '领用数量无效，无法扣减库存，审批已中止' };
+  }
+  var identifier = item.code || item.name;
+  var result = MaterialStore.applyDelta(identifier, -qty);
+  if (!result.ok) {
+    return { ok: false, message: result.message + '，审批已中止' };
+  }
+  return { ok: true, stock: result.stock, identifier: identifier };
+}
+
+/* 页面元素在本脚本之前已解析，直接初始化一次即可 */
+renderMobileApplies();
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>

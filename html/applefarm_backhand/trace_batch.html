@@ -324,6 +324,27 @@ const mockBatchData = [
 
 const STATUS_TEXT = { pending:'待包装', stored:'已入库', packed:'已包装', shipped:'已发货' };
 
+/* ---------- 批次持久化 ----------
+   key: smartorchard_trace_batches
+   首次访问自动播种内置样例，之后全部读写 localStorage，
+   使溯源编码页 / 溯源查询 / H5 溯源可与批次主数据共享同一份真源。 */
+const BATCH_STORE_KEY = 'smartorchard_trace_batches';
+
+function loadBatches() {
+  try {
+    const raw = localStorage.getItem(BATCH_STORE_KEY);
+    if (raw) {
+      const v = JSON.parse(raw);
+      if (Array.isArray(v) && v.length) return v;
+    }
+  } catch (e) { /* 落到播种 */ }
+  localStorage.setItem(BATCH_STORE_KEY, JSON.stringify(mockBatchData));
+  return mockBatchData.slice();
+}
+function saveBatches(list) {
+  localStorage.setItem(BATCH_STORE_KEY, JSON.stringify(list));
+}
+
 let currentDetailId = null;
 let currentEditId = null;
 
@@ -425,7 +446,7 @@ function searchData() {
   const status = document.getElementById('statusSelect').value;
   const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
 
-  const filtered = mockBatchData.filter(b => {
+  const filtered = loadBatches().filter(b => {
     const item = enrich(b);
     if (base && item.base !== base) return false;
     if (product && item.product !== product) return false;
@@ -444,7 +465,7 @@ function resetSearch() {
   document.getElementById('productSelect').value = '';
   document.getElementById('statusSelect').value = '';
   document.getElementById('searchInput').value = '';
-  Pagination.updateData(mockBatchData);
+  Pagination.updateData(loadBatches());
   showToast('已重置筛选条件');
 }
 
@@ -454,7 +475,7 @@ function exportBatches() {
 
 /* ---------- 详情 ---------- */
 function showDetail(id) {
-  const batch = mockBatchData.find(b => b.id === id);
+  const batch = loadBatches().find(b => b.id === id);
   if (!batch) return;
   currentDetailId = id;
   const item = enrich(batch);
@@ -493,7 +514,7 @@ function showDetail(id) {
 }
 
 function gotoTraceCode(batchNo) {
-  const seq = batchNo || (currentDetailId ? enrich(mockBatchData.find(b => b.id === currentDetailId)).batchNo : '');
+  const seq = batchNo || (currentDetailId ? (enrich(loadBatches().find(b => b.id === currentDetailId)) || {}).batchNo : '');
   closeModal('detailModal');
   showToast(`已跳转溯源编码，批次：${seq}`);
   const url = 'trace_code.html?batch=' + encodeURIComponent(seq);
@@ -576,7 +597,8 @@ function saveBatch() {
   if (!/^PC-\d{8}-\d{3}$/.test(batchNo)) { showToast('批次号格式应为 PC-YYYYMMDD-NNN', 'error'); return; }
   if (!quantity || Number(quantity) <= 0) { showToast('请输入采收数量', 'error'); return; }
 
-  const duplicated = mockBatchData.some(b => b.batchNo === batchNo && b.id !== currentEditId);
+  const batches = loadBatches();
+  const duplicated = batches.some(b => b.batchNo === batchNo && b.id !== currentEditId);
   if (duplicated) { showToast('批次号已存在', 'error'); return; }
 
   const payload = {
@@ -593,17 +615,19 @@ function saveBatch() {
   };
 
   if (currentEditId) {
-    const target = mockBatchData.find(b => b.id === currentEditId);
-    Object.assign(target, payload);
+    const target = batches.find(b => b.id === currentEditId);
+    if (target) Object.assign(target, payload);
     showToast('批次已保存');
   } else {
-    payload.id = 'BAT' + String(mockBatchData.length + 1).padStart(3, '0');
+    payload.id = 'BAT' + Date.now();
     payload.traceCount = 0;
-    mockBatchData.unshift(payload);
+    payload.createdAt = new Date().toISOString();
+    batches.unshift(payload);
     showToast('批次已创建');
   }
+  saveBatches(batches);
   closeModal('editModal');
-  Pagination.updateData(mockBatchData);
+  Pagination.updateData(batches);
 }
 
 /* ---------- 弹窗 / 提示 ---------- */
@@ -645,7 +669,7 @@ document.addEventListener('DOMContentLoaded', function() {
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
-    data: mockBatchData,
+    data: loadBatches(),
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderBatchRow

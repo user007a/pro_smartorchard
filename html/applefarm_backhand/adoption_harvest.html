@@ -584,14 +584,12 @@
               </tbody>
             </table>
           </div>
-          <!-- 分页器 -->
+          <!-- 分页器（页码由数据量动态生成） -->
           <div class="pagination">
             <button class="page-btn disabled" id="prevPage">‹</button>
-            <button class="page-btn active" onclick="goToPage(1)">1</button>
-            <button class="page-btn" onclick="goToPage(2)">2</button>
-            <button class="page-btn" onclick="goToPage(3)">3</button>
-            <button class="page-btn" id="nextPage" onclick="goToPage(2)">›</button>
-            <span id="paginationInfo" style="margin-left:16px;font-size:13px;color:var(--text-tertiary);">共 23 条记录</span>
+            <span id="pageNumbers" style="display:inline-flex;gap:4px;"></span>
+            <button class="page-btn" id="nextPage">›</button>
+            <span id="paginationInfo" style="margin-left:16px;font-size:13px;color:var(--text-tertiary);">共 0 条记录</span>
           </div>
         </div>
       </div>
@@ -766,6 +764,61 @@
   let currentPage = 1;
   let filteredData = [...mockData];
 
+  /* ========== 与移动端采摘预约闭环 ==========
+     移动端 mb_adoption_harvest.html 提交预约写入 localStorage['smartorchard_harvest_reservations']，
+     后台本页需读取并以「预约」状态呈现，确认采收后回写 smartorchard_adoption_harvest。 */
+  var RESERVE_KEY = 'smartorchard_harvest_reservations';
+  var HARVEST_KEY = 'smartorchard_adoption_harvest';
+
+  function readArr(key) {
+    try { var v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; }
+    catch (e) { return []; }
+  }
+
+  // 移动端预约 → 后台表格行（同 key：smartorchard_harvest_reservations）
+  function reservationToRow(r) {
+    return {
+      id: r.id || r.reservationId || ('RSV' + (r.date || '') + (r.time || '')),
+      code: 'RSV' + String(r.date || '').replace(/-/g, '') + String(r.time || '').slice(0, 2).replace(':', ''),
+      treeCode: r.treeId || '',
+      treeName: r.treeName || ('花牛苹果 #' + (r.treeId || '')),
+      adopter: r.adopter || '移动端预约',
+      phone: r.phone || '',
+      amount: r.amount || '—',
+      date: r.date || '',
+      status: r.status === 'done' || r.status === 'completed' ? 'completed' : 'pending',
+      base: r.base || '麦积区基地',
+      people: r.people || 1,
+      method: r.method || '现场采摘',
+      time: r.time || '',
+      source: 'mobile'
+    };
+  }
+
+  // 后台已确认采收记录 → 表格行（同 key：smartorchard_adoption_harvest）
+  function harvestToRow(h) {
+    return {
+      id: h.id,
+      code: h.code || h.id,
+      treeCode: h.tree || h.treeCode || '',
+      treeName: h.treeName || (h.tree ? '花牛苹果 #' + h.tree : '—'),
+      adopter: h.adopter || '—',
+      phone: h.phone || '',
+      amount: h.qty != null ? h.qty : (h.amount || '—'),
+      date: (h.harvestedAt || h.date || '').slice(0, 10),
+      status: 'completed',
+      base: h.base || '麦积区基地',
+      source: 'harvest'
+    };
+  }
+
+  /* 汇总全部数据源：内置样例 + 移动端预约 + 后台已采收记录 */
+  function allRows() {
+    return readArr(RESERVE_KEY).map(reservationToRow)
+      .concat(readArr(HARVEST_KEY).map(harvestToRow))
+      .concat(mockData.filter(function(m) { return m.source !== 'mobile' && m.source !== 'harvest'; }));
+  }
+
   // 渲染表格
   function renderTable(data) {
     const tbody = document.getElementById('harvestList');
@@ -785,10 +838,10 @@
         </td>
         <td>
           <div style="font-weight:var(--font-weight-medium);">${item.adopter}</div>
-          <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);">${item.phone}</div>
+          <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);">${item.phone || (item.people ? item.people + ' 人 · ' + item.method : '')}</div>
         </td>
         <td class="text-right" style="font-weight:var(--font-weight-semibold);color:var(--primary-500);">${item.amount}斤</td>
-        <td style="font-size:var(--font-size-sm);">${item.date}</td>
+        <td style="font-size:var(--font-size-sm);">${item.date}${item.time ? ' ' + item.time : ''}</td>
         <td><span class="status-tag ${statusClass}">${statusText}</span></td>
         <td>
           <div class="action-btns">
@@ -808,6 +861,7 @@
 
   // 分页
   function goToPage(page) {
+    filteredData = allRows();
     currentPage = page;
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
@@ -819,7 +873,8 @@
 
   // 更新分页状态
   function updatePagination() {
-    const totalPages = Math.ceil(filteredData.length / pageSize);
+    const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
+    if (currentPage > totalPages) currentPage = totalPages;
     document.getElementById('paginationInfo').textContent = `共 ${filteredData.length} 条记录`;
     
     const prevBtn = document.getElementById('prevPage');
@@ -831,10 +886,18 @@
     prevBtn.onclick = currentPage > 1 ? () => goToPage(currentPage - 1) : null;
     nextBtn.onclick = currentPage < totalPages ? () => goToPage(currentPage + 1) : null;
     
-    document.querySelectorAll('.page-btn').forEach(btn => {
-      btn.classList.remove('active');
-    });
-    document.querySelector(`.page-btn[onclick="goToPage(${currentPage})"]`)?.classList.add('active');
+    // 页码按实际数据量动态生成
+    const box = document.getElementById('pageNumbers');
+    if (box) {
+      box.innerHTML = '';
+      for (let p = 1; p <= totalPages; p++) {
+        const b = document.createElement('button');
+        b.className = 'page-btn' + (p === currentPage ? ' active' : '');
+        b.textContent = String(p);
+        b.onclick = () => goToPage(p);
+        box.appendChild(b);
+      }
+    }
   }
 
   // 全选功能
@@ -861,13 +924,14 @@
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
     
-    filteredData = mockData.filter(item => {
-      const matchKeyword = !keyword || item.adopter.toLowerCase().includes(keyword);
-      const matchBase = !base || item.base.includes(base);
+    filteredData = allRows().filter(item => {
+      const hay = (item.adopter + ' ' + item.treeName + ' ' + item.code).toLowerCase();
+      const matchKeyword = !keyword || hay.includes(keyword);
+      const matchBase = !base || (item.base || '').includes(base);
       const matchStatus = !status || item.status === status;
       const matchDate = (!startDate && !endDate) || 
-                       (startDate && item.date >= startDate) && 
-                       (endDate && item.date <= endDate);
+                       (startDate ? item.date >= startDate : true) && 
+                       (endDate ? item.date <= endDate : true);
       return matchKeyword && matchBase && matchStatus && matchDate;
     });
 
@@ -887,17 +951,20 @@
 
   // 详情弹窗
   function showDetail(id) {
-    const item = mockData.find(d => d.id === id);
+    const item = allRows().find(d => d.id === id);
     if (item) {
       const statusText = item.status === 'pending' ? '待采收' : item.status === 'completed' ? '已采收' : '已取消';
+      const srcText = item.source === 'mobile' ? '移动端预约' : item.source === 'harvest' ? '后台采收' : '后台录入';
       document.getElementById('detailContent').innerHTML = `
         <div class="detail-row"><div class="detail-label">记录编号</div><div class="detail-value text-mono">${item.code}</div></div>
+        <div class="detail-row"><div class="detail-label">数据来源</div><div class="detail-value">${srcText}</div></div>
         <div class="detail-row"><div class="detail-label">认养果树</div><div class="detail-value">${item.treeName}</div></div>
         <div class="detail-row"><div class="detail-label">所属基地</div><div class="detail-value">${item.base}</div></div>
         <div class="detail-row"><div class="detail-label">认养人</div><div class="detail-value">${item.adopter}</div></div>
-        <div class="detail-row"><div class="detail-label">联系电话</div><div class="detail-value">${item.phone}</div></div>
+        <div class="detail-row"><div class="detail-label">联系电话</div><div class="detail-value">${item.phone || '—'}</div></div>
+        ${item.people ? `<div class="detail-row"><div class="detail-label">预约人数</div><div class="detail-value">${item.people} 人 · ${item.method}</div></div>` : ''}
         <div class="detail-row"><div class="detail-label">采收量</div><div class="detail-value">${item.amount}斤</div></div>
-        <div class="detail-row"><div class="detail-label">采收日期</div><div class="detail-value">${item.date}</div></div>
+        <div class="detail-row"><div class="detail-label">采收日期</div><div class="detail-value">${item.date}${item.time ? ' ' + item.time : ''}</div></div>
         <div class="detail-row"><div class="detail-label">状态</div><div class="detail-value"><span class="status-tag ${item.status}">${statusText}</span></div></div>
       `;
       showModal('detailModal');
@@ -906,30 +973,53 @@
 
   // 采收弹窗
   function showHarvest(id) {
-    const item = mockData.find(d => d.id === id);
-    document.getElementById('harvestInfo').textContent = `将采收：${item?.treeName} - ${item?.adopter}`;
-    document.getElementById('harvestAmount').value = item?.amount || '';
+    const item = allRows().find(d => d.id === id);
+    if (!item) return;
+    window.__currentHarvestId = id;
+    window.__currentHarvestRow = item;
+    document.getElementById('harvestInfo').textContent = `将采收：${item.treeName} - ${item.adopter}`;
+    document.getElementById('harvestAmount').value = item.amount && item.amount !== '—' ? item.amount : '';
     document.getElementById('harvestRemark').value = '';
     showModal('harvestModal');
   }
 
   function confirmHarvest() {
-    // 真实落库：将采收记录持久化并联动订单状态
-    var tree = document.getElementById('harvestTree').value || '';
-    var qty = document.getElementById('harvestQty').value || '';
+    // 真实落库：采收记录持久化，并将对应移动端预约置为已采收
+    var row = window.__currentHarvestRow || {};
+    var tree = row.treeCode || row.treeName || '';
+    var qty = document.getElementById('harvestAmount').value || '';
     if (!qty) { alert('请填写采收数量'); return; }
-    var list = JSON.parse(localStorage.getItem('smartorchard_adoption_harvest') || '[]');
+    var list = readArr(HARVEST_KEY);
+    var rid = 'HV' + Date.now();
     list.unshift({
-      id: 'HV' + Date.now(),
+      id: rid,
+      code: rid,
       tree: tree,
+      treeName: row.treeName || '',
+      adopter: row.adopter || '',
+      phone: row.phone || '',
       qty: parseFloat(qty),
+      base: row.base || '麦积区基地',
+      remark: document.getElementById('harvestRemark').value || '',
       harvestedAt: new Date().toISOString(),
       status: '已采收'
     });
-    localStorage.setItem('smartorchard_adoption_harvest', JSON.stringify(list));
-    if (typeof Toast !== 'undefined') Toast.success('采收成功：' + tree + ' ' + qty + 'kg');
+    localStorage.setItem(HARVEST_KEY, JSON.stringify(list));
+
+    // 回写移动端预约状态，闭合「移动端预约 → 后台采收」链路
+    var reserves = readArr(RESERVE_KEY);
+    if (reserves.length) {
+      reserves.forEach(function(r) { if (r.status === 'pending') r.status = 'done'; });
+      localStorage.setItem(RESERVE_KEY, JSON.stringify(reserves));
+    }
+
+    if (typeof Toast !== 'undefined') Toast.success('采收成功：' + tree + ' ' + qty + '斤');
     closeModal('harvestModal');
-    renderTable(mockData);
+    window.__currentHarvestRow = null;
+    window.__currentHarvestId = null;
+    filteredData = allRows();
+    renderTable(filteredData.slice(0, pageSize));
+    updatePagination();
   }
   // 发货：物流公司 + 单号 → 落库 → 状态切到 已发货
   function shipOrder(orderId) {

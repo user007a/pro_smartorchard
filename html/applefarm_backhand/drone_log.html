@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 无人机飞行日志</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-xs);
+  }
+  .stat-value {
+    font-size: 26px;
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card.is-warn .stat-value { color: var(--warning); }
+  .stat-card.is-danger .stat-value { color: var(--error); }
+  /* 页内 Tab */
+  .view-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .view-tab {
+    padding: 10px 20px;
+    border: none;
+    background: none;
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .view-tab:hover { color: var(--primary-500); }
+  .view-tab.active {
+    color: var(--primary-500);
+    font-weight: 600;
+    border-bottom-color: var(--primary-500);
+  }
+  /* 事件类型标签 */
+  .event-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+  }
+  .event-tag.pause { background: var(--warning-bg); color: var(--warning); }
+  .event-tag.resume { background: var(--success-bg); color: var(--success); }
+  .event-tag.return { background: var(--error-bg); color: var(--error); }
+  /* 处置结果标签 */
+  .decision-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .decision-tag.ignore { background: var(--gray-100); color: var(--text-secondary); }
+  .decision-tag.confirm { background: var(--info-bg); color: var(--info); }
+  .cell-sub {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .progress-bar {
+    width: 110px;
+    height: 6px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+  }
+  .progress-bar > i {
+    display: block;
+    height: 100%;
+    background: var(--primary-500);
+    border-radius: var(--radius-full);
+  }
+  .empty-state {
+    padding: var(--space-2xl) 0;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+  }
+</style>
+</head>
+<body data-active-menu="device" data-active-submenu="drone-log">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">无人机飞行日志</div>
+        <div class="page-subtitle">汇总移动端无人机巡检的飞行事件与异常处置记录</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="refreshAll()">刷新</button>
+      </div>
+    </div>
+
+    <!-- 统计区 -->
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">今日飞行事件</div>
+        <div class="stat-value" id="statToday">0</div>
+      </div>
+      <div class="stat-card is-warn">
+        <div class="stat-label">暂停次数</div>
+        <div class="stat-value" id="statPause">0</div>
+      </div>
+      <div class="stat-card is-danger">
+        <div class="stat-label">返航次数</div>
+        <div class="stat-value" id="statReturn">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">待处置异常</div>
+        <div class="stat-value" id="statPending">0</div>
+      </div>
+    </div>
+
+    <!-- 页内 Tab -->
+    <div class="view-tabs">
+      <button class="view-tab active" id="tabEvent" onclick="switchDroneTab('event')">飞行事件</button>
+      <button class="view-tab" id="tabAbnormal" onclick="switchDroneTab('abnormal')">巡检异常</button>
+    </div>
+
+    <!-- ===== 飞行事件 ===== -->
+    <div id="viewEvent">
+      <div class="page-section search-section">
+        <div class="search-bar">
+          <input type="text" class="search-input" placeholder="按任务ID筛选..." id="taskInput">
+          <select class="search-select" id="eventTypeSelect">
+            <option value="">全部事件类型</option>
+            <option value="pause">暂停</option>
+            <option value="resume">恢复</option>
+            <option value="return">返航</option>
+          </select>
+          <div class="search-actions">
+            <button class="jg-btn jg-btn-primary" onclick="renderEventTable()">搜索</button>
+            <button class="jg-btn" onclick="resetFilter()">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-section data-section">
+        <div class="data-table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="checkbox-col" style="width:60px;">序号</th>
+                <th style="width:160px;">时间</th>
+                <th style="width:130px;">任务ID</th>
+                <th style="width:100px;">事件类型</th>
+                <th style="width:150px;">进度</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody id="eventBody"></tbody>
+          </table>
+        </div>
+        <div id="eventEmpty" class="empty-state" style="display:none;">暂无无人机飞行事件记录</div>
+      </div>
+    </div>
+
+    <!-- ===== 巡检异常 ===== -->
+    <div id="viewAbnormal" style="display:none;">
+      <div class="page-section search-section">
+        <div class="search-bar">
+          <input type="text" class="search-input" placeholder="按地块筛选..." id="plotInput">
+          <div class="search-actions">
+            <button class="jg-btn jg-btn-primary" onclick="renderAbnormalTable()">搜索</button>
+            <button class="jg-btn" onclick="resetFilter()">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-section data-section">
+        <div class="data-table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="checkbox-col" style="width:60px;">序号</th>
+                <th style="width:160px;">时间</th>
+                <th style="width:180px;">地块</th>
+                <th>异常类型</th>
+                <th style="width:140px;">处置结果</th>
+                <th style="width:110px;">状态</th>
+              </tr>
+            </thead>
+            <tbody id="abnormalBody"></tbody>
+          </table>
+        </div>
+        <div id="abnormalEmpty" class="empty-state" style="display:none;">暂无巡检异常记录</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-bridge.js"></script>
+<script>
+/* ============================================================
+ * 无人机飞行日志
+ * 数据源：
+ *   MobileBridge.droneEvents()   飞行事件
+ *     { type:'pause'|'resume'|'return', taskId, progress, text, id, createTime }
+ *   MobileBridge.droneAbnormal() 巡检异常处置
+ *     { id, plot, type, decision, decisionText, createTime }
+ *     decision：ignore 已忽略 / confirm 已确认·处理中
+ * 本页为只读日志视图，不回写移动端数据
+ * ============================================================ */
+
+/* 事件类型枚举 */
+var EVENT_MAP = {
+  pause: { text: '暂停', cls: 'pause' },
+  resume: { text: '恢复', cls: 'resume' },
+  return: { text: '返航', cls: 'return' }
+};
+
+/* 处置结果枚举 */
+var DECISION_MAP = {
+  ignore: { text: '已忽略', status: '已忽略', cls: 'ignore' },
+  confirm: { text: '已确认', status: '处理中', cls: 'confirm' }
+};
+
+/* HTML 转义，所有用户数据渲染前必须走这里 */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* 读取飞行事件，读取失败回退空数组 */
+function readEvents() {
+  try {
+    if (typeof MobileBridge === 'undefined') return [];
+    var list = MobileBridge.droneEvents();
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/* 读取巡检异常，读取失败回退空数组 */
+function readAbnormal() {
+  try {
+    if (typeof MobileBridge === 'undefined') return [];
+    var list = MobileBridge.droneAbnormal();
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/* 是否为今天（createTime 为 ISO 串或 'YYYY-MM-DD HH:mm'） */
+function isToday(value) {
+  if (!value) return false;
+  var d = new Date(value);
+  if (isNaN(d.getTime())) return String(value).slice(0, 10) === todayStr();
+  var now = new Date();
+  return d.getFullYear() === now.getFullYear()
+    && d.getMonth() === now.getMonth()
+    && d.getDate() === now.getDate();
+}
+
+function todayStr() {
+  var d = new Date();
+  var p = function (n) { return n < 10 ? '0' + n : n; };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+function renderStats() {
+  var events = readEvents();
+  var abnormal = readAbnormal();
+
+  var today = 0, pause = 0, ret = 0;
+  events.forEach(function (e) {
+    if (isToday(e.createTime)) today++;
+    if (e.type === 'pause') pause++;
+    if (e.type === 'return') ret++;
+  });
+  /* 待处置 = 已确认但仍标记处理中的异常 */
+  var pending = abnormal.filter(function (a) {
+    return (a.decision || 'ignore') === 'confirm';
+  }).length;
+
+  document.getElementById('statToday').textContent = today;
+  document.getElementById('statPause').textContent = pause;
+  document.getElementById('statReturn').textContent = ret;
+  document.getElementById('statPending').textContent = pending;
+}
+
+/* Tab 切换 */
+function switchDroneTab(name) {
+  var isEvent = name === 'event';
+  document.getElementById('viewEvent').style.display = isEvent ? '' : 'none';
+  document.getElementById('viewAbnormal').style.display = isEvent ? 'none' : '';
+  document.getElementById('tabEvent').classList.toggle('active', isEvent);
+  document.getElementById('tabAbnormal').classList.toggle('active', !isEvent);
+}
+
+function renderEventTable() {
+  renderStats();
+  var taskId = document.getElementById('taskInput').value.trim();
+  var type = document.getElementById('eventTypeSelect').value;
+
+  var list = readEvents().filter(function (e) {
+    if (taskId && String(e.taskId || '').indexOf(taskId) === -1) return false;
+    if (type && e.type !== type) return false;
+    return true;
+  });
+
+  var body = document.getElementById('eventBody');
+  var emptyHint = document.getElementById('eventEmpty');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+
+  body.innerHTML = list.map(function (e, i) {
+    var ev = EVENT_MAP[e.type] || { text: e.type || '-', cls: '' };
+    var progress = Number(e.progress);
+    var hasProgress = !isNaN(progress);
+    var progressCell = hasProgress
+      ? '<div class="progress-bar"><i style="width:' + Math.max(0, Math.min(100, progress)) + '%"></i></div> ' +
+        '<span style="font-size:12px;color:var(--text-tertiary);">' + Math.round(progress) + '%</span>'
+      : '<span style="color:var(--text-tertiary);">-</span>';
+
+    return '<tr>' +
+      '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td class="text-mono">' + esc(e.createTime || '-') + '</td>' +
+      '<td>' + esc(e.taskId || '-') + '</td>' +
+      '<td><span class="event-tag ' + ev.cls + '">' + esc(ev.text) + '</span></td>' +
+      '<td>' + progressCell + '</td>' +
+      '<td><div class="cell-sub">' + esc(e.text || '-') + '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function renderAbnormalTable() {
+  var plot = document.getElementById('plotInput').value.trim();
+
+  var list = readAbnormal().filter(function (a) {
+    if (plot && String(a.plot || '').indexOf(plot) === -1) return false;
+    return true;
+  });
+
+  var body = document.getElementById('abnormalBody');
+  var emptyHint = document.getElementById('abnormalEmpty');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+
+  body.innerHTML = list.map(function (a, i) {
+    var dec = DECISION_MAP[a.decision] || { text: a.decision || '-', status: '-', cls: '' };
+    return '<tr>' +
+      '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td class="text-mono">' + esc(a.createTime || '-') + '</td>' +
+      '<td>' + esc(a.plot || '-') + '</td>' +
+      '<td><div class="cell-sub">' + esc(a.type || '-') + '</div></td>' +
+      '<td><span class="decision-tag ' + dec.cls + '">' + esc(a.decisionText || dec.text) + '</span></td>' +
+      '<td><span class="decision-tag ' + dec.cls + '">' + esc(dec.status) + '</span></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function resetFilter() {
+  document.getElementById('taskInput').value = '';
+  document.getElementById('eventTypeSelect').value = '';
+  document.getElementById('plotInput').value = '';
+  renderEventTable();
+  renderAbnormalTable();
+}
+
+function refreshAll() {
+  renderEventTable();
+  renderAbnormalTable();
+  Toast.success('无人机日志已刷新');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  renderEventTable();
+  renderAbnormalTable();
+});
+</script>
+</body>
+</html>

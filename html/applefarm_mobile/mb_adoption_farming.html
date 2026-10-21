@@ -166,6 +166,63 @@
     function goBack() {
       window.history.back();
     }
+
+    /* 当前果树信息：全部取自页面已有的果树卡片，不写死新的假值。
+       treeId 由 mb_adoption.html「绑定农事」入口以 ?treeId= 传入（缺省回落到卡片上的 A025），
+       品种取卡片「品种：xxx」，认养人从共享挂牌记录 / C 端认养记录反查，查不到显示「—」。 */
+    var currentTreeNo = '';
+    var currentTreeName = '';
+    var currentBase = '';
+
+    function pickTreeNo(text) {
+      var s = String(text == null ? '' : text).trim();
+      var m = s.match(/#([A-Za-z0-9-]+)/);
+      return m ? m[1] : s;
+    }
+
+    function initTreeInfo() {
+      var card = document.querySelector('.tree-card');
+      var nameEl = card ? card.querySelector('.tree-name') : null;
+      var varietyEl = card ? card.querySelector('.tree-variety') : null;
+      var name = nameEl ? nameEl.textContent.trim() : '';
+      var varietyText = varietyEl ? varietyEl.textContent.trim() : '';
+      var varietyMatch = varietyText.match(/品种[：:]\s*([^·]+)/);
+      var variety = varietyMatch ? varietyMatch[1].trim() : '';
+
+      var treeNo = pickTreeNo(name);
+      var m = (location.search || '').match(/[?&]treeId=([^&]+)/);
+      if (m) {
+        try { treeNo = decodeURIComponent(m[1]).trim() || treeNo; } catch (e) { treeNo = m[1].trim() || treeNo; }
+      }
+      currentTreeNo = treeNo;
+      currentTreeName = (variety ? variety + ' ' : '') + '#' + treeNo;
+      // 卡片「品种：花牛苹果 · 树龄8年 · A1区」末段即地块区域
+      var parts = varietyText.split('·');
+      currentBase = (parts.length > 1 ? parts[parts.length - 1] : '').trim();
+      if (nameEl) nameEl.textContent = currentTreeName;
+    }
+
+    // 认养人：同棵树的最近一条挂牌记录优先，其次 C 端认养记录（snzg_adoptions）
+    function resolveAdopter(treeNo) {
+      var tags = window.MobileStore ? MobileStore.list(MobileStore.KEYS.adoptionTag) : [];
+      for (var i = 0; i < tags.length; i++) {
+        var t = tags[i];
+        if (t && t.kind !== 'farming_bind' && t.adopter && pickTreeNo(t.treeNo) === treeNo) return t.adopter;
+      }
+      var list = [];
+      try {
+        var raw = localStorage.getItem('snzg_adoptions');
+        var v = raw ? JSON.parse(raw) : null;
+        if (Array.isArray(v)) list = v;
+      } catch (e) { list = []; }
+      for (var j = 0; j < list.length; j++) {
+        var a = list[j];
+        if (!a) continue;
+        var ids = [String(a.id || '').replace(/^AD-/i, ''), String(a.treeNo || '')];
+        if (ids.indexOf(treeNo) > -1) return a.adopter || a.userName || a.name || '';
+      }
+      return '';
+    }
     
     function toggleSelect(item) {
       var checkbox = item.querySelector('.farming-checkbox');
@@ -186,19 +243,35 @@
         var titleEl = item.querySelector('.farming-title');
         var typeEl = item.querySelector('.farming-type');
         var timeEl = item.querySelector('.farming-time');
+        var type = typeEl ? typeEl.textContent.trim() : '';
         var title = titleEl ? titleEl.textContent.trim() : '';
-        if (typeEl) title = title.replace(typeEl.textContent.trim(), '').trim();
+        // 类型标签文字混在 title 里，只剔除末尾那一段，
+        // 否则「春季修剪作业」会被削成「春季作业」
+        if (type) {
+          var idx = title.lastIndexOf(type);
+          if (idx > -1 && title.slice(idx + type.length).trim() === '') {
+            title = title.slice(0, idx).trim();
+          }
+        }
         records.push({
           title: title,
-          type: typeEl ? typeEl.textContent.trim() : '',
+          type: type,
           time: timeEl ? timeEl.textContent.trim() : ''
         });
       });
 
+      var adopter = resolveAdopter(currentTreeNo);
+
       MobileStore.push(MobileStore.KEYS.adoptionTag, {
         kind: 'farming_bind',
+        treeNo: currentTreeNo,
+        treeName: currentTreeName,
+        adopter: adopter || '—',
+        base: currentBase,
         records: records,
         count: records.length,
+        // 推送状态初值，后台推送处置后可回写同一字段
+        status: 'pending',
         bindTime: new Date().toISOString()
       });
 
@@ -210,6 +283,8 @@
       document.getElementById('successModal').classList.remove('show');
       window.history.back();
     }
+
+    initTreeInfo();
   </script>
 </body>
 </html>

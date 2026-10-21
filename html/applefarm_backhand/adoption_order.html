@@ -484,6 +484,22 @@
     text-align:right;
   }
 
+  /* 续费标记 */
+  .renew-tag {
+    display:inline-flex;
+    align-items:center;
+    padding:3px 8px;
+    border-radius:var(--radius-full);
+    font-size:var(--font-size-xs);
+    font-weight:var(--font-weight-medium);
+    line-height:1.4;
+    white-space:nowrap;
+    border:1px solid transparent;
+  }
+  .renew-tag.renew { background:var(--info-bg); color:var(--info); border-color:var(--info-border); }
+  .renew-tag.first { background:var(--gray-bg); color:var(--text-tertiary); border-color:var(--border-light); }
+  .renew-tag.stop { background:var(--error-bg); color:var(--error); border-color:var(--error-border); }
+
   /* 响应式布局 */
   @media (max-width:768px) {
     .stats-cards {
@@ -535,12 +551,23 @@
     <main class="main-content">
       <div class="content-wrapper">
         <!-- 统计卡片 -->
-        <!-- 统计卡条已按统一规范移除 (原class=stats-cards) -->
+        <div class="patrol-stats" id="orderStats"></div>
 
         <!-- 搜索栏区 -->
         <div class="page-section search-section">
           <div class="search-bar">
             <input type="text" class="search-input" placeholder="搜索订单号/认养人..." id="searchInput">
+            <select class="search-select" id="baseSelect">
+              <option value="">全部基地</option>
+              <option value="麦积区基地">麦积区基地</option>
+              <option value="白水基地">白水基地</option>
+              <option value="宜川基地">宜川基地</option>
+            </select>
+            <select class="search-select" id="renewSelect">
+              <option value="">全部类型</option>
+              <option value="first">首单</option>
+              <option value="renew">续费订单</option>
+            </select>
             <select class="search-select" id="statusSelect">
               <option value="">全部状态</option>
               <option value="paid">已支付</option>
@@ -580,8 +607,12 @@
                   <th style="width:120px;">订单编号</th>
                   <th style="width:120px;">认养人</th>
                   <th style="width:140px;">认养果树</th>
+                  <th style="width:110px;">所属基地</th>
                   <th style="width:100px;" class="text-right">认养金额</th>
                   <th style="width:120px;">认养期限</th>
+                  <th style="width:100px;">续费标记</th>
+                  <th style="width:90px;text-align:right;">续费次数</th>
+                  <th style="width:100px;">合同状态</th>
                   <th style="width:80px;">订单状态</th>
                   <th style="width:120px;">下单时间</th>
                   <th>操作</th>
@@ -760,47 +791,91 @@
 
 <!-- 引入交互脚本 -->
 <script>
-  // Mock数据
+  /* Mock数据（renew 续费标记 / renewCycle 续费次数 / prevOrderNo 原订单号 / contractStatus 合同状态；base 所属基地） */
   const mockData = [
-    { id: '1', code: 'AD20260615001', name: '惠加宁', phone: '13307912585', treeName: '花牛苹果 #A025', base: '麦积区基地', amount: '399', startDate: '2026-09-15', endDate: '2027-09-14', status: 'paid', createTime: '2026-09-15 14:32' },
-    { id: '2', code: 'AD20260614102', name: '黄忠坚', phone: '13979412180', treeName: '花牛苹果 #B012', base: '麦积区基地', amount: '299', startDate: '2026-09-14', endDate: '2027-09-13', status: 'paid', createTime: '2026-09-14 09:15' },
-    { id: '3', code: 'AD20260613103', name: '徐水应', phone: '13879418637', treeName: '秦冠 #C008', base: '麦积区基地', amount: '599', startDate: '2026-09-13', endDate: '2027-09-12', status: 'pending', createTime: '2026-09-13 16:45' },
-    { id: '4', code: 'AD20260612104', name: '朱泉龙', phone: '18296452648', treeName: '花牛苹果 #A018', base: '麦积区基地', amount: '499', startDate: '2026-09-12', endDate: '2027-09-11', status: 'refunded', createTime: '2026-09-12 11:20' },
-    { id: '5', code: 'AD20260611105', name: '陈小忠', phone: '18779417899', treeName: '花牛苹果 #B015', base: '麦积区基地', amount: '259', startDate: '2026-09-11', endDate: '2027-09-10', status: 'completed', createTime: '2026-09-11 15:08' },
-    { id: '6', code: 'AD20260610106', name: '廖春亮', phone: '13767679075', treeName: '金帅 #D002', base: '白水基地', amount: '349', startDate: '2026-09-10', endDate: '2027-09-09', status: 'paid', createTime: '2026-09-10 10:30' },
-    { id: '7', code: 'AD20260609107', name: '李建明', phone: '13970432567', treeName: '花牛苹果 #E001', base: '宜川基地', amount: '499', startDate: '2026-09-09', endDate: '2027-09-08', status: 'cancelled', createTime: '2026-09-09 14:20' },
-    { id: '8', code: 'AD20260608108', name: '李根', phone: '13030587809', treeName: '花牛苹果 #E004', base: '宜川基地', amount: '399', startDate: '2026-09-08', endDate: '2027-09-07', status: 'completed', createTime: '2026-09-08 09:45' },
-    { id: '9', code: 'AD20260607109', name: '张才孙', phone: '15079427679', treeName: '花牛苹果 #F003', base: '宜川基地', amount: '299', startDate: '2026-09-07', endDate: '2027-09-06', status: 'paid', createTime: '2026-09-07 13:15' },
-    { id: '10', code: 'AD20260606110', name: '刘全国', phone: '13870409283', treeName: '花牛苹果 #A001', base: '麦积区基地', amount: '599', startDate: '2026-09-06', endDate: '2027-09-05', status: 'completed', createTime: '2026-09-06 16:30' },
-    { id: '11', code: 'AD20260605111', name: '毛定卫', phone: '15979580151', treeName: '花牛苹果 #A002', base: '麦积区基地', amount: '399', startDate: '2026-09-05', endDate: '2027-09-04', status: 'pending', createTime: '2026-09-05 11:00' },
-    { id: '12', code: 'AD20260604112', name: '叶三东', phone: '13307946219', treeName: '花牛苹果 #B001', base: '麦积区基地', amount: '449', startDate: '2026-09-04', endDate: '2027-09-03', status: 'paid', createTime: '2026-09-04 14:45' },
-    { id: '13', code: 'AD20260603113', name: '周才贵', phone: '13307043277', treeName: '花牛苹果 #B004', base: '麦积区基地', amount: '299', startDate: '2026-09-03', endDate: '2027-09-02', status: 'completed', createTime: '2026-09-03 09:20' },
-    { id: '14', code: 'AD20260602114', name: '程名高', phone: '13879411631', treeName: '秦冠 #C003', base: '麦积区基地', amount: '399', startDate: '2026-09-02', endDate: '2027-09-01', status: 'paid', createTime: '2026-09-02 15:30' },
-    { id: '15', code: 'AD20260601115', name: '邓小华', phone: '15179450918', treeName: '金帅 #D002', base: '白水基地', amount: '499', startDate: '2026-09-01', endDate: '2027-09-30', status: 'pending', createTime: '2026-09-01 10:15' },
-    { id: '16', code: 'AD20260531116', name: '周成友', phone: '13407945529', treeName: '花牛苹果 #E001', base: '宜川基地', amount: '349', startDate: '2026-09-30', endDate: '2027-09-30', status: 'completed', createTime: '2026-09-30 14:00' },
-    { id: '17', code: 'AD20260530117', name: '危红卫', phone: '13870456916', treeName: '花牛苹果 #E004', base: '宜川基地', amount: '599', startDate: '2026-09-30', endDate: '2027-09-29', status: 'paid', createTime: '2026-09-30 09:30' },
-    { id: '18', code: 'AD20260529118', name: '方超', phone: '13437942227', treeName: '花牛苹果 #F003', base: '宜川基地', amount: '299', startDate: '2026-09-29', endDate: '2027-09-28', status: 'completed', createTime: '2026-09-29 16:20' },
-    { id: '19', code: 'AD20260528119', name: '曹红英', phone: '15179480005', treeName: '花牛苹果 #A001', base: '麦积区基地', amount: '399', startDate: '2026-09-28', endDate: '2027-09-27', status: 'refunded', createTime: '2026-09-28 11:45' },
-    { id: '20', code: 'AD20260527120', name: '崔新根', phone: '13970402086', treeName: '花牛苹果 #A002', base: '麦积区基地', amount: '449', startDate: '2026-09-27', endDate: '2027-09-26', status: 'paid', createTime: '2026-09-27 13:00' },
-    { id: '21', code: 'AD20260526121', name: '惠加宁', phone: '13307912585', treeName: '花牛苹果 #B001', base: '麦积区基地', amount: '299', startDate: '2026-09-26', endDate: '2027-09-25', status: 'pending', createTime: '2026-09-26 15:30' },
-    { id: '22', code: 'AD20260525122', name: '黄忠坚', phone: '13979412180', treeName: '花牛苹果 #B004', base: '麦积区基地', amount: '399', startDate: '2026-09-25', endDate: '2027-09-24', status: 'completed', createTime: '2026-09-25 10:15' },
-    { id: '23', code: 'AD20260524123', name: '徐水应', phone: '13879418637', treeName: '秦冠 #C003', base: '麦积区基地', amount: '599', startDate: '2026-09-24', endDate: '2027-09-23', status: 'paid', createTime: '2026-09-24 14:20' },
+    { id: '1', code: 'AD20260615001', name: '惠加宁', phone: '13307912585', treeName: '花牛苹果 #A025', base: '麦积区基地', amount: '399', startDate: '2026-09-15', endDate: '2027-09-14', status: 'paid', renew: true, renewCycle: 1, prevOrderNo: 'AD20250614008', contractStatus: '履约中', createTime: '2026-09-15 14:32' },
+    { id: '2', code: 'AD20260614102', name: '黄忠坚', phone: '13979412180', treeName: '花牛苹果 #B012', base: '麦积区基地', amount: '299', startDate: '2026-09-14', endDate: '2027-09-13', status: 'paid', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '履约中', createTime: '2026-09-14 09:15' },
+    { id: '3', code: 'AD20260613103', name: '徐水应', phone: '13879418637', treeName: '秦冠 #C008', base: '麦积区基地', amount: '599', startDate: '2026-09-13', endDate: '2027-09-12', status: 'pending', renew: true, renewCycle: 2, prevOrderNo: 'AD20240613002', contractStatus: '履约中', createTime: '2026-09-13 16:45' },
+    { id: '4', code: 'AD20260612104', name: '朱泉龙', phone: '18296452648', treeName: '花牛苹果 #A018', base: '麦积区基地', amount: '499', startDate: '2026-09-12', endDate: '2027-09-11', status: 'refunded', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '已终止', createTime: '2026-09-12 11:20' },
+    { id: '5', code: 'AD20260611105', name: '陈小忠', phone: '18779417899', treeName: '花牛苹果 #B015', base: '麦积区基地', amount: '259', startDate: '2026-09-11', endDate: '2027-09-10', status: 'completed', renew: true, renewCycle: 1, prevOrderNo: 'AD20250610021', contractStatus: '已完成', createTime: '2026-09-11 15:08' },
+    { id: '6', code: 'AD20260610106', name: '廖春亮', phone: '13767679075', treeName: '金帅 #D002', base: '白水基地', amount: '349', startDate: '2026-09-10', endDate: '2027-09-09', status: 'paid', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '履约中', createTime: '2026-09-10 10:30' },
+    { id: '7', code: 'AD20260609107', name: '李建明', phone: '13970432567', treeName: '花牛苹果 #E001', base: '宜川基地', amount: '499', startDate: '2026-09-09', endDate: '2027-09-08', status: 'cancelled', renew: true, renewCycle: 1, prevOrderNo: 'AD20250608015', contractStatus: '已终止', createTime: '2026-09-09 14:20' },
+    { id: '8', code: 'AD20260608108', name: '李根', phone: '13030587809', treeName: '花牛苹果 #E004', base: '宜川基地', amount: '399', startDate: '2026-09-08', endDate: '2027-09-07', status: 'completed', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '已完成', createTime: '2026-09-08 09:45' },
+    { id: '9', code: 'AD20260607109', name: '张才孙', phone: '15079427679', treeName: '花牛苹果 #F003', base: '宜川基地', amount: '299', startDate: '2026-09-07', endDate: '2027-09-06', status: 'paid', renew: true, renewCycle: 2, prevOrderNo: 'AD20240606011', contractStatus: '履约中', createTime: '2026-09-07 13:15' },
+    { id: '10', code: 'AD20260606110', name: '刘全国', phone: '13870409283', treeName: '花牛苹果 #A001', base: '麦积区基地', amount: '599', startDate: '2026-09-06', endDate: '2027-09-05', status: 'completed', renew: true, renewCycle: 1, prevOrderNo: 'AD20250605003', contractStatus: '已完成', createTime: '2026-09-06 16:30' },
+    { id: '11', code: 'AD20260605111', name: '毛定卫', phone: '15979580151', treeName: '花牛苹果 #A002', base: '麦积区基地', amount: '399', startDate: '2026-09-05', endDate: '2027-09-04', status: 'pending', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '履约中', createTime: '2026-09-05 11:00' },
+    { id: '12', code: 'AD20260604112', name: '叶三东', phone: '13307946219', treeName: '花牛苹果 #B001', base: '麦积区基地', amount: '449', startDate: '2026-09-04', endDate: '2027-09-03', status: 'paid', renew: true, renewCycle: 2, prevOrderNo: 'AD20240603019', contractStatus: '履约中', createTime: '2026-09-04 14:45' },
+    { id: '13', code: 'AD20260603113', name: '周才贵', phone: '13307043277', treeName: '花牛苹果 #B004', base: '麦积区基地', amount: '299', startDate: '2026-09-03', endDate: '2027-09-02', status: 'completed', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '已完成', createTime: '2026-09-03 09:20' },
+    { id: '14', code: 'AD20260602114', name: '程名高', phone: '13879411631', treeName: '秦冠 #C003', base: '麦积区基地', amount: '399', startDate: '2026-09-02', endDate: '2027-09-01', status: 'paid', renew: true, renewCycle: 1, prevOrderNo: 'AD20250601006', contractStatus: '履约中', createTime: '2026-09-02 15:30' },
+    { id: '15', code: 'AD20260601115', name: '邓小华', phone: '15179450918', treeName: '金帅 #D002', base: '白水基地', amount: '499', startDate: '2026-09-01', endDate: '2027-09-30', status: 'pending', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '履约中', createTime: '2026-09-01 10:15' },
+    { id: '16', code: 'AD20260531116', name: '周成友', phone: '13407945529', treeName: '花牛苹果 #E001', base: '宜川基地', amount: '349', startDate: '2026-09-30', endDate: '2027-09-30', status: 'completed', renew: true, renewCycle: 1, prevOrderNo: 'AD20250530012', contractStatus: '已完成', createTime: '2026-09-30 14:00' },
+    { id: '17', code: 'AD20260530117', name: '危红卫', phone: '13870456916', treeName: '花牛苹果 #E004', base: '宜川基地', amount: '599', startDate: '2026-09-30', endDate: '2027-09-29', status: 'paid', renew: true, renewCycle: 2, prevOrderNo: 'AD20240529009', contractStatus: '履约中', createTime: '2026-09-30 09:30' },
+    { id: '18', code: 'AD20260529118', name: '方超', phone: '13437942227', treeName: '花牛苹果 #F003', base: '宜川基地', amount: '299', startDate: '2026-09-29', endDate: '2027-09-28', status: 'completed', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '已完成', createTime: '2026-09-29 16:20' },
+    { id: '19', code: 'AD20260528119', name: '曹红英', phone: '15179480005', treeName: '花牛苹果 #A001', base: '麦积区基地', amount: '399', startDate: '2026-09-28', endDate: '2027-09-27', status: 'refunded', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '已终止', createTime: '2026-09-28 11:45' },
+    { id: '20', code: 'AD20260527120', name: '崔新根', phone: '13970402086', treeName: '花牛苹果 #A002', base: '麦积区基地', amount: '449', startDate: '2026-09-27', endDate: '2027-09-26', status: 'paid', renew: true, renewCycle: 1, prevOrderNo: 'AD20250526014', contractStatus: '履约中', createTime: '2026-09-27 13:00' },
+    { id: '21', code: 'AD20260526121', name: '惠加宁', phone: '13307912585', treeName: '花牛苹果 #B001', base: '麦积区基地', amount: '299', startDate: '2026-09-26', endDate: '2027-09-25', status: 'pending', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '履约中', createTime: '2026-09-26 15:30' },
+    { id: '22', code: 'AD20260525122', name: '黄忠坚', phone: '13979412180', treeName: '花牛苹果 #B004', base: '麦积区基地', amount: '399', startDate: '2026-09-25', endDate: '2027-09-24', status: 'completed', renew: true, renewCycle: 2, prevOrderNo: 'AD20240524007', contractStatus: '已完成', createTime: '2026-09-25 10:15' },
+    { id: '23', code: 'AD20260524123', name: '徐水应', phone: '13879418637', treeName: '秦冠 #C003', base: '麦积区基地', amount: '599', startDate: '2026-09-24', endDate: '2027-09-23', status: 'paid', renew: true, renewCycle: 1, prevOrderNo: 'AD20250523018', contractStatus: '履约中', createTime: '2026-09-24 14:20' },
   ];
 
   const pageSize = 8;
   let currentPage = 1;
   let filteredData = [...mockData];
 
+  // 顶部统计卡：认养订单总数 / 续费订单数 / 续费率 / 续费金额
+  function renderStats() {
+    const box = document.getElementById('orderStats');
+    if (!box) return;
+    const total = mockData.length;
+    const renewList = mockData.filter(i => i.renew);
+    const renewCount = renewList.length;
+    const renewRate = total ? Math.round(renewCount / total * 1000) / 10 : 0;
+    const renewAmount = renewList.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    box.innerHTML = `
+      <div class="patrol-stat-card">
+        <div class="stat-value">${total}</div>
+        <div class="stat-label">认养订单总数</div>
+      </div>
+      <div class="patrol-stat-card">
+        <div class="stat-value">${renewCount}</div>
+        <div class="stat-label">续费订单数</div>
+      </div>
+      <div class="patrol-stat-card">
+        <div class="stat-value">${renewRate.toFixed(1)}%</div>
+        <div class="stat-label">续费率</div>
+      </div>
+      <div class="patrol-stat-card">
+        <div class="stat-value">¥${renewAmount.toLocaleString()}</div>
+        <div class="stat-label">续费金额</div>
+      </div>
+    `;
+  }
+
+  // 续费标记 badge：续费订单 / 首单
+  function renderRenewTag(item) {
+    return item.renew
+      ? '<span class="renew-tag renew">续费</span>'
+      : '<span class="renew-tag first">首单</span>';
+  }
+
+  // 合同状态标签
+  function renderContractTag(status) {
+    const cls = status === '履约中' ? 'renew' : status === '已完成' ? 'first' : 'stop';
+    return `<span class="renew-tag ${cls}">${status}</span>`;
+  }
+
   // 渲染表格
   function renderTable(data) {
     const tbody = document.getElementById('orderList');
     tbody.innerHTML = '';
-    
+
     data.forEach((item, __seq) => {
       const statusText = item.status === 'paid' ? '已支付' : item.status === 'pending' ? '待支付' : item.status === 'completed' ? '已完成' : item.status === 'refunded' ? '已退款' : '已取消';
       const statusClass = item.status;
-      
+
       const row = document.createElement('tr');
+      // 续费订单整行浅色高亮
+      if (item.renew) row.style.background = 'var(--primary-50)';
       row.innerHTML = `
         <td>${__seq + 1}</td>
         <td class="text-mono"><strong>${item.code}</strong></td>
@@ -808,15 +883,16 @@
           <div style="font-weight:var(--font-weight-medium);">${item.name}</div>
           <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);">${item.phone}</div>
         </td>
-        <td>
-          <div style="font-weight:var(--font-weight-medium);">${item.treeName}</div>
-          <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);">${item.base}</div>
-        </td>
+        <td style="font-weight:var(--font-weight-medium);">${item.treeName}</td>
+        <td>${item.base}</td>
         <td class="text-right" style="font-weight:var(--font-weight-semibold);color:var(--primary-500);">¥${item.amount}</td>
         <td>
           <div style="font-size:var(--font-size-sm);">${item.startDate}</div>
           <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);">至 ${item.endDate}</div>
         </td>
+        <td>${renderRenewTag(item)}</td>
+        <td class="text-right">${item.renewCycle || '-'}</td>
+        <td>${renderContractTag(item.contractStatus)}</td>
         <td><span class="status-tag ${statusClass}">${statusText}</span></td>
         <td style="font-size:var(--font-size-sm);color:var(--text-tertiary);">${item.createTime}</td>
         <td>
@@ -887,11 +963,15 @@
     const keyword = document.getElementById('searchInput').value.toLowerCase();
     const status = document.getElementById('statusSelect').value;
     const time = document.getElementById('timeSelect').value;
-    
+    const base = document.getElementById('baseSelect').value;
+    const renew = document.getElementById('renewSelect').value;
+
     filteredData = mockData.filter(item => {
       const matchKeyword = !keyword || item.code.toLowerCase().includes(keyword) || item.name.toLowerCase().includes(keyword);
       const matchStatus = !status || item.status === status;
-      return matchKeyword && matchStatus;
+      const matchBase = !base || item.base === base;
+      const matchRenew = !renew || (renew === 'renew' ? item.renew : !item.renew);
+      return matchKeyword && matchStatus && matchBase && matchRenew;
     });
 
     currentPage = 1;
@@ -921,6 +1001,10 @@
         <div class="detail-row"><div class="detail-label">所属基地</div><div class="detail-value">${item.base}</div></div>
         <div class="detail-row"><div class="detail-label">认养金额</div><div class="detail-value">¥${item.amount}</div></div>
         <div class="detail-row"><div class="detail-label">认养期限</div><div class="detail-value">${item.startDate} 至 ${item.endDate}</div></div>
+        <div class="detail-row"><div class="detail-label">续费标记</div><div class="detail-value">${renderRenewTag(item)}</div></div>
+        <div class="detail-row"><div class="detail-label">续费次数</div><div class="detail-value">${item.renew ? item.renewCycle + ' 次' : '首单'}</div></div>
+        <div class="detail-row"><div class="detail-label">原订单号</div><div class="detail-value text-mono">${item.prevOrderNo || '-'}</div></div>
+        <div class="detail-row"><div class="detail-label">合同状态</div><div class="detail-value">${renderContractTag(item.contractStatus)}</div></div>
         <div class="detail-row"><div class="detail-label">订单状态</div><div class="detail-value"><span class="status-tag ${item.status}">${statusText}</span></div></div>
         <div class="detail-row"><div class="detail-label">下单时间</div><div class="detail-value">${item.createTime}</div></div>
       `;
@@ -969,6 +1053,7 @@
   }
 
   // 初始化
+  renderStats();
   goToPage(1);
 </script>
 

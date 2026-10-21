@@ -98,6 +98,8 @@
     <div class="tab-item active" data-tab="agri">农资成本</div>
     <div class="tab-item" data-tab="labor">人工成本</div>
     <div class="tab-item" data-tab="equip">设备维护</div>
+    <div class="tab-item" data-tab="logistics">物流成本</div>
+    <div class="tab-item" data-tab="packing">包装耗材</div>
     <div class="tab-item" data-tab="other">其他成本</div>
   </div>
 
@@ -114,6 +116,27 @@
     <div class="chart-section" style="margin-bottom:0;">
       <h2 class="section-title">同期成本对比</h2>
       <div id="chart-cost-compare" class="chart-container" style="height:260px;"></div>
+    </div>
+  </div>
+
+  <!-- 成本科目配置（大屏口径：农资投入/人工用工/物流配送/包装耗材/其他费用 五类） -->
+  <div class="table-container" id="costSubjectSection">
+    <h2 class="section-title">成本科目配置 <span style="font-size:11px; font-weight:normal; color:var(--text-tertiary); margin-left:12px;">占比用于经营分析与数据大屏的成本结构口径，保存后写入本地配置</span></h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:60px;">序号</th>
+          <th style="width:160px;">成本科目</th>
+          <th>说明</th>
+          <th style="width:160px;">占比(%)</th>
+          <th style="width:220px;">占比示意</th>
+        </tr>
+      </thead>
+      <tbody id="costSubjectBody"></tbody>
+    </table>
+    <div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
+      <button class="jg-btn jg-btn-primary" onclick="saveCostSubject()">保存科目配置</button>
+      <span style="font-size:12px;color:var(--text-tertiary);" id="costSubjectHint"></span>
     </div>
   </div>
 
@@ -140,6 +163,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const costDataSet = {
     agri: {
       title: '农资成本',
+      subject: '农资投入',
       trend: { name: '农资成本', data: [82000, 95000, 88000, 105000, 96000, 88000, 78000, 72000, 95000, 88000, 76000, 65000], color: '#ff6b35' },
       pie: [
         { name: '复合肥', value: 45000 },
@@ -159,6 +183,7 @@ document.addEventListener('DOMContentLoaded', function() {
     },
     labor: {
       title: '人工成本',
+      subject: '人工用工',
       trend: { name: '人工成本', data: [58000, 62000, 68000, 75000, 78000, 70000, 65000, 62000, 72000, 68000, 60000, 52000], color: '#1890ff' },
       pie: [
         { name: '施肥用工', value: 28000 },
@@ -178,6 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
     },
     equip: {
       title: '设备维护',
+      subject: '其他费用',
       trend: { name: '设备维护', data: [12000, 11000, 13500, 15500, 14500, 16500, 18500, 17500, 19500, 17500, 13500, 11500], color: '#52c41a' },
       pie: [
         { name: '灌溉设备', value: 11500 },
@@ -195,23 +221,78 @@ document.addEventListener('DOMContentLoaded', function() {
         ['5', '其他设备', '易损更换', '5', '720', '3,600', '全部基地']
       ]
     },
+    logistics: {
+      title: '物流成本',
+      subject: '物流配送',
+      trend: { name: '物流成本', data: [21000, 18500, 22600, 25400, 23800, 26900, 31200, 29800, 28400, 25300, 22100, 19800], color: '#13c2c2' },
+      pie: [
+        { name: '基地干线运输', value: 98000 },
+        { name: '冷链干线', value: 74000 },
+        { name: '同城配送', value: 42000 },
+        { name: '出口海运', value: 27800 },
+        { name: '装卸搬运', value: 18000 }
+      ],
+      detailCols: ['序号', '运单号', '发货基地', '目的地', '运输方式', '重量(kg)', '单价(元/kg)', '金额(万元)', '发生日期', '状态'],
+      detailRows: [
+        ['1', 'YD20261015001', '天水麦积区基地', '兰州中川机场', '冷链干线', '12,600', '2.40', '3.02', '2026-10-15', '已完成'],
+        ['2', 'YD20261014002', '天水甘谷县基地', '西安国际港', '常温干线', '18,200', '1.15', '2.09', '2026-10-14', '已完成'],
+        ['3', 'YD20261013003', '天水秦安县基地', '天水麦积区基地', '基地调拨', '9,400', '0.85', '0.80', '2026-10-13', '已完成'],
+        ['4', 'YD20261012004', '天水麦积区基地', '上海浦东分拨', '冷链干线', '22,500', '3.10', '6.98', '2026-10-12', '运输中'],
+        ['5', 'YD20261011005', '天水武山县基地', '天水秦州区', '同城配送', '3,200', '1.60', '0.51', '2026-10-11', '已完成'],
+        ['6', 'YD20261010006', '天水清水县基地', '青岛崂山仓', '冷链干线', '20,800', '3.05', '6.34', '2026-10-10', '运输中'],
+        ['7', 'YD20261009007', '天水甘谷县基地', '马尔代夫中转', '出口海运', '25,600', '1.05', '2.69', '2026-10-09', '已完成'],
+        ['8', 'YD20261008008', '天水张家川县基地', '天水甘谷县基地', '基地调拨', '7,800', '0.82', '0.64', '2026-10-08', '已完成'],
+        ['9', 'YD20261007009', '天水麦积区基地', '成都双流仓', '冷链干线', '19,400', '3.00', '5.82', '2026-10-07', '待发运'],
+        ['10', 'YD20261006010', '天水秦州区基地', '北京朝阳仓', '冷链干线', '21,300', '3.20', '6.82', '2026-10-06', '运输中'],
+        ['11', 'YD20261005011', '天水清水县基地', '天水市城区', '同城配送', '2,600', '1.50', '0.39', '2026-10-05', '已完成'],
+        ['12', 'YD20261004012', '天水武山县基地', '西安咸阳仓', '常温干线', '16,700', '1.20', '2.00', '2026-10-04', '已完成']
+      ]
+    },
+    packing: {
+      title: '包装耗材',
+      subject: '包装耗材',
+      trend: { name: '包装耗材', data: [12800, 13600, 15200, 16800, 17400, 18100, 19300, 18700, 17600, 16400, 14900, 14200], color: '#fa8c16' },
+      pie: [
+        { name: '瓦楞纸箱', value: 76000 },
+        { name: '珍珠棉网套', value: 42000 },
+        { name: '食品级保鲜膜', value: 26800 },
+        { name: '礼盒包装', value: 21400 },
+        { name: '标签耗材', value: 12800 }
+      ],
+      detailCols: ['序号', '耗材名称', '规格', '供应商', '使用基地', '领用数量', '单价', '金额', '领用日期'],
+      detailRows: [
+        ['1', '瓦楞纸箱', '5kg/箱', '甘肃天水纸业', '天水麦积区基地', '4,200', '18.0 元/个', '7.56 万', '2026-10-15'],
+        ['2', '珍珠棉网套', '80网目/个', '山东烟台网套厂', '天水甘谷县基地', '3,600', '11.5 元/个', '4.14 万', '2026-10-14'],
+        ['3', '食品级保鲜膜', '45cm×300m', '烟台中鑫包装', '天水秦安县基地', '980', '24.0 元/卷', '2.35 万', '2026-10-13'],
+        ['4', '精品礼盒', '8果装/套', '天水华美包装', '天水麦积区基地', '1,450', '48.0 元/套', '6.96 万', '2026-10-12'],
+        ['5', '溯源标签', '60×40mm', '郑州印联科技', '全部基地', '26,000', '0.48 元/张', '1.25 万', '2026-10-11'],
+        ['6', '瓦楞纸箱', '10kg/箱', '甘肃天水纸业', '天水武山县基地', '2,800', '26.0 元/个', '7.28 万', '2026-10-10'],
+        ['7', '防震气泡膜', '50cm×100m', '烟台中鑫包装', '天水秦州区基地', '420', '32.0 元/卷', '1.34 万', '2026-10-09'],
+        ['8', '珍珠棉网套', '60网目/个', '山东烟台网套厂', '天水清水县基地', '2,900', '9.8 元/个', '2.84 万', '2026-10-08'],
+        ['9', '瓦楞纸箱', '15kg/箱', '甘肃天水纸业', '天水张家川县基地', '2,200', '36.0 元/个', '7.92 万', '2026-10-07'],
+        ['10', '果柄保护贴', '10mm×20mm', '郑州印联科技', '全部基地', '18,500', '0.22 元/个', '0.41 万', '2026-10-06'],
+        ['11', '精品礼盒', '12果装/套', '天水华美包装', '天水甘谷县基地', '860', '78.0 元/套', '6.71 万', '2026-10-05'],
+        ['12', '食品级保鲜膜', '60cm×300m', '烟台中鑫包装', '天水麦积区基地', '760', '28.0 元/卷', '2.13 万', '2026-10-04']
+      ]
+    },
     other: {
       title: '其他成本',
-      trend: { name: '其他成本', data: [8500, 9500, 10500, 12500, 11500, 13500, 14500, 15500, 16500, 14500, 11500, 9500], color: '#722ed1' },
+      subject: '其他费用',
+      trend: { name: '其他成本', data: [6500, 7500, 8500, 10500, 9500, 11500, 12500, 13500, 14500, 12500, 9500, 7500], color: '#722ed1' },
       pie: [
-        { name: '包装材料', value: 8500 },
         { name: '水电费', value: 5500 },
         { name: '土地租赁', value: 10500 },
         { name: '保险费', value: 4500 },
-        { name: '其他杂费', value: 3500 }
+        { name: '检测化验', value: 3200 },
+        { name: '其他杂费', value: 2700 }
       ],
       detailCols: ['序号', '费用类型', '说明', '数量', '单价(元)', '金额(元)', '归属基地'],
       detailRows: [
-        ['1', '包装材料', '苹果包装箱', '700', '12', '8,400', '天水麦积区基地'],
-        ['2', '水电费', '基地用电用水', '1', '5,500', '5,500', '全部基地'],
-        ['3', '土地租赁', '流转土地租金', '35亩', '300', '10,500', '甘肃吉县苹果园'],
-        ['4', '保险费', '农业保险摊销', '1月', '4,500', '4,500', '全部基地'],
-        ['5', '其他杂费', '办公及杂项', '1', '3,500', '3,500', '天水麦积区基地']
+        ['1', '水电费', '基地用电用水', '1', '5,500', '5,500', '全部基地'],
+        ['2', '土地租赁', '流转土地租金', '35亩', '300', '10,500', '甘肃吉县苹果园'],
+        ['3', '保险费', '农业保险摊销', '1月', '4,500', '4,500', '全部基地'],
+        ['4', '检测化验', '农残检测服务费', '30批次', '106', '3,200', '天水麦积区基地'],
+        ['5', '其他杂费', '办公及杂项', '1', '2,700', '2,700', '天水麦积区基地']
       ]
     }
   };
@@ -233,8 +314,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var data = {
       agri: { items: [['尿素', '50kg/袋', 95, 50, 4750], ['NPK复合肥', '40kg/袋', 180, 30, 5400], ['杀虫剂', '500ml/瓶', 65, 40, 2600]], total: 12750 },
       labor: { items: [['季节性用工', '人/天', 200, 200, 40000], ['技术员', '人/月', 8000, 4, 32000]], total: 72000 },
-      device: { items: [['基肥机', '台/月', 1200, 12, 14400], ['杀虫灯维护', '盏/月', 50, 80, 4000]], total: 18400 },
-      other: { items: [['包装', '箱', 8, 4000, 32000], ['冷库能耗', '度', 1.2, 8000, 9600]], total: 41600 }
+      equip: { items: [['基肥机', '台/月', 1200, 12, 14400], ['杀虫灯维护', '盏/月', 50, 80, 4000]], total: 18400 },
+      logistics: { items: [['冷链干线运输', '元/kg', 3.1, 63000, 195300], ['基地调拨', '元/kg', 0.85, 17200, 14620]], total: 209920 },
+      packing: { items: [['瓦楞纸箱', '个', 18, 9200, 165600], ['珍珠棉网套', '个', 11.5, 6500, 74750]], total: 240350 },
+      other: { items: [['冷库能耗', '度', 1.2, 8000, 9600], ['土地租赁', '亩/年', 300, 350, 105000]], total: 114600 }
     };
     var d = data[window.__costCurrentTab || 'agri'] || { items: [], total: 0 };
     var csv = '名称,规格,单价,数量,金额\n' + d.items.map(function(r){ return r.join(','); }).join('\n') + '\n合计,,,,' + d.total;
@@ -265,17 +348,104 @@ function renderTab(tabKey) {
     // 饼图
     Chart.donut('#chart-cost-pie', { series: d.pie });
 
-    // 明细表
-    const thead = '<tr>' + d.detailCols.map(c => '<th>' + c + '</th>').join('') + '</tr>';
+    // 明细表：末列统一追加「成本科目」，标明该明细归属哪一类科目
+    const subject = d.subject || '其他费用';
+    const thead = '<tr>' + d.detailCols.concat(['成本科目']).map(c => '<th>' + c + '</th>').join('') + '</tr>';
     const tbody = d.detailRows.map(row =>
-      '<tr>' + row.map(c => '<td>' + c + '</td>').join('') + '</tr>'
+      '<tr>' + row.concat([subject]).map(c => '<td>' + c + '</td>').join('') + '</tr>'
     ).join('');
     document.getElementById('cost-detail-container').innerHTML =
       '<table class="data-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
   }
 
+  /* ============================================================
+   * 成本科目配置（大屏口径五类，与经营分析共用）
+   *   key = snzg_cost_structure，保存后供成本报表与经营分析读取
+   * ============================================================ */
+  const COST_SUBJECT_KEY = 'snzg_cost_structure';
+  const COST_SUBJECTS = [
+    { key: 'agri',      name: '农资投入', desc: '肥料、农药、种苗等直接投入品', share: 34 },
+    { key: 'labor',     name: '人工用工', desc: '施肥、采摘、修剪等季节性用工',   share: 28 },
+    { key: 'logistics', name: '物流配送', desc: '干线运输、冷链发运、同城配送',     share: 18 },
+    { key: 'packing',   name: '包装耗材', desc: '纸箱、网套、礼盒、溯源标签等',     share: 12 },
+    { key: 'other',     name: '其他费用', desc: '水电、土地租赁、保险、检测化验',     share: 8 }
+  ];
+
+  function loadCostSubjects() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(COST_SUBJECT_KEY) || 'null'); } catch (e) { saved = null; }
+    if (saved && Array.isArray(saved.subjects)) {
+      COST_SUBJECTS.forEach(function (s, i) {
+        if (saved.subjects[i]) {
+          s.name = saved.subjects[i].name || s.name;
+          s.share = Number(saved.subjects[i].share);
+          if (isNaN(s.share)) s.share = 0;
+        }
+      });
+    }
+    renderCostSubjects();
+  }
+
+  function renderCostSubjects() {
+    const body = document.getElementById('costSubjectBody');
+    const hint = document.getElementById('costSubjectHint');
+    if (!body) return;
+    const max = COST_SUBJECTS.reduce(function (m, s) { return Math.max(m, s.share); }, 0) || 1;
+    body.innerHTML = COST_SUBJECTS.map(function (s, i) {
+      const pct = Math.max(0, Math.min(100, Math.round(s.share / max * 100)));
+      return '<tr>' +
+        '<td>' + (i + 1) + '</td>' +
+        '<td><strong>' + s.name + '</strong></td>' +
+        '<td>' + s.desc + '</td>' +
+        '<td><input type="number" class="form-input" style="padding:6px 10px;text-align:right;" min="0" max="100" step="0.1" value="' + s.share + '" data-subject-idx="' + i + '" oninput="previewCostSubject(' + i + ', this.value)"></td>' +
+        '<td><span style="display:block;position:relative;height:8px;border-radius:4px;background:var(--gray-100);overflow:hidden;">' +
+          '<i style="position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:linear-gradient(90deg,var(--primary-500),var(--primary-300));width:' + pct + '%;"></i>' +
+        '</span></td>' +
+      '</tr>';
+    }).join('');
+    if (hint) {
+      const total = COST_SUBJECTS.reduce(function (s, x) { return s + (Number(x.share) || 0); }, 0);
+      hint.textContent = '五类科目合计 ' + Math.round(total * 10) / 10 + '%';
+    }
+  }
+
+  function previewCostSubject(idx, val) {
+    COST_SUBJECTS[idx].share = Number(val) || 0;
+    const body = document.getElementById('costSubjectBody');
+    if (!body) return;
+    const max = COST_SUBJECTS.reduce(function (m, s) { return Math.max(m, s.share); }, 0) || 1;
+    const bar = body.querySelectorAll('tr')[idx].querySelector('td:last-child i');
+    if (bar) bar.style.width = Math.max(0, Math.min(100, Math.round(COST_SUBJECTS[idx].share / max * 100))) + '%';
+    const hint = document.getElementById('costSubjectHint');
+    if (hint) {
+      const total = COST_SUBJECTS.reduce(function (s, x) { return s + (Number(x.share) || 0); }, 0);
+      hint.textContent = '五类科目合计 ' + Math.round(total * 10) / 10 + '%';
+    }
+  }
+
+  // 暴露到全局：供 HTML 内联 onclick 的 saveCostSubject() 转调
+  window.__saveCostSubject = saveCostSubject;
+
+  function saveCostSubject() {
+    const payload = {
+      updatedAt: new Date().toISOString().slice(0, 10),
+      subjects: COST_SUBJECTS.map(function (s) { return { key: s.key, name: s.name, share: s.share }; })
+    };
+    try {
+      localStorage.setItem(COST_SUBJECT_KEY, JSON.stringify(payload));
+      renderCostSubjects();
+      if (typeof Toast !== 'undefined' && Toast.show) Toast.show('成本科目配置已保存', 'success');
+      else alert('成本科目配置已保存');
+    } catch (e) {
+      alert('保存失败：' + e.message);
+    }
+  }
+
   // 初始化默认 tab
   renderTab('agri');
+
+  // 成本科目配置：读取 localStorage 覆盖默认值后渲染
+  loadCostSubjects();
 
   // tab 切换
   document.querySelectorAll('#cost-tabs .tab-item').forEach(tab => {
@@ -293,6 +463,12 @@ function renderTab(tabKey) {
 function exportCostReport() {
   if (typeof window.__exportCostData === 'function') window.__exportCostData();
   else if (typeof Toast !== 'undefined') Toast.error('导出功能未就绪');
+}
+
+// 成本科目配置入口：同上，需暴露到全局供内联 onclick 调用
+function saveCostSubject() {
+  if (typeof window.__saveCostSubject === 'function') window.__saveCostSubject();
+  else if (typeof Toast !== 'undefined') Toast.error('成本科目配置未就绪');
 }
 </script>
 

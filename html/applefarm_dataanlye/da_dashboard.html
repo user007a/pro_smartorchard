@@ -360,20 +360,18 @@ body{display:flex;align-items:center;justify-content:center}
       <span class="mini-stat">产值 <b>2512万</b></span>
       <span class="mini-stat">溯源上链 <b>78.3%</b></span>
       <div class="clock" role="timer" aria-live="off"><span id="clk">--:--:--</span><small id="dt">2026-09-22 周二</small></div>
-      <a href="../applefarm_backhand/login.html">管理后台</a>
       <a href="vr_panorama.html">果园实景</a>
       <div class="dsnav" id="dsnav">
         <button type="button" class="dsnav-btn" aria-haspopup="true" aria-expanded="false" onclick="toggleNav()">切换大屏 ▾</button>
         <nav class="dsnav-menu" role="menu" aria-label="大屏切换">
-          <a role="menuitem" href="da_index.html">大屏门户</a>
-          <a role="menuitem" href="da_overview.html">果园管理驾驶舱</a>
-          <a role="menuitem" href="da_dashboard.html" class="on">生产指挥驾驶舱</a>
-          <a role="menuitem" href="da_business.html">经营分析大屏</a>
-          <a role="menuitem" href="da_trace.html">质量溯源大屏</a>
-          <a role="menuitem" href="da_alert.html">智能预警大屏</a>
-          <a role="menuitem" href="da_growth.html">物候生长大屏</a>
-          <a role="menuitem" href="da_iot.html">设备物联大屏</a>
-          <a role="menuitem" href="da_results.html">数字成果大屏</a>
+          <a role="menuitem" href="da_overview.html">企业管理</a>
+          <a role="menuitem" href="da_dashboard.html" class="on">生产指挥</a>
+          <a role="menuitem" href="da_business.html">经营分析</a>
+          <a role="menuitem" href="da_alert.html">智能预警</a>
+          <a role="menuitem" href="da_growth.html">物候生长</a>
+          <a role="menuitem" href="da_iot.html">设备物联</a>
+          <a role="menuitem" href="da_results.html">数字成果</a>
+          <a role="menuitem" href="da_trace.html">质量溯源</a>
         </nav>
       </div>
     </div>
@@ -566,8 +564,8 @@ body{display:flex;align-items:center;justify-content:center}
       </div>
     </div>
     <div class="bcard">
-      <h3 class="bh"><i></i>农资库存与采购<span>本周保障率 79%</span></h3>
-      <div class="agri-mini">
+      <h3 class="bh"><i></i>农资库存与采购<span id="agriRate">本周保障率 --</span></h3>
+      <div class="agri-mini" id="agriMini">
         <div class="m"><div class="nm">化肥<small>复合肥</small></div>
           <div class="bar"><i style="width:68%"></i></div>
           <div class="rt sk">9天<small>可覆盖</small></div></div>
@@ -581,7 +579,7 @@ body{display:flex;align-items:center;justify-content:center}
           <div class="bar"><i style="width:23%"></i></div>
           <div class="rt sk">2天<small>补货倒计时 1 天</small></div></div>
       </div>
-      <div class="agri-note">农药、套袋低于安全线：<b>套袋</b>临疏果套袋高峰，建议优先补货；农药联动北1/北4 喷药计划。</div>
+      <div class="agri-note" id="agriNote">农资库存与后台「农资管理」实时同步。</div>
     </div>
   </div>
 </div>
@@ -590,7 +588,7 @@ body{display:flex;align-items:center;justify-content:center}
 /* ---------- 缩放适配（单屏不滚动） ---------- */
 (function(){
   var s=document.getElementById('stage');
-  function fit(){s.style.transform='translate(-50%,-50%) scale('+(innerWidth/1920)+','+(innerHeight/1080)+')';}
+  function fit(){var k=Math.min(innerWidth/1920,innerHeight/1080);s.style.transform='translate(-50%,-50%) scale('+k+')';}
   addEventListener('resize',fit);fit();
 })();
 
@@ -812,6 +810,76 @@ detail.classList.add('hide'); /* 默认收起，点击地块再打开 */
   }
 })();
 
+/* ---------- 农资库存：读取后台农资共享数据层（material-store.js） ---------- */
+(function () {
+  // 四大类农资按后台农资类型归并，统计当前库存与安全库存
+  var GROUPS = [
+    { key: '化肥',   types: ['fertilizer'], pick: ['M-001'] },
+    { key: '农药',   types: ['pesticide'],  pick: ['M-005'] },
+    { key: '农膜',   types: [],            pick: ['M-004'] },
+    { key: '套袋',   types: ['tool'],       pick: ['M-022'] }
+  ];
+  // 日均消耗基准（用于折算可覆盖天数），与后台农资使用记录的周均用量口径一致
+  var DAILY_USE = { '化肥': 16.7, '农药': 6.3, '农膜': 0.5, '套袋': 6.0 };
+
+  function aggregate() {
+    if (!window.MaterialStore) return null;
+    var all = MaterialStore.all();
+    return GROUPS.map(function (g) {
+      var items = g.types.length
+        ? all.filter(function (m) { return g.types.indexOf(m.type) >= 0; })
+        : all.filter(function (m) { return g.pick.indexOf(m.code) >= 0; });
+      var stock = items.reduce(function (s, m) { return s + (Number(m.stock) || 0); }, 0);
+      var safety = items.reduce(function (s, m) { return s + (Number(m.safety) || 0); }, 0);
+      return { key: g.key, stock: stock, safety: safety, days: Math.round(stock / DAILY_USE[g.key]) };
+    });
+  }
+
+  function render() {
+    var rows = aggregate();
+    var box = document.getElementById('agriMini');
+    if (!rows || !box) return;
+
+    // 保障率 = 库存达到安全线的品类占比
+    var safeCount = rows.filter(function (r) { return r.stock >= r.safety; }).length;
+    var rate = Math.round((safeCount / rows.length) * 100);
+    var rateEl = document.getElementById('agriRate');
+    if (rateEl) rateEl.textContent = '本周保障率 ' + rate + '%';
+
+    box.innerHTML = rows.map(function (r) {
+      var pct = r.safety ? Math.min(100, Math.round((r.stock / (r.safety * 1.6)) * 100)) : 0;
+      var warn = r.stock < r.safety;
+      var cls = warn ? (pct < 40 ? ' crit' : ' warn') : '';
+      var note = warn
+        ? '低于安全 ' + r.safety + (r.days <= 2 ? '，补货倒计时 ' + (2 - r.days) + ' 天' : '')
+        : '可覆盖';
+      return '<div class="m' + cls + '"><div class="nm">' + r.key +
+        '<small>当前 ' + r.stock + '</small></div>' +
+        '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
+        '<div class="rt">' + r.days + '天<small>' + note + '</small></div></div>';
+    }).join('');
+
+    var lows = rows.filter(function (r) { return r.stock < r.safety; });
+    var noteEl = document.getElementById('agriNote');
+    if (noteEl) {
+      noteEl.innerHTML = lows.length
+        ? '库存低于安全线：<b>' + lows.map(function (r) { return r.key; }).join('、') +
+          '</b>，建议优先补货。数据来源：后台农资管理（实时同步）。'
+        : '各品类库存均高于安全线。数据来源：后台农资管理（实时同步）。';
+    }
+  }
+
+  function init() {
+    render();
+    // 跨标签页同步：后台农资页改动库存后，大屏自动刷新
+    window.addEventListener('storage', function (e) {
+      if (e.key === 'smartorchard_material_store_v1') render();
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+
 /* ---------- 大屏切换下拉 ---------- */
 function toggleNav(){
   var n=document.getElementById('dsnav');if(!n)return;
@@ -828,7 +896,6 @@ document.addEventListener('keydown',function(e){
 });
 </script>
 <script src="../applefarm_backhand/js/shared/alert-data.js"></script>
-<script src="js/shared/mock-dashboard.js"></script>
-<script src="js/shared/dashboards-mock.js"></script>
+<script src="../applefarm_backhand/js/material-store.js"></script>
 </body>
 </html>

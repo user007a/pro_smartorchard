@@ -77,6 +77,26 @@
   .plot-tooltip { position:absolute; background:rgba(0,0,0,0.85); color:#fff; padding:6px 10px; border-radius:4px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.15s; z-index:5; white-space:nowrap; }
   .plot-tooltip.show { opacity:1; }
   .plot-tooltip::after { content:''; position:absolute; bottom:-4px; left:50%; margin-left:-4px; border:4px solid transparent; border-top-color:rgba(0,0,0,0.85); }
+  /* 地块风险指数表 */
+  .risk-table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; }
+  .risk-table th { text-align:left; font-weight:600; color:var(--text-secondary); font-size:12px; padding:10px 12px; background:linear-gradient(135deg, var(--gray-50), var(--gray-100)); border-bottom:2px solid var(--border-light); }
+  .risk-table td { padding:10px 12px; border-bottom:1px solid var(--border-light); color:var(--text-primary); }
+  .risk-table tbody tr:nth-child(even) { background:var(--gray-50); }
+  .risk-table tbody tr:hover { background:var(--primary-50); }
+  .risk-cell { display:flex; align-items:center; gap:10px; min-width:150px; }
+  .risk-cell .risk-track { flex:1; height:8px; background:#eef1ef; border-radius:4px; overflow:hidden; }
+  .risk-cell .risk-track > i { display:block; height:100%; border-radius:4px; }
+  .risk-cell .risk-track > i.high { background:linear-gradient(90deg,#ff7875,#ff4d4f); }
+  .risk-cell .risk-track > i.mid { background:linear-gradient(90deg,#ffd666,#fa8c16); }
+  .risk-cell .risk-track > i.low { background:linear-gradient(90deg,#95de64,#52c41a); }
+  .risk-cell .risk-num { font-weight:700; font-variant-numeric:tabular-nums; min-width:30px; text-align:right; }
+  .risk-cell .risk-num.high { color:var(--error); }
+  .risk-cell .risk-num.mid { color:var(--warning); }
+  .risk-cell .risk-num.low { color:var(--success); }
+  .risk-level { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; font-weight:500; }
+  .risk-level.high { background:#fff1f0; color:#cf1322; }
+  .risk-level.mid { background:#fff1b8; color:#8c6d10; }
+  .risk-level.low { background:#d9f7be; color:#3a8618; }
 </style>
 <style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
 <link rel="stylesheet" href="css/unified-theme.css">
@@ -97,9 +117,9 @@
 <div class="page-container">
   <!-- 顶部 4 指标 -->
   <div class="patrol-stats">
-    <div class="patrol-stat-card red"><div class="stat-value">3</div><div class="stat-label">高风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--error);">需立即处理</div></div>
-    <div class="patrol-stat-card orange"><div class="stat-value">18</div><div class="stat-label">中风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--warning);">监测中</div></div>
-    <div class="patrol-stat-card green"><div class="stat-value">105</div><div class="stat-label">低风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--success);">安全</div></div>
+    <div class="patrol-stat-card red"><div class="stat-value" id="statHighRisk">3</div><div class="stat-label">高风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--error);">需立即处理</div></div>
+    <div class="patrol-stat-card orange"><div class="stat-value" id="statMidRisk">18</div><div class="stat-label">中风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--warning);">监测中</div></div>
+    <div class="patrol-stat-card green"><div class="stat-value" id="statLowRisk">105</div><div class="stat-label">低风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--success);">安全</div></div>
     <div class="patrol-stat-card blue"><div class="stat-value">6</div><div class="stat-label">今日防治建议</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">已生成</div></div>
   </div>
 
@@ -153,6 +173,25 @@
     </div>
     <div id="chart-trend" class="chart-container" style="height:280px;"></div>
   </div>
+
+  <!-- 按地块的风险指数（数值化） -->
+  <div class="chart-section" style="margin-bottom:20px;">
+    <h2 class="section-title">地块风险指数 <span style="font-size:12px;color:var(--text-tertiary);font-weight:400;">风险等级由指数推导：≥70 高 · 40-69 中 · &lt;40 低</span></h2>
+    <table class="risk-table">
+      <thead>
+        <tr>
+          <th style="width:80px;">地块编号</th>
+          <th style="width:130px;">地块名称</th>
+          <th style="width:130px;">主栽品种</th>
+          <th style="width:130px;">病虫害类型</th>
+          <th style="width:220px;">风险指数</th>
+          <th style="width:90px;">风险等级</th>
+          <th>责任人</th>
+        </tr>
+      </thead>
+      <tbody id="riskTableBody"></tbody>
+    </table>
+  </div>
 </div>
     </main>
   </div>
@@ -195,28 +234,31 @@
   svg.appendChild(ft);
 
   // 病虫害地块（基于大屏 PLOTS 数据，按当前风险等级着色）
+  // riskIndex：数值化风险指数 0-100（≥70 高 / 40-69 中 / <40 低），与 level 相互独立
   const PLOTS = [
-    { id: 'A1', name: '1号东', pts: [[258,58],[448,46],[452,182],[300,190],[256,172]], variety: '富士',   area: 9.2, level: 'low',    pest: '无',     manager: '张建国', updated: '09-23 14:30', yieldL: '高', health: 92 },
-    { id: 'A2', name: '2号东', pts: [[462,44],[652,52],[656,184],[466,188]],          variety: '王林',   area: 8.6, level: 'low',    pest: '无',     manager: '张建国', updated: '09-23 14:30', yieldL: '高', health: 90 },
-    { id: 'A3', name: '3号东', pts: [[666,50],[702,44],[794,184],[700,190],[662,180]], variety: '花牛苹果', area: 7.8, level: 'medium', pest: '早期落叶病', manager: '李红', updated: '09-24 09:15', yieldL: '中', health: 74 },
-    { id: 'A4', name: '4号东', pts: [[714,46],[888,52],[894,186],[800,182],[708,120]], variety: '红星',   area: 8.1, level: 'low',    pest: '无',     manager: '李红', updated: '09-23 14:30', yieldL: '高', health: 91 },
-    { id: 'B1', name: '1号北', pts: [[254,206],[446,200],[450,376],[300,384],[254,360]], variety: '富士',   area: 9.0, level: 'low',    pest: '无',     manager: '王强', updated: '09-23 14:30', yieldL: '高', health: 93 },
-    { id: 'B2', name: '2号北', pts: [[460,198],[648,204],[652,380],[464,382]],        variety: '王林',   area: 8.4, level: 'medium', pest: '蚜虫',    manager: '王强', updated: '09-24 08:50', yieldL: '低', health: 61 },
-    { id: 'B3', name: '3号北', pts: [[660,204],[772,200],[776,378],[664,380]],        variety: '花牛苹果', area: 8.0, level: 'high',   pest: '轮纹病',  manager: '赵敏', updated: '09-24 11:20', yieldL: '中', health: 89 },
-    { id: 'B4', name: '4号北', pts: [[788,210],[892,206],[896,378],[790,374]],        variety: '红星',   area: 7.9, level: 'medium', pest: '红蜘蛛',  manager: '赵敏', updated: '09-24 10:05', yieldL: '中', health: 77 },
-    { id: 'C1', name: '1号西', pts: [[256,398],[448,392],[452,552],[270,560],[256,530]], variety: '富士',   area: 8.7, level: 'low',    pest: '无',     manager: '孙磊', updated: '09-23 14:30', yieldL: '高', health: 90 },
-    { id: 'C2', name: '2号西', pts: [[462,392],[650,396],[654,556],[466,558]],        variety: '王林',   area: 8.2, level: 'low',    pest: '无',     manager: '孙磊', updated: '09-23 14:30', yieldL: '中', health: 88 },
-    { id: 'C3', name: '3号西', pts: [[664,396],[888,390],[892,556],[672,560]],        variety: '花牛苹果', area: 7.6, level: 'high',   pest: '炭疽病',  manager: '周涛', updated: '09-24 11:00', yieldL: '低', health: 58 },
-    { id: 'D1', name: '1号南', pts: [[258,578],[632,566],[640,684],[300,692],[262,640]], variety: '富士',   area: 8.3, level: 'low',    pest: '无',     manager: '周涛', updated: '09-23 14:30', yieldL: '高', health: 91 }
+    { id: 'A1', name: '1号东', pts: [[258,58],[448,46],[452,182],[300,190],[256,172]], variety: '富士',   area: 9.2, level: 'low',    riskIndex: 18, pest: '无',     manager: '张建国', updated: '09-23 14:30', yieldL: '高', health: 92 },
+    { id: 'A2', name: '2号东', pts: [[462,44],[652,52],[656,184],[466,188]],          variety: '王林',   area: 8.6, level: 'low',    riskIndex: 22, pest: '无',     manager: '张建国', updated: '09-23 14:30', yieldL: '高', health: 90 },
+    { id: 'A3', name: '3号东', pts: [[666,50],[702,44],[794,184],[700,190],[662,180]], variety: '花牛苹果', area: 7.8, level: 'medium', riskIndex: 52, pest: '早期落叶病', manager: '李红', updated: '09-24 09:15', yieldL: '中', health: 74 },
+    { id: 'A4', name: '4号东', pts: [[714,46],[888,52],[894,186],[800,182],[708,120]], variety: '红星',   area: 8.1, level: 'low',    riskIndex: 15, pest: '无',     manager: '李红', updated: '09-23 14:30', yieldL: '高', health: 91 },
+    { id: 'B1', name: '1号北', pts: [[254,206],[446,200],[450,376],[300,384],[254,360]], variety: '富士',   area: 9.0, level: 'low',    riskIndex: 20, pest: '无',     manager: '王强', updated: '09-23 14:30', yieldL: '高', health: 93 },
+    { id: 'B2', name: '2号北', pts: [[460,198],[648,204],[652,380],[464,382]],        variety: '王林',   area: 8.4, level: 'medium', riskIndex: 58, pest: '蚜虫',    manager: '王强', updated: '09-24 08:50', yieldL: '低', health: 61 },
+    { id: 'B3', name: '3号北', pts: [[660,204],[772,200],[776,378],[664,380]],        variety: '花牛苹果', area: 8.0, level: 'high',   riskIndex: 82, pest: '轮纹病',  manager: '赵敏', updated: '09-24 11:20', yieldL: '中', health: 89 },
+    { id: 'B4', name: '4号北', pts: [[788,210],[892,206],[896,378],[790,374]],        variety: '红星',   area: 7.9, level: 'medium', riskIndex: 47, pest: '红蜘蛛',  manager: '赵敏', updated: '09-24 10:05', yieldL: '中', health: 77 },
+    { id: 'C1', name: '1号西', pts: [[256,398],[448,392],[452,552],[270,560],[256,530]], variety: '富士',   area: 8.7, level: 'low',    riskIndex: 25, pest: '无',     manager: '孙磊', updated: '09-23 14:30', yieldL: '高', health: 90 },
+    { id: 'C2', name: '2号西', pts: [[462,392],[650,396],[654,556],[466,558]],        variety: '王林',   area: 8.2, level: 'low',    riskIndex: 28, pest: '无',     manager: '孙磊', updated: '09-23 14:30', yieldL: '中', health: 88 },
+    { id: 'C3', name: '3号西', pts: [[664,396],[888,390],[892,556],[672,560]],        variety: '花牛苹果', area: 7.6, level: 'high',   riskIndex: 76, pest: '炭疽病',  manager: '周涛', updated: '09-24 11:00', yieldL: '低', health: 58 },
+    { id: 'D1', name: '1号南', pts: [[258,578],[632,566],[640,684],[300,692],[262,640]], variety: '富士',   area: 8.3, level: 'low',    riskIndex: 19, pest: '无',     manager: '周涛', updated: '09-23 14:30', yieldL: '高', health: 91 }
   ];
   // 基地附加地块（各基地简化示意，与大屏互补）
   const EXT = [
-    { id: 'TS', name: '天水基地', pts: [[40,150],[180,140],[200,300],[60,310]],   area: 105.0, level: 'medium', pest: '轮纹病',  manager: '陈志强', updated: '09-24 09:45', yieldL: '中', health: 76 },
-    { id: 'LK', name: '龙口基地', pts: [[740,260],[880,270],[870,400],[740,400]], area: 88.0,  level: 'low',    pest: '无',     manager: '刘海涛', updated: '09-23 14:30', yieldL: '高', health: 89 },
-    { id: 'QD', name: '青岛基地', pts: [[60,400],[200,400],[220,560],[70,580]],   area: 72.0,  level: 'low',    pest: '无',     manager: '王福生', updated: '09-23 14:30', yieldL: '高', health: 87 },
-    { id: 'ZY', name: '招远基地', pts: [[710,420],[880,430],[870,560],[720,560]], area: 62.0,  level: 'medium', pest: '红蜘蛛',  manager: '孙明德', updated: '09-24 10:30', yieldL: '中', health: 79 }
+    { id: 'TS', name: '天水基地', pts: [[40,150],[180,140],[200,300],[60,310]],   area: 105.0, level: 'medium', riskIndex: 63, pest: '轮纹病',  manager: '陈志强', updated: '09-24 09:45', yieldL: '中', health: 76 },
+    { id: 'LK', name: '龙口基地', pts: [[740,260],[880,270],[870,400],[740,400]], area: 88.0,  level: 'low',    riskIndex: 24, pest: '无',     manager: '刘海涛', updated: '09-23 14:30', yieldL: '高', health: 89 },
+    { id: 'QD', name: '青岛基地', pts: [[60,400],[200,400],[220,560],[70,580]],   area: 72.0,  level: 'low',    riskIndex: 21, pest: '无',     manager: '王福生', updated: '09-23 14:30', yieldL: '高', health: 87 },
+    { id: 'ZY', name: '招远基地', pts: [[710,420],[880,430],[870,560],[720,560]], area: 62.0,  level: 'medium', riskIndex: 44, pest: '红蜘蛛',  manager: '孙明德', updated: '09-24 10:30', yieldL: '中', health: 79 }
   ];
   const ALL = PLOTS.concat(EXT);
+  window.PEST_PLOTS = PLOTS;
+  window.PEST_ALL = ALL;
 
   const COL = { high: 'rgba(229,86,75,0.35)', medium: 'rgba(242,179,61,0.38)', low: 'rgba(43,212,110,0.30)' };
   const COLB = { high: '#ff5d63', medium: '#f5b53d', low: '#2bd46e' };
@@ -378,8 +420,50 @@
   map.insertBefore(svg, map.firstChild);
 })();
 
-// ===== ECharts 风险趋势（可切换 3 天 / 7 天） =====
+// ===== 地块风险指数表（数值化，level 保留给原图表使用）=====
+// 风险等级由 riskIndex 推导：≥70 高 / 40-69 中 / <40 低
+function riskLevelOf(index) {
+  if (index >= 70) return { key: 'high', text: '高风险' };
+  if (index >= 40) return { key: 'mid', text: '中风险' };
+  return { key: 'low', text: '低风险' };
+}
+
+function renderRiskTable() {
+  const tbody = document.getElementById('riskTableBody');
+  if (!tbody) return;
+  const rows = window.PEST_PLOTS || [];
+  tbody.innerHTML = rows.map(p => {
+    const idx = Math.max(0, Math.min(100, Number(p.riskIndex) || 0));
+    const lv = riskLevelOf(idx);
+    return `<tr>
+      <td><strong>${p.id}</strong></td>
+      <td>${p.name}</td>
+      <td>${p.variety}</td>
+      <td>${p.pest || '无'}</td>
+      <td>
+        <div class="risk-cell">
+          <div class="risk-track"><i class="${lv.key}" style="width:${idx}%"></i></div>
+          <span class="risk-num ${lv.key}">${idx}</span>
+        </div>
+      </td>
+      <td><span class="risk-level ${lv.key}">${lv.text}</span></td>
+      <td>${p.manager || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  // 统计卡按 riskIndex 动态计算
+  const counts = { high: 0, mid: 0, low: 0 };
+  rows.forEach(p => { counts[riskLevelOf(Number(p.riskIndex) || 0).key]++; });
+  const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setText('statHighRisk', counts.high);
+  setText('statMidRisk', counts.mid);
+  setText('statLowRisk', counts.low);
+}
+
+// ===== ECharts 风险趋势（可切换 3 天 / 7 天）=====
 document.addEventListener('DOMContentLoaded', function() {
+  renderRiskTable();
+
   const dataMap = {
     3: { categories: ['今天', '明天', '后天'], series: [{ name: '综合风险指数', data: [68, 35, 22], color: '#ff4d4f', area: true }] },
     7: { categories: ['今天', '明天', '周四', '周五', '周六', '周日', '下周一'], series: [{ name: '综合风险指数', data: [68, 35, 22, 25, 12, 18, 30], color: '#ff4d4f', area: true }] }

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 溯源统计</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 统计卡 */
+  .stat-card-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-xl);
+    transition: box-shadow var(--transition-normal);
+  }
+  .stat-card:hover { box-shadow: var(--shadow-md); }
+  .stat-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; }
+  .stat-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-value .unit { font-size: 13px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; }
+  .stat-sub { margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
+  .stat-sub.up { color: var(--success); }
+  .stat-sub.down { color: var(--error); }
+
+  /* 三图区 */
+  .chart-grid-3 {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+  }
+  @media (max-width: 1280px) { .chart-grid-3 { grid-template-columns: 1fr; } }
+
+  /* 两栏区 */
+  .duo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+    align-items: start;
+  }
+  @media (max-width: 1280px) { .duo-grid { grid-template-columns: 1fr; } }
+
+  .data-table { min-width: 560px; }
+  .empty-row td { text-align: center; color: var(--text-tertiary); padding: 40px 0; }
+
+  /* 省份扫码 TOP 进度条 */
+  .prov-row { padding: 10px 0; border-bottom: 1px dashed var(--border-light); }
+  .prov-row:last-child { border-bottom: none; }
+  .prov-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .prov-name { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+  .prov-val { font-size: 12.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+  .prov-val strong { color: var(--text-primary); font-size: 13px; }
+  .prov-bar { height: 8px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
+  .prov-bar-fill { height: 100%; border-radius: 4px; background: var(--primary-500); transition: width 0.5s ease; }
+
+  /* 区块链存证 */
+  .chain-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 1024px) { .chain-metrics { grid-template-columns: repeat(2, 1fr); } }
+  .chain-metric { padding: 12px 14px; background: var(--gray-50); border-radius: var(--radius-md); border: 1px solid var(--border-light); }
+  .chain-metric-label { font-size: 12px; color: var(--text-tertiary); margin-bottom: 4px; }
+  .chain-metric-value { font-size: 18px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .chain-metric-value .unit { font-size: 12px; font-weight: 500; color: var(--text-tertiary); margin-left: 3px; }
+
+  .block-list { list-style: none; }
+  .block-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-bottom: 1px solid var(--border-light);
+  }
+  .block-item:last-child { border-bottom: none; }
+  .block-height {
+    flex: none; min-width: 88px;
+    font-size: 13px; font-weight: 600; color: var(--primary-600);
+    font-variant-numeric: tabular-nums;
+  }
+  .block-hash {
+    flex: 1; min-width: 0;
+    font-size: 12.5px; color: var(--text-secondary);
+    font-family: 'SF Mono', 'Cascadia Code', 'Menlo', monospace;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .block-time { flex: none; font-size: 12.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+
+  /* 批次流向 */
+  .flow-track { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 1280px) { .flow-track { grid-template-columns: 1fr; } }
+  .flow-stage { padding: 14px; border: 1px solid var(--border-light); border-radius: var(--radius-md); background: var(--gray-50); }
+  .flow-stage-title {
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+    margin-bottom: 10px; padding-bottom: 8px;
+    border-bottom: 1px dashed var(--border-light);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .flow-stage-total { font-size: 15px; font-weight: 700; color: var(--primary-600); font-variant-numeric: tabular-nums; }
+  .flow-item { margin-bottom: 10px; }
+  .flow-item:last-child { margin-bottom: 0; }
+  .flow-item-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
+  .flow-item-name { color: var(--text-secondary); }
+  .flow-item-val { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .flow-bar { height: 6px; background: var(--border-light); border-radius: 3px; overflow: hidden; }
+  .flow-bar-fill { height: 100%; background: var(--primary-500); border-radius: 3px; transition: width 0.5s ease; }
+  .flow-summary {
+    display: flex; gap: 24px; flex-wrap: wrap;
+    padding-top: 12px; border-top: 1px solid var(--border-light);
+  }
+  .flow-summary-item { display: flex; flex-direction: column; gap: 2px; }
+  .flow-summary-label { font-size: 12px; color: var(--text-tertiary); }
+  .flow-summary-value { font-size: 16px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+  .flow-summary-value .unit { font-size: 12px; font-weight: 500; color: var(--text-tertiary); margin-left: 2px; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="溯源管理" data-active-submenu="溯源统计">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 第一排统计卡 -->
+        <div class="stat-card-row" id="statRow1"></div>
+        <!-- 第二排统计卡 -->
+        <div class="stat-card-row" id="statRow2"></div>
+
+        <!-- 扫码趋势 + 渠道占比 + 追溯码状态 -->
+        <div class="chart-grid-3">
+          <div class="chart-section">
+            <h2 class="section-title">近 7 日扫码趋势（次）</h2>
+            <div id="chart-scan-trend" style="height:300px;"></div>
+          </div>
+          <div class="chart-section">
+            <h2 class="section-title">扫码来源渠道占比</h2>
+            <div id="chart-channel" style="height:300px;"></div>
+          </div>
+          <div class="chart-section">
+            <h2 class="section-title">追溯码状态分布</h2>
+            <div id="chart-code-status" style="height:300px;"></div>
+          </div>
+        </div>
+
+        <!-- 省份 TOP12 + 区块链存证 -->
+        <div class="duo-grid">
+          <div class="data-section" style="padding:24px;">
+            <h2 class="section-title">省份扫码 TOP 12（近 30 日）</h2>
+            <div id="provList"></div>
+          </div>
+
+          <div class="data-section" style="padding:24px;">
+            <h2 class="section-title">区块链存证</h2>
+            <div class="chain-metrics" id="chainMetrics"></div>
+            <ul class="block-list" id="blockList"></ul>
+          </div>
+        </div>
+
+        <!-- 认证证书批次覆盖 -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>证书名称</th>
+                  <th>证书编号</th>
+                  <th>覆盖批次</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="certBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 批次流向 -->
+        <div class="chart-section">
+          <h2 class="section-title">批次流向：基地 → 采收 → 包装 → 渠道 → 消费者</h2>
+          <div class="flow-track" id="flowTrack"></div>
+          <div class="flow-summary" id="flowSummary"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/page-actions.js"></script>
+<script src="js/components/chart.js"></script>
+<script src="js/shared/trace-stat-store.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  function fmt(n){
+    n = Number(n) || 0;
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  function esc(v){
+    return String(v === undefined || v === null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  var els = {
+    row1       : document.getElementById('statRow1'),
+    row2       : document.getElementById('statRow2'),
+    provList   : document.getElementById('provList'),
+    chainMetrics : document.getElementById('chainMetrics'),
+    blockList  : document.getElementById('blockList'),
+    certBody   : document.getElementById('certBody'),
+    flowTrack  : document.getElementById('flowTrack'),
+    flowSummary: document.getElementById('flowSummary')
+  };
+
+  // 共识算法未由 TraceStatStore.overview() 暴露，此处按链默认共识显示
+  var CHAIN_CONSENSUS = 'Raft';
+
+  function cardHtml(label, value, unit, sub, subCls){
+    return '<div class="stat-card">' +
+      '<div class="stat-label">' + esc(label) + '</div>' +
+      '<div class="stat-value">' + value + (unit ? '<span class="unit">' + esc(unit) + '</span>' : '') + '</div>' +
+      '<div class="stat-sub ' + (subCls || '') + '">' + sub + '</div>' +
+    '</div>';
+  }
+
+  function renderStats(){
+    var o = TraceStatStore.overview();
+    var dod = Number(o.dod) || 0;
+    var dodCls = dod >= 0 ? 'up' : 'down';
+    var dodTxt = '环比 ' + (dod >= 0 ? '+' : '') + fmt(dod) + '%';
+
+    els.row1.innerHTML =
+      cardHtml('累计上链批次', fmt(o.totalBatches), '批', '覆盖 ' + fmt(o.totalIssued) + ' 个追溯码') +
+      cardHtml('激活追溯码',   fmt(o.activated), '个', '激活率 ' + fmt(o.activateRate) + '%') +
+      cardHtml('今日扫码量',   fmt(o.todayScan), '次', esc(dodTxt), dodCls) +
+      cardHtml('扫码覆盖省份', fmt(o.provinceTotal), '个', '全国省区覆盖情况');
+
+    els.row2.innerHTML =
+      cardHtml('批次合格率',     fmt(o.passRate), '%', '批次抽检合格占比') +
+      cardHtml('平均查询响应',   fmt(o.avgResponse), 's', '消费者扫码查询平均耗时') +
+      cardHtml('溯源覆盖率',     fmt(o.traceCoverage), '%', '可追溯批次数占比') +
+      cardHtml('消费者满意度',   fmt(o.satisfaction), '/5', '扫码后评价均分');
+  }
+
+  function renderCharts(){
+    var trend = TraceStatStore.scanTrend();
+    Chart.line('#chart-scan-trend', {
+      categories: trend.map(function(x){ return x.date; }),
+      series: [{
+        name: '扫码量（次）',
+        data: trend.map(function(x){ return x.value; }),
+        color: '#1890ff',
+        area: true
+      }]
+    });
+
+    var channels = TraceStatStore.channels();
+    Chart.pie('#chart-channel', {
+      series: channels.map(function(x, i){
+        return { name: x.name, value: x.value, color: ['#1890ff', '#52c41a', '#ff6b35', '#722ed1'][i % 4] };
+      })
+    });
+
+    var codeStatus = TraceStatStore.codeStatus();
+    Chart.donut('#chart-code-status', {
+      series: codeStatus.map(function(x, i){
+        return { name: x.name, value: x.value, color: ['#52c41a', '#40a9ff', '#faad14', '#ff4d4f'][i % 4] };
+      })
+    });
+  }
+
+  function renderProvinces(){
+    var list = TraceStatStore.provinces().slice().sort(function(a, b){
+      return (b.value || 0) - (a.value || 0);
+    }).slice(0, 12);
+
+    if (!list.length){
+      els.provList.innerHTML = '<div class="empty-state"><div class="empty-text">暂无省份扫码数据</div></div>';
+      return;
+    }
+
+    var max = list[0].value || 1;
+    els.provList.innerHTML = list.map(function(x){
+      var width = Math.max(3, Math.round((x.value / max) * 1000) / 10);
+      return '<div class="prov-row">' +
+        '<div class="prov-head">' +
+          '<span class="prov-name">' + esc(x.name) + '</span>' +
+          '<span class="prov-val"><strong>' + fmt(x.value) + '</strong> 次</span>' +
+        '</div>' +
+        '<div class="prov-bar"><div class="prov-bar-fill" style="width:' + width + '%;"></div></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderChain(){
+    var o = TraceStatStore.overview();
+    var blocks = TraceStatStore.chainBlocks();
+
+    els.chainMetrics.innerHTML =
+      '<div class="chain-metric"><div class="chain-metric-label">当前区块高度</div>' +
+        '<div class="chain-metric-value">' + fmt(o.chainHeight) + '</div></div>' +
+      '<div class="chain-metric"><div class="chain-metric-label">共识算法</div>' +
+        '<div class="chain-metric-value">' + esc(CHAIN_CONSENSUS) + '</div></div>' +
+      '<div class="chain-metric"><div class="chain-metric-label">共识节点数</div>' +
+        '<div class="chain-metric-value">' + fmt(o.chainNodes) + '<span class="unit">个</span></div></div>' +
+      '<div class="chain-metric"><div class="chain-metric-label">上链成功率</div>' +
+        '<div class="chain-metric-value">' + fmt(o.chainSuccessRate) + '<span class="unit">%</span></div></div>';
+
+    if (!blocks.length){
+      els.blockList.innerHTML = '<li class="block-item"><span class="block-hash">暂无区块数据</span></li>';
+      return;
+    }
+
+    els.blockList.innerHTML = blocks.slice(0, 5).map(function(b){
+      return '<li class="block-item">' +
+        '<span class="block-height">#' + fmt(b.height) + '</span>' +
+        '<span class="block-hash" title="' + esc(b.hash) + '">' + esc(b.hash) + '</span>' +
+        '<span class="block-time">' + esc(b.time) + '</span>' +
+      '</li>';
+    }).join('');
+  }
+
+  function renderCerts(){
+    var list = TraceStatStore.certificates();
+    if (!list.length){
+      els.certBody.innerHTML = '<tr class="empty-row"><td colspan="4">暂无认证证书数据</td></tr>';
+      return;
+    }
+    els.certBody.innerHTML = list.map(function(x){
+      var valid = x.valid === '有效';
+      return '<tr>' +
+        '<td><strong>' + esc(x.name) + '</strong></td>' +
+        '<td>' + esc(x.code) + '</td>' +
+        '<td class="num">' + fmt(x.batches) + ' 批</td>' +
+        '<td><span class="status-tag ' + (valid ? 'enabled' : 'disabled') + '">' + esc(x.valid) + '</span></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderFlow(){
+    var flow = TraceStatStore.flow();
+    if (!flow){
+      els.flowTrack.innerHTML = '<div class="empty-state"><div class="empty-text">暂无流向数据</div></div>';
+      els.flowSummary.innerHTML = '';
+      return;
+    }
+
+    var stages = [
+      { key: 'base',     title: '基地' },
+      { key: 'harvest',  title: '采收' },
+      { key: 'package',  title: '包装' },
+      { key: 'channel',  title: '渠道' },
+      { key: 'consumer', title: '消费者' }
+    ];
+
+    els.flowTrack.innerHTML = stages.map(function(st){
+      var items = flow[st.key] || [];
+      var total = items.reduce(function(sum, x){ return sum + (x.value || 0); }, 0);
+      var max = total || 1;
+      var body = items.length
+        ? items.map(function(x){
+            var width = Math.max(3, Math.round((x.value / max) * 1000) / 10);
+            return '<div class="flow-item">' +
+              '<div class="flow-item-head">' +
+                '<span class="flow-item-name">' + esc(x.name) + '</span>' +
+                '<span class="flow-item-val">' + fmt(x.value) + '</span>' +
+              '</div>' +
+              '<div class="flow-bar"><div class="flow-bar-fill" style="width:' + width + '%;"></div></div>' +
+            '</div>';
+          }).join('')
+        : '<div class="flow-item"><span class="flow-item-name">暂无数据</span></div>';
+
+      return '<div class="flow-stage">' +
+        '<div class="flow-stage-title">' + esc(st.title) +
+          '<span class="flow-stage-total" style="margin-left:auto;">' + fmt(total) + ' 批</span>' +
+        '</div>' + body +
+      '</div>';
+    }).join('');
+
+    els.flowSummary.innerHTML =
+      '<div class="flow-summary-item"><span class="flow-summary-label">本周新增批次</span>' +
+        '<span class="flow-summary-value">' + fmt(flow.thisWeek) + '<span class="unit">批</span></span></div>' +
+      '<div class="flow-summary-item"><span class="flow-summary-label">流向渠道数</span>' +
+        '<span class="flow-summary-value">' + fmt(flow.channelCount) + '<span class="unit">个</span></span></div>' +
+      '<div class="flow-summary-item"><span class="flow-summary-label">平均流通时长</span>' +
+        '<span class="flow-summary-value">' + fmt(flow.avgDuration) + '<span class="unit">天</span></span></div>';
+  }
+
+  function renderAll(){
+    renderStats();
+    renderCharts();
+    renderProvinces();
+    renderChain();
+    renderCerts();
+    renderFlow();
+  }
+
+  TraceStatStore.subscribe(function(){
+    renderAll();
+  });
+})();
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

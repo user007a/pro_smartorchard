@@ -92,68 +92,8 @@
 <body>
   <div class="mb-app">
 
-    <!-- 购物车列表 -->
-    <div class="cart-list">
-      <div class="cart-item" data-id="redFuji">
-        <input type="checkbox" class="cart-checkbox" checked>
-        <div class="cart-img"><img src="images/thumb_apple5kg.jpg" alt="花牛苹果"></div>
-        <div class="cart-info">
-          <div>
-            <div class="cart-name">花牛苹果 5斤装</div>
-            <div class="cart-spec">脆甜多汁 · 新鲜采摘</div>
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="cart-price">¥68</span>
-            <div class="cart-quantity">
-              <button class="qty-btn" onclick="changeQuantity('redFuji', -1)">−</button>
-              <span class="qty-value">1</span>
-              <button class="qty-btn" onclick="changeQuantity('redFuji', 1)">+</button>
-            </div>
-          </div>
-        </div>
-        <button class="cart-delete" onclick="removeItem('redFuji')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-      </div>
-
-      <div class="cart-item" data-id="giftBox">
-        <input type="checkbox" class="cart-checkbox" checked>
-        <div class="cart-img"><img src="images/thumb_giftbox.jpg" alt="精品礼盒"></div>
-        <div class="cart-info">
-          <div>
-            <div class="cart-name">精品礼盒装 8斤</div>
-            <div class="cart-spec">送礼佳品 · 品质保证</div>
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="cart-price">¥168</span>
-            <div class="cart-quantity">
-              <button class="qty-btn" onclick="changeQuantity('giftBox', -1)">−</button>
-              <span class="qty-value">1</span>
-              <button class="qty-btn" onclick="changeQuantity('giftBox', 1)">+</button>
-            </div>
-          </div>
-        </div>
-        <button class="cart-delete" onclick="removeItem('giftBox')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-      </div>
-
-      <div class="cart-item" data-id="gala">
-        <input type="checkbox" class="cart-checkbox">
-        <div class="cart-img"><img src="images/thumb_yellow_red.jpg" alt="花牛苹果"></div>
-        <div class="cart-info">
-          <div>
-            <div class="cart-name">花牛苹果 5斤装</div>
-            <div class="cart-spec">酸甜可口 · 皮薄肉嫩</div>
-          </div>
-          <div class="flex justify-between items-center">
-            <span class="cart-price">¥58</span>
-            <div class="cart-quantity">
-              <button class="qty-btn" onclick="changeQuantity('gala', -1)">−</button>
-              <span class="qty-value">2</span>
-              <button class="qty-btn" onclick="changeQuantity('gala', 1)">+</button>
-            </div>
-          </div>
-        </div>
-        <button class="cart-delete" onclick="removeItem('gala')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-      </div>
-    </div>
+    <!-- 购物车列表（由 localStorage['h5_cart'] 渲染） -->
+    <div class="cart-list" id="cartList"></div>
 
     <!-- 底部操作栏 -->
     <div class="footer-bar">
@@ -161,10 +101,10 @@
       <span class="footer-text" onclick="toggleSelectAll(document.querySelector('.footer-checkbox'))">全选</span>
       <div class="footer-price">
         <div class="price-label">合计（含优惠）</div>
-        <div class="price-value" id="totalPrice">¥236</div>
+        <div class="price-value" id="totalPrice">¥0</div>
         <div class="price-discount" id="discountInfo" style="font-size:11px;color:#999;"></div>
       </div>
-      <button class="mb-btn mb-btn-primary mb-btn-lg" onclick="checkout()" id="checkoutBtn">结算(2)</button>
+      <button class="mb-btn mb-btn-primary mb-btn-lg" onclick="checkout()" id="checkoutBtn">结算(0)</button>
     </div>
 
     <!-- 优惠券/积分选择弹窗（H5-B-003） -->
@@ -186,162 +126,211 @@
     </nav>
   </div>
 
+  <script src="js/mall-coupons.js"></script>
   <script>
-    // 购物车数据
-    var cartData = {
-      redFuji: { price: 68, quantity: 1 },
-      giftBox: { price: 168, quantity: 1 },
-      gala: { price: 58, quantity: 2 }
-    };
+    var CART_KEY = 'h5_cart';
+    var selectedCoupon = null; // { name, type:'cash'|'percent', value, min, pointsUsed }
+
+    /* ---------- 数据层：与商城/结算页共用 localStorage['h5_cart'] ---------- */
+    function readCart() {
+      try { var v = JSON.parse(localStorage.getItem(CART_KEY) || '[]'); return Array.isArray(v) ? v : []; }
+      catch (e) { return []; }
+    }
+    function writeCart(list) { localStorage.setItem(CART_KEY, JSON.stringify(list)); }
+
+    var CART_SPEC = { redFuji: '5斤装', gala: '5斤装', giftBox: '8斤装' };
 
     function navigateTo(page) { window.location.href = page; }
-    function checkout() { window.location.href = 'h5_checkout.html'; }
-    function clearCart() { showToast('购物车已清空'); }
-
-    // 数量调整
-    function changeQuantity(itemId, delta) {
-      var item = cartData[itemId];
-      if (!item) return;
-      
-      item.quantity = Math.max(1, item.quantity + delta);
-      
-      // 更新显示
-      var cartItem = document.querySelector('.cart-item[data-id="' + itemId + '"]');
-      if (cartItem) {
-        var qtyElement = cartItem.querySelector('.qty-value');
-        if (qtyElement) {
-          qtyElement.textContent = item.quantity;
-        }
-      }
-      
-      updateTotal();
+    function checkout() {
+      var n = selectedCount();
+      if (!n) { showToast('请先选择要结算的商品'); return; }
+      var list = readCart();
+      // 同步勾选状态，供结算页只结算已选商品
+      list.forEach(function(i) {
+        i.checked = !!document.querySelector('.cart-item[data-id="' + i.id + '"] .cart-checkbox:checked');
+      });
+      writeCart(list);
+      window.location.href = 'h5_checkout.html';
     }
+    function clearCart() { writeCart([]); renderCart(); showToast('购物车已清空'); }
 
-    // 删除商品
-    function removeItem(itemId) {
-      if (confirm('确定要删除该商品吗？')) {
-        var cartItem = document.querySelector('.cart-item[data-id="' + itemId + '"]');
-        if (cartItem) {
-          cartItem.remove();
-          delete cartData[itemId];
+    /* ---------- 渲染 ---------- */
+    function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+    function renderCart() {
+      var list = readCart();
+      var box = document.getElementById('cartList');
+      if (!box) return;
+      if (!list.length) {
+        box.innerHTML = '<div class="empty-state" style="padding:48px 24px;text-align:center;color:var(--text-secondary);">' +
+          '<div style="font-size:40px;margin-bottom:12px;">🛒</div>' +
+          '<div style="font-size:15px;margin-bottom:16px;">购物车还是空的</div>' +
+          '<button class="mb-btn mb-btn-primary" onclick="navigateTo(\'h5_store.html\')">去商城逛逛</button></div>';
+        updateTotal();
+        return;
+      }
+      box.innerHTML = list.map(function(i) {
+        var id = esc(i.id);
+        var qty = Number(i.qty) || 1;
+        var price = Number(i.price) || 0;
+        var img = i.img || 'images/thumb_redfuji.jpg';
+        return '<div class="cart-item" data-id="' + id + '">' +
+          '<input type="checkbox" class="cart-checkbox"' + (i.checked !== false ? ' checked' : '') + '>' +
+          '<div class="cart-img"><img src="' + esc(img) + '" alt="" onerror="this.src=\'images/thumb_redfuji.jpg\'"></div>' +
+          '<div class="cart-info">' +
+            '<div>' +
+              '<div class="cart-name">' + esc(i.name || '商品') + '</div>' +
+              '<div class="cart-spec">' + esc(i.spec || CART_SPEC[i.id] || '标准装') + '</div>' +
+            '</div>' +
+            '<div class="flex justify-between items-center">' +
+              '<span class="cart-price">¥' + price + '</span>' +
+              '<div class="cart-quantity">' +
+                '<button class="qty-btn" onclick="changeQuantity(\'' + id + '\',-1)">−</button>' +
+                '<span class="qty-value">' + qty + '</span>' +
+                '<button class="qty-btn" onclick="changeQuantity(\'' + id + '\',1)">+</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<button class="cart-delete" onclick="removeItem(\'' + id + '\')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+        '</div>';
+      }).join('');
+
+      document.querySelectorAll('.cart-checkbox').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+          persistChecked();
           updateTotal();
-          showToast('已删除');
-        }
-      }
+          syncFooterCheckbox();
+        });
+      });
+      updateTotal();
+      syncFooterCheckbox();
     }
 
-    // 全选/取消全选
-    function toggleSelectAll(checkbox) {
-      var checkboxes = document.querySelectorAll('.cart-checkbox');
-      checkboxes.forEach(function(cb) {
-        cb.checked = checkbox.checked;
-        cb.dispatchEvent(new Event('change'));
+    function persistChecked() {
+      var list = readCart();
+      list.forEach(function(i) {
+        var cb = document.querySelector('.cart-item[data-id="' + i.id + '"] .cart-checkbox');
+        if (cb) i.checked = cb.checked;
       });
+      writeCart(list);
+    }
+
+    /* ---------- 数量 / 删除 / 全选 ---------- */
+    function changeQuantity(itemId, delta) {
+      var list = readCart();
+      var hit = null;
+      for (var i = 0; i < list.length; i++) { if (list[i].id === itemId) { hit = list[i]; break; } }
+      if (!hit) return;
+      hit.qty = Math.max(1, (Number(hit.qty) || 1) + delta);
+      writeCart(list);
+      var qtyEl = document.querySelector('.cart-item[data-id="' + itemId + '"] .qty-value');
+      if (qtyEl) qtyEl.textContent = hit.qty;
       updateTotal();
     }
 
-    // 更新总价和结算数量
-    function updateTotal() {
-      var checkboxes = document.querySelectorAll('.cart-checkbox');
-      var totalPrice = 0;
-      var selectedCount = 0;
+    function removeItem(itemId) {
+      if (!confirm('确定要删除该商品吗？')) return;
+      var list = readCart().filter(function(i) { return i.id !== itemId; });
+      writeCart(list);
+      renderCart();
+      showToast('已删除');
+    }
 
-      checkboxes.forEach(function(cb) {
-        var cartItem = cb.closest('.cart-item');
-        var itemId = cartItem.getAttribute('data-id');
-        var item = cartData[itemId];
-        
-        if (item && cb.checked) {
-          totalPrice += item.price * item.quantity;
-          selectedCount++;
-        }
+    function toggleSelectAll(checkbox) {
+      document.querySelectorAll('.cart-checkbox').forEach(function(cb) { cb.checked = checkbox.checked; });
+      persistChecked();
+      updateTotal();
+    }
+
+    function syncFooterCheckbox() {
+      var all = document.querySelectorAll('.cart-checkbox');
+      var checked = document.querySelectorAll('.cart-checkbox:checked');
+      var f = document.querySelector('.footer-checkbox');
+      if (f) f.checked = all.length > 0 && all.length === checked.length;
+    }
+
+    /* ---------- 金额计算 ---------- */
+    function selectedItems() {
+      return readCart().filter(function(i) {
+        var cb = document.querySelector('.cart-item[data-id="' + i.id + '"] .cart-checkbox');
+        return cb ? cb.checked : i.checked !== false;
       });
+    }
+    function selectedCount() { return selectedItems().length; }
+    function subtotal() {
+      return selectedItems().reduce(function(s, i) { return s + (Number(i.price) || 0) * (Number(i.qty) || 1); }, 0);
+    }
 
-      // 更新显示
+    function updateTotal() {
+      var total = subtotal();
+      var discount = calcDiscount(total);
       var totalElement = document.getElementById('totalPrice');
       var checkoutBtn = document.getElementById('checkoutBtn');
-      
-      if (totalElement) {
-        totalElement.textContent = '¥' + totalPrice;
-      }
-      
-      if (checkoutBtn) {
-        checkoutBtn.textContent = '结算(' + selectedCount + ')';
-      }
+      var info = document.getElementById('discountInfo');
+      if (totalElement) totalElement.textContent = '¥' + Math.max(0, total - discount);
+      if (checkoutBtn) checkoutBtn.textContent = '结算(' + selectedCount() + ')';
+      if (info) info.textContent = discount > 0 ? '已优惠 ¥' + discount : '';
+      var label = document.querySelector('.footer-bar .price-label');
+      if (label) label.textContent = discount > 0 ? '合计（已优惠 ¥' + discount + '）' : '合计（含优惠）';
     }
 
-    // 单个商品选中状态变化
-    document.querySelectorAll('.cart-checkbox').forEach(function(cb) {
-      cb.addEventListener('change', function() {
-        updateTotal();
-        // 更新全选框状态
-        var allChecked = document.querySelectorAll('.cart-checkbox').length === 
-                        document.querySelectorAll('.cart-checkbox:checked').length;
-        var footerCheckbox = document.querySelector('.footer-checkbox');
-        if (footerCheckbox) {
-          footerCheckbox.checked = allChecked;
-        }
-      });
-    });
+    /* 优惠券规则来源：后台「商城管理 / 优惠券管理」维护的 mall_coupons
+       （由 js/mall-coupons.js 提供，与结算页 h5_checkout.html 共用同一份配置） */
+    var COUPONS = MallCoupons.all();
+    function calcDiscount(total) {
+      var d = 0;
+      var code = MallCoupons.selected();
+      var c = selectedCoupon || MallCoupons.get(code);
+      if (c && total >= (c.min || 0)) {
+        d += c.type === 'cash' ? c.value : Math.round(total * (1 - c.value / 10));
+      }
+      if (c && c.pointsUsed) d += Math.floor(c.pointsUsed / 100);
+      return Math.min(Math.max(0, d), total);
+    }
 
-    // 优惠券/积分弹窗（H5-B-003）
-var selectedCoupon = null; // { name, type:'cash'|'percent', value, min }
-function openCouponModal() {
-  var list = [
-    { name: '满100减10', type: 'cash', value: 10, min: 100 },
-    { name: '满200减30', type: 'cash', value: 30, min: 200 },
-    { name: '9折优惠券', type: 'percent', value: 9, min: 0 }
-  ];
-  var html = list.map(function(c, i){
-    return '<div onclick="selectCoupon(' + i + ')" style="border:1px dashed #d4af37;border-radius:8px;padding:12px;margin:8px 0;cursor:pointer;background:linear-gradient(135deg,#fef9e7,#fff8dc);">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-      '<div><div style="font-weight:600;color:#8b4513;">' + c.name + '</div>' +
-      '<div style="font-size:11px;color:#8b7355;">满 ' + c.min + ' 元可用</div></div>' +
-      '<div style="color:#ea580c;font-weight:700;">' + (c.type === 'cash' ? '¥' + c.value : c.value + '折') + '</div>' +
-      '</div></div>';
-  }).join('');
-  html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee;">' +
-    '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">可用积分 <b id="userPoints">0</b>（100积分=¥1）</div>' +
-    '<input type="number" id="usePoints" placeholder="使用积分" min="0" style="width:100%;padding:8px;border:1px solid #eee;border-radius:6px;">' +
-    '<button onclick="applyPoints()" style="margin-top:8px;width:100%;background:var(--primary);color:#fff;border:none;padding:8px;border-radius:6px;">应用积分抵扣</button>' +
-    '</div>';
-  document.getElementById('couponList').innerHTML = html;
-  var pts = JSON.parse(localStorage.getItem('h5_points') || '[]').reduce(function(s,p){ return s + (p.amount || 0); }, 0);
-  var el = document.getElementById('userPoints'); if (el) el.textContent = pts;
-  document.getElementById('couponModal').style.display = 'flex';
-}
-function closeCouponModal() { document.getElementById('couponModal').style.display = 'none'; }
-function selectCoupon(i) {
-  var list = [{name:'满100减10',type:'cash',value:10,min:100},{name:'满200减30',type:'cash',value:30,min:200},{name:'9折优惠券',type:'percent',value:9,min:0}];
-  selectedCoupon = list[i];
-  closeCouponModal();
-  recomputeCartTotal();
-  showToast('已选用：' + selectedCoupon.name);
-}
-function applyPoints() {
-  var pts = parseInt(document.getElementById('usePoints').value) || 0;
-  if (pts <= 0) { showToast('请填写积分数量'); return; }
-  selectedCoupon = selectedCoupon || {};
-  selectedCoupon.pointsUsed = pts;
-  closeCouponModal();
-  recomputeCartTotal();
-}
-function recomputeCartTotal() {
-  var totalEl = document.getElementById('totalPrice');
-  var info = document.getElementById('discountInfo');
-  var subtotal = 236;
-  var discount = 0;
-  if (selectedCoupon) {
-    if (selectedCoupon.type === 'cash') discount = selectedCoupon.value;
-    else if (selectedCoupon.type === 'percent') discount = Math.round(subtotal * (1 - selectedCoupon.value / 10));
-  }
-  if (selectedCoupon && selectedCoupon.pointsUsed) discount += Math.floor(selectedCoupon.pointsUsed / 100);
-  var final = Math.max(0, subtotal - discount);
-  totalEl.textContent = '¥' + final;
-  if (info) info.textContent = discount > 0 ? '已优惠 ¥' + discount : '';
-}
+    // 优惠券/积分弹窗
+    function openCouponModal() {
+      COUPONS = MallCoupons.all();
+      var html = COUPONS.map(function(c, i) {
+        return '<div onclick="selectCoupon(' + i + ')" style="border:1px dashed #d4af37;border-radius:8px;padding:12px;margin:8px 0;cursor:pointer;background:linear-gradient(135deg,#fef9e7,#fff8dc);">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+          '<div><div style="font-weight:600;color:#8b4513;">' + c.name + '</div>' +
+          '<div style="font-size:11px;color:#8b7355;">' + (Number(c.min) > 0 ? '满 ' + c.min + ' 元可用' : '无门槛') + '</div></div>' +
+          '<div style="color:#ea580c;font-weight:700;">' + (c.type === 'cash' ? '¥' + c.value : c.value + '折') + '</div>' +
+          '</div></div>';
+      }).join('');
+      html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee;">' +
+        '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">可用积分 <b id="userPoints">0</b>（100积分=¥1）</div>' +
+        '<input type="number" id="usePoints" placeholder="使用积分" min="0" style="width:100%;padding:8px;border:1px solid #eee;border-radius:6px;">' +
+        '<button onclick="applyPoints()" style="margin-top:8px;width:100%;background:var(--primary);color:#fff;border:none;padding:8px;border-radius:6px;">应用积分抵扣</button>' +
+        '</div>';
+      document.getElementById('couponList').innerHTML = html;
+      var pts = 0;
+      try { pts = JSON.parse(localStorage.getItem('h5_points') || '[]').reduce(function(s, p) { return s + (p.amount || 0); }, 0); } catch (e) {}
+      var el = document.getElementById('userPoints'); if (el) el.textContent = pts;
+      document.getElementById('couponModal').style.display = 'flex';
+    }
+    function closeCouponModal() { document.getElementById('couponModal').style.display = 'none'; }
+    function selectCoupon(i) {
+      selectedCoupon = COUPONS[i];
+      // 同步给结算页，避免两页优惠口径不一致
+      MallCoupons.select(selectedCoupon.code);
+      closeCouponModal();
+      updateTotal();
+      showToast('已选用：' + selectedCoupon.name);
+    }
+    function applyPoints() {
+      var pts = parseInt(document.getElementById('usePoints').value) || 0;
+      if (pts <= 0) { showToast('请填写积分数量'); return; }
+      selectedCoupon = selectedCoupon || {};
+      selectedCoupon.pointsUsed = pts;
+      closeCouponModal();
+      updateTotal();
+    }
 
-function showToast(message) {
+    renderCart();
+
+    function showToast(message) {
       var toast = document.createElement('div');
       toast.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.7);color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;z-index:999;animation:fadeInOut 2s ease;';
       toast.textContent = message;

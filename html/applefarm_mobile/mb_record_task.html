@@ -839,6 +839,89 @@
       document.getElementById('confirmTask').textContent = type;
     }
 
+    /* ---------- 农事类型九宫格：由后台字典（smartorchard_data_dict）动态渲染 ---------- */
+    // 与后台 system_settings.html 共享的数据字典 key
+    var DICT_STORAGE_KEY = 'smartorchard_data_dict';
+    var TASK_TYPE_SVG_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+    // 类型名 → { color, svg }：保留原有 9 项的图标与配色
+    var TASK_TYPE_ICON_MAP = {
+      '疏果': { color: 'green', svg: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="12" r="3"/>' },
+      '套袋': { color: 'orange', svg: '<path d="M12 2L2 7l10 5 10-5z"/><rect x="2" y="7" width="20" height="15" rx="2"/>' },
+      '喷药': { color: 'red', svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
+      '灌溉': { color: 'blue', svg: '<path d="M12 2l-5.5 9 1.8 0 0 5.5 7.4 0 0-5.5 1.8 0z"/><circle cx="12" cy="7" r="2"/>' },
+      '施肥': { color: 'purple', svg: '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M12 6v8"/><path d="M8 6h8"/>' },
+      '修剪': { color: 'cyan', svg: '<path d="M14.12 14.12l4.24-4.24a2.5 2.5 0 0 0-3.54-3.54l-4.24 4.24"/><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' },
+      '环剥': { color: 'green', svg: '<circle cx="12" cy="12" r="8"/><path d="M12 4v3"/><path d="M12 17v3"/>' },
+      '除草': { color: 'red', svg: '<path d="M7 21h10"/><path d="M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9z"/>' },
+      '授粉': { color: 'orange', svg: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/><path d="M4.22 4.22l2.12 2.12"/><path d="M17.66 17.66l2.12 2.12"/><path d="M4.22 19.78l2.12-2.12"/><path d="M17.66 6.34l2.12-2.12"/>' }
+    };
+    // 字典中新增 / 未知类型：默认图标 + 默认配色，保证不空白、不报错
+    var DEFAULT_TASK_TYPE_ICON = { color: 'green', svg: '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/>' };
+
+    // 从共享字典读取 FARMING_TYPE 并拆成类型清单；读不到返回 null
+    function getFarmingTypes() {
+      var raw = null;
+      try { raw = localStorage.getItem(DICT_STORAGE_KEY); } catch (e) { raw = null; }
+      if (!raw) return null;
+      var arr = null;
+      try { arr = JSON.parse(raw); } catch (e) { return null; }
+      if (!arr || !arr.length) return null;
+      for (var i = 0; i < arr.length; i++) {
+        var item = arr[i];
+        if (!item || item.code !== 'FARMING_TYPE' || !item.value) continue;
+        var list = [];
+        var rawVal = String(item.value).trim();
+        if (rawVal.charAt(0) === '[') {
+          // 后台编辑表单保存的 JSON 结构：[{value,label,sort,remark}]
+          try {
+            JSON.parse(rawVal).forEach(function (it) {
+              var n = (it && (it.label || it.value || it.name)) || '';
+              if (n) list.push(String(n).trim());
+            });
+          } catch (e2) { list = []; }
+        } else {
+          // 逗号分隔字符串：疏果,套袋,喷药,...
+          var parts = rawVal.split(/[,，]/);
+          for (var j = 0; j < parts.length; j++) {
+            var nm = parts[j].trim();
+            if (nm) list.push(nm);
+          }
+        }
+        return list.length ? list : null;
+      }
+      return null;
+    }
+
+    // 生成单个九宫格项（未知类型走默认图标）
+    function buildTaskTypeItem(name) {
+      var meta = TASK_TYPE_ICON_MAP[name] || DEFAULT_TASK_TYPE_ICON;
+      return '<div class="task-type-item" onclick="selectTaskType(\'' + name + '\')">' +
+               '<div class="task-type-icon ' + meta.color + '">' +
+                 '<svg ' + TASK_TYPE_SVG_ATTRS + '>' + meta.svg + '</svg>' +
+               '</div>' +
+               '<div class="task-type-name">' + name + '</div>' +
+             '</div>';
+    }
+
+    // 渲染九宫格；读不到字典时保留页面内静态的 9 项硬编码兜底
+    function renderTaskTypeGrid() {
+      var grid = document.querySelector('.task-type-grid');
+      if (!grid) return;
+      var types = getFarmingTypes();
+      if (!types) return;
+      var html = '';
+      for (var i = 0; i < types.length; i++) html += buildTaskTypeItem(types[i]);
+      grid.innerHTML = html;
+      // 已选中的类型若仍在列表内，恢复高亮
+      if (selectedTaskType) {
+        var items = document.querySelectorAll('.task-type-item');
+        for (var k = 0; k < items.length; k++) {
+          var nameEl = items[k].querySelector('.task-type-name');
+          if (nameEl && nameEl.textContent === selectedTaskType) items[k].classList.add('active');
+        }
+      }
+    }
+
     function selectQuickTask(task) {
       if (task === '果实套袋') { selectPlot('A1区'); selectTaskType('套袋'); }
       else if (task === '夏季修剪') { selectPlot('B2区'); selectTaskType('修剪'); }
@@ -935,6 +1018,12 @@
       document.getElementById('photoInput').addEventListener('change', function () { onPhotoPicked(this); });
       MobileStore.renderSyncBar(document.getElementById('syncBar'));
       captureGps();
+      renderTaskTypeGrid(); // 农事类型九宫格：优先用后台字典渲染
+    });
+
+    // 后台修改数据字典后，同源页面广播 storage 事件，移动端同步刷新九宫格
+    window.addEventListener('storage', function (e) {
+      if (!e.key || e.key === DICT_STORAGE_KEY) renderTaskTypeGrid();
     });
   </script>
 </body>

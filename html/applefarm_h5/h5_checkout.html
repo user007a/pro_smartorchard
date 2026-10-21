@@ -249,6 +249,7 @@
     </div>
   </div>
 
+  <script src="js/mall-coupons.js"></script>
   <script>
     function selectPayment(el) {
       document.querySelectorAll('.payment-item').forEach(function(p) { p.classList.remove('selected'); });
@@ -275,19 +276,10 @@
       catch (e) { return []; }
     }
 
-    /* 优惠券规则与购物车保持一致：满减券校验门槛，折扣券按比例计算 */
+    /* 优惠券规则来源：后台「商城管理 / 优惠券管理」维护的 mall_coupons
+       （由 js/mall-coupons.js 提供，与购物车 h5_cart.html 共用同一份配置） */
     function calcDiscount(subtotal) {
-      var code = localStorage.getItem('h5_coupon_code') || '';
-      var map = {
-        'cash10': { type: 'cash', value: 10, min: 100 },
-        'cash30': { type: 'cash', value: 30, min: 200 },
-        'percent9': { type: 'percent', value: 9, min: 0 }
-      };
-      var c = map[code];
-      if (!c) return 0;
-      if (subtotal < c.min) return 0;
-      var d = c.type === 'cash' ? c.value : Math.round(subtotal * (1 - c.value / 10));
-      return Math.max(0, Math.min(d, subtotal));
+      return MallCoupons.calc(subtotal, MallCoupons.selected());
     }
 
     function renderCheckout() {
@@ -325,6 +317,44 @@
       return { items: items, subtotal: subtotal, discount: discount, total: total };
     }
 
+    /* 读取默认收货地址快照（供后台订单售后/对账使用） */
+    function snapshotAddress() {
+      // 首页加购时会把当时的地址快照写入 h5_checkout_draft，24h 内优先沿用
+      try {
+        var draft = JSON.parse(localStorage.getItem('h5_checkout_draft') || 'null');
+        if (draft && draft.address && Date.now() - (Number(draft.ts) || 0) < 86400000) {
+          return {
+            name: draft.address.name || '', phone: draft.address.phone || '',
+            region: draft.address.region || '', detail: draft.address.detail || ''
+          };
+        }
+      } catch (e) { /* 忽略 */ }
+      var list = [];
+      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) { list = []; }
+      if (!Array.isArray(list)) list = [];
+      var def = list.filter(function (a) { return a && a.default; })[0] || list[0];
+      if (!def) return { name: '刘友宝', phone: '15111480531', region: '湖南省长沙市', detail: '麓云路159号佳境小区15#1406' };
+      return { name: def.name || '', phone: def.phone || '', region: def.region || '', detail: def.detail || '' };
+    }
+
+    /* 勾选需要发票时，向后台「发票管理」推送一条开票申请 */
+    function pushInvoiceApply(orderNo, amount) {
+      var list = [];
+      try { list = JSON.parse(localStorage.getItem('h5_invoices') || '[]'); } catch (e) { list = []; }
+      if (!Array.isArray(list)) list = [];
+      var addr = snapshotAddress();
+      list.unshift({
+        id: 'INV' + Date.now(),
+        title: addr.name || '个人',
+        amount: Number(amount) || 0,
+        type: '电子普通发票',
+        orderNo: orderNo,
+        applyTime: new Date().toISOString(),
+        status: 'pending'
+      });
+      localStorage.setItem('h5_invoices', JSON.stringify(list));
+    }
+
     function submitOrder() {
       var needInvoice = document.getElementById('invoiceToggle').checked;
       var paymentEl = document.querySelector('.payment-item.selected .payment-name');
@@ -333,6 +363,8 @@
       var items = data.items;
       if (!items.length) { showToast('订单为空，请先选购商品'); return; }
       var orderNo = 'ORD' + Date.now();
+      // 券码在下单后会被 MallCoupons.clear() 清除，需在此之前留档
+      var couponCode = MallCoupons.selected();
       var order = {
         id: orderNo,
         no: orderNo,
@@ -342,6 +374,8 @@
         total: data.total,
         payment: payment,
         invoice: needInvoice,
+        address: snapshotAddress(),
+        couponCode: couponCode,
         status: '待付款',
         statusCode: 'pending',
         createdAt: new Date().toISOString(),
@@ -350,8 +384,12 @@
       var list = JSON.parse(localStorage.getItem('h5_orders') || '[]');
       list.unshift(order);
       localStorage.setItem('h5_orders', JSON.stringify(list));
+      if (needInvoice) pushInvoiceApply(orderNo, data.total);
       localStorage.removeItem('h5_cart');
       localStorage.removeItem('h5_checkout_single');
+      localStorage.removeItem('h5_checkout_draft');
+      // 券码一次性使用，下单后清除，避免下次下单静默复用上次优惠
+      MallCoupons.clear();
       showToast('订单已生成：' + orderNo + '，使用' + payment + (needInvoice ? '，已申请发票' : ''));
       setTimeout(function() { window.location.href = 'h5_order.html?focus=' + orderNo; }, 1200);
     }

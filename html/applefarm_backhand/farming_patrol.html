@@ -61,6 +61,95 @@
   .data-section .data-table {
     margin-bottom:16px;
   }
+
+  /* ===== T1 巡园异常上报接入 ===== */
+  /* 页内 Tab 切换 */
+  .view-tabs {
+    display:flex;
+    gap:8px;
+    margin-bottom:16px;
+    border-bottom:1px solid var(--border-light);
+  }
+  .view-tab {
+    padding:10px 20px;
+    border:none;
+    background:none;
+    font-size:14px;
+    font-family:inherit;
+    color:var(--text-secondary);
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+    transition:all 0.2s;
+  }
+  .view-tab:hover { color:var(--primary-500); }
+  .view-tab.active {
+    color:var(--primary-500);
+    font-weight:600;
+    border-bottom-color:var(--primary-500);
+  }
+  /* 状态标签 */
+  .mb-status-tag {
+    display:inline-block;
+    padding:3px 10px;
+    border-radius:999px;
+    font-size:12px;
+    white-space:nowrap;
+  }
+  .mb-status-tag.wait { background:var(--warning-bg); color:var(--warning); }
+  .mb-status-tag.done { background:var(--success-bg); color:var(--success); }
+  /* 异常类型标签 */
+  .mb-type-tag {
+    display:inline-block;
+    padding:3px 10px;
+    border-radius:4px;
+    font-size:12px;
+    white-space:nowrap;
+  }
+  .mb-type-tag.pest { background:var(--error-bg); color:var(--error); }
+  .mb-type-tag.device { background:var(--warning-bg); color:var(--warning); }
+  .mb-type-tag.other { background:var(--gray-100); color:var(--text-secondary); }
+  /* 照片缩略 */
+  .mb-photo-thumb {
+    width:44px;height:44px;border-radius:6px;object-fit:cover;
+    border:1px solid var(--border-light);cursor:pointer;display:block;background:var(--gray-50);
+  }
+  .mb-photo-none { font-size:12px; color:var(--text-tertiary); }
+  /* 处理结果回显 */
+  .mb-handle-box {
+    margin-top:6px;padding:8px 10px;background:var(--gray-50);
+    border-left:3px solid var(--primary-300);border-radius:4px;
+    font-size:12px;color:var(--text-secondary);
+  }
+  /* 弹窗内表单 */
+  .modal-overlay.show { display:flex; }
+  .modal-field { margin-bottom:16px; }
+  .modal-field label {
+    display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px;
+  }
+  .modal-field textarea, .modal-field select {
+    width:100%;padding:10px 12px;border:1.5px solid var(--border-default);
+    border-radius:6px;font-size:14px;font-family:inherit;background:var(--bg-card);
+  }
+  .modal-field textarea { min-height:90px;resize:vertical;line-height:1.6; }
+  .modal-field textarea:focus, .modal-field select:focus {
+    border-color:var(--primary-500);outline:none;box-shadow:0 0 0 4px rgba(24,144,255,0.12);
+  }
+  .detail-row {
+    display:flex;gap:12px;padding:8px 0;
+    border-bottom:1px solid var(--border-light);font-size:13px;
+  }
+  .detail-row:last-child { border-bottom:none; }
+  .detail-label { color:var(--text-tertiary);min-width:80px;flex-shrink:0; }
+  .detail-value { color:var(--text-primary);flex:1;word-break:break-all; }
+  .photo-viewer {
+    display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);
+    z-index:2000;align-items:center;justify-content:center;padding:24px;
+  }
+  .photo-viewer.show { display:flex; }
+  .photo-viewer img { max-width:92%;max-height:92%;border-radius:8px;background:#fff; }
+  .empty-state {
+    padding:40px 0;text-align:center;color:var(--text-tertiary);font-size:13px;
+  }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -94,9 +183,29 @@
     <!-- 主内容区 -->
     <main class="main-content">
       <div class="content-wrapper">
+        <div class="page-header">
+          <div>
+            <div class="page-title">巡园管理</div>
+            <div class="page-subtitle">后台巡园计划与移动端现场异常上报统一受理</div>
+          </div>
+          <div class="page-actions">
+            <button class="jg-btn" onclick="refreshAbnormalList()">刷新</button>
+          </div>
+        </div>
+
+        <!-- ===== T1：巡园计划 / 异常上报 分区 Tab ===== -->
+        <div class="view-tabs">
+          <button class="view-tab active" id="tabPlan" onclick="switchPatrolTab('plan')">巡园计划</button>
+          <button class="view-tab" id="tabAbnormal" onclick="switchPatrolTab('abnormal')">
+            异常上报<span id="abnormalBadge" style="display:none;margin-left:6px;padding:0 6px;border-radius:999px;background:var(--warning);color:#fff;font-size:11px;">0</span>
+          </button>
+        </div>
+
         <!-- 统计卡片区 -->
         <!-- 统计卡条已按统一规范移除 (原class=patrol-stats) -->
 
+        <!-- ===== 分区一：巡园计划（原后台数据） ===== -->
+        <div id="viewPlan">
         <!-- 搜索栏区 -->
         <div class="page-section search-section">
           <div class="search-bar">
@@ -166,10 +275,106 @@
           </div>
           <div id="pagination-container"></div>
         </div>
+        </div>
+
+        <!-- ===== 分区二：移动端异常上报（T1 新增） ===== -->
+        <div id="viewAbnormal" style="display:none;">
+          <div class="page-section search-section">
+            <div class="search-bar">
+              <select class="search-select" id="abnormalTypeSelect">
+                <option value="">全部异常类型</option>
+                <option value="病虫害">病虫害</option>
+                <option value="设备故障">设备故障</option>
+                <option value="其他">其他</option>
+              </select>
+              <select class="search-select" id="abnormalStatusSelect">
+                <option value="">全部状态</option>
+                <option value="待处理">待处理</option>
+                <option value="已处理">已处理</option>
+              </select>
+              <input type="text" class="search-input" placeholder="搜索上报人或异常说明..." id="abnormalSearchInput">
+              <div class="search-actions">
+                <button class="jg-btn jg-btn-primary" onclick="renderAbnormalTable()">搜索</button>
+                <button class="jg-btn" onclick="resetAbnormalFilter()">重置</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="page-section data-section">
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th class="checkbox-col" style="width:60px;">序号</th>
+                    <th style="width:140px;">上报时间</th>
+                    <th style="width:100px;">异常类型</th>
+                    <th>异常说明</th>
+                    <th style="width:180px;">定位</th>
+                    <th style="width:90px;">上报人</th>
+                    <th style="width:80px;">照片</th>
+                    <th style="width:100px;">状态</th>
+                    <th style="width:140px;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="abnormalBody"></tbody>
+              </table>
+            </div>
+            <div id="abnormalEmpty" class="empty-state" style="display:none;">暂无移动端异常上报</div>
+          </div>
+        </div>
       </div>
 
+    </main>
+  </div>
+</div>
+
+<!-- ===== 异常处理弹窗（T1） ===== -->
+<div class="modal-overlay" id="abnormalHandleModal">
+  <div class="modal-box" style="max-width:600px;">
+    <div class="modal-header">
+      <h3 class="modal-title">异常处理</h3>
+      <button class="modal-close" onclick="closeAbnormalModal()">&times;</button>
     </div>
-  </main>
+    <div class="modal-body">
+      <div class="detail-row">
+        <div class="detail-label">上报时间</div>
+        <div class="detail-value" id="ahTime"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">异常类型</div>
+        <div class="detail-value" id="ahType"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">上报人</div>
+        <div class="detail-value" id="ahOperator"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">异常说明</div>
+        <div class="detail-value" id="ahRemark"></div>
+      </div>
+      <div class="modal-field" style="margin-top:16px;">
+        <label>处理结论<span style="color:var(--error);">*</span></label>
+        <select id="ahResult">
+          <option value="认领处理">认领处理</option>
+          <option value="标记误报">标记误报</option>
+          <option value="转设备故障">转设备故障</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>处理意见<span style="color:var(--error);">*</span></label>
+        <textarea id="ahRemarkInput" placeholder="填写处理说明，移动端作业人员可见"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeAbnormalModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitAbnormalHandle()">提交处理</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 照片大图预览 ===== -->
+<div class="photo-viewer" id="photoViewer" onclick="closePhotoViewer()">
+  <img id="photoViewerImg" src="" alt="异常照片">
 </div>
   <div id="modal-add-patrol" class="modal-overlay">
     <div class="modal-box">
@@ -484,6 +689,7 @@
 
 <!-- 引入交互脚本 -->
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-bridge.js"></script>
 <script>
 // 当前页面数据
 var currentPatrolId = '';
@@ -632,7 +838,215 @@ document.addEventListener('DOMContentLoaded', function() {
     tbodyId: 'dataTableBody',
     renderRow: renderRow
   });
+  renderAbnormalTable();
 });
+
+/* ============================================================
+ * T1 巡园异常上报接入
+ * 数据源：MobileBridge.abnormalReports()
+ *   写入方 = 移动端巡园页异常上报
+ *   字段：{ kind:'abnormal', id, type, remark, photo, lat, lng,
+ *          reportTime, operator, status:'待处理', source:'mobile' }
+ * 处理后回写同一 localStorage 记录，移动端列表即刻可见
+ * ============================================================ */
+
+/* 异常类型 → 标签样式类 */
+var ABNORMAL_TYPE_CLASS = {
+  '病虫害': 'pest',
+  '设备故障': 'device',
+  '其他': 'other'
+};
+
+var currentAbnormalId = null;
+
+/* HTML 转义，所有用户数据渲染前必须走这里 */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* 读取移动端异常上报，读取失败回退空数组 */
+function readAbnormalList() {
+  try {
+    if (typeof MobileBridge === 'undefined') return [];
+    var list = MobileBridge.abnormalReports();
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/* 分区 Tab 切换：巡园计划 / 异常上报 */
+function switchPatrolTab(name) {
+  var isPlan = name === 'plan';
+  document.getElementById('viewPlan').style.display = isPlan ? '' : 'none';
+  document.getElementById('viewAbnormal').style.display = isPlan ? 'none' : '';
+  document.getElementById('tabPlan').classList.toggle('active', isPlan);
+  document.getElementById('tabAbnormal').classList.toggle('active', !isPlan);
+  if (!isPlan) renderAbnormalTable();
+}
+
+/* 定位格式化 */
+function formatAbnormalGps(item) {
+  if (typeof item.lat !== 'number' || typeof item.lng !== 'number') return '无定位';
+  return '北纬' + item.lat.toFixed(4) + '°<br>东经' + item.lng.toFixed(4) + '°';
+}
+
+/* 按当前筛选条件过滤 */
+function filteredAbnormalList() {
+  var type = document.getElementById('abnormalTypeSelect').value;
+  var status = document.getElementById('abnormalStatusSelect').value;
+  var kw = document.getElementById('abnormalSearchInput').value.trim().toLowerCase();
+
+  return readAbnormalList().filter(function (item) {
+    if (type && item.type !== type) return false;
+    if (status && (item.status || '待处理') !== status) return false;
+    if (kw) {
+      var hay = ((item.operator || '') + ' ' + (item.remark || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+}
+
+/* 渲染异常上报表格 + 待处理角标 */
+function renderAbnormalTable() {
+  var all = readAbnormalList();
+  var list = filteredAbnormalList();
+
+  /* 待处理数量角标 */
+  var pending = 0;
+  all.forEach(function (i) { if ((i.status || '待处理') === '待处理') pending++; });
+  var badge = document.getElementById('abnormalBadge');
+  if (pending > 0) {
+    badge.style.display = '';
+    badge.textContent = pending;
+  } else {
+    badge.style.display = 'none';
+  }
+
+  var body = document.getElementById('abnormalBody');
+  var emptyHint = document.getElementById('abnormalEmpty');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    emptyHint.style.display = 'block';
+    return;
+  }
+  emptyHint.style.display = 'none';
+
+  body.innerHTML = list.map(function (item, i) {
+    var status = item.status || '待处理';
+    var isDone = status === '已处理';
+    /* 处理结果回显 */
+    var extra = '';
+    if (isDone && (item.handleResult || item.handleRemark)) {
+      extra = '<div class="mb-handle-box">处理：' + esc(item.handleResult || '-') +
+        (item.handleRemark ? ' · ' + esc(item.handleRemark) : '') +
+        (item.handleTime ? '<br>处理时间：' + esc(item.handleTime) : '') + '</div>';
+    }
+    /* 照片：有则缩略图，点击看大图；无则文字标记 */
+    var photoCell = item.photo
+      ? '<img class="mb-photo-thumb" src="' + esc(item.photo) + '" alt="异常照片" onclick="openPhotoViewer(this.src)">'
+      : '<span class="mb-photo-none">无照片</span>';
+
+    return '<tr>' +
+      '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td class="text-mono">' + esc(item.reportTime || item.createTime || '-') + '</td>' +
+      '<td><span class="mb-type-tag ' + esc(ABNORMAL_TYPE_CLASS[item.type] || 'other') + '">' + esc(item.type || '其他') + '</span></td>' +
+      '<td><div class="cell-title">' + esc(item.remark || '-') + '</div>' + extra + '</td>' +
+      '<td style="font-size:12px;">' + formatAbnormalGps(item) + '</td>' +
+      '<td>' + esc(item.operator || '现场人员') + '</td>' +
+      '<td>' + photoCell + '</td>' +
+      '<td><span class="mb-status-tag ' + (isDone ? 'done' : 'wait') + '">' + esc(status) + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn detail" onclick="openAbnormalModal(\'' + esc(item.id) + '\')">' + (isDone ? '查看' : '处理') + '</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function resetAbnormalFilter() {
+  document.getElementById('abnormalTypeSelect').value = '';
+  document.getElementById('abnormalStatusSelect').value = '';
+  document.getElementById('abnormalSearchInput').value = '';
+  renderAbnormalTable();
+}
+
+function refreshAbnormalList() {
+  renderAbnormalTable();
+  if (typeof Toast !== 'undefined') Toast.success('异常上报数据已刷新');
+}
+
+/* 打开处理弹窗 */
+function openAbnormalModal(id) {
+  var list = readAbnormalList();
+  var target = null;
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].id) === String(id)) { target = list[i]; break; }
+  }
+  if (!target) {
+    if (typeof Toast !== 'undefined') Toast.error('未找到该异常记录');
+    return;
+  }
+
+  currentAbnormalId = target.id;
+  document.getElementById('ahTime').textContent = target.reportTime || target.createTime || '-';
+  document.getElementById('ahType').textContent = target.type || '其他';
+  document.getElementById('ahOperator').textContent = target.operator || '现场人员';
+  document.getElementById('ahRemark').textContent = target.remark || '-';
+  document.getElementById('ahResult').value = '认领处理';
+  document.getElementById('ahRemarkInput').value = target.handleRemark || '';
+
+  document.getElementById('abnormalHandleModal').classList.add('show');
+}
+
+function closeAbnormalModal() {
+  document.getElementById('abnormalHandleModal').classList.remove('show');
+  currentAbnormalId = null;
+}
+
+/* 提交处理结果，回写移动端记录 */
+function submitAbnormalHandle() {
+  var result = document.getElementById('ahResult').value;
+  var remark = document.getElementById('ahRemarkInput').value.trim();
+
+  if (!remark) {
+    if (typeof Toast !== 'undefined') Toast.warning('请填写处理意见');
+    return;
+  }
+  if (typeof MobileBridge === 'undefined') {
+    if (typeof Toast !== 'undefined') Toast.error('数据桥接未加载，无法保存处理结果');
+    return;
+  }
+
+  var ok = MobileBridge.updateRecord(MobileBridge.KEYS.patrol, currentAbnormalId, {
+    status: '已处理',
+    handleResult: result,
+    handleRemark: remark,
+    handleTime: MobileBridge.stampNow()
+  });
+
+  if (!ok) {
+    if (typeof Toast !== 'undefined') Toast.error('处理结果保存失败，请刷新后重试');
+    return;
+  }
+  closeAbnormalModal();
+  renderAbnormalTable();
+  if (typeof Toast !== 'undefined') Toast.success('异常处理结果已保存，移动端可查看');
+}
+
+/* 照片大图预览 */
+function openPhotoViewer(src) {
+  document.getElementById('photoViewerImg').src = src;
+  document.getElementById('photoViewer').classList.add('show');
+}
+
+function closePhotoViewer() {
+  document.getElementById('photoViewer').classList.remove('show');
+  document.getElementById('photoViewerImg').src = '';
+}
 </script>
 
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->

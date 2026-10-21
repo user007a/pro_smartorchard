@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 同步队列监控</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label {
+    font-size: var(--font-size-sm);
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-xs);
+  }
+  .stat-value {
+    font-size: 26px;
+    font-weight: var(--font-weight-bold);
+    color: var(--text-primary);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card.is-pending .stat-value { color: var(--warning); }
+  .stat-card.is-danger .stat-value { color: var(--error); }
+  .stat-card.is-info .stat-value { color: var(--info); }
+  .stat-card.is-success .stat-value { color: var(--success); }
+
+  .notice-bar {
+    padding: 10px 14px;
+    background: var(--info-bg);
+    border-left: 3px solid var(--info);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-lg);
+    line-height: 1.6;
+  }
+
+  .type-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+  }
+  .type-tag.farming { background: var(--success-bg); color: var(--success); }
+  .type-tag.patrol { background: var(--info-bg); color: var(--info); }
+  .type-tag.abnormal { background: var(--error-bg); color: var(--error); }
+
+  .status-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .status-tag.pending { background: var(--warning-bg); color: var(--warning); }
+
+  .cell-sub {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    max-width: 360px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .empty-state {
+    padding: var(--space-2xl) 0;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
+  }
+  .empty-state .empty-icon {
+    font-size: 36px;
+    margin-bottom: var(--space-sm);
+  }
+
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card);
+    border-radius: 12px;
+    width: 92%;
+    max-width: 520px;
+    max-height: 80vh;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer;
+    padding: 4px; font-size: 20px; line-height: 1;
+    color: var(--text-tertiary); transition: color 0.2s;
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(80vh - 60px);
+  }
+  .detail-row {
+    display: flex;
+    gap: var(--space-md);
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-light);
+    font-size: var(--font-size-sm);
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-label { color: var(--text-tertiary); min-width: 76px; flex-shrink: 0; }
+  .detail-value { color: var(--text-primary); flex: 1; word-break: break-all; }
+  .payload-pre {
+    background: var(--gray-50);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    font-family: var(--font-family-mono, monospace);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    max-height: 240px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+</style>
+</head>
+<body data-active-menu="mobile-ops" data-active-submenu="sync-queue">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">同步队列监控</div>
+        <div class="page-subtitle">展示移动端离线暂存、待上传到平台的队列积压情况</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="refreshList()">刷新</button>
+        <button class="jg-btn jg-btn-primary" id="flushAllBtn" onclick="flushAllQueue()">全部同步</button>
+      </div>
+    </div>
+
+    <!-- 统计区 -->
+    <div class="stat-row">
+      <div class="stat-card is-pending">
+        <div class="stat-label">待同步总数</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card is-info">
+        <div class="stat-label">记农事</div>
+        <div class="stat-value" id="statFarming">0</div>
+      </div>
+      <div class="stat-card is-info">
+        <div class="stat-label">巡园打卡</div>
+        <div class="stat-value" id="statPatrol">0</div>
+      </div>
+      <div class="stat-card is-danger">
+        <div class="stat-label">巡园异常</div>
+        <div class="stat-value" id="statAbnormal">0</div>
+      </div>
+    </div>
+
+    <!-- 数据列表区 -->
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="checkbox-col" style="width:60px;">序号</th>
+              <th style="width:150px;">入队时间</th>
+              <th style="width:110px;">同步类型</th>
+              <th style="width:150px;">关联记录 ID</th>
+              <th>载荷摘要</th>
+              <th style="width:90px;">状态</th>
+              <th style="width:160px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="queueBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyHint" class="empty-state" style="display:none;">
+        <div class="empty-icon">✓</div>
+        <div>当前无待同步记录，作业数据已全部上传</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== 详情弹窗 ===== -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">队列详情</h3>
+      <button class="modal-close" onclick="closeDetailModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-bridge.js"></script>
+<script>
+/* ============================================================
+ * 同步队列监控（T11）
+ * 数据源：localStorage['smartorchard_sync_queue']（由 MobileBridge.syncQueue() 暴露）
+ * 写入方：移动端 MobileStore.enqueue()：
+ *   - type 'farming_record'   记农事（payload: { plot, taskType, remark, gps... }）
+ *   - type 'patrol_checkin'  巡园打卡（payload: { checkpointName, gps... }）
+ *   - type 'patrol_abnormal' 巡园异常（payload: { level, desc, gps... }）
+ * 联网时移动端会立即 flush 并清队列，所以本页看到的多为离线积压。
+ * ============================================================ */
+(function () {
+  'use strict';
+
+  if (!window.MobileBridge) {
+    console.error('[mb_sync_queue] MobileBridge 未加载，请确认脚本引入顺序。');
+    return;
+  }
+
+  var QUEUE_KEY = window.MobileBridge.KEYS.syncQueue;
+
+  var TYPE_TEXT = {
+    farming_record: '记农事',
+    patrol_checkin: '巡园打卡',
+    patrol_abnormal: '巡园异常'
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /**
+   * 从入队时间或 createTime 推断展示用时间文本。
+   * 入队时间字段名遵循 MobileStore.enqueue() 的约定（queuedAt），若不存在则退回 createTime。
+   */
+  function pickTime(item) {
+    var raw = item.queuedAt || item.createTime;
+    if (!raw) return '—';
+    var d = raw instanceof Date ? raw : new Date(raw);
+    if (isNaN(d.getTime())) return String(raw);
+    var p = function (n) { return n < 10 ? '0' + n : n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+      ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  /**
+   * 按 type 渲染载荷摘要。仅提取一两项关键字段，避免把整段 JSON 倾倒在表格里。
+   */
+  function summarizePayload(item) {
+    var t = item.type;
+    var p = item.payload || {};
+    if (t === 'farming_record') {
+      var task = p.taskType ? '·' + p.taskType : '';
+      var plot = p.plot || '未指定地块';
+      return plot + task + (p.remark ? ' / ' + p.remark : '');
+    }
+    if (t === 'patrol_checkin') {
+      var cp = p.checkpointName || '巡园点';
+      return cp + (p.note ? ' / ' + p.note : '');
+    }
+    if (t === 'patrol_abnormal') {
+      var lv = p.level ? '[' + p.level + ']' : '';
+      return lv + (p.desc || p.title || '异常描述缺失');
+    }
+    // 兜底：罗列前两个键值对
+    try {
+      var keys = Object.keys(p).slice(0, 2);
+      if (!keys.length) return '—';
+      return keys.map(function (k) { return k + ': ' + p[k]; }).join('  ');
+    } catch (e) {
+      return '—';
+    }
+  }
+
+  function readQueue() {
+    try {
+      var arr = window.MobileBridge.syncQueue();
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function writeQueue(list) {
+    try {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(list));
+      return true;
+    } catch (e) {
+      Toast.error('本地存储写入失败，请稍后再试');
+      return false;
+    }
+  }
+
+  function renderStats(list) {
+    var farming = 0, patrol = 0, abnormal = 0;
+    list.forEach(function (it) {
+      if (it.type === 'farming_record') farming++;
+      else if (it.type === 'patrol_checkin') patrol++;
+      else if (it.type === 'patrol_abnormal') abnormal++;
+    });
+    document.getElementById('statTotal').textContent = list.length;
+    document.getElementById('statFarming').textContent = farming;
+    document.getElementById('statPatrol').textContent = patrol;
+    document.getElementById('statAbnormal').textContent = abnormal;
+
+    var btn = document.getElementById('flushAllBtn');
+    if (btn) btn.disabled = list.length === 0;
+  }
+
+  function renderTable() {
+    var list = readQueue();
+    renderStats(list);
+
+    var body = document.getElementById('queueBody');
+    var empty = document.getElementById('emptyHint');
+
+    if (!list.length) {
+      body.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+
+    body.innerHTML = list.map(function (it, i) {
+      var t = it.type || '';
+      var typeName = TYPE_TEXT[t] || t || '未知类型';
+      var refId = it.refId || it.id || '—';
+      var status = it.status || 'pending';
+      return '<tr>' +
+        '<td class="checkbox-col">' + (i + 1) + '</td>' +
+        '<td class="text-mono">' + esc(pickTime(it)) + '</td>' +
+        '<td><span class="type-tag ' + esc(t) + '">' + esc(typeName) + '</span></td>' +
+        '<td class="text-mono">' + esc(refId) + '</td>' +
+        '<td><div class="cell-sub">' + esc(summarizePayload(it)) + '</div></td>' +
+        '<td><span class="status-tag pending">待同步</span></td>' +
+        '<td><div class="action-btns">' +
+          '<button class="action-btn detail" data-detail="' + esc(it.id) + '">详情</button>' +
+          '<button class="action-btn danger" data-remove="' + esc(it.id) + '">删除</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function refreshList() {
+    renderTable();
+    Toast.info('已刷新');
+  }
+
+  /* ---- 详情弹窗 ---- */
+  function openDetail(id) {
+    var list = readQueue();
+    var it = null;
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].id) === String(id)) { it = list[i]; break; }
+    }
+    if (!it) { Toast.error('未找到该队列项'); return; }
+
+    var t = it.type || '';
+    var typeName = TYPE_TEXT[t] || t || '未知';
+    var payloadText;
+    try { payloadText = JSON.stringify(it.payload || {}, null, 2); }
+    catch (e) { payloadText = String(it.payload || ''); }
+
+    document.getElementById('detailBody').innerHTML =
+      '<div class="detail-row"><div class="detail-label">同步类型</div><div class="detail-value">' + esc(typeName) + '</div></div>' +
+      '<div class="detail-row"><div class="detail-label">队列 ID</div><div class="detail-value text-mono">' + esc(it.id || '') + '</div></div>' +
+      '<div class="detail-row"><div class="detail-label">关联记录</div><div class="detail-value text-mono">' + esc(it.refId || '—') + '</div></div>' +
+      '<div class="detail-row"><div class="detail-label">入队时间</div><div class="detail-value">' + esc(pickTime(it)) + '</div></div>' +
+      '<div class="detail-row"><div class="detail-label">重试次数</div><div class="detail-value">' + esc(it.retry || 0) + '</div></div>' +
+      '<div class="detail-row"><div class="detail-label">完整载荷</div><div class="detail-value">' +
+        '<pre class="payload-pre">' + esc(payloadText) + '</pre>' +
+      '</div></div>';
+    document.getElementById('detailModal').classList.add('show');
+  }
+  function closeDetailModal() { document.getElementById('detailModal').classList.remove('show'); }
+
+  /* ---- 单条删除 ---- */
+  function removeOne(id) {
+    var list = readQueue();
+    var hit = false;
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].id) === String(id)) { list.splice(i, 1); hit = true; break; }
+    }
+    if (!hit) { Toast.error('未找到该队列项'); return; }
+    if (writeQueue(list)) {
+      renderTable();
+      Toast.success('已移除该待同步记录');
+    }
+  }
+  function confirmRemoveOne(id) {
+    ConfirmDialog.show({
+      title: '删除待同步记录',
+      message: '确认从队列中删除此条目？删除后该记录不会再次补传。',
+      onConfirm: function () { removeOne(id); }
+    });
+  }
+
+  /* ---- 全部同步（模拟清空） ---- */
+  function flushAllQueue() {
+    var list = readQueue();
+    if (!list.length) { Toast.info('当前队列为空，无需同步'); return; }
+    ConfirmDialog.show({
+      title: '全部同步',
+      message: '将模拟一次同步操作，清空当前 ' + list.length + ' 条待同步记录（演示环境无真实后端）。是否继续？',
+      onConfirm: function () {
+        if (writeQueue([])) {
+          renderTable();
+          Toast.success('已模拟同步，队列已清空');
+        }
+      }
+    });
+  }
+
+  /* ---- 事件代理：详情/删除按钮 ---- */
+  document.addEventListener('click', function (e) {
+    var det = e.target.closest && e.target.closest('[data-detail]');
+    var del = e.target.closest && e.target.closest('[data-remove]');
+    if (det) openDetail(det.getAttribute('data-detail'));
+    else if (del) confirmRemoveOne(del.getAttribute('data-remove'));
+  });
+
+  /* ---- 跨标签页同步 ---- */
+  window.addEventListener('storage', function (e) {
+    if (e.key === QUEUE_KEY) renderTable();
+  });
+
+  document.addEventListener('DOMContentLoaded', function () {
+    renderTable();
+  });
+
+  /* 暴露到全局供内联属性调用 */
+  window.refreshList = refreshList;
+  window.flushAllQueue = flushAllQueue;
+  window.closeDetailModal = closeDetailModal;
+})();
+</script>
+</body>
+</html>

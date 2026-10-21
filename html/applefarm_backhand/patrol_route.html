@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 巡园路线配置</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));
+    gap:var(--space-md);
+    margin-bottom:var(--space-lg);
+  }
+  .stat-card {
+    background:var(--bg-card);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-lg);
+    padding:var(--space-lg);
+  }
+  .stat-label { font-size:var(--font-size-sm); color:var(--text-tertiary); margin-bottom:var(--space-xs); }
+  .stat-value {
+    font-size:26px; font-weight:var(--font-weight-bold);
+    color:var(--text-primary); line-height:1.2; font-variant-numeric:tabular-nums;
+  }
+
+  /* 状态 tag */
+  .status-tag {
+    display:inline-block;
+    padding:3px 10px;
+    border-radius:var(--radius-full);
+    font-size:var(--font-size-xs);
+    font-weight:500;
+    white-space:nowrap;
+  }
+  .status-tag.on  { background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); }
+  .status-tag.off { background:var(--gray-100);   color:var(--text-secondary); border:1px solid var(--border-default); }
+
+  /* 操作按钮组 */
+  .action-btns { display:flex; gap:6px; flex-wrap:wrap; }
+  .action-btn {
+    padding:4px 10px;
+    font-size:var(--font-size-xs);
+    border:1px solid var(--border-default);
+    border-radius:var(--radius-sm);
+    cursor:pointer;
+    background:var(--bg-card);
+    color:var(--text-secondary);
+  }
+  .action-btn:hover { border-color:var(--primary-500); color:var(--primary-500); }
+  .action-btn.danger { color:var(--error); border-color:var(--error-border); }
+  .action-btn.danger:hover { background:var(--error-bg); }
+
+  /* 弹窗 */
+  .modal-overlay {
+    display:none;
+    position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,0.5);
+    z-index:1000;
+    justify-content:center; align-items:center;
+    backdrop-filter:blur(4px);
+  }
+  .modal-overlay.show { display:flex; }
+  .modal-box {
+    background:var(--bg-card);
+    border-radius:12px;
+    width:92%; max-width:760px;
+    max-height:85vh; overflow:hidden;
+    box-shadow:0 20px 40px rgba(0,0,0,0.2);
+    animation:modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity:0; transform:scale(0.95) translateY(-20px); }
+    to   { opacity:1; transform:scale(1)   translateY(0); }
+  }
+  .modal-header {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:16px 20px; border-bottom:1px solid var(--border-default);
+  }
+  .modal-title { font-size:16px; font-weight:600; color:#1f1f1f; margin:0; }
+  .modal-close {
+    background:none; border:none; cursor:pointer; padding:4px;
+    font-size:20px; line-height:1; color:var(--text-tertiary);
+  }
+  .modal-close:hover { color:var(--text-secondary); }
+  .modal-body { padding:20px; overflow-y:auto; max-height:calc(85vh - 132px); }
+  .modal-footer {
+    display:flex; justify-content:flex-end; gap:12px;
+    padding:16px 20px; border-top:1px solid var(--border-default);
+  }
+
+  /* 表单 */
+  .form-row { display:flex; gap:var(--space-md); margin-bottom:var(--space-lg); }
+  .form-field { flex:1; }
+  .form-field label {
+    display:block; font-size:var(--font-size-sm);
+    font-weight:500; color:var(--text-primary); margin-bottom:var(--space-sm);
+  }
+  .form-field input,
+  .form-field select,
+  .form-field textarea {
+    width:100%; padding:10px 14px; border:1.5px solid var(--border-default);
+    border-radius:var(--radius-lg); font-size:var(--font-size-base);
+    font-family:inherit; background:var(--bg-card); box-sizing:border-box;
+    transition:all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .form-field input:focus,
+  .form-field select:focus {
+    border-color:var(--primary-500);
+    box-shadow:0 0 0 4px rgba(24,144,255,0.12);
+    outline:none;
+  }
+
+  /* 点位编辑区 */
+  .points-head {
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:var(--space-sm);
+  }
+  .points-head .points-title { font-size:var(--font-size-sm); font-weight:500; color:var(--text-primary); }
+  .point-row {
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-md);
+    padding:var(--space-md);
+    margin-bottom:var(--space-md);
+    background:var(--gray-50, #fafafa);
+  }
+  .point-row-head {
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:var(--space-sm);
+  }
+  .point-row-head .point-idx { font-size:var(--font-size-xs); font-weight:600; color:var(--text-secondary); }
+  .point-grid {
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:8px;
+  }
+  .point-grid .pf { display:flex; flex-direction:column; gap:4px; }
+  .point-grid .pf label { font-size:var(--font-size-xs); color:var(--text-tertiary); }
+  .point-grid .pf input,
+  .point-grid .pf select {
+    width:100%; padding:6px 10px; box-sizing:border-box;
+    border:1.5px solid var(--border-default); border-radius:var(--radius-sm);
+    font-size:var(--font-size-sm); font-family:inherit; background:var(--bg-card);
+  }
+  .point-grid .pf input:focus,
+  .point-grid .pf select:focus { border-color:var(--primary-500); outline:none; }
+
+  /* 分页 */
+  .pagination {
+    display:flex; align-items:center; justify-content:flex-end;
+    gap:4px; margin-top:20px; padding-top:16px;
+    border-top:1px solid var(--border-light);
+  }
+  .page-btn {
+    width:36px; height:36px;
+    display:flex; align-items:center; justify-content:center;
+    border:1.5px solid var(--border-default);
+    border-radius:var(--radius-md);
+    background:var(--bg-card);
+    font-size:var(--font-size-sm);
+    color:var(--text-secondary);
+    cursor:pointer;
+    transition:all var(--transition-fast, 0.2s ease);
+  }
+  .page-btn.active { border-color:var(--primary-500); color:var(--primary-500); background:var(--primary-50, #e6f4ff); }
+  .page-btn.disabled { opacity:0.45; cursor:not-allowed; }
+
+  .empty-state {
+    padding:var(--space-2xl) 0; text-align:center;
+    color:var(--text-tertiary); font-size:var(--font-size-sm);
+  }
+</style>
+</head>
+<body data-active-menu="patrol" data-active-submenu="patrol-route">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">巡园路线配置</div>
+        <div class="page-subtitle">移动端「巡果园」页 (mb_patrol.html) 的数据源，维护巡园路线与打卡点位</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn jg-btn-primary" onclick="openEdit()">新增路线</button>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">路线总数</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">启用中</div>
+        <div class="stat-value" id="statEnabled">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">点位总数</div>
+        <div class="stat-value" id="statPoints">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">必到点位</div>
+        <div class="stat-value" id="statRequired">0</div>
+      </div>
+    </div>
+
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <select class="search-select" id="searchBase">
+          <option value="">全部基地</option>
+          <option value="麦积区基地 A区">麦积区基地 A区</option>
+          <option value="麦积区基地 B区">麦积区基地 B区</option>
+          <option value="麦积区基地 C区">麦积区基地 C区</option>
+          <option value="白水基地 A区">白水基地 A区</option>
+          <option value="宜川基地 A区">宜川基地 A区</option>
+        </select>
+        <select class="search-select" id="searchEnabled">
+          <option value="">全部状态</option>
+          <option value="true">启用</option>
+          <option value="false">停用</option>
+        </select>
+        <input type="text" class="search-input" id="searchKw" placeholder="搜索路线名称 / 所属基地...">
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="handleSearch()">搜索</button>
+          <button class="jg-btn" onclick="resetSearch()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:60px;">序号</th>
+              <th style="width:100px;">路线编号</th>
+              <th>路线名称</th>
+              <th style="width:160px;">所属基地</th>
+              <th style="width:80px;">点位数</th>
+              <th style="width:100px;">必到点位数</th>
+              <th style="width:80px;">状态</th>
+              <th style="width:150px;">更新时间</th>
+              <th style="width:230px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="routeBody"></tbody>
+        </table>
+      </div>
+      <div id="routeEmpty" class="empty-state" style="display:none;">暂无巡园路线数据</div>
+      <div class="pagination">
+        <button class="page-btn disabled" id="prevPage">‹</button>
+        <span id="pageNums"></span>
+        <button class="page-btn" id="nextPage">›</button>
+        <span id="paginationInfo" style="margin-left:16px;font-size:13px;color:var(--text-tertiary);">共 0 条记录</span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 新增/编辑 弹窗 -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="editModalTitle">新增路线</h3>
+      <button class="modal-close" onclick="closeEdit()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>路线编号</label>
+          <input type="text" id="editRouteId" readonly placeholder="自动生成">
+        </div>
+        <div class="form-field">
+          <label>路线名称<span style="color:var(--error);">*</span></label>
+          <input type="text" id="editRouteName" placeholder="如 A区日常巡园路线">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>所属基地<span style="color:var(--error);">*</span></label>
+          <select id="editBase">
+            <option value="麦积区基地 A区">麦积区基地 A区</option>
+            <option value="麦积区基地 B区">麦积区基地 B区</option>
+            <option value="麦积区基地 C区">麦积区基地 C区</option>
+            <option value="白水基地 A区">白水基地 A区</option>
+            <option value="宜川基地 A区">宜川基地 A区</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>启用状态</label>
+          <select id="editEnabled">
+            <option value="true">启用</option>
+            <option value="false">停用</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>备注</label>
+        <input type="text" id="editRemark" placeholder="选填">
+      </div>
+
+      <div class="points-head">
+        <span class="points-title">巡园点位</span>
+        <button class="jg-btn" type="button" onclick="addPointRow()">+ 添加点位</button>
+      </div>
+      <div id="pointRows"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeEdit()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script>
+/* ============================================================
+ * 巡园路线配置（移动端 mb_patrol.html 数据源）
+ * localStorage key: mb_patrol_routes
+ * ============================================================ */
+
+var ROUTE_KEY = 'mb_patrol_routes';
+var PAGE_SIZE = 8;
+var currentPage = 1;
+var editingId = null;   // 当前编辑的路线编号，null 表示新增
+
+/* 种子：3 条路线，点位坐标取自 mb_patrol.html 既有 A1/B1/C1 */
+var DEFAULT_ROUTES = [
+  {
+    routeId: 'RT-001',
+    routeName: 'A区日常巡园路线',
+    base: '麦积区基地 A区',
+    points: [
+      { id: 'A1', name: 'A区1号巡园点', lat: 34.34900, lng: 106.18000, nearRadius: 100, required: true, order: 1 },
+      { id: 'B1', name: 'B区1号巡园点', lat: 34.35200, lng: 106.18365, nearRadius: 100, required: true, order: 2 },
+      { id: 'C1', name: 'C区1号巡园点', lat: 34.35500, lng: 106.18600, nearRadius: 100, required: true, order: 3 }
+    ],
+    enabled: true,
+    remark: '覆盖 A/B/C 三区主干道，每日必巡',
+    updatedAt: '2026-10-21 10:00'
+  },
+  {
+    routeId: 'RT-002',
+    routeName: 'B区专项巡检路线',
+    base: '麦积区基地 B区',
+    points: [
+      { id: 'B1', name: 'B区1号巡园点', lat: 34.35200, lng: 106.18365, nearRadius: 60, required: false, order: 1 }
+    ],
+    enabled: true,
+    remark: '果树长势抽检',
+    updatedAt: '2026-10-21 10:00'
+  },
+  {
+    routeId: 'RT-003',
+    routeName: 'C区仓储巡园路线',
+    base: '麦积区基地 C区',
+    points: [
+      { id: 'C1', name: 'C区1号巡园点', lat: 34.35500, lng: 106.18600, nearRadius: 80, required: true, order: 1 }
+    ],
+    enabled: false,
+    remark: '仓库周边安全巡查',
+    updatedAt: '2026-10-21 10:00'
+  }
+];
+
+/* ---------- 通用工具 ---------- */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+  });
+}
+function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+function nowStamp() {
+  var d = new Date();
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+    ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+function toNum(v, def) {
+  var n = parseFloat(v);
+  return isNaN(n) ? def : n;
+}
+function readJSON(key, fallback) {
+  try {
+    var raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    var v = JSON.parse(raw);
+    return Array.isArray(v) ? v : fallback;
+  } catch (e) { return fallback; }
+}
+function writeJSON(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+  catch (e) { Toast.error('本地存储写入失败'); return false; }
+}
+
+/* ---------- 数据读写 ---------- */
+function readRoutes() {
+  var list = readJSON(ROUTE_KEY, null);
+  if (!list || list.length === 0) {
+    list = DEFAULT_ROUTES.map(function (r) {
+      return {
+        routeId: r.routeId,
+        routeName: r.routeName,
+        base: r.base,
+        points: r.points.map(function (p) { return JSON.parse(JSON.stringify(p)); }),
+        enabled: r.enabled,
+        remark: r.remark,
+        updatedAt: r.updatedAt
+      };
+    });
+    writeJSON(ROUTE_KEY, list);
+  }
+  return list;
+}
+function writeRoutes(list) { return writeJSON(ROUTE_KEY, list); }
+
+function genRouteId(list) {
+  var max = 0;
+  list.forEach(function (r) {
+    var n = parseInt(String(r.routeId || '').replace(/\D/g, ''), 10);
+    if (!isNaN(n) && n > max) max = n;
+  });
+  var id;
+  do {
+    max++;
+    id = 'RT-' + String(max).padStart(3, '0');
+  } while (list.some(function (r) { return r.routeId === id; }));
+  return id;
+}
+
+/* ---------- 统计 ---------- */
+function renderStats() {
+  var list = readRoutes();
+  var enabled = 0, points = 0, required = 0;
+  list.forEach(function (r) {
+    if (r.enabled) enabled++;
+    (r.points || []).forEach(function (p) {
+      points++;
+      if (p.required) required++;
+    });
+  });
+  document.getElementById('statTotal').textContent    = list.length;
+  document.getElementById('statEnabled').textContent  = enabled;
+  document.getElementById('statPoints').textContent   = points;
+  document.getElementById('statRequired').textContent = required;
+}
+
+/* ---------- 列表 ---------- */
+function getFiltered() {
+  var kw  = (document.getElementById('searchKw').value || '').trim().toLowerCase();
+  var en  = document.getElementById('searchEnabled').value;
+  var base = document.getElementById('searchBase').value;
+  return readRoutes().filter(function (r) {
+    if (base && r.base !== base) return false;
+    if (en === 'true' && !r.enabled) return false;
+    if (en === 'false' && r.enabled) return false;
+    if (kw) {
+      var hay = ((r.routeName || '') + '|' + (r.base || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function handleSearch() { currentPage = 1; renderTable(); }
+
+function resetSearch() {
+  document.getElementById('searchBase').value = '';
+  document.getElementById('searchEnabled').value = '';
+  document.getElementById('searchKw').value = '';
+  currentPage = 1;
+  renderTable();
+}
+
+function renderTable() {
+  var list = getFiltered();
+  var totalPages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  var start = (currentPage - 1) * PAGE_SIZE;
+  var pageData = list.slice(start, start + PAGE_SIZE);
+
+  var tbody = document.getElementById('routeBody');
+  var empty = document.getElementById('routeEmpty');
+  if (!list.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    tbody.innerHTML = pageData.map(function (r, i) {
+      var pts = r.points || [];
+      var req = pts.filter(function (p) { return p.required; }).length;
+      return ''
+        + '<tr>'
+        +   '<td>' + (start + i + 1) + '</td>'
+        +   '<td>' + esc(r.routeId) + '</td>'
+        +   '<td><strong>' + esc(r.routeName) + '</strong></td>'
+        +   '<td>' + esc(r.base || '-') + '</td>'
+        +   '<td>' + pts.length + '</td>'
+        +   '<td>' + req + '</td>'
+        +   '<td><span class="status-tag ' + (r.enabled ? 'on' : 'off') + '">' + (r.enabled ? '启用' : '停用') + '</span></td>'
+        +   '<td>' + esc(r.updatedAt || '-') + '</td>'
+        +   '<td>'
+        +     '<div class="action-btns">'
+        +       '<button class="action-btn" onclick="openEdit(\'' + esc(r.routeId) + '\')">编辑</button>'
+        +       '<button class="action-btn" onclick="toggleEnabled(\'' + esc(r.routeId) + '\')">' + (r.enabled ? '停用' : '启用') + '</button>'
+        +       '<button class="action-btn danger" onclick="deleteRoute(\'' + esc(r.routeId) + '\')">删除</button>'
+        +     '</div>'
+        +   '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  // 分页
+  document.getElementById('paginationInfo').textContent = '共 ' + list.length + ' 条记录';
+  var nums = '';
+  for (var p = 1; p <= totalPages; p++) {
+    nums += '<button class="page-btn ' + (p === currentPage ? 'active' : '') + '" onclick="goToPage(' + p + ')">' + p + '</button>';
+  }
+  document.getElementById('pageNums').innerHTML = nums;
+  var prev = document.getElementById('prevPage');
+  var next = document.getElementById('nextPage');
+  prev.classList.toggle('disabled', currentPage === 1);
+  next.classList.toggle('disabled', currentPage === totalPages);
+  prev.onclick = currentPage > 1 ? function () { goToPage(currentPage - 1); } : null;
+  next.onclick = currentPage < totalPages ? function () { goToPage(currentPage + 1); } : null;
+}
+
+function goToPage(p) { currentPage = p; renderTable(); }
+
+/* ---------- 点位行 ---------- */
+function pointRowHtml(p, idx) {
+  p = p || {};
+  var req = p.required !== false;
+  return ''
+    + '<div class="point-row">'
+    +   '<div class="point-row-head">'
+    +     '<span class="point-idx">点位 ' + (idx + 1) + '</span>'
+    +     '<button class="action-btn danger" type="button" onclick="removePointRow(this)">删除</button>'
+    +   '</div>'
+    +   '<div class="point-grid">'
+    +     '<div class="pf"><label>点位ID</label><input class="p-id" type="text" value="' + esc(p.id || '') + '" placeholder="A1"></div>'
+    +     '<div class="pf"><label>名称</label><input class="p-name" type="text" value="' + esc(p.name || '') + '" placeholder="A区1号巡园点"></div>'
+    +     '<div class="pf"><label>纬度</label><input class="p-lat" type="number" step="0.000001" value="' + (p.lat != null ? p.lat : '') + '" placeholder="34.3490"></div>'
+    +     '<div class="pf"><label>经度</label><input class="p-lng" type="number" step="0.000001" value="' + (p.lng != null ? p.lng : '') + '" placeholder="106.1800"></div>'
+    +     '<div class="pf"><label>就近半径(米)</label><input class="p-radius" type="number" min="1" value="' + (p.nearRadius != null ? p.nearRadius : 100) + '"></div>'
+    +     '<div class="pf"><label>顺序</label><input class="p-order" type="number" min="1" value="' + (p.order != null ? p.order : (idx + 1)) + '"></div>'
+    +     '<div class="pf"><label>是否必到</label><select class="p-required">'
+    +       '<option value="true"' + (req ? ' selected' : '') + '>必到</option>'
+    +       '<option value="false"' + (!req ? ' selected' : '') + '>非必到</option>'
+    +     '</select></div>'
+    +   '</div>'
+    + '</div>';
+}
+function renumberPointRows() {
+  var rows = document.querySelectorAll('#pointRows .point-row');
+  for (var i = 0; i < rows.length; i++) {
+    var idx = rows[i].querySelector('.point-idx');
+    if (idx) idx.textContent = '点位 ' + (i + 1);
+  }
+}
+function addPointRow() {
+  var box = document.getElementById('pointRows');
+  var count = box.querySelectorAll('.point-row').length;
+  box.insertAdjacentHTML('beforeend', pointRowHtml(null, count));
+  renumberPointRows();
+}
+function removePointRow(btn) {
+  var row = btn.closest ? btn.closest('.point-row') : null;
+  if (row && row.parentNode) row.parentNode.removeChild(row);
+  renumberPointRows();
+}
+function renderPointRows(points) {
+  var box = document.getElementById('pointRows');
+  box.innerHTML = (points || []).map(function (p, i) { return pointRowHtml(p, i); }).join('');
+  renumberPointRows();
+}
+function collectPoints() {
+  var rows = document.querySelectorAll('#pointRows .point-row');
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var id = (r.querySelector('.p-id').value || '').trim();
+    if (!id) return { error: '第 ' + (i + 1) + ' 个点位未填写点位ID' };
+    out.push({
+      id: id,
+      name: (r.querySelector('.p-name').value || '').trim(),
+      lat: toNum(r.querySelector('.p-lat').value, 0),
+      lng: toNum(r.querySelector('.p-lng').value, 0),
+      nearRadius: Math.max(1, parseInt(r.querySelector('.p-radius').value, 10) || 100),
+      required: r.querySelector('.p-required').value === 'true',
+      order: parseInt(r.querySelector('.p-order').value, 10) || (i + 1)
+    });
+  }
+  if (!out.length) return { error: '请至少添加一个巡园点位' };
+  return { points: out };
+}
+
+/* ---------- 新增 / 编辑 ---------- */
+function openEdit(id) {
+  editingId = id || null;
+  var list = readRoutes();
+  var item = id ? list.filter(function (r) { return r.routeId === id; })[0] : null;
+  document.getElementById('editModalTitle').textContent = id ? '编辑路线' : '新增路线';
+  document.getElementById('editRouteId').value   = item ? item.routeId : genRouteId(list);
+  document.getElementById('editRouteName').value = (item && item.routeName) || '';
+  document.getElementById('editBase').value      = (item && item.base) || '麦积区基地 A区';
+  document.getElementById('editEnabled').value   = item ? (item.enabled ? 'true' : 'false') : 'true';
+  document.getElementById('editRemark').value    = (item && item.remark) || '';
+  renderPointRows(item ? (item.points || []) : [null]);
+  document.getElementById('editModal').classList.add('show');
+}
+function closeEdit() {
+  document.getElementById('editModal').classList.remove('show');
+  editingId = null;
+}
+function submitEdit() {
+  var routeName = (document.getElementById('editRouteName').value || '').trim();
+  if (!routeName) { Toast.warning('请填写路线名称'); return; }
+  var collected = collectPoints();
+  if (collected.error) { Toast.warning(collected.error); return; }
+
+  var list = readRoutes();
+  var data = {
+    routeName: routeName,
+    base: document.getElementById('editBase').value,
+    enabled: document.getElementById('editEnabled').value === 'true',
+    remark: (document.getElementById('editRemark').value || '').trim(),
+    points: collected.points,
+    updatedAt: nowStamp()
+  };
+  if (editingId) {
+    var idx = list.findIndex(function (r) { return r.routeId === editingId; });
+    if (idx >= 0) {
+      data.routeId = editingId;
+      list[idx] = data;
+      Toast.success('已保存');
+    }
+  } else {
+    data.routeId = document.getElementById('editRouteId').value || genRouteId(list);
+    list.unshift(data);
+    Toast.success('已新增');
+  }
+  writeRoutes(list);
+  closeEdit();
+  refresh();
+}
+
+/* ---------- 启用 / 停用 / 删除 ---------- */
+function toggleEnabled(id) {
+  var list = readRoutes();
+  var idx = list.findIndex(function (r) { return r.routeId === id; });
+  if (idx < 0) return;
+  list[idx].enabled = !list[idx].enabled;
+  list[idx].updatedAt = nowStamp();
+  writeRoutes(list);
+  Toast.success(list[idx].enabled ? '已启用' : '已停用');
+  refresh();
+}
+
+function deleteRoute(id) {
+  ConfirmDialog.show({
+    title: '删除路线',
+    message: '确认删除该巡园路线吗？移动端将不再加载该路线点位。',
+    onConfirm: function () {
+      var list = readRoutes().filter(function (r) { return r.routeId !== id; });
+      writeRoutes(list);
+      Toast.success('已删除');
+      refresh();
+    }
+  });
+}
+
+function refresh() {
+  renderStats();
+  renderTable();
+}
+
+/* 后台同页 tab 之间 / 其他端写入后同步刷新 */
+window.addEventListener('storage', function (e) {
+  if (e.key === ROUTE_KEY) refresh();
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+  refresh();
+});
+</script>
+</body>
+</html>

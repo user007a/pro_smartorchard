@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 应收周转</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  /* 统计卡 */
+  .stat-card-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-xl);
+    transition: box-shadow var(--transition-normal);
+  }
+  .stat-card:hover { box-shadow: var(--shadow-md); }
+  .stat-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; }
+  .stat-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-value .unit { font-size: 13px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; }
+  .stat-sub { margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
+  .stat-sub.ok { color: var(--success); }
+  .stat-sub.miss { color: var(--error); }
+
+  /* 环形图 + 账龄占比 */
+  .aging-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-lg);
+    margin-bottom: var(--space-xl);
+    align-items: start;
+  }
+  @media (max-width: 1280px) { .aging-grid { grid-template-columns: 1fr; } }
+
+  /* 账龄进度条 */
+  .aging-row { padding: 12px 0; border-bottom: 1px dashed var(--border-light); }
+  .aging-row:last-child { border-bottom: none; }
+  .aging-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .aging-name { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+  .aging-val { font-size: 12.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+  .aging-val strong { color: var(--text-primary); font-size: 13px; }
+  .aging-bar { height: 8px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
+  .aging-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--primary-500);
+    transition: width 0.5s ease;
+  }
+  .aging-bar-fill.risk { background: var(--warning); }
+
+  /* 账龄风险提示 */
+  .risk-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    margin-bottom: var(--space-xl);
+    border-radius: var(--radius-md);
+    font-size: 12.5px;
+    border: 1px solid;
+  }
+  .risk-strip .risk-icon {
+    width: 22px; height: 22px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 13px;
+  }
+  .risk-strip.warn {
+    background: var(--warning-bg);
+    border-color: var(--warning-border);
+    color: #ad6800;
+  }
+  .risk-strip.warn .risk-icon { background: var(--warning); }
+  .risk-strip.warn strong { color: #d46b08; }
+  .risk-strip.normal {
+    background: var(--success-bg);
+    border-color: var(--success-border);
+    color: #389e0d;
+  }
+  .risk-strip.normal .risk-icon { background: var(--success); }
+  .risk-strip.normal strong { color: var(--success); }
+
+  .data-table { min-width: 680px; }
+  .empty-row td { text-align: center; color: var(--text-tertiary); padding: 40px 0; }
+
+  /* 表格内占比进度条 */
+  .cell-ratio { width: 190px; }
+  .cell-ratio-bar { height: 8px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
+  .cell-ratio-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--primary-500);
+    transition: width 0.5s ease;
+  }
+  .cell-ratio-text {
+    margin-top: 5px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .cell-ratio-text strong { color: var(--text-primary); font-size: 13px; }
+
+  /* 表格上方口径说明 */
+  .table-note {
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    background: var(--gray-50);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+  }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="经营分析" data-active-submenu="应收周转">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <!-- 页面标题区 -->
+        <div class="page-header">
+          <div>
+            <div class="page-title">应收周转</div>
+            <div class="page-subtitle" id="pageSubtitle">监控应收账款余额、账龄结构与周转效率</div>
+          </div>
+          <div class="page-actions" id="actionBar" style="margin-bottom:0;">
+            <button class="jg-btn jg-btn-primary" data-act="edit">维护应收数据</button>
+          </div>
+        </div>
+
+        <!-- 统计卡 -->
+        <div class="stat-card-row" id="statCards"></div>
+
+        <!-- 账龄风险提示 -->
+        <div id="riskStrip"></div>
+
+        <!-- 环形图 + 账龄占比条 -->
+        <div class="aging-grid">
+          <div class="chart-section">
+            <h2 class="section-title">账龄分布（万元）</h2>
+            <div id="chart-aging" style="height:300px;"></div>
+          </div>
+
+          <div class="data-section" style="padding:24px;">
+            <h2 class="section-title">各账龄区间金额与占比</h2>
+            <div id="agingList"></div>
+          </div>
+        </div>
+
+        <!-- 客户应收明细 -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>客户名称</th>
+                  <th>类型</th>
+                  <th>应收金额（万元）</th>
+                  <th>账龄区间</th>
+                  <th>占比</th>
+                </tr>
+              </thead>
+              <tbody id="customerBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/page-actions.js"></script>
+<script src="js/components/chart.js"></script>
+<script src="js/shared/biz-store.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  var AGING_COLORS = ['#52c41a', '#1890ff', '#faad14', '#ff4d4f'];
+  // 账龄区间与「90 天以上」的映射说明（按排行顺序轮转归集的演示映射）
+  var AGING_RANGES = ['30 天以内', '31-60 天', '61-90 天', '90 天以上'];
+
+  function fmt(n){
+    n = Number(n) || 0;
+    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  // 保留 1 位小数
+  function pct(n){ return Math.round((Number(n) || 0) * 10) / 10; }
+  // 金额占比（%），保留 1 位小数
+  function shareOf(amount, total){ return total ? pct((Number(amount) || 0) / total * 100) : 0; }
+  function esc(v){
+    return String(v === undefined || v === null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  var els = {
+    subtitle     : document.getElementById('pageSubtitle'),
+    statCards    : document.getElementById('statCards'),
+    riskStrip    : document.getElementById('riskStrip'),
+    agingList    : document.getElementById('agingList'),
+    customerBody  : document.getElementById('customerBody'),
+    actionBar    : document.getElementById('actionBar')
+  };
+
+  function renderStats(){
+    var r = BizStore.receivable();
+    var over60 = Number(r.over60) || 0;
+    var risk = over60 > 10;
+
+    els.subtitle.textContent = BizStore.summary().fiscalYear + ' · 监控应收账款余额、账龄结构与周转效率';
+
+    els.statCards.innerHTML =
+      '<div class="stat-card">' +
+        '<div class="stat-label">应收余额</div>' +
+        '<div class="stat-value">' + fmt(r.balance) + '<span class="unit">万元</span></div>' +
+        '<div class="stat-sub">账龄区间共 ' + fmt(r.aging.length) + ' 段</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">周转天数</div>' +
+        '<div class="stat-value">' + fmt(r.turnoverDays) + '<span class="unit">天</span></div>' +
+        '<div class="stat-sub">应收账期平均周转</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">超 60 天占比</div>' +
+        '<div class="stat-value">' + fmt(over60) + '<span class="unit">%</span></div>' +
+        '<div class="stat-sub ' + (risk ? 'miss' : 'ok') + '">' +
+          (risk ? '高于 10% 阈值，需加强催收' : '低于 10% 阈值，账龄健康') +
+        '</div>' +
+      '</div>' +
+      '<div class="stat-card">' +
+        '<div class="stat-label">坏账</div>' +
+        '<div class="stat-value">' + fmt(r.badDebt) + '<span class="unit">万元</span></div>' +
+        '<div class="stat-sub">占应收余额 ' + fmt(shareOf(r.badDebt, r.balance)) + '%</div>' +
+      '</div>';
+  }
+
+  function renderRisk(){
+    var over60 = Number(BizStore.receivable().over60) || 0;
+    if (over60 > 10){
+      els.riskStrip.innerHTML =
+        '<div class="risk-strip warn">' +
+          '<span class="risk-icon">!</span>' +
+          '<div><strong>账龄风险提示：</strong>账龄超 60 天占比 ' + fmt(over60) +
+            '%，已超过 10% 阈值，回款周期偏长。建议加强催收力度，优先清收 61-90 天与 90 天以上区间款项。</div>' +
+        '</div>';
+    } else {
+      els.riskStrip.innerHTML =
+        '<div class="risk-strip normal">' +
+          '<span class="risk-icon">✓</span>' +
+          '<div><strong>账龄风险提示：</strong>账龄超 60 天占比 ' + fmt(over60) +
+            '%，处于 10% 阈值以内，账龄结构健康，保持现有回款节奏即可。</div>' +
+        '</div>';
+    }
+  }
+
+  function renderAging(){
+    var aging = BizStore.receivable().aging || [];
+
+    if (!aging.length){
+      els.agingList.innerHTML = '<div class="empty-state"><div class="empty-text">暂无账龄数据</div></div>';
+      return;
+    }
+
+    els.agingList.innerHTML = aging.map(function(x, i){
+      var width = Math.max(2, Number(x.ratio) || 0);
+      var isRisk = i >= 2; // 61-90 天及以上视为长账龄
+      return '<div class="aging-row">' +
+        '<div class="aging-head">' +
+          '<span class="aging-name">' + esc(x.name) + '</span>' +
+          '<span class="aging-val"><strong>' + fmt(x.value) + '</strong> 万元 · ' + fmt(x.ratio) + '%</span>' +
+        '</div>' +
+        '<div class="aging-bar"><div class="aging-bar-fill' + (isRisk ? ' risk' : '') + '" style="width:' + width + '%;"></div></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderCharts(){
+    var aging = BizStore.receivable().aging || [];
+    Chart.donut('#chart-aging', {
+      series: aging.map(function(x, i){
+        return { name: x.name, value: Number(x.value) || 0, color: AGING_COLORS[i % AGING_COLORS.length] };
+      })
+    });
+  }
+
+  function renderCustomers(){
+    var list = BizStore.customerRank();
+    var total = list.reduce(function(sum, x){ return sum + (Number(x.amount) || 0); }, 0);
+
+    if (!list.length){
+      els.customerBody.innerHTML = '<tr class="empty-row"><td colspan="5">暂无客户应收数据</td></tr>';
+      return;
+    }
+
+    els.customerBody.innerHTML = list.map(function(x, i){
+      var range = AGING_RANGES[i % AGING_RANGES.length];
+      var ratio = shareOf(x.amount, total);
+      var width = Math.max(2, ratio);
+      return '<tr>' +
+        '<td><strong>' + esc(x.name) + '</strong></td>' +
+        '<td>' + esc(x.type || '-') + '</td>' +
+        '<td class="num">' + fmt(pct(x.amount)) + '</td>' +
+        '<td>' + esc(range) + '</td>' +
+        '<td class="cell-ratio">' +
+          '<div class="cell-ratio-bar"><div class="cell-ratio-fill" style="width:' + width + '%;"></div></div>' +
+          '<div class="cell-ratio-text"><strong>' + fmt(ratio) + '%</strong></div>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderAll(){
+    renderStats();
+    renderRisk();
+    renderAging();
+    renderCustomers();
+    renderCharts();
+  }
+
+  /* ---------------- 维护应收数据 ---------------- */
+
+  function openEditModal(){
+    var r = BizStore.receivable();
+    Modal.form({
+      title: '维护应收数据',
+      fields: [
+        { name: 'balance',      label: '应收余额（万元）', type: 'number', required: true, placeholder: '如 412',   hint: '非负数' },
+        { name: 'turnoverDays', label: '周转天数（天）',   type: 'number', required: true, placeholder: '如 38',    hint: '非负数' },
+        { name: 'over60',       label: '超 60 天占比（%）', type: 'number', required: true, placeholder: '如 14',    hint: '0 - 100' },
+        { name: 'badDebt',      label: '坏账（万元）',     type: 'number', required: true, placeholder: '如 0',     hint: '非负数' }
+      ],
+      values: {
+        balance: r.balance,
+        turnoverDays: r.turnoverDays,
+        over60: r.over60,
+        badDebt: r.badDebt
+      },
+      submitText: '保存',
+      width: '560px',
+      onSubmit: function(formData){
+        var next = {};
+        var labels = { balance:'应收余额', turnoverDays:'周转天数', over60:'超 60 天占比', badDebt:'坏账' };
+        var keys = Object.keys(labels);
+
+        for (var i = 0; i < keys.length; i++){
+          var k = keys[i];
+          var raw = formData[k];
+          var n = Number(raw);
+          if (raw === '' || raw === undefined || isNaN(n) || n < 0){
+            Toast.show('「' + labels[k] + '」必须为非负数字', 'warning');
+            return false;
+          }
+          next[k] = k === 'turnoverDays' || k === 'badDebt' ? Math.round(n) : pct(n);
+        }
+
+        if (next.over60 > 100){
+          Toast.show('「超 60 天占比」需在 0 - 100 之间', 'warning');
+          return false;
+        }
+
+        BizStore.setReceivable(next);
+        Toast.show('保存成功', 'success');
+        return true;
+      }
+    });
+  }
+
+  // 顶部操作按钮：一次性事件委托
+  els.actionBar.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    if (btn.getAttribute('data-act') === 'edit') openEditModal();
+  });
+
+  BizStore.subscribe(function(){
+    renderAll();
+  });
+})();
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

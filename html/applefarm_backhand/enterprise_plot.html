@@ -1,4 +1,25 @@
 <!DOCTYPE html>
+<!-- ============================================================
+     地块管理页 · 地块主数据落库说明
+     localStorage key: smartorchard_plot_master
+     用途：本页维护的「地块总表」。首次进入由页面内 mockPlotData 播种，
+           之后地块的新增 / 编辑 / 删除 / 审核操作都会回写该键，
+           供移动端果园地图页（applefarm_mobile/mb_map.html）读取渲染。
+     结构：JSON 纯数组，每项字段
+       id          编号ID，如 PLOT001
+       code        地块编号，如 D-001
+       name        地块名称
+       enterprise  所属基地
+       area        面积(亩)
+       variety     品种
+       year        种植年份
+       status      状态：normal 正常 / warning 预警 / danger 危险
+       statusText  状态中文文案
+       manager     负责人
+       lng / lat   经度 / 纬度
+     注意：本键与移动端手绘地块键「smartorchard_plots」相互独立，
+           本页只读写 smartorchard_plot_master，不会污染手绘数据。
+     ============================================================ -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -307,6 +328,46 @@
     gap:var(--space-lg);
     margin-bottom:var(--space-xl);
   }
+
+  /* 经纬度列：等宽数字 + caption 字号 */
+  .coord-cell {
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+    font-size:var(--font-size-xs);
+    color:var(--text-tertiary);
+    white-space:nowrap;
+  }
+
+  /* 地块地图视图 */
+  .map-section {
+    background:var(--bg-card);
+    border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-card);
+    border:1px solid var(--border-light);
+    padding:var(--space-lg);
+    margin-bottom:var(--space-xl);
+  }
+  .map-section[hidden] { display:none; }
+  .map-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:12px; }
+  .map-title { font-size:16px; font-weight:var(--font-weight-semibold); color:var(--text-primary); }
+  .map-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--text-tertiary); }
+  .map-legend span { display:inline-flex; align-items:center; gap:5px; }
+  .map-legend i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .map-canvas { width:100%; height:auto; display:block; background:var(--gray-50); border-radius:var(--radius-md); }
+  .map-plot-shape { cursor:pointer; transition:opacity var(--transition-fast); }
+  .map-plot-shape:hover { opacity:0.78; }
+  .map-plot-label { font-size:10px; fill:#fff; font-weight:600; pointer-events:none; }
+  .map-note { margin-top:10px; font-size:12px; color:var(--text-tertiary); }
+  .map-empty { padding:48px 0; text-align:center; color:var(--text-tertiary); font-size:13px; }
+  /* 地块分布图选中信息 */
+  .dist-info {
+    margin-top:12px; padding:12px 16px; border:1px solid var(--border-light);
+    border-radius:var(--radius-md); background:var(--bg-card); font-size:13px;
+  }
+  .dist-info[hidden] { display:none; }
+  .dist-info .di-name { font-weight:600; color:var(--text-primary); margin-bottom:6px; }
+  .dist-info .di-grid { display:flex; flex-wrap:wrap; gap:20px; color:var(--text-tertiary); }
+  .dist-info .di-grid b { color:var(--text-primary); font-weight:500; margin-left:4px; }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -329,6 +390,40 @@
   .ent-upload-remove{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.6);color:#fff;border:none;font-size:14px;line-height:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}
   .ent-upload-remove:hover{background:rgba(0,0,0,0.85);}
   .ent-upload-source{position:absolute;left:2px;bottom:2px;font-size:10px;background:rgba(24,144,255,0.85);color:#fff;padding:1px 4px;border-radius:4px;}
+
+  /* === T4 手绘地块审核 === */
+  .review-tag{
+    display:inline-block;padding:3px 10px;border-radius:var(--radius-full,999px);
+    font-size:12px;font-weight:500;white-space:nowrap;
+  }
+  .review-tag.pending{background:var(--warning-bg);color:var(--warning);}
+  .review-tag.approved{background:var(--success-bg);color:var(--success);}
+  .review-tag.rejected{background:var(--error-bg);color:var(--error);}
+  .review-box{
+    margin-top:4px;font-size:12px;color:var(--text-tertiary);
+  }
+  /* 审核弹窗 */
+  .modal-overlay.show{display:flex;}
+  .modal-field{margin-bottom:16px;}
+  .modal-field label{
+    display:block;font-size:13px;font-weight:500;color:var(--text-primary);margin-bottom:6px;
+  }
+  .modal-field textarea,.modal-field input{
+    width:100%;padding:10px 12px;border:1.5px solid var(--border-default);
+    border-radius:6px;font-size:14px;font-family:inherit;background:var(--bg-card);
+  }
+  .modal-field textarea{min-height:90px;resize:vertical;line-height:1.6;}
+  .modal-field textarea:focus,.modal-field input:focus{
+    border-color:var(--primary-500);outline:none;box-shadow:0 0 0 4px rgba(24,144,255,0.12);
+  }
+  .review-detail-row{
+    display:flex;gap:12px;padding:8px 0;
+    border-bottom:1px solid var(--border-light);font-size:13px;
+  }
+  .review-detail-row:last-child{border-bottom:none;}
+  .review-detail-label{color:var(--text-tertiary);min-width:84px;flex-shrink:0;}
+  .review-detail-value{color:var(--text-primary);flex:1;word-break:break-all;}
+  .empty-state{padding:40px 0;text-align:center;color:var(--text-tertiary);font-size:13px;}
 </style>
 <link rel="stylesheet" href="css/unified-theme.css">
 <link rel="stylesheet" href="css/typography.css">
@@ -353,10 +448,14 @@
 
         <div class="search-bar">
           <select class="search-select" id="baseSelect">
-            <option value="">选择基地</option>
-            <option value="ytqx">天水麦积区基地</option>
-            <option value="whrc">天水秦州基地</option>
-            <option value="qdlx">青岛莱西基地</option>
+            <option value="">全部基地</option>
+            <option value="天水麦积区基地">天水麦积区基地</option>
+            <option value="天水秦州区基地">天水秦州区基地</option>
+            <option value="天水甘谷县基地">天水甘谷县基地</option>
+            <option value="天水秦安县基地">天水秦安县基地</option>
+            <option value="天水清水县基地">天水清水县基地</option>
+            <option value="天水武山县基地">天水武山县基地</option>
+            <option value="天水张家川县基地">天水张家川县基地</option>
           </select>
           <select class="search-select" id="statusSelect">
             <option value="">地块状态</option>
@@ -376,7 +475,7 @@
           </select>
           <input type="text" class="search-input" placeholder="搜索地块编号..." id="searchInput">
           
-        <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchPlotData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
+        <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchPlotData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button><button class="jg-btn jg-btn-outline" id="viewToggleBtn" onclick="toggleView()">地图视图</button></div>
           </div>
 
         <div class="action-bar">
@@ -393,12 +492,55 @@
               </svg>
               导出地块
             </button>
+            <button class="jg-btn" onclick="refreshPlotReview()">刷新手绘地块</button>
           </div>
         </div>
 
 
 
-        <div class="data-section">
+        <!-- ===== T4：待审核手绘地块审核区 ===== -->
+        <div class="data-section" id="plotReviewSection" style="display:none;">
+          <div style="padding:16px 20px 0;">
+            <h3 style="font-size:16px;font-weight:600;color:var(--text-primary);margin:0 0 4px;">手绘地块审核</h3>
+            <p style="font-size:12px;color:var(--text-tertiary);margin:0;">
+              移动端现场手绘地块需审核通过后方可并入上方地块总表
+            </p>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:60px;">序号</th>
+                <th>地块名称</th>
+                <th style="width:120px;">地块类型</th>
+                <th style="text-align:right;width:100px;">面积(亩)</th>
+                <th style="width:150px;">绘制时间</th>
+                <th>绘制说明</th>
+                <th style="text-align:center;width:100px;">审核状态</th>
+                <th style="width:160px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="plotReviewBody"></tbody>
+          </table>
+          <div id="plotReviewEmpty" class="empty-state" style="display:none;">暂无待审核的手绘地块</div>
+        </div>
+
+        <!-- ===== 地块地图视图 ===== -->
+        <div class="map-section" id="plotMapSection" hidden>
+          <div class="map-header">
+            <div class="map-title">地块地图</div>
+            <div class="map-legend">
+              <span><i style="background:#52c41a"></i>正常</span>
+              <span><i style="background:#faad14"></i>需施肥</span>
+              <span><i style="background:#ff4d4f"></i>病虫害</span>
+              <span><i style="background:#bfbfbf"></i>休耕</span>
+              <span><i style="background:#1890ff"></i>维护中</span>
+            </div>
+          </div>
+          <div id="plotMapContainer"></div>
+          <div class="map-note">坐标为各地块登记的经纬度（WGS84），按线性映射绘制，仅作示意图非导航用途。</div>
+        </div>
+
+        <div class="data-section" id="plotListSection">
           <table class="data-table">
             <thead>
               <tr>
@@ -408,8 +550,12 @@
                 <th>所属基地</th>
                 <th style="text-align:right">面积(亩)</th>
                 <th>果树品种</th>
+                <th>负责人</th>
                 <th style="text-align:center">种植年份</th>
                 <th>状态</th>
+                <th style="text-align:center">审核状态</th>
+                <th style="text-align:right">经度</th>
+                <th style="text-align:right">纬度</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -417,8 +563,74 @@
           </table>
           <div id="pagination-container"></div>
         </div>
+
+        <!-- ===== 地块分布图（纯 SVG 坐标映射，随筛选联动） ===== -->
+        <div class="map-section" id="plotDistSection">
+          <div class="map-header">
+            <div class="map-title">地块分布图</div>
+            <div class="map-legend">
+              <span><i style="background:#52c41a"></i>正常</span>
+              <span><i style="background:#faad14"></i>需施肥</span>
+              <span><i style="background:#ff4d4f"></i>病虫害</span>
+              <span><i style="background:#bfbfbf"></i>休耕</span>
+              <span><i style="background:#1890ff"></i>维护中</span>
+            </div>
+          </div>
+          <div id="plotDistContainer"></div>
+          <div class="dist-info" id="plotDistInfo" hidden></div>
+          <div class="map-note">色块大小与地块面积正相关，坐标为各地块登记的经纬度（WGS84）线性映射，示意图非导航用途。</div>
+        </div>
       </div>
     </main>
+  </div>
+</div>
+
+<!-- ===== T4 手绘地块审核弹窗 ===== -->
+<div class="modal-overlay" id="plotReviewModal">
+  <div class="modal-box" style="max-width:600px;">
+    <div class="modal-header">
+      <h3 class="modal-title">手绘地块审核</h3>
+      <button class="modal-close" onclick="closePlotReviewModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="review-detail-row">
+        <div class="review-detail-label">地块名称</div>
+        <div class="review-detail-value" id="prName"></div>
+      </div>
+      <div class="review-detail-row">
+        <div class="review-detail-label">地块类型</div>
+        <div class="review-detail-value" id="prType"></div>
+      </div>
+      <div class="review-detail-row">
+        <div class="review-detail-label">面积(亩)</div>
+        <div class="review-detail-value" id="prArea"></div>
+      </div>
+      <div class="review-detail-row">
+        <div class="review-detail-label">绘制时间</div>
+        <div class="review-detail-value" id="prTime"></div>
+      </div>
+      <div class="review-detail-row">
+        <div class="review-detail-label">绘制说明</div>
+        <div class="review-detail-value" id="prRemark"></div>
+      </div>
+      <div class="review-detail-row">
+        <div class="review-detail-label">当前状态</div>
+        <div class="review-detail-value" id="prStatus"></div>
+      </div>
+      <div class="modal-field" style="margin-top:16px;">
+        <label>审核人</label>
+        <input type="text" id="prReviewer" value="超级用户">
+      </div>
+      <div class="modal-field">
+        <label>审核意见</label>
+        <textarea id="prReviewRemark" placeholder="驳回时必填，说明需修改的内容"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closePlotReviewModal()">取消</button>
+      <button class="jg-btn" style="color:var(--error);" onclick="submitPlotReview('rejected')">驳回</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitPlotReview('approved')">审核通过</button>
+    </div>
   </div>
 </div>
 
@@ -479,32 +691,209 @@ const Pagination = {
   }
 };
 
-// 地块数据（字段名与 PageActions 一致；status 取 plot 三态 normal/warning/danger；负责人姓名来自系统管理-用户管理）
+// 地块数据（字段名与 PageActions 一致；status 取 plot 三态 normal/warning/danger；负责人姓名来自系统管理-用户管理；lng/lat 为天水麦积区附近经纬度）
 const mockPlotData = [
-  {id:'PLOT001',code:'D-001',name:'东区1号地',enterprise:'天水麦积区基地',area:85,variety:'花牛苹果',year:2018,status:'normal',statusText:'正常',manager:'惠加宁'},
-  {id:'PLOT002',code:'D-002',name:'东区2号地',enterprise:'天水麦积区基地',area:92,variety:'花牛苹果',year:2016,status:'normal',statusText:'正常',manager:'黄忠坚'},
-  {id:'PLOT003',code:'D-003',name:'西区1号地',enterprise:'天水麦积区基地',area:78,variety:'金帅',year:2020,status:'warning',statusText:'需施肥',manager:'徐水应'},
-  {id:'PLOT004',code:'D-004',name:'北区1号地',enterprise:'天水秦州区基地',area:65,variety:'花牛苹果',year:2014,status:'normal',statusText:'正常',manager:'朱泉龙'},
-  {id:'PLOT005',code:'D-005',name:'南区1号地',enterprise:'天水甘谷县基地',area:88,variety:'花牛苹果',year:2021,status:'danger',statusText:'病虫害',manager:'陈小忠'},
-  {id:'PLOT006',code:'D-006',name:'中区1号地',enterprise:'天水秦安县基地',area:65,variety:'花牛苹果',year:2020,status:'normal',statusText:'正常',manager:'廖春亮'},
-  {id:'PLOT007',code:'D-007',name:'南区2号地',enterprise:'天水清水县基地',area:88,variety:'花牛苹果',year:2018,status:'normal',statusText:'正常',manager:'李建明'},
-  {id:'PLOT008',code:'D-008',name:'西区2号地',enterprise:'天水武山县基地',area:110,variety:'花牛苹果',year:2017,status:'warning',statusText:'需施肥',manager:'李根'},
-  {id:'PLOT009',code:'D-009',name:'北区2号地',enterprise:'天水张家川县基地',area:92,variety:'花牛苹果',year:2016,status:'normal',statusText:'正常',manager:'张才孙'},
-  {id:'PLOT010',code:'D-010',name:'东区3号地',enterprise:'天水麦积区基地',area:78,variety:'金帅',year:2021,status:'danger',statusText:'病虫害',manager:'刘全国'},
-  {id:'PLOT011',code:'D-011',name:'南区3号地',enterprise:'天水秦州区基地',area:105,variety:'花牛苹果',year:2019,status:'normal',statusText:'正常',manager:'毛定卫'},
-  {id:'PLOT012',code:'D-012',name:'西区3号地',enterprise:'天水甘谷县基地',area:82,variety:'秦冠',year:2022,status:'normal',statusText:'正常',manager:'叶三东'},
-  {id:'PLOT013',code:'D-013',name:'北区3号地',enterprise:'天水清水县基地',area:75,variety:'花牛苹果',year:2018,status:'warning',statusText:'需施肥',manager:'周才贵'},
-  {id:'PLOT014',code:'D-014',name:'中区2号地',enterprise:'天水武山县基地',area:98,variety:'花牛苹果',year:2017,status:'normal',statusText:'正常',manager:'程名高'},
-  {id:'PLOT015',code:'D-015',name:'东区4号地',enterprise:'天水张家川县基地',area:68,variety:'花牛苹果',year:2020,status:'normal',statusText:'正常',manager:'邓小华'},
-  {id:'PLOT016',code:'D-016',name:'南区4号地',enterprise:'天水麦积区基地',area:115,variety:'金帅',year:2015,status:'danger',statusText:'病虫害',manager:'周成友'},
-  {id:'PLOT017',code:'D-017',name:'西区4号地',enterprise:'天水秦州区基地',area:89,variety:'花牛苹果',year:2019,status:'normal',statusText:'正常',manager:'危红卫'},
-  {id:'PLOT018',code:'D-018',name:'北区4号地',enterprise:'天水甘谷县基地',area:96,variety:'花牛苹果',year:2021,status:'warning',statusText:'需施肥',manager:'方超'},
-  {id:'PLOT019',code:'D-019',name:'中区3号地',enterprise:'天水秦安县基地',area:72,variety:'花牛苹果',year:2018,status:'normal',statusText:'正常',manager:'曹红英'},
-  {id:'PLOT020',code:'D-020',name:'东区5号地',enterprise:'天水清水县基地',area:102,variety:'秦冠',year:2016,status:'normal',statusText:'正常',manager:'崔新根'},
-  {id:'PLOT021',code:'D-021',name:'南区5号地',enterprise:'天水武山县基地',area:86,variety:'花牛苹果',year:2022,status:'normal',statusText:'正常',manager:'惠加宁'},
-  {id:'PLOT022',code:'D-022',name:'西区5号地',enterprise:'天水张家川县基地',area:93,variety:'花牛苹果',year:2017,status:'danger',statusText:'病虫害',manager:'黄忠坚'},
-  {id:'PLOT023',code:'D-023',name:'北区5号地',enterprise:'天水麦积区基地',area:81,variety:'金帅',year:2020,status:'normal',statusText:'正常',manager:'徐水应'}
+  {id:'PLOT001',code:'D-001',name:'东区1号地',enterprise:'天水麦积区基地',area:85,variety:'花牛苹果',year:2018,status:'normal',statusText:'正常',manager:'惠加宁',lng:105.7216,lat:34.5623},
+  {id:'PLOT002',code:'D-002',name:'东区2号地',enterprise:'天水麦积区基地',area:92,variety:'花牛苹果',year:2016,status:'normal',statusText:'正常',manager:'黄忠坚',lng:105.7482,lat:34.5718},
+  {id:'PLOT003',code:'D-003',name:'西区1号地',enterprise:'天水麦积区基地',area:78,variety:'金帅',year:2020,status:'warning',statusText:'需施肥',manager:'徐水应',lng:105.6954,lat:34.5487},
+  {id:'PLOT004',code:'D-004',name:'北区1号地',enterprise:'天水秦州区基地',area:65,variety:'花牛苹果',year:2014,status:'normal',statusText:'正常',manager:'朱泉龙',lng:105.7621,lat:34.6035},
+  {id:'PLOT005',code:'D-005',name:'南区1号地',enterprise:'天水甘谷县基地',area:88,variety:'花牛苹果',year:2021,status:'danger',statusText:'病虫害',manager:'陈小忠',lng:105.5837,lat:34.4512},
+  {id:'PLOT006',code:'D-006',name:'中区1号地',enterprise:'天水秦安县基地',area:65,variety:'花牛苹果',year:2020,status:'normal',statusText:'正常',manager:'廖春亮',lng:105.6738,lat:34.8612},
+  {id:'PLOT007',code:'D-007',name:'南区2号地',enterprise:'天水清水县基地',area:88,variety:'花牛苹果',year:2018,status:'normal',statusText:'正常',manager:'李建明',lng:105.7328,lat:34.3214},
+  {id:'PLOT008',code:'D-008',name:'西区2号地',enterprise:'天水武山县基地',area:110,variety:'花牛苹果',year:2017,status:'warning',statusText:'需施肥',manager:'李根',lng:105.5219,lat:34.7216},
+  {id:'PLOT009',code:'D-009',name:'北区2号地',enterprise:'天水张家川县基地',area:92,variety:'花牛苹果',year:2016,status:'normal',statusText:'正常',manager:'张才孙',lng:105.1832,lat:34.7638},
+  {id:'PLOT010',code:'D-010',name:'东区3号地',enterprise:'天水麦积区基地',area:78,variety:'金帅',year:2021,status:'danger',statusText:'病虫害',manager:'刘全国',lng:105.7754,lat:34.5791},
+  {id:'PLOT011',code:'D-011',name:'南区3号地',enterprise:'天水秦州区基地',area:105,variety:'花牛苹果',year:2019,status:'normal',statusText:'正常',manager:'毛定卫',lng:105.8067,lat:34.4936},
+  {id:'PLOT012',code:'D-012',name:'西区3号地',enterprise:'天水甘谷县基地',area:82,variety:'秦冠',year:2022,status:'normal',statusText:'正常',manager:'叶三东',lng:105.5594,lat:34.4187},
+  {id:'PLOT013',code:'D-013',name:'北区3号地',enterprise:'天水清水县基地',area:75,variety:'花牛苹果',year:2018,status:'warning',statusText:'需施肥',manager:'周才贵',lng:105.7845,lat:34.2918},
+  {id:'PLOT014',code:'D-014',name:'中区2号地',enterprise:'天水武山县基地',area:98,variety:'花牛苹果',year:2017,status:'normal',statusText:'正常',manager:'程名高',lng:105.6431,lat:34.7529},
+  {id:'PLOT015',code:'D-015',name:'东区4号地',enterprise:'天水张家川县基地',area:68,variety:'花牛苹果',year:2020,status:'normal',statusText:'正常',manager:'邓小华',lng:105.2163,lat:34.6852},
+  {id:'PLOT016',code:'D-016',name:'南区4号地',enterprise:'天水麦积区基地',area:115,variety:'金帅',year:2015,status:'danger',statusText:'病虫害',manager:'周成友',lng:105.8392,lat:34.5471},
+  {id:'PLOT017',code:'D-017',name:'西区4号地',enterprise:'天水秦州区基地',area:89,variety:'花牛苹果',year:2019,status:'normal',statusText:'正常',manager:'危红卫',lng:105.6178,lat:34.5314},
+  {id:'PLOT018',code:'D-018',name:'北区4号地',enterprise:'天水甘谷县基地',area:96,variety:'花牛苹果',year:2021,status:'warning',statusText:'需施肥',manager:'方超',lng:105.8836,lat:34.4128},
+  {id:'PLOT019',code:'D-019',name:'中区3号地',enterprise:'天水秦安县基地',area:72,variety:'花牛苹果',year:2018,status:'normal',statusText:'正常',manager:'曹红英',lng:105.6587,lat:34.8896},
+  {id:'PLOT020',code:'D-020',name:'东区5号地',enterprise:'天水清水县基地',area:102,variety:'秦冠',year:2016,status:'normal',statusText:'正常',manager:'崔新根',lng:105.8621,lat:34.2537},
+  {id:'PLOT021',code:'D-021',name:'南区5号地',enterprise:'天水武山县基地',area:86,variety:'花牛苹果',year:2022,status:'normal',statusText:'正常',manager:'惠加宁',lng:105.5985,lat:34.6893},
+  {id:'PLOT022',code:'D-022',name:'西区5号地',enterprise:'天水张家川县基地',area:93,variety:'花牛苹果',year:2017,status:'danger',statusText:'病虫害',manager:'黄忠坚',lng:105.2476,lat:34.7971},
+  {id:'PLOT023',code:'D-023',name:'北区5号地',enterprise:'天水麦积区基地',area:81,variety:'金帅',year:2020,status:'normal',statusText:'正常',manager:'徐水应',lng:105.6853,lat:34.6215}
 ];
+
+/* ============================================================
+ * 地块主数据落库（后台 → 移动端 mb_map.html）
+ * localStorage key: smartorchard_plot_master
+ *   用途：本页地块总表，首次进入以 mockPlotData 播种，新增/编辑/删除/审核后回写
+ *   结构：纯数组，字段 id/code/name/enterprise/area/variety/year/status/statusText/manager/lng/lat
+ *   注意：与移动端手绘地块键 smartorchard_plots 相互独立，本页只读写本键
+ * ============================================================ */
+var PLOT_MASTER_KEY = 'smartorchard_plot_master';
+
+/* 内存中的地块主数据，DOMContentLoaded 时由 seedPlotMaster() 填充 */
+var plotMasterData = [];
+
+function readPlotMaster() {
+  try {
+    var raw = localStorage.getItem(PLOT_MASTER_KEY);
+    if (!raw) return null;
+    var arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/* 以纯数组形式回写主数据；失败（如配额溢出）不阻断页面 */
+function writePlotMaster(list) {
+  try {
+    localStorage.setItem(PLOT_MASTER_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/* 首次进入：主数据不存在则把 mockPlotData 完整播种（字段一字不改） */
+function seedPlotMaster() {
+  var existing = readPlotMaster();
+  if (existing && existing.length) return existing;
+  writePlotMaster(mockPlotData);
+  return mockPlotData.slice();
+}
+
+/* 把当前内存主数据同步回 localStorage */
+function syncPlotMaster() {
+  writePlotMaster(plotMasterData);
+}
+
+/* 数字左补零到 3 位（ES5 实现，避免依赖 padStart） */
+function plotPad3(n) {
+  var s = String(n);
+  while (s.length < 3) s = '0' + s;
+  return s;
+}
+
+/* 生成下一个地块 id / 编号（沿用 PLOTxxx / D-xxx 规则） */
+function nextPlotId() {
+  var max = 0;
+  plotMasterData.forEach(function (p) {
+    var m = String(p.id || '').match(/(\d+)/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return 'PLOT' + plotPad3(max + 1);
+}
+function nextPlotCode() {
+  var max = 0;
+  plotMasterData.forEach(function (p) {
+    var m = String(p.code || '').match(/(\d+)/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return 'D-' + plotPad3(max + 1);
+}
+
+/* 读取弹窗表单中某个字段的值 */
+function plotFormVal(formEl, name) {
+  var el = formEl.querySelector('[name="' + name + '"]');
+  return el ? el.value : '';
+}
+
+/* 新增 / 编辑保存后，把表单结果合并进主数据并重新渲染 */
+function upsertPlotMaster(mode, id, formEl) {
+  if (mode === 'edit') {
+    var target = null;
+    var i;
+    for (i = 0; i < plotMasterData.length; i++) {
+      if (String(plotMasterData[i].id) === String(id)) { target = plotMasterData[i]; break; }
+    }
+    if (!target) return;
+    var name = plotFormVal(formEl, 'name');
+    var enterprise = plotFormVal(formEl, 'enterprise');
+    var variety = plotFormVal(formEl, 'variety');
+    var area = plotFormVal(formEl, 'area');
+    var year = plotFormVal(formEl, 'year');
+    var manager = plotFormVal(formEl, 'manager');
+    if (name) target.name = name;
+    if (enterprise) target.enterprise = enterprise;
+    if (variety) target.variety = variety;
+    if (area !== '') target.area = Number(area);
+    if (year !== '') target.year = Number(year);
+    if (manager) target.manager = manager;
+  } else {
+    plotMasterData.push({
+      id: nextPlotId(),
+      code: nextPlotCode(),
+      name: plotFormVal(formEl, 'name') || '未命名地块',
+      enterprise: plotFormVal(formEl, 'enterprise') || '',
+      area: Number(plotFormVal(formEl, 'area')) || 0,
+      variety: plotFormVal(formEl, 'variety') || '',
+      year: Number(plotFormVal(formEl, 'year')) || new Date().getFullYear(),
+      status: 'normal',
+      statusText: '正常',
+      manager: plotFormVal(formEl, 'manager') || '',
+      lng: null,
+      lat: null
+    });
+  }
+  syncPlotMaster();
+  refreshPlotMasterView();
+}
+
+/* 主数据变化后刷新列表 / 地图 / 分布图 */
+function refreshPlotMasterView() {
+  var filtered = filteredPlotData();
+  Pagination.updateData(filtered);
+  if (currentView === 'map') renderPlotMap(filtered);
+  renderPlotDist(filtered);
+}
+
+/* 弹窗提交时把表单结果写入主数据（Modal 的 show 类名在下一帧才加，这里取最后一个弹层） */
+function hookPlotModalForm(mode, id) {
+  var overlays = document.querySelectorAll('.modal-overlay');
+  if (!overlays.length) return;
+  var overlay = overlays[overlays.length - 1];
+  var formEl = overlay.querySelector('#modal-form');
+  if (!formEl) return;
+  formEl.addEventListener('submit', function () {
+    upsertPlotMaster(mode, id, formEl);
+  });
+}
+
+/* 接管新增 / 编辑 / 删除入口，让地块操作同步落库到 smartorchard_plot_master */
+function hookPlotMasterActions() {
+  if (typeof PageActions === 'undefined') return;
+
+  // 新增按钮此前由 PageActions.init 绑定过一次，先深拷贝去掉该监听，
+  // 仅保留行内 onclick="PageActions.showCreate()"，避免弹窗被打开两次
+  var createBtn = document.querySelector('.btn-create');
+  if (createBtn && createBtn.parentNode) {
+    var fresh = createBtn.cloneNode(true);
+    createBtn.parentNode.replaceChild(fresh, createBtn);
+  }
+
+  var origCreate = PageActions.showCreate;
+  PageActions.showCreate = function () {
+    origCreate();
+    hookPlotModalForm('create', null);
+  };
+
+  var origEdit = PageActions.showEdit;
+  PageActions.showEdit = function (id) {
+    origEdit(id);
+    hookPlotModalForm('edit', id);
+  };
+
+  // 删除：确认后从主数据移除并回写
+  PageActions.deleteItem = function (id) {
+    if (typeof Confirm === 'undefined' || !Confirm.delete) return;
+    Confirm.delete().then(function (confirmed) {
+      if (!confirmed) return;
+      plotMasterData = plotMasterData.filter(function (p) {
+        return String(p.id) !== String(id);
+      });
+      syncPlotMaster();
+      refreshPlotMasterView();
+      plotToast('删除成功', 'success');
+    });
+  };
+}
 
 function renderPlotRow(item, seq) {
   return `
@@ -515,8 +904,16 @@ function renderPlotRow(item, seq) {
       <td>${item.enterprise}</td>
       <td style="text-align:right">${item.area}</td>
       <td>${item.variety}</td>
+      <td>${item.manager}</td>
       <td style="text-align:center">${item.year}</td>
       <td><span class="status-tag ${item.status}">${item.statusText}</span></td>
+      <td style="text-align:center">${
+        item.source === 'mobile'
+          ? `<span class="review-tag ${escPlot(item.reviewStatus || 'approved')}">${escPlot(reviewText(item.reviewStatus))}</span>`
+          : '<span style="color:var(--text-tertiary);">-</span>'
+      }</td>
+      <td class="coord-cell">${item.lng != null ? Number(item.lng).toFixed(4) : '-'}</td>
+      <td class="coord-cell">${item.lat != null ? Number(item.lat).toFixed(4) : '-'}</td>
       <td>
         <div class="action-btns">
           <button class="action-btn" onclick="PageActions.showDetail('${item.id}')">详情</button>
@@ -528,55 +925,454 @@ function renderPlotRow(item, seq) {
   `;
 }
 
-function searchPlotData() {
-  const keyword = document.getElementById('searchInput').value.toLowerCase();
-  const filtered = mockPlotData.filter(item =>
-    !keyword || item.code.toLowerCase().includes(keyword) || item.name.toLowerCase().includes(keyword)
-  );
-  Pagination.updateData(filtered);
+/* ============================================================
+ * T4 手绘地块审核
+ * 数据源：MobileBridge.plots()
+ *   写入方 = 移动端画地块
+ *   字段：{ id, name, type, area, points:[{x,y}], remark, source:'mobile', createTime }
+ *   type：apple 苹果园 / peach 桃园 / grape 葡萄园 / other 其他
+ * 审核结果回写 MobileBridge.KEYS.plots，移动端地块列表可见
+ * 通过 → 并入地块总表；待审核 / 已驳回 → 停留在审核区
+ * ============================================================ */
+
+/* 手绘地块类型 → 中文名 */
+const PLOT_TYPE_CN = { apple: '苹果园', peach: '桃园', grape: '葡萄园', other: '其他' };
+
+/* 审核状态枚举 */
+const REVIEW_TEXT = { pending: '待审核', approved: '已通过', rejected: '已驳回' };
+
+var currentReviewPlotId = null;
+
+/* 本页未引入 common-functions.js，Toast 仅有 show()，
+ * 统一走这里提示，兼容两种 Toast 实现 */
+function plotToast(msg, type) {
+  if (typeof Toast === 'undefined') return;
+  if (typeof Toast.show === 'function') { Toast.show(msg, type || 'info'); return; }
+  if (typeof Toast[type] === 'function') Toast[type](msg);
 }
 
-function smartReset() {
-  document.getElementById('searchInput').value = '';
-  const varietySelect = document.getElementById('varietySelect');
-  if (varietySelect) varietySelect.value = '';
-  Pagination.updateData(mockPlotData);
+/* HTML 转义，所有移动端数据渲染前必须走这里 */
+function escPlot(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
 }
 
-// 移动端手绘地块映射为 PC 端地块结构（FLOW-010 跨端闭环）
+function reviewText(status) {
+  return REVIEW_TEXT[status] || REVIEW_TEXT.pending;
+}
+
+/* 读取移动端手绘地块，读取失败回退空数组 */
 function mobileDrawnPlots() {
   if (typeof MobileBridge === 'undefined') return [];
-  const TYPE_NAME = { apple: '花牛苹果', pear: '梨', peach: '桃', grape: '葡萄', other: '其他' };
-  return MobileBridge.plots().map((p, i) => ({
+  try {
+    const list = MobileBridge.plots();
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/* 手绘地块 → PC 端地块表格结构 */
+function mapDrawnPlots() {
+  return mobileDrawnPlots().map((p, i) => ({
     id: p.id || ('MPLOT' + i),
     code: 'M-' + String(i + 1).padStart(3, '0'),
     name: p.name || ('手绘地块-' + (i + 1)),
     enterprise: p.plot || '天水麦积区基地',
     area: Number(p.area) || 0,
-    variety: TYPE_NAME[p.type] || '花牛苹果',
+    variety: PLOT_TYPE_CN[p.type] || PLOT_TYPE_CN.other,
     year: 2026,
     status: 'normal',
     statusText: '正常',
     manager: '现场绘制',
     source: 'mobile',
-    remark: p.remark || ''
+    rawType: p.type,
+    remark: p.remark || '',
+    createTime: p.createTime || '',
+    reviewStatus: p.reviewStatus || 'pending',
+    reviewRemark: p.reviewRemark || '',
+    reviewer: p.reviewer || ''
   }));
 }
 
+/* 地块总表 = 后台地块 + 已审核通过的手绘地块 */
+function allPlotData() {
+  const approved = mapDrawnPlots().filter(p => p.reviewStatus === 'approved');
+  return plotMasterData.concat(approved);
+}
+
+/* ============================================================
+ * 地块地图视图（内联 SVG，不依赖地图库 / 不联网）
+ *   经纬度 → 画布坐标线性映射，viewBox 900 × 520
+ *   按 status 着色：正常绿 / 需施肥黄 / 病虫害红 / 休耕灰 / 维护中蓝
+ *   移动端手绘地块无坐标 → 不绘制，并注明原因
+ * ============================================================ */
+const MAP_W = 900;
+const MAP_H = 520;
+const MAP_PAD = 46;
+const PLOT_STATUS_FILL = {
+  normal: '#52c41a',
+  warning: '#faad14',
+  danger: '#ff4d4f',
+  fallow: '#bfbfbf',
+  maintain: '#1890ff'
+};
+
+let currentView = 'list';
+
+/* 筛选：关键词 + 品种 + 状态 + 基地，同时作用于列表与地图 */
+function filteredPlotData() {
+  const keyword = (document.getElementById('searchInput') || { value: '' }).value.trim().toLowerCase();
+  const variety = (document.getElementById('varietySelect') || { value: '' }).value;
+  const status = (document.getElementById('statusSelect') || { value: '' }).value;
+  const base = (document.getElementById('baseSelect') || { value: '' }).value;
+  const varietyMap = { hfs: '花牛苹果', js: '金帅', gl: '红富士', qg: '秦冠', rb: '瑞雪' };
+
+  return allPlotData().filter(function (item) {
+    const matchKeyword = !keyword
+      || String(item.code).toLowerCase().includes(keyword)
+      || String(item.name).toLowerCase().includes(keyword);
+    const matchVariety = !variety || item.variety === varietyMap[variety];
+    const matchStatus = !status || item.status === status;
+    const matchBase = !base || item.enterprise === base;
+    return matchKeyword && matchVariety && matchStatus && matchBase;
+  });
+}
+
+/* 渲染 SVG 地块地图 */
+function renderPlotMap(list) {
+  const box = document.getElementById('plotMapContainer');
+  if (!box) return;
+
+  const located = list.filter(function (p) { return p.lng != null && p.lat != null; });
+  const missing = list.length - located.length;
+
+  if (!located.length) {
+    box.innerHTML = '<div class="map-empty">当前筛选条件下没有带坐标的地块，无法在地图上显示</div>';
+    return;
+  }
+
+  const lngs = located.map(function (p) { return p.lng; });
+  const lats = located.map(function (p) { return p.lat; });
+  const minLng = Math.min.apply(null, lngs), maxLng = Math.max.apply(null, lngs);
+  const minLat = Math.min.apply(null, lats), maxLat = Math.max.apply(null, lats);
+  const spanLng = (maxLng - minLng) || 0.01;
+  const spanLat = (maxLat - minLat) || 0.01;
+  const plotW = Math.max(46, Math.min(96, 620 / Math.sqrt(located.length)));
+  const plotH = Math.max(34, plotW * 0.62);
+
+  function toX(lng) { return MAP_PAD + (lng - minLng) / spanLng * (MAP_W - MAP_PAD * 2); }
+  function toY(lat) { return MAP_H - MAP_PAD - (lat - minLat) / spanLat * (MAP_H - MAP_PAD * 2); }
+
+  const shapes = located.map(function (p, i) {
+    const cx = toX(p.lng);
+    const cy = toY(p.lat);
+    const x = Math.min(cx - plotW / 2, MAP_W - MAP_PAD - plotW);
+    const y = Math.min(cy - plotH / 2, MAP_H - MAP_PAD - plotH);
+    const fill = PLOT_STATUS_FILL[p.status] || '#bfbfbf';
+    const tip = p.name + ' · ' + p.variety + ' · ' + p.area + '亩 · 负责人 ' + p.manager + ' · ' + p.statusText;
+    return '<g class="map-plot-shape">' +
+      '<title>' + escPlot(tip) + '</title>' +
+      '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + plotW.toFixed(1) + '" height="' + plotH.toFixed(1) + '" rx="5" ry="5" fill="' + fill + '" fill-opacity="0.82" stroke="#ffffff" stroke-width="1.4"></rect>' +
+      '<text class="map-plot-label" x="' + (x + plotW / 2).toFixed(1) + '" y="' + (y + plotH / 2 + 3.5).toFixed(1) + '" text-anchor="middle">' + escPlot(p.code) + '</text>' +
+    '</g>';
+  }).join('');
+
+  box.innerHTML =
+    '<svg class="map-canvas" viewBox="0 0 ' + MAP_W + ' ' + MAP_H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="地块分布示意图">' +
+      '<rect x="0" y="0" width="' + MAP_W + '" height="' + MAP_H + '" fill="#f7f9f7"></rect>' +
+      '<text x="14" y="20" font-size="11" fill="#8c8c8c">示意图 · 非真实比例</text>' +
+      shapes +
+      // 指北针
+      '<g transform="translate(' + (MAP_W - 46) + ',52)">' +
+        '<circle cx="0" cy="0" r="18" fill="#ffffff" fill-opacity="0.9" stroke="#d9d9d9"></circle>' +
+        '<path d="M0,-13 L5,6 L0,2 L-5,6 Z" fill="#1890ff"></path>' +
+        '<path d="M0,13 L5,-6 L0,-2 L-5,-6 Z" fill="#d9d9d9"></path>' +
+        '<text x="0" y="-22" font-size="11" text-anchor="middle" fill="#595959" font-weight="700">N</text>' +
+      '</g>' +
+      // 比例尺
+      '<g transform="translate(' + MAP_PAD + ',' + (MAP_H - 20) + ')">' +
+        '<line x1="0" y1="0" x2="120" y2="0" stroke="#8c8c8c" stroke-width="2"></line>' +
+        '<line x1="0" y1="-4" x2="0" y2="4" stroke="#8c8c8c" stroke-width="2"></line>' +
+        '<line x1="60" y1="-3" x2="60" y2="3" stroke="#8c8c8c" stroke-width="2"></line>' +
+        '<line x1="120" y1="-4" x2="120" y2="4" stroke="#8c8c8c" stroke-width="2"></line>' +
+        '<text x="126" y="4" font-size="10" fill="#8c8c8c">约 10km</text>' +
+      '</g>' +
+    '</svg>' +
+    (missing > 0
+      ? '<div class="map-note">部分移动端手绘地块暂无坐标，未在地图显示（' + missing + ' 块）。</div>'
+      : '');
+}
+
+/* ============================================================
+ * 地块分布图（独立区块，纯 SVG）
+ *   经纬度 → 画布坐标线性映射：viewBox 880 × 520
+ *     x = (lng - 105.8) / (106.2 - 105.8) * 800 + 40
+ *     y = (34.7 - lat) / (34.7 - 34.4) * 460 + 30
+ *   色块大小与面积正相关，按 status 着色，点击显示地块信息
+ * ============================================================ */
+const DIST_W = 880;
+const DIST_H = 520;
+const DIST_LNG_MIN = 105.8, DIST_LNG_MAX = 106.2;
+const DIST_LAT_MIN = 34.4, DIST_LAT_MAX = 34.7;
+
+function distToX(lng) { return (lng - DIST_LNG_MIN) / (DIST_LNG_MAX - DIST_LNG_MIN) * 800 + 40; }
+function distToY(lat) { return (DIST_LAT_MIN === DIST_LAT_MAX ? 0 : (DIST_LAT_MAX - lat) / (DIST_LAT_MAX - DIST_LAT_MIN) * 460) + 30; }
+
+function renderPlotDist(list) {
+  const box = document.getElementById('plotDistContainer');
+  if (!box) return;
+
+  const located = list.filter(function (p) { return p.lng != null && p.lat != null; });
+
+  if (!located.length) {
+    box.innerHTML = '<div class="map-empty">当前筛选条件下没有带坐标的地块，无法绘制分布图</div>';
+    return;
+  }
+
+  const areas = located.map(function (p) { return Number(p.area) || 0; });
+  const minArea = Math.min.apply(null, areas);
+  const maxArea = Math.max.apply(null, areas);
+  const spanArea = (maxArea - minArea) || 1;
+
+  const shapes = located.map(function (p) {
+    const cx = distToX(Number(p.lng));
+    const cy = distToY(Number(p.lat));
+    // 面积越大色块越大（半径 16 ~ 30）
+    const r = 16 + Math.round((Number(p.area) - minArea) / spanArea * 14);
+    const fill = PLOT_STATUS_FILL[p.status] || '#bfbfbf';
+    return '<g class="map-plot-shape" onclick="showPlotDistInfo(\'' + escPlot(p.id) + '\')">' +
+      '<title>' + escPlot(p.name + ' · ' + p.area + '亩 · ' + p.variety + ' · ' + p.manager + ' · ' + p.statusText) + '</title>' +
+      '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="' + r + '" fill="' + fill + '" fill-opacity="0.82" stroke="#ffffff" stroke-width="1.6"></circle>' +
+    '</g>';
+  }).join('');
+
+  box.innerHTML =
+    '<svg class="map-canvas" viewBox="0 0 ' + DIST_W + ' ' + DIST_H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="地块分布示意图">' +
+      '<rect x="0" y="0" width="' + DIST_W + '" height="' + DIST_H + '" fill="#f7f9f7"></rect>' +
+      '<text x="40" y="22" font-size="11" fill="#8c8c8c">经度 ' + DIST_LNG_MIN + '~' + DIST_LNG_MAX + ' · 纬度 ' + DIST_LAT_MIN + '~' + DIST_LAT_MAX + '</text>' +
+      shapes +
+      '<text x="' + (DIST_W - 34) + '" y="' + (DIST_H - 12) + '" font-size="10" fill="#8c8c8c" text-anchor="end">色块大小 ∝ 地块面积</text>' +
+    '</svg>';
+}
+
+/* 点击色块展示地块信息 */
+function showPlotDistInfo(id) {
+  const info = document.getElementById('plotDistInfo');
+  if (!info) return;
+  const p = allPlotData().filter(function (x) { return String(x.id) === String(id); })[0];
+  if (!p) return;
+  info.hidden = false;
+  info.innerHTML =
+    '<div class="di-name">' + escPlot(p.code + ' · ' + p.name) + '</div>' +
+    '<div class="di-grid">' +
+      '<span>面积<b>' + escPlot(p.area) + ' 亩</b></span>' +
+      '<span>品种<b>' + escPlot(p.variety) + '</b></span>' +
+      '<span>负责人<b>' + escPlot(p.manager) + '</b></span>' +
+      '<span>所属基地<b>' + escPlot(p.enterprise) + '</b></span>' +
+      '<span>状态<b>' + escPlot(p.statusText) + '</b></span>' +
+    '</div>';
+}
+
+/* 切换列表视图 / 地图视图 */
+function toggleView() {
+  currentView = currentView === 'list' ? 'map' : 'list';
+  applyView();
+}
+
+function applyView() {
+  const listSection = document.getElementById('plotListSection');
+  const mapSection = document.getElementById('plotMapSection');
+  const distSection = document.getElementById('plotDistSection');
+  const btn = document.getElementById('viewToggleBtn');
+  const pagination = document.getElementById('pagination-container');
+
+  if (currentView === 'map') {
+    if (listSection) listSection.hidden = true;
+    if (mapSection) mapSection.hidden = false;
+    if (distSection) distSection.hidden = true;
+    if (pagination) pagination.style.display = 'none';
+    if (btn) btn.textContent = '列表视图';
+    renderPlotMap(filteredPlotData());
+  } else {
+    if (listSection) listSection.hidden = false;
+    if (mapSection) mapSection.hidden = true;
+    if (distSection) distSection.hidden = false;
+    if (pagination) pagination.style.display = '';
+    if (btn) btn.textContent = '地图视图';
+    Pagination.render();
+  }
+}
+
+function searchPlotData() {
+  const filtered = filteredPlotData();
+  Pagination.updateData(filtered);
+  if (currentView === 'map') renderPlotMap(filtered);
+  renderPlotDist(filtered);
+}
+
+function smartReset() {
+  document.getElementById('searchInput').value = '';
+  const varietySelect = document.getElementById('varietySelect');
+  const statusSelect = document.getElementById('statusSelect');
+  const baseSelect = document.getElementById('baseSelect');
+  if (varietySelect) varietySelect.value = '';
+  if (statusSelect) statusSelect.value = '';
+  if (baseSelect) baseSelect.value = '';
+  const filtered = filteredPlotData();
+  Pagination.updateData(filtered);
+  if (currentView === 'map') renderPlotMap(filtered);
+  renderPlotDist(filtered);
+  renderPlotReviewTable();
+}
+
+/* 刷新手绘地块：重新读取 localStorage 并重建两处列表 */
+function refreshPlotReview() {
+  Pagination.updateData(allPlotData());
+  if (currentView === 'map') renderPlotMap(filteredPlotData());
+  renderPlotDist(filteredPlotData());
+  renderPlotReviewTable();
+  plotToast('手绘地块数据已刷新', 'success');
+}
+
+/* ---------- 待审核手绘地块表 ---------- */
+function renderPlotReviewTable() {
+  const pending = mapDrawnPlots().filter(p => p.reviewStatus !== 'approved');
+  const section = document.getElementById('plotReviewSection');
+  const body = document.getElementById('plotReviewBody');
+  const emptyHint = document.getElementById('plotReviewEmpty');
+
+  if (!pending.length) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+
+  body.innerHTML = pending.map((p, i) => {
+    const st = p.reviewStatus || 'pending';
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td><strong>' + escPlot(p.name) + '</strong></td>' +
+      '<td>' + escPlot(PLOT_TYPE_CN[p.rawType] || PLOT_TYPE_CN.other) + '</td>' +
+      '<td style="text-align:right">' + escPlot(p.area) + '</td>' +
+      '<td class="text-mono">' + escPlot(p.createTime || '-') + '</td>' +
+      '<td><div class="review-box">' + escPlot(p.remark || '-') +
+        (p.reviewRemark ? '<br>驳回原因：' + escPlot(p.reviewRemark) : '') + '</div></td>' +
+      '<td style="text-align:center"><span class="review-tag ' + escPlot(st) + '">' + escPlot(reviewText(st)) + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn" onclick="openPlotReviewModal(\'' + escPlot(p.id) + '\')">审核</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ---------- 审核弹窗 ---------- */
+function openPlotReviewModal(id) {
+  const list = mapDrawnPlots();
+  let target = null;
+  for (let i = 0; i < list.length; i++) {
+    if (String(list[i].id) === String(id)) { target = list[i]; break; }
+  }
+  if (!target) {
+    plotToast('未找到该手绘地块', 'error');
+    return;
+  }
+
+  currentReviewPlotId = target.id;
+  document.getElementById('prName').textContent = target.name || '-';
+  document.getElementById('prType').textContent = PLOT_TYPE_CN[target.rawType] || PLOT_TYPE_CN.other;
+  document.getElementById('prArea').textContent = target.area || 0;
+  document.getElementById('prTime').textContent = target.createTime || '-';
+  document.getElementById('prRemark').textContent = target.remark || '-';
+  const st = target.reviewStatus || 'pending';
+  document.getElementById('prStatus').innerHTML =
+    `<span class="review-tag ${escPlot(st)}">${escPlot(reviewText(st))}</span>`;
+  document.getElementById('prReviewer').value = target.reviewer || '超级用户';
+  document.getElementById('prReviewRemark').value = target.reviewRemark || '';
+
+  document.getElementById('plotReviewModal').classList.add('show');
+}
+
+function closePlotReviewModal() {
+  document.getElementById('plotReviewModal').classList.remove('show');
+  currentReviewPlotId = null;
+}
+
+/* 提交审核：approved / rejected；驳回需填意见并二次确认 */
+function submitPlotReview(decision) {
+  const reviewer = document.getElementById('prReviewer').value.trim() || '超级用户';
+  const remark = document.getElementById('prReviewRemark').value.trim();
+
+  if (decision === 'rejected') {
+    if (!remark) {
+      plotToast('驳回时请填写驳回原因', 'warning');
+      return;
+    }
+    if (typeof ConfirmDialog !== 'undefined') {
+      ConfirmDialog.show({
+        title: '驳回手绘地块',
+        message: '确定要驳回该手绘地块吗？驳回后移动端可看到驳回原因并重新绘制。',
+        onConfirm: function () { doPlotReview(decision, reviewer, remark); }
+      });
+      return;
+    }
+  }
+  doPlotReview(decision, reviewer, remark);
+}
+
+function doPlotReview(decision, reviewer, remark) {
+  if (typeof MobileBridge === 'undefined') {
+    plotToast('数据桥接未加载，无法保存审核结果', 'error');
+    return;
+  }
+
+  const patch = decision === 'approved'
+    ? { reviewStatus: 'approved', reviewTime: MobileBridge.stampNow(), reviewer, reviewRemark: remark }
+    : { reviewStatus: 'rejected', reviewer, reviewRemark: remark };
+
+  const ok = MobileBridge.updateRecord(MobileBridge.KEYS.plots, currentReviewPlotId, patch);
+  if (!ok) {
+    plotToast('审核结果保存失败，请刷新后重试', 'error');
+    return;
+  }
+
+  closePlotReviewModal();
+  Pagination.updateData(allPlotData());
+  renderPlotReviewTable();
+  // 审核结果落定后同步回写地块主数据，保证移动端读到最新
+  syncPlotMaster();
+  plotToast(decision === 'approved' ? '地块审核通过，已并入地块总表' : '地块已驳回，移动端可查看原因', 'success');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+  // 地块主数据落库：首次进入用 mockPlotData 播种，之后以 smartorchard_plot_master 为准
+  plotMasterData = seedPlotMaster();
   PageActions.init('plot');
-  const drawnPlots = mobileDrawnPlots();
-  const allPlots = mockPlotData.concat(drawnPlots);
+  // 接管新增 / 编辑 / 删除，让地块操作同步回写主数据
+  hookPlotMasterActions();
+  const drawnPlots = mapDrawnPlots();
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
-    data: allPlots,
+    data: allPlotData(),
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderPlotRow
   });
-  if (drawnPlots.length > 0 && typeof Toast !== 'undefined') {
-    Toast.show('已加载移动端绘制地块 ' + drawnPlots.length + ' 块', 'info');
+  renderPlotReviewTable();
+  renderPlotDist(filteredPlotData());
+
+  // 品种 / 状态 / 基地下拉：同时作用于列表与地图
+  ['varietySelect', 'statusSelect', 'baseSelect'].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', searchPlotData);
+  });
+
+  if (drawnPlots.length > 0) {
+    const pendingCount = drawnPlots.filter(p => p.reviewStatus !== 'approved').length;
+    plotToast('已加载移动端绘制地块 ' + drawnPlots.length + ' 块'
+      + (pendingCount > 0 ? '，待审核 ' + pendingCount + ' 块' : ''), 'info');
   }
 });
 </script>
