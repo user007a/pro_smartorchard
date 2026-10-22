@@ -6,6 +6,40 @@
   <title>移动商城 - 我的</title>
   <link rel="stylesheet" href="../applefarm_mobile/css/mobile-design-system.css">
   <style>
+    /* 登录入口条：未登录时引导登录，已登录时展示「账号与安全」 */
+    .login-entry-bar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin: var(--space-4) var(--space-4) 0;
+      padding: 12px 14px;
+      background: var(--bg-white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      cursor: pointer;
+    }
+    .login-entry-bar:active { background: var(--gray-100); }
+    .login-entry-bar .le-icon {
+      width: 30px; height: 30px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      background: var(--primary-50);
+      color: var(--primary-700);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .login-entry-bar .le-icon svg { width: 17px; height: 17px; }
+    .login-entry-bar .le-text { flex: 1; min-width: 0; }
+    .login-entry-bar .le-title { font-size: var(--font-base); color: var(--text); font-weight: var(--font-medium); }
+    .login-entry-bar .le-desc { font-size: var(--font-xs); color: var(--text-tertiary); margin-top: 2px; }
+    .login-entry-bar .le-action {
+      flex-shrink: 0;
+      font-size: var(--font-sm);
+      color: var(--primary-600);
+      font-weight: var(--font-medium);
+      display: flex; align-items: center; gap: 2px;
+    }
+    .login-entry-bar .le-action svg { width: 14px; height: 14px; }
     /* ========== 页面专属样式 - 参照mb_mine ========== */
     .profile-section {
       background: var(--gradient-header);
@@ -102,6 +136,23 @@
       </div>
     </header>
 
+    <!-- 登录入口条：未登录引导登录，已登录展示账号信息 -->
+    <div class="login-entry-bar" id="loginEntryBar" onclick="handleLoginEntry()">
+      <div class="le-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+        </svg>
+      </div>
+      <div class="le-text">
+        <div class="le-title" id="leTitle">点击登录 / 注册</div>
+        <div class="le-desc" id="leDesc">登录后可下单、认养与查看溯源档案</div>
+      </div>
+      <div class="le-action" id="leAction">
+        <span id="leActionText">去登录</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+    </div>
+
     <!-- 功能菜单 -->
     <div class="mb-list" style="margin: var(--space-4) 0;">
       <div class="mb-list-item" onclick="navigateTo('h5_order.html')">
@@ -191,8 +242,36 @@
     </nav>
   </div>
 
+  <script src="js/h5-auth.js"></script>
   <script>
     function navigateTo(page) { window.location.href = page; }
+
+// 登录入口条：未登录引导登录，已登录展示账号信息
+function handleLoginEntry() {
+  if (H5Auth.isLoggedIn()) {
+    navigateTo('h5_profile.html');
+    return;
+  }
+  H5Auth.redirectToLogin();
+}
+
+function renderLoginEntry() {
+  var titleEl = document.getElementById('leTitle');
+  var descEl = document.getElementById('leDesc');
+  var actionEl = document.getElementById('leActionText');
+  if (!titleEl) return;
+  if (H5Auth.isLoggedIn()) {
+    var name = H5Auth.displayName();
+    var phone = H5Auth.maskedPhone();
+    titleEl.textContent = name;
+    descEl.textContent = phone ? ('手机号 ' + phone + ' · 点击查看账号信息') : '点击查看账号信息';
+    actionEl.textContent = '账号信息';
+  } else {
+    titleEl.textContent = '点击登录 / 注册';
+    descEl.textContent = '登录后可下单、认养与查看溯源档案';
+    actionEl.textContent = '去登录';
+  }
+}
 
 // 会员中心 4 宫格：从 localStorage 实时统计（H5-B-021）
 function readArr(key) {
@@ -256,27 +335,28 @@ function refreshMemberStats() {
   var nameEl = document.getElementById('memberName');
   var levelEl = document.getElementById('memberLevel');
   var areaEl = document.getElementById('memberArea');
-  if (nameEl) nameEl.textContent = loginUser || '未登录';
+  if (nameEl) nameEl.textContent = loginUser || '未登录，点击下方登录';
   var spend = currentUserSpend(orders);
   var level = computeMemberLevel(spend);
   if (levelEl) levelEl.textContent = level.name;
   var adoptionsN = currentUserAdoptions(allAdoptions);
-  if (areaEl) areaEl.textContent = loginUser ? ('已认养 ' + adoptionsN + ' 棵果树') : '请先登录后查看认养数据';
+  if (areaEl) areaEl.textContent = loginUser ? ('已认养 ' + adoptionsN + ' 棵果树') : '登录后即可认养果树、查看溯源档案';
 
-  document.getElementById('statOrders').textContent = orders.length;
+  // 未登录时订单/收藏统计不展示，避免游客看到他人数据
+  document.getElementById('statOrders').textContent = loginUser ? orders.length : 0;
   document.getElementById('statAdoptions').textContent = adoptionsN;
-  document.getElementById('statFavs').textContent = favs.length;
-  document.getElementById('statPoints').textContent = points;
+  document.getElementById('statFavs').textContent = loginUser ? favs.length : 0;
+  document.getElementById('statPoints').textContent = loginUser ? points : 0;
 }
 document.addEventListener('DOMContentLoaded', refreshMemberStats);
+document.addEventListener('DOMContentLoaded', renderLoginEntry);
 window.addEventListener('storage', function (e) {
-  if (e.key && (/^h5_|^snzg_adoptions/).test(e.key)) refreshMemberStats();
+  if (e.key && (/^h5_|^snzg_adoptions/.test(e.key))) refreshMemberStats();
 });
 
 function confirmLogout() {
   if (!confirm('确定要退出登录吗？')) return;
-  ['isLoggedIn', 'loginUser', 'loginRole'].forEach(function(k) { sessionStorage.removeItem(k); });
-  localStorage.removeItem('smartorchard_current_user');
+  H5Auth.logout();
   window.location.href = 'trace_intro.html?logout=1';
 }
   </script>
