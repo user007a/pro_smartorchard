@@ -707,16 +707,7 @@
           </svg>
           历史趋势
         </div>
-        <div class="chart-area">
-          <div class="chart-placeholder">
-            <div class="chart-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 20V10M8 20V4M3 14h18"/>
-              </svg>
-            </div>
-            <div class="chart-text">温度/湿度趋势图表</div>
-          </div>
-        </div>
+        <div class="chart-area" id="deviceTrendChart"></div>
       </div>
       
       <div class="action-btns">
@@ -814,9 +805,92 @@
         '数据更新于 ' + p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds());
     }
 
+    /* 设备历史趋势：自绘 SVG 折线（近 12 小时）
+   以设备当前读数为基准，叠加符合昼夜变化的确定性波形，
+   避免使用 Math.random() 导致每次打开数据跳变 */
+    var TREND_BASE = {
+      '温湿度传感器':   { t: 26, h: 65, unit: '°C' },
+      '土壤湿度传感器': { t: 18, h: 42, unit: '%' },
+      '灌溉控制器':     { t: 22, h: 58, unit: '°C' },
+      '气象监测站':     { t: 19, h: 71, unit: '°C' }
+    };
+
+    function renderDeviceTrend(deviceName) {
+      var box = document.getElementById('deviceTrendChart');
+      if (!box) return;
+      var base = TREND_BASE[deviceName] || TREND_BASE['温湿度传感器'];
+      var N = 12, W = 320, H = 150, PL = 30, PR = 10, PT = 14, PB = 22;
+      var iw = W - PL - PR, ih = H - PT - PB;
+
+      var seedNum = deviceName.split('').reduce(function (s, c) { return s + c.charCodeAt(0); }, 0);
+      var tSeries = [], hSeries = [];
+      for (var i = 0; i < N; i++) {
+        var phase = (i / (N - 1)) * Math.PI * 2;
+        var wobble = Math.sin(phase + seedNum * 0.7) * 0.5 + Math.sin(phase * 2 + seedNum) * 0.22;
+        tSeries.push(base.t + wobble * 3.2);
+        hSeries.push(base.h + wobble * 9);
+      }
+
+      function pathOf(series, min, max) {
+        var d = '', a = '';
+        for (var i = 0; i < series.length; i++) {
+          var x = PL + (i / (N - 1)) * iw;
+          var y = PT + ih - ((series[i] - min) / (max - min)) * ih;
+          d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+          a += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) +
+               'L' + x.toFixed(1) + ' ' + (PT + ih) + 'Z';
+        }
+        return { line: d, area: a };
+      }
+
+      var tMin = Math.min.apply(null, tSeries) - 1, tMax = Math.max.apply(null, tSeries) + 1;
+      var hMin = Math.min.apply(null, hSeries) - 4, hMax = Math.max.apply(null, hSeries) + 4;
+      var tp = pathOf(tSeries, tMin, tMax), hp = pathOf(hSeries, hMin, hMax);
+
+      var grid = '';
+      for (var g = 0; g <= 3; g++) {
+        var gy = PT + (g / 3) * ih;
+        grid += '<line x1="' + PL + '" y1="' + gy.toFixed(1) + '" x2="' + (W - PR) +
+                '" y2="' + gy.toFixed(1) + '" stroke="#e8e8e8" stroke-width="1"/>';
+      }
+
+      var lastX = PL + iw, lastTy = PT + ih - ((tSeries[N - 1] - tMin) / (tMax - tMin)) * ih;
+      var lastHy = PT + ih - ((hSeries[N - 1] - hMin) / (hMax - hMin)) * ih;
+
+      box.innerHTML =
+        '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" ' +
+        'style="display:block" role="img" aria-label="' + deviceName + ' 近 12 小时温度与湿度趋势">' +
+        '<defs>' +
+        '<linearGradient id="gT" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="#ff6b35" stop-opacity=".28"/>' +
+        '<stop offset="100%" stop-color="#ff6b35" stop-opacity="0"/></linearGradient>' +
+        '<linearGradient id="gH" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="#1890ff" stop-opacity=".22"/>' +
+        '<stop offset="100%" stop-color="#1890ff" stop-opacity="0"/></linearGradient></defs>' +
+        grid +
+        '<path d="' + tp.area + '" fill="url(#gT)"/>' +
+        '<path d="' + hp.area + '" fill="url(#gH)"/>' +
+        '<path d="' + tp.line + '" fill="none" stroke="#ff6b35" stroke-width="2" ' +
+        'stroke-linecap="round" stroke-linejoin="round"/>' +
+        '<path d="' + hp.line + '" fill="none" stroke="#1890ff" stroke-width="2" ' +
+        'stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>' +
+        '<circle cx="' + lastX.toFixed(1) + '" cy="' + lastTy.toFixed(1) + '" r="3" fill="#ff6b35"/>' +
+        '<circle cx="' + lastX.toFixed(1) + '" cy="' + lastHy.toFixed(1) + '" r="3" fill="#1890ff"/>' +
+        '<text x="4" y="' + (PT + 4) + '" font-size="9" fill="#8c8c8c">' + tMax.toFixed(0) + base.unit + '</text>' +
+        '<text x="4" y="' + (PT + ih) + '" font-size="9" fill="#8c8c8c">' + tMin.toFixed(0) + base.unit + '</text>' +
+        '<text x="' + PL + '" y="' + (H - 5) + '" font-size="9" fill="#8c8c8c">12小时前</text>' +
+        '<text x="' + (W - PR) + '" y="' + (H - 5) + '" font-size="9" fill="#8c8c8c" text-anchor="end">当前</text>' +
+        '</svg>' +
+        '<div style="position:absolute;left:34px;top:6px;font-size:11px;color:#ff6b35;font-weight:600">' +
+        tSeries[N - 1].toFixed(1) + '°C</div>' +
+        '<div style="position:absolute;left:34px;top:20px;font-size:11px;color:#1890ff;font-weight:600">' +
+        hSeries[N - 1].toFixed(0) + '%</div>';
+    }
+
     function openDeviceDetail(name) {
       currentDevice = name;
       document.getElementById('modalDeviceName').textContent = name + ' - 详情';
+      renderDeviceTrend(name);
       document.getElementById('detailModal').classList.add('show');
     }
 

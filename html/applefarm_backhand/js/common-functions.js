@@ -35,7 +35,20 @@ function buildUserOptionsHtmlMulti(selectedValues) {
 window.buildUserOptionsHtml = buildUserOptionsHtml;
 window.buildUserOptionsHtmlMulti = buildUserOptionsHtmlMulti;
 
-// 模态框操作
+/* ============================================================
+ * 全局命名空间防冲突
+ * ------------------------------------------------------------
+ * 本文件与 js/components/modal.js、js/components/confirm.js
+ * 存在同名全局对象（Modal / Toast / ConfirmDialog），但两套
+ * API 签名不同：
+ *   components/modal.js   → Modal.open/close/form/detail/confirm，Toast 默认 info
+ *   common-functions.js   → Modal.show/hide/hideAll，          Toast 默认 success
+ *
+ * 直接 `window.X = X` 会互相覆盖，导致跨页面复制代码时行为不一致。
+ * 策略：components/* 为权威实现（API 更完整）；
+ *      本文件仅在权威实现「尚未加载」时补充挂载，并保留自身实现
+ *      到独立命名的 LegacyModal / LegacyToast 等，避免破坏既有调用。
+ * ============================================================ */
 const Modal = {
   // 显示模态框
   show: function(modalId) {
@@ -63,6 +76,7 @@ const Modal = {
     document.body.style.overflow = '';
   }
 };
+const LegacyModal = Modal;
 
 // 分页操作 - 完整版
 const Pagination = {
@@ -206,8 +220,8 @@ const Search = {
   }
 };
 
-// 删除确认对话框
-const ConfirmDialog = {
+// 删除确认对话框（独立命名，避免覆盖 components/confirm.js 的 ConfirmDialog）
+const LegacyConfirmDialog = {
   show: function(options) {
     const { title, message, onConfirm, onCancel } = options;
 
@@ -217,7 +231,7 @@ const ConfirmDialog = {
       <div class="modal-box" style="max-width: 420px;">
         <div class="modal-header">
           <h3 class="modal-title">${title}</h3>
-          <button class="modal-close" onclick="ConfirmDialog.hide(this)">
+          <button class="modal-close" onclick="LegacyConfirmDialog.hide(this)">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 4L12 12M12 4L4 12"/>
             </svg>
@@ -228,8 +242,8 @@ const ConfirmDialog = {
           <p style="color: var(--text-secondary);">${message}</p>
         </div>
         <div class="modal-footer">
-          <button class="jg-btn" onclick="ConfirmDialog.hide(this); if (typeof onCancel === 'function') onCancel();">取消</button>
-          <button class="jg-btn jg-btn-danger" onclick="ConfirmDialog.hide(this); if (typeof onConfirm === 'function') onConfirm();">确认删除</button>
+          <button class="jg-btn" onclick="LegacyConfirmDialog.hide(this); if (typeof onCancel === 'function') onCancel();">取消</button>
+          <button class="jg-btn jg-btn-danger" onclick="LegacyConfirmDialog.hide(this); if (typeof onConfirm === 'function') onConfirm();">确认删除</button>
         </div>
       </div>
     `;
@@ -246,8 +260,8 @@ const ConfirmDialog = {
   }
 };
 
-// 消息提示
-const Toast = {
+// 消息提示（独立命名，默认 success；components/modal.js 的 Toast 默认 info）
+const LegacyToast = {
   show: function(message, type = 'success', duration = 3000) {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
@@ -310,15 +324,27 @@ document.addEventListener('DOMContentLoaded', function() {
   // ESC键关闭模态框
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
-      Modal.hideAll();
+      LegacyModal.hideAll();
     }
   });
 });
 
-// 导出为全局变量
-window.Modal = Modal;
+/* ============================================================
+ * 导出为全局变量（仅在权威实现缺席时补挂，避免互相覆盖）
+ * ============================================================ */
+window.LegacyModal = LegacyModal;
+window.LegacyConfirmDialog = LegacyConfirmDialog;
+window.LegacyToast = LegacyToast;
 window.Pagination = Pagination;
 window.Search = Search;
-window.ConfirmDialog = ConfirmDialog;
-window.Toast = Toast;;
+
+if (typeof window.Modal === 'undefined') {
+  window.Modal = LegacyModal;
+}
+if (typeof window.ConfirmDialog === 'undefined') {
+  window.ConfirmDialog = LegacyConfirmDialog;
+}
+if (typeof window.Toast === 'undefined') {
+  window.Toast = LegacyToast;
+}
 

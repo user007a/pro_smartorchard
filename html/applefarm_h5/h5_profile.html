@@ -211,7 +211,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </div>
         </div>
-        <div class="profile-name-display">刘友宝 <span class="vip-tag">VIP会员</span></div>
+        <div class="profile-name-display" id="profileNameDisplay">未登录 <span class="vip-tag" id="profileLevelTag">普通会员</span></div>
       </div>
 
       <!-- 基本信息 -->
@@ -222,19 +222,19 @@
         </div>
         <div class="info-row">
           <span class="info-label">姓名</span>
-          <span class="info-value">刘友宝 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></span>
+          <span class="info-value" id="profileName">未登录 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></span>
         </div>
         <div class="info-row">
           <span class="info-label">手机号</span>
-          <span class="info-value">15111480531 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></span>
+          <span class="info-value" id="profilePhone">未设置 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></span>
         </div>
         <div class="info-row">
           <span class="info-label">会员等级</span>
-          <span class="info-value"><span class="vip-tag">VIP会员</span></span>
+          <span class="info-value"><span class="vip-tag" id="profileLevel">普通会员</span></span>
         </div>
         <div class="info-row">
           <span class="info-label">注册时间</span>
-          <span class="info-value">2026.06.15</span>
+          <span class="info-value" id="profileRegistered">—</span>
         </div>
       </div>
 
@@ -244,13 +244,13 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
           收货地址
         </div>
-        <div class="address-card">
+        <div class="address-card" id="profileDefaultAddress">
           <div class="address-header">
-            <span class="address-name">刘友宝</span>
-            <span class="address-phone">15111480531</span>
-            <span class="address-default">默认</span>
+            <span class="address-name" id="addrName">—</span>
+            <span class="address-phone" id="addrPhone">—</span>
+            <span class="address-default" id="addrDefaultTag" style="display:none;">默认</span>
           </div>
-          <div class="address-detail">湖南省长沙市麓云路159号佳境小区15#1406</div>
+          <div class="address-detail" id="addrDetail">暂无默认地址，请前往「管理地址」新增</div>
         </div>
         <div class="info-row" style="margin-top: var(--space-2);">
           <span class="info-label">其他地址</span>
@@ -293,6 +293,104 @@
 
   <script>
     function navigateTo(page) { window.location.href = page; }
+
+    // 等级规则（与后台 mall_member.html 一致）：消费≥3000 VIP，≥1000 金卡，否则普通
+    function computeMemberLevel(totalSpend) {
+      if (totalSpend >= 3000) return { name: 'VIP会员', levelTag: 'vip' };
+      if (totalSpend >= 1000) return { name: '金卡会员', levelTag: 'gold' };
+      return { name: '普通会员', levelTag: 'normal' };
+    }
+    function readArr(key) {
+      try { var v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; }
+      catch (e) { return []; }
+    }
+    function currentUserSpend(orders) {
+      var loginUser = sessionStorage.getItem('loginUser') || '';
+      if (!Array.isArray(orders) || !orders.length) return 0;
+      var s = 0;
+      for (var i = 0; i < orders.length; i++) {
+        var o = orders[i] || {};
+        var byUser = !loginUser || (o.user === loginUser) || (o.userName === loginUser) || (o.username === loginUser);
+        if (!byUser) continue;
+        var amt = parseFloat(o.amount || o.totalAmount || o.total || 0);
+        if (!isNaN(amt)) s += amt;
+      }
+      return s;
+    }
+    function pickDefaultAddress(loginUser) {
+      var list = readArr('h5_addresses');
+      // 优先匹配当前用户名，其次取第一个设默认的，最后取第一个
+      var matchUser = list.filter(function (a) { return a && a.user === loginUser; });
+      var def = matchUser.find(function (a) { return a.default; });
+      if (def) return def;
+      def = list.find(function (a) { return a && a.default; });
+      if (def) return def;
+      return matchUser[0] || list[0] || null;
+    }
+
+    function setFirstText(el, value) {
+      if (!el) return;
+      var text = (value == null ? '' : String(value)) + ' ';
+      if (el.childNodes && el.childNodes.length && el.childNodes[0].nodeType === 3) {
+        el.childNodes[0].nodeValue = text;
+      } else {
+        el.textContent = text;
+      }
+    }
+
+    function renderProfile() {
+      var loginUser = sessionStorage.getItem('loginUser') || '';
+      var orders = readArr('h5_orders');
+      var spend = currentUserSpend(orders);
+      var level = computeMemberLevel(spend);
+
+      // 顶部
+      var nameTop = document.getElementById('profileNameDisplay');
+      var levelTop = document.getElementById('profileLevelTag');
+      setFirstText(nameTop, loginUser || '未登录');
+      if (levelTop) levelTop.textContent = level.name;
+
+      // 基本信息
+      var nameEl = document.getElementById('profileName');
+      var phoneEl = document.getElementById('profilePhone');
+      var levelEl = document.getElementById('profileLevel');
+      var regEl = document.getElementById('profileRegistered');
+      setFirstText(nameEl, loginUser || '未登录');
+      var cache = {};
+      try { cache = JSON.parse(sessionStorage.getItem('loginUserProfile') || '{}'); } catch (e) {}
+      var phone = cache.phone || '';
+      setFirstText(phoneEl, phone ? maskPhone(phone) : '未设置');
+      if (levelEl) levelEl.textContent = level.name;
+      if (regEl) regEl.textContent = cache.registered || '—';
+
+      // 收货地址
+      var addr = pickDefaultAddress(loginUser);
+      var addrNameEl = document.getElementById('addrName');
+      var addrPhoneEl = document.getElementById('addrPhone');
+      var addrTagEl = document.getElementById('addrDefaultTag');
+      var addrDetailEl = document.getElementById('addrDetail');
+      if (addr) {
+        if (addrNameEl) addrNameEl.textContent = addr.name || (loginUser || '收货人');
+        if (addrPhoneEl) addrPhoneEl.textContent = addr.phone ? maskPhone(addr.phone) : '未填写手机';
+        if (addrTagEl) addrTagEl.style.display = 'inline-block';
+        if (addrDetailEl) addrDetailEl.textContent = ((addr.region || '') + ' ' + (addr.detail || '')).trim() || '—';
+      } else {
+        if (addrNameEl) addrNameEl.textContent = '—';
+        if (addrPhoneEl) addrPhoneEl.textContent = '—';
+        if (addrTagEl) addrTagEl.style.display = 'none';
+        if (addrDetailEl) addrDetailEl.textContent = loginUser ? '请前往「管理地址」新增' : '请先登录后维护收货地址';
+      }
+    }
+    function maskPhone(p) {
+      var s = String(p || '');
+      if (s.length === 11) return s.substr(0, 3) + '****' + s.substr(7);
+      return s;
+    }
+    renderProfile();
+    document.addEventListener('DOMContentLoaded', renderProfile);
+    window.addEventListener('storage', function (e) {
+      if (e.key && (/^h5_|^snzg_/).test(e.key)) renderProfile();
+    });
 
     function manageAddress() {
       // 地址管理：使用 localStorage 持久化地址列表，支持新增/编辑/设为默认

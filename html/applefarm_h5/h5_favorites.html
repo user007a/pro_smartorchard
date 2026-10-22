@@ -40,6 +40,60 @@
 
     .favorite-card:active { transform: scale(0.99); }
 
+    /* 编辑模式 */
+    .favorite-card.is-edit { background: var(--primary-50); border-color: var(--primary-200); }
+    .fav-check {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+    .fav-check input { position: absolute; opacity: 0; pointer-events: none; }
+    .fav-check-box {
+      width: 22px; height: 22px;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      background: var(--bg-white);
+    }
+    .fav-check input:checked + .fav-check-box {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+    .fav-check input:checked + .fav-check-box::after {
+      content: '';
+      width: 6px; height: 12px;
+      border: solid #fff;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg) translate(-1px, -1px);
+    }
+    .favorite-card { position: relative; }
+    .fav-edit-bar {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-3) var(--space-4);
+      margin-bottom: var(--space-3);
+    }
+    .fav-edit-bar .bar-tip { font-size: var(--font-sm); color: var(--text-secondary); }
+    .fav-edit-bar .bar-btn {
+      background: var(--error);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 6px 14px;
+      font-size: var(--font-sm);
+      font-weight: 600;
+      cursor: pointer;
+    }
+
     .favorite-img {
       width: 80px;
       height: 80px;
@@ -147,6 +201,11 @@
       </div>
 
       <div id="favoriteList"></div>
+
+      <div class="fav-edit-bar" id="favEditBar" style="display:none;">
+        <span class="bar-tip">勾选后点击右侧按钮可批量删除</span>
+        <button class="bar-btn" onclick="deleteSelectedFavorites()">删除所选</button>
+      </div>
     </div>
 
     <!-- 底部导航 -->
@@ -181,9 +240,9 @@
     function seedFavorites() {
       if (localStorage.getItem('h5_favorites')) return;
       localStorage.setItem('h5_favorites', JSON.stringify([
-        { id: 'redFuji', name: '花牛苹果 5斤装', desc: '脆甜多汁 · 新鲜采摘', price: 68, img: 'images/thumb_red_hanging.jpg', date: '2026.09.10' },
-        { id: 'giftBox', name: '精品礼盒装 8斤', desc: '送礼佳品 · 品质保证', price: 168, img: 'images/thumb_giftbox.jpg', date: '2026.09.08' },
-        { id: 'adopt3yr', name: '认养果树3年套餐', desc: '专属果树 · 全程溯源', price: 1888, img: 'images/thumb_picked.jpg', date: '2026.09.01' }
+        { id: 'redFuji', name: '花牛苹果 5斤装', desc: '脆甜多汁 · 新鲜采摘', price: 68, img: 'images/thumb_red_hanging.jpg', date: '2026.10.15' },
+        { id: 'giftBox', name: '精品礼盒装 8斤', desc: '送礼佳品 · 品质保证', price: 168, img: 'images/thumb_giftbox.jpg', date: '2026.10.10' },
+        { id: 'adopt3yr', name: '认养果树3年套餐', desc: '专属果树 · 全程溯源', price: 1888, img: 'images/thumb_picked.jpg', date: '2026.10.05' }
       ]));
     }
 
@@ -192,44 +251,77 @@
       catch (e) { return []; }
     }
 
+    /* 多选删除状态 */
+    var _favEditMode = false;
+    var _favSelected = Object.create(null);
+
     function renderFavorites() {
       seedFavorites();
       var list = readFavorites();
       var box = document.getElementById('favoriteList');
       var countEl = document.getElementById('favCount');
-      if (countEl) countEl.textContent = '共收藏 ' + list.length + ' 件商品';
+      if (countEl) {
+        var selectedCount = Object.keys(_favSelected).length;
+        countEl.textContent = _favEditMode
+          ? ('已选 ' + selectedCount + ' / ' + list.length)
+          : ('共收藏 ' + list.length + ' 件商品');
+      }
       if (!list.length) {
         box.innerHTML = '<div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21.2l7.7-7.7 1.1-1a5.5 5.5 0 0 0 0-7.9z"/></svg></div>' +
           '<div class="empty-title">暂无收藏</div><div class="empty-desc">去商城挑选喜欢的商品吧</div>';
         return;
       }
-      box.innerHTML = list.map(function(it, idx) {
-        return '<div class="favorite-card" onclick="goToProduct(\'' + it.id + '\')">' +
+      box.innerHTML = list.map(function(it) {
+        var checked = _favSelected[it.id] ? ' checked' : '';
+        var checkbox = _favEditMode
+          ? '<label class="fav-check" onclick="event.stopPropagation();">' +
+              '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="toggleSelect(\'' + it.id + '\', this.checked)">' +
+              '<span class="fav-check-box"></span>' +
+            '</label>'
+          : '';
+        return '<div class="favorite-card' + (_favEditMode ? ' is-edit' : '') + '" onclick="' + (_favEditMode ? 'toggleSelect(\'' + it.id + '\', !_favSelected[\'' + it.id + '\'])' : 'goToProduct(\'' + it.id + '\')') + '">' +
+          checkbox +
           '<div class="favorite-img"><img src="' + (it.img || 'images/thumb_redfuji.jpg') + '" alt="' + (it.name || '') + '"></div>' +
           '<div class="favorite-info">' +
           '<div class="favorite-name">' + (it.name || '商品') + '</div>' +
           '<div class="favorite-desc">' + (it.desc || '') + '</div>' +
           '<div class="favorite-bottom"><span class="favorite-price">¥' + (Number(it.price) || 0) + '</span>' +
           '<span class="favorite-date">收藏于 ' + (it.date || '-') + '</span></div></div>' +
-          '<div class="favorite-delete" onclick="removeFavorite(event, \'' + it.id + '\')">' +
-          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div></div>';
+          '</div>';
       }).join('');
     }
 
-    function removeFavorite(event, id) {
-      event.stopPropagation();
-      if (!confirm('确定要取消收藏该商品吗？')) return;
-      var next = readFavorites().filter(function(x) { return x.id !== id; });
-      localStorage.setItem('h5_favorites', JSON.stringify(next));
+    function toggleSelect(id, checked) {
+      if (!_favEditMode) return;
+      if (checked) _favSelected[id] = true; else delete _favSelected[id];
       renderFavorites();
-      showToast('已取消收藏');
+    }
+
+    function toggleEditMode() {
+      _favEditMode = !_favEditMode;
+      _favSelected = Object.create(null);
+      var editEl = document.querySelector('.favorites-edit');
+      var bar = document.getElementById('favEditBar');
+      if (editEl) editEl.textContent = _favEditMode ? '取消' : '编辑';
+      if (bar) bar.style.display = _favEditMode ? 'flex' : 'none';
+      renderFavorites();
+    }
+
+    function deleteSelectedFavorites() {
+      var ids = Object.keys(_favSelected);
+      if (!ids.length) {
+        showToast('请先勾选要删除的收藏');
+        return;
+      }
+      if (!confirm('确定删除已选的 ' + ids.length + ' 件收藏？')) return;
+      var next = readFavorites().filter(function (x) { return !_favSelected[x.id]; });
+      localStorage.setItem('h5_favorites', JSON.stringify(next));
+      _favSelected = Object.create(null);
+      showToast('已删除 ' + ids.length + ' 件收藏');
+      renderFavorites();
     }
 
     renderFavorites();
-
-    function toggleEditMode() {
-      showToast('进入编辑模式');
-    }
 
     function showToast(message) {
       var toast = document.createElement('div');

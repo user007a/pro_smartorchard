@@ -92,7 +92,7 @@
           </div>
           <div class="stat-card blue">
             <div class="stat-header">
-              <span class="stat-label">今日新增</span>
+              <span class="stat-label">待处理总数</span>
               <span class="stat-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
                   <path d="M12 5v14"/>
@@ -125,8 +125,8 @@
                 </svg>
               </span>
             </div>
-            <div class="stat-value">28<span style="font-size:12px;color:#6b7280;">分钟</span></div>
-            <div class="stat-footer">较昨日 -5 分钟</div>
+            <div class="stat-value" id="kpiRespTime">—</div>
+            <div class="stat-footer" id="kpiRespFoot">按告警创建至首次处理的时差估算</div>
           </div>
         </div>
 
@@ -155,7 +155,7 @@
                 </svg>
                 告警级别分布
               </span>
-              <span class="meta">近 7 天</span>
+              <span class="meta">全量</span>
             </div>
             <div id="levelDonut"></div>
           </div>
@@ -170,7 +170,7 @@
               </svg>
               预警趋势
             </span>
-            <span class="meta">近 6 个时间窗</span>
+            <span class="meta">近 6 个月</span>
           </div>
           <div id="alertTrend"></div>
         </div>
@@ -208,6 +208,36 @@
     document.getElementById('topList').innerHTML = html;
   }
 
+  // 响应时长：按告警「创建时间 → 首次处理动作时间」的时差估算平均值（分钟）
+  // history 形如 ['系统自动生成预警', '2026-09-20 11:20 技术员已接单处理']，
+  // 首条无时间戳（即创建时刻），后续条目自带处理时间戳。
+  function avgResponseMinutes(){
+    var durations = [];
+    AlertStore.all().forEach(function(a){
+      var created = parseTime(a.time);
+      if (created === null) return;
+      var handledAt = null;
+      (a.history || []).forEach(function(h){
+        if (handledAt !== null) return;
+        var m = String(h).match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})/);
+        if (!m) return;
+        var t = parseTime(m[1]);
+        if (t !== null && t >= created) handledAt = t;
+      });
+      if (handledAt === null) return;
+      durations.push((handledAt - created) / 60000);
+    });
+    if (!durations.length) return null;
+    return durations.reduce(function(s, x){ return s + x; }, 0) / durations.length;
+  }
+
+  function parseTime(str){
+    var m = String(str || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    if (!m) return null;
+    var d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], 0, 0);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+
   function renderKpis(){
     var s = AlertStore.stats();
     document.getElementById('kpiPending').textContent = s.pending;
@@ -218,6 +248,17 @@
     document.getElementById('kpiDone').textContent = s.completed;
     document.getElementById('kpiTotal').textContent = s.total;
     document.getElementById('kpiRate').textContent = s.rate + '%';
+
+    var avg = avgResponseMinutes();
+    var valEl = document.getElementById('kpiRespTime');
+    var footEl = document.getElementById('kpiRespFoot');
+    if (avg === null){
+      valEl.textContent = '—';
+      footEl.textContent = '暂无处理记录，无法计算响应时长';
+    } else {
+      valEl.innerHTML = (avg >= 60 ? (Math.round(avg / 6) / 10).toFixed(1) + ' 小时' : Math.round(avg) + '<span style="font-size:12px;color:#6b7280;">分钟</span>');
+      footEl.textContent = '基于 ' + s.total + ' 条预警的处理记录估算';
+    }
   }
 
   function pad2(n){ return n < 10 ? '0' + n : '' + n; }

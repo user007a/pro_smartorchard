@@ -1,4 +1,4 @@
-﻿﻿﻿<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -104,7 +104,7 @@
 
     <!-- 底部导航 -->
     <nav class="mb-tab-bar">
-      <div class="mb-tab-item">
+      <div class="mb-tab-item" onclick="navigateTo('index.html')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         <span>首页</span>
       </div>
@@ -119,6 +119,10 @@
       <div class="mb-tab-item active">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
         <span>订单</span>
+      </div>
+      <div class="mb-tab-item" onclick="navigateTo('h5_member.html')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>我的</span>
       </div>
     </nav>
   </div>
@@ -152,16 +156,41 @@
 
     function actionButtons(order) {
       var code = statusOf(order);
-      if (code === '待付款') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="cancelOrder(\'' + order.no + '\')">取消</button>' +
-        '<button class="mb-btn mb-btn-sm mb-btn-primary" onclick="payOrder(\'' + order.no + '\')">去付款</button>';
-      if (code === '待发货') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="viewDetail(\'' + order.no + '\')">查看详情</button>';
-      if (code === '待收货') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="viewLogistics(\'' + order.no + '\')">查看物流</button>' +
-        '<button class="mb-btn mb-btn-sm mb-btn-primary" onclick="confirmReceipt(\'' + order.no + '\')">确认收货</button>';
-      if (code === '已完成') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="reorder(\'' + order.no + '\')">再次购买</button>';
+      if (code === '待付款') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="cancelOrder(\'' + escOrder(order.no) + '\')">取消</button>' +
+        '<button class="mb-btn mb-btn-sm mb-btn-primary" onclick="payOrder(\'' + escOrder(order.no) + '\')">去付款</button>';
+      if (code === '待发货') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="viewDetail(\'' + escOrder(order.no) + '\')">查看详情</button>';
+      if (code === '待收货') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="viewLogistics(\'' + escOrder(order.no) + '\')">查看物流</button>' +
+        '<button class="mb-btn mb-btn-sm mb-btn-primary" onclick="confirmReceipt(\'' + escOrder(order.no) + '\')">确认收货</button>';
+      if (code === '已完成') return '<button class="mb-btn mb-btn-sm mb-btn-secondary" onclick="reorder(\'' + escOrder(order.no) + '\')">再次购买</button>';
       return '';
     }
 
+    /* 状态口径统一：
+   PC 后台 mall_order / sales_order 发货后写入 h5_sales_orders，
+   H5 需把「待收货」显式落库到 h5_orders，否则任何直接读 order.status
+   的第三方（如数据大屏 da_business）拿到的仍是「待发货」。 */
+    function syncShippedStatus() {
+      var shippedNos = {};
+      try {
+        shippedNos = JSON.parse(localStorage.getItem('h5_sales_orders') || '[]').reduce(function(m, s) {
+          if (s && s.orderNo) m[s.orderNo] = true;
+          return m;
+        }, {});
+      } catch (e) { return false; }
+      if (!Object.keys(shippedNos).length) return false;
+      var list = readOrders(), changed = false;
+      list.forEach(function (o) {
+        if (o.status === '待发货' && (shippedNos[o.no] || shippedNos[o.id])) {
+          o.status = '待收货';
+          changed = true;
+        }
+      });
+      if (!changed) return false;
+      return writeOrders(list);
+    }
+
     function renderOrders() {
+      syncShippedStatus();
       var list = readOrders();
       var filtered = (currentTab === '全部') ? list : list.filter(function(o){ return statusOf(o) === currentTab; });
       var html;
@@ -170,19 +199,19 @@
       } else {
         html = filtered.map(function(order){
           var items = (order.items || []).map(function(it){
-            return '<div class="order-item-img"><img src="' + (it.img || 'images/thumb_apple5kg.jpg') + '" alt="' + (it.name || '') + '"></div>' +
-              '<div class="order-info"><div class="order-name">' + (it.name || '商品') + '</div>' +
-              '<div class="order-spec">' + (it.desc || '') + ' × ' + (it.qty || 1) + '</div></div>';
+            return '<div class="order-item-img"><img src="' + escOrder(it.img || 'images/thumb_apple5kg.jpg') + '" alt="' + escOrder(it.name || '') + '" onerror="this.onerror=null;this.src=\'images/thumb_apple5kg.jpg\'"></div>' +
+              '<div class="order-info"><div class="order-name">' + escOrder(it.name || '商品') + '</div>' +
+              '<div class="order-spec">' + escOrder(it.spec || it.desc || '') + ' × ' + (Number(it.qty) || 1) + '</div></div>';
           }).join('');
           var status = statusOf(order);
           var tag = TAG_CLASS[status] || 'default';
           var focused = (focusOrderNo && order.no === focusOrderNo) ? ' style="border-color:var(--primary);box-shadow:0 0 0 2px rgba(46,158,90,.2);"' : '';
-          return '<div class="order-card"' + focused + ' data-no="' + order.no + '">' +
-            '<div class="order-header"><span class="order-no">' + order.no + '</span>' +
+          return '<div class="order-card"' + focused + ' data-no="' + escOrder(order.no) + '">' +
+            '<div class="order-header"><span class="order-no">' + escOrder(order.no) + '</span>' +
             '<span class="mb-tag ' + tag + '">' + status + '</span></div>' +
             '<div class="order-items">' + items + '</div>' +
             '<div class="order-footer">' +
-            '<div class="order-total">共' + (order.items ? order.items.length : 1) + '件 合计 <strong>¥' + (order.total || 0) + '</strong></div>' +
+            '<div class="order-total">共' + (order.items ? order.items.length : 1) + '件 合计 <strong>¥' + (Math.round((Number(order.total) || 0) * 100) / 100).toFixed(2) + '</strong></div>' +
             '<div class="order-actions">' + actionButtons(order) + '</div>' +
             '</div></div>';
         }).join('');
@@ -195,12 +224,17 @@
       }
     }
 
+    function writeOrders(list) {
+      try { localStorage.setItem('h5_orders', JSON.stringify(list)); return true; }
+      catch (e) { showOrderToast('保存失败：浏览器存储不可用'); return false; }
+    }
+
     function cancelOrder(no) {
       if (!confirm('确定要取消订单 ' + no + '？')) return;
       var list = readOrders();
       var o = list.find(function(x){ return x.no === no; });
       if (o) { o.status = '已取消'; o.statusCode = 'cancelled'; }
-      localStorage.setItem('h5_orders', JSON.stringify(list));
+      if (!writeOrders(list)) return;
       renderOrders();
       showOrderToast('订单已取消');
     }
@@ -209,7 +243,7 @@
       var list = readOrders();
       var o = list.find(function(x){ return x.no === no; });
       if (o) { o.status = '待发货'; o.statusCode = 'paid'; }
-      localStorage.setItem('h5_orders', JSON.stringify(list));
+      if (!writeOrders(list)) return;
       renderOrders();
       showOrderToast('支付成功，等待商家发货');
     }
@@ -218,34 +252,82 @@
       var list = readOrders();
       var o = list.find(function(x){ return x.no === no; });
       if (o) { o.status = '已完成'; o.statusCode = 'completed'; }
-      localStorage.setItem('h5_orders', JSON.stringify(list));
+      if (!writeOrders(list)) return;
       renderOrders();
       showOrderToast('已确认收货，感谢您的购买');
     }
 
+    /* 再次购买：同商品需合并数量，否则购物车出现重复行，
+       按 data-id 改数量会同时命中多行 */
     function reorder(no) {
       var list = readOrders();
       var o = list.find(function(x){ return x.no === no; });
-      if (!o || !o.items) return;
+      if (!o || !o.items || !o.items.length) return;
       var cart = [];
       try { cart = JSON.parse(localStorage.getItem('h5_cart') || '[]'); } catch (e) { cart = []; }
+      if (!Array.isArray(cart)) cart = [];
       o.items.forEach(function(it){
-        cart.push(Object.assign({}, it, { qty: it.qty || 1, checked: true }));
+        var exist = null;
+        for (var i = 0; i < cart.length; i++) { if (String(cart[i].id) === String(it.id)) { exist = cart[i]; break; } }
+        if (exist) { exist.qty = (Number(exist.qty) || 1) + (Number(it.qty) || 1); }
+        else { cart.push(Object.assign({}, it, { qty: it.qty || 1, checked: true })); }
       });
-      localStorage.setItem('h5_cart', JSON.stringify(cart));
+      try { localStorage.setItem('h5_cart', JSON.stringify(cart)); }
+      catch (e) { showOrderToast('加入购物车失败：浏览器存储不可用'); return; }
       showOrderToast('商品已加入购物车');
       setTimeout(function(){ window.location.href = 'h5_cart.html'; }, 600);
     }
+
+    /* 订单详情 / 物流：使用可滚动的底部弹层，替代 2.2s 自动消失的 toast，
+       避免长文本（物流单号、地址）被截断 */
+    function openOrderSheet(title, rows) {
+      var old = document.getElementById('orderSheetOverlay');
+      if (old) old.remove();
+      var ov = document.createElement('div');
+      ov.id = 'orderSheetOverlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;display:flex;align-items:flex-end;justify-content:center;';
+      var html = '<div style="width:100%;max-width:750px;background:#fff;border-radius:16px 16px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));max-height:76vh;overflow-y:auto;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+        '<div style="font-size:16px;font-weight:600;color:#1a1a1a;">' + title + '</div>' +
+        '<button type="button" aria-label="关闭" onclick="document.getElementById(\'orderSheetOverlay\').remove()" ' +
+        'style="border:none;background:#f5f7fa;width:28px;height:28px;border-radius:50%;font-size:16px;line-height:1;color:#595959;cursor:pointer;">×</button>' +
+        '</div><div style="font-size:14px;color:#1a1a1a;line-height:1.9;">' + rows + '</div></div>';
+      ov.innerHTML = html;
+      ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+      document.body.appendChild(ov);
+    }
+    function row(label, value) {
+      return '<div style="display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid #f5f7fa;">' +
+        '<span style="color:#8c8c8c;flex:none;">' + label + '</span>' +
+        '<span style="text-align:right;word-break:break-all;">' + value + '</span></div>';
+    }
+    function escOrder(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function money(n) { return '¥' + (Math.round((Number(n) || 0) * 100) / 100).toFixed(2); }
 
     function viewDetail(no) {
       var list = readOrders();
       var o = list.find(function(x){ return x.no === no; });
       if (!o) return;
-      var lines = ['订单 ' + no, '金额：¥' + o.total];
-      if (o.subtotal != null && o.discount != null) lines.push('商品金额：¥' + o.subtotal + '，优惠：¥' + o.discount);
-      lines.push('支付方式：' + (o.payment || '在线支付'));
-      lines.push('下单时间：' + (o.createdAt ? new Date(o.createdAt).toLocaleString() : '-'));
-      showOrderToast(lines.join('\n'));
+      var addr = o.address || {};
+      var rows = row('订单编号', escOrder(o.no)) +
+        row('订单状态', escOrder(statusOf(o))) +
+        row('商品金额', money(o.subtotal)) +
+        (Number(o.discount) > 0 ? row('优惠金额', '-' + money(o.discount)) : '') +
+        row('实付金额', '<strong>' + money(o.total) + '</strong>') +
+        (o.pointsUsed > 0 ? row('积分抵扣', escOrder(o.pointsUsed) + ' 积分') : '') +
+        (o.couponCode ? row('优惠券', escOrder(o.couponCode)) : '') +
+        row('支付方式', escOrder(o.payment || '在线支付')) +
+        row('发票', o.invoice ? '已申请' : '未申请') +
+        row('收货信息', escOrder([addr.name, addr.phone, addr.region, addr.detail].filter(Boolean).join(' ') || '-')) +
+        row('下单时间', o.createdAt ? new Date(o.createdAt).toLocaleString() : '-');
+      var goods = (o.items || []).map(function (it) {
+        return row(escOrder(it.name || '商品') + ' × ' + (it.qty || 1), money((Number(it.price) || 0) * (Number(it.qty) || 1)));
+      }).join('');
+      openOrderSheet('订单详情', goods + '<div style="height:8px"></div>' + rows);
     }
 
     function viewLogistics(no) {
@@ -253,7 +335,11 @@
       try { shipped = JSON.parse(localStorage.getItem('h5_sales_orders') || '[]'); } catch (e) { shipped = []; }
       var info = shipped.find(function(s){ return s.orderNo === no; });
       if (!info) { showOrderToast('暂无物流信息，请耐心等待'); return; }
-      showOrderToast('订单 ' + no + ' 物流：\n承运：' + (info.company || '-') + '\n单号：' + info.tracking + '\n发货时间：' + new Date(info.shippedAt).toLocaleString());
+      openOrderSheet('物流信息',
+        row('订单编号', escOrder(no)) +
+        row('承运商', escOrder(info.company || '-')) +
+        row('运单号', '<strong>' + escOrder(info.tracking || '-') + '</strong>') +
+        row('发货时间', info.shippedAt ? new Date(info.shippedAt).toLocaleString() : '-'));
     }
 
     function showOrderToast(message) {

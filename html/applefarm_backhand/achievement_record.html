@@ -8,13 +8,15 @@
 <link rel="stylesheet" href="css/sidebar-layout.css">
 <link rel="stylesheet" href="css/page-content.css">
 <style>
-  /* 统计卡 */
+  /* 统计卡（与明细表 5 项成效一一对应） */
   .stat-card-row {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: var(--space-lg);
     margin-bottom: var(--space-xl);
   }
+  @media (max-width: 1280px) { .stat-card-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 768px)  { .stat-card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .stat-card {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
@@ -35,6 +37,7 @@
   .stat-value .unit { font-size: 13px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; }
   .stat-value.down { color: var(--success); }
   .stat-value.up   { color: var(--accent-500); }
+  .stat-value.flat-bad { color: var(--error); }
   .stat-sub { margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
 
   .data-table { min-width: 720px; }
@@ -153,8 +156,17 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // 顶部统计卡关注的 4 项（顺序与 achievements 默认数据一致）
-  var FOCUS_ITEMS = ['节水', '节肥', '减药', '增产'];
+  // 顶部统计卡关注的成效项（与 achievements 明细表逐项对应，含「减损」）
+  var FOCUS_ITEMS = ['节水', '节肥', '减药', '增产', '减损'];
+
+  // 语义判定：节水性指标（节水/节肥/减药/减损）下降为正向（绿），
+  // 增产类上升为正向（橙），其余为负向（红）。表格与卡片共用同一口径。
+  function isReduce(name){ return name !== '增产'; }
+  // delta 的正负号不代表好坏，正负向由指标语义决定
+  function deltaIsPositive(name, delta){
+    if (!delta) return false;
+    return isReduce(name) ? delta < 0 : delta > 0;
+  }
 
   var els = {
     statCards : document.getElementById('statCards'),
@@ -174,10 +186,11 @@
     els.statCards.innerHTML = FOCUS_ITEMS.map(function(name){
       var row = findItem(name);
       var delta = row ? (Number(row.delta) || 0) : 0;
-      // 节水性指标（节水/节肥/减药）下降为正向，用 success 绿；增产上升为正向，用橙色强调
-      var isReduce = (name !== '增产');
-      var valueCls = isReduce ? (delta < 0 ? 'down' : '') : (delta > 0 ? 'up' : '');
-      var sub = row ? (isReduce ? '实施后降至基准的 ' + fmt(row.after) + '%' : '实施后达基准的 ' + fmt(row.after) + '%') : '暂无数据';
+      var reduce = isReduce(name);
+      // 节水性指标（节水/节肥/减药/减损）下降为正向 → 绿色；增产上升为正向 → 橙色强调
+      var positive = deltaIsPositive(name, delta);
+      var valueCls = positive ? (reduce ? 'down' : 'up') : (delta ? 'flat-bad' : '');
+      var sub = row ? (reduce ? '实施后降至基准的 ' + fmt(row.after) + '%' : '实施后达基准的 ' + fmt(row.after) + '%') : '暂无数据';
       return '<div class="stat-card">' +
         '<div class="stat-label">' + esc(name) + '</div>' +
         '<div class="stat-value ' + valueCls + '">' + (delta > 0 ? '+' : '') + fmt(delta) + '<span class="unit">%</span></div>' +
@@ -195,12 +208,15 @@
     els.tbody.innerHTML = list.map(function(x){
       var delta = Number(x.delta) || 0;
       var unit = x.unit || '%';
-      var cls = delta > 0 ? 'text-success' : (delta < 0 ? 'text-danger' : 'text-tertiary');
+      // 与顶部统计卡同一语义口径：节水性下降为正向（绿），增产上升为正向（绿）
+      var positive = deltaIsPositive(x.item, delta);
+      var cls = delta === 0 ? 'text-tertiary' : (positive ? 'text-success' : 'text-danger');
+      var arrow = delta === 0 ? '' : (positive ? '↓ ' : '↑ ');
       return '<tr>' +
         '<td><strong>' + esc(x.item) + '</strong></td>' +
         '<td class="num">' + fmt(x.before) + unit + '</td>' +
         '<td class="num">' + fmt(x.after) + unit + '</td>' +
-        '<td class="num ' + cls + '">' + (delta > 0 ? '+' : '') + fmt(delta) + unit + '</td>' +
+        '<td class="num ' + cls + '">' + arrow + (delta > 0 ? '+' : '') + fmt(delta) + unit + '</td>' +
         '<td>' + esc(x.desc || '-') + '</td>' +
       '</tr>';
     }).join('');

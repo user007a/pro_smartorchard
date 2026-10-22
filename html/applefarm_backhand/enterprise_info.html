@@ -159,6 +159,10 @@
   .cert-item.expiring { border-color:var(--warning);box-shadow:0 0 0 3px var(--warning-bg); }
   .cert-item.expiring .cert-badge { background:var(--warning-bg);color:#9a6700;border-color:var(--warning-border); }
   .cert-badge.expiring { background:var(--warning-bg);color:#9a6700;border-color:var(--warning-border); }
+  /* 已过期：红色警示 */
+  .cert-item.expired { border-color:var(--error);box-shadow:0 0 0 3px var(--error-bg); }
+  .cert-item.expired .cert-badge { background:var(--error-bg);color:var(--error);border-color:var(--error-border); }
+  .cert-badge.expired { background:var(--error-bg);color:var(--error);border-color:var(--error-border); }
 
   /* ===== 经营数据 ===== */
   .op-stats { display:grid;grid-template-columns:repeat(5,1fr);gap:var(--space-lg); }
@@ -460,16 +464,24 @@ function daysToExpire(expireDate) {
   return Math.ceil((t - Date.now()) / 86400000);
 }
 
+// 证书状态（按当前日期实时判定）：已过期（红） / 即将到期（30 天内，橙） / 有效（绿）
+var CERT_EXPIRING_DAYS = 30;
+function certStatusView(expireDate) {
+  var left = daysToExpire(expireDate);
+  if (left === null) return { cls: '', text: '有效' };
+  if (left < 0) return { cls: 'expired', text: '已过期 ' + Math.abs(left) + ' 天' };
+  if (left <= CERT_EXPIRING_DAYS) return { cls: 'expiring', text: '即将到期（' + left + ' 天）' };
+  return { cls: '', text: '有效' };
+}
+
 function renderCerts() {
   var box = document.getElementById('cert-list');
   if (!box) return;
   box.innerHTML = CERT_DATA.map(function (c, i) {
-    var left = daysToExpire(c.expireDate);
-    var expiring = left !== null && left <= 90;
-    var badgeText = expiring ? (left >= 0 ? '临期 ' + left + ' 天' : '已过期') : '有效';
-    return '<div class="cert-item' + (expiring ? ' expiring' : '') + '" data-cert="' + i + '">' +
+    var sv = certStatusView(c.expireDate);
+    return '<div class="cert-item' + (sv.cls ? ' ' + sv.cls : '') + '" data-cert="' + i + '">' +
       '<div class="cert-img-wrap"><img src="../common/images/certs/' + c.img + '" alt="' + c.name + '">' +
-        '<span class="cert-badge' + (expiring ? ' expiring' : '') + '">' + badgeText + '</span></div>' +
+        '<span class="cert-badge' + (sv.cls ? ' ' + sv.cls : '') + '">' + sv.text + '</span></div>' +
       '<div class="cert-info">' +
         '<div class="cert-name">' + c.name + '</div>' +
         '<div class="cert-no">编号：' + c.no + '</div>' +

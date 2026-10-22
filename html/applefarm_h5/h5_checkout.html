@@ -1,4 +1,4 @@
-﻿﻿﻿<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -279,14 +279,25 @@
     /* 优惠券规则来源：后台「商城管理 / 优惠券管理」维护的 mall_coupons
        （由 js/mall-coupons.js 提供，与购物车 h5_cart.html 共用同一份配置） */
     function calcDiscount(subtotal) {
-      return MallCoupons.calc(subtotal, MallCoupons.selected());
+      return round2(MallCoupons.calc(subtotal, MallCoupons.selected()) + pointsDeduct(subtotal));
     }
+
+    /* 积分抵扣：与购物车共用 h5_points_used（100 积分 = ¥1），避免两页口径漂移 */
+    function pointsDeduct(subtotal) {
+      var used = 0;
+      try { used = parseInt(localStorage.getItem('h5_points_used') || '0', 10); } catch (e) { used = 0; }
+      if (isNaN(used) || used <= 0) return 0;
+      return Math.min(Math.floor(used / 100), Math.max(0, subtotal));
+    }
+
+    /* 金额统一规整到分，避免浮点误差（如 19.9*3=59.700000000000006） */
+    function round2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
 
     function renderCheckout() {
       var items = readCart().filter(function(i) { return i.checked !== false; });
       var goods = document.getElementById('checkoutGoods');
       if (!items.length) {
-        goods.innerHTML = '<div class="empty-state" style="padding:24px;text-align:center;color:var(--text-3);">购物车为空，请返回商城选购商品</div>';
+        goods.innerHTML = '<div class="empty-state" style="padding:24px;text-align:center;color:var(--text-tertiary);">购物车为空，请返回商城选购商品</div>';
       } else {
         goods.innerHTML = items.map(function(i) {
           var qty = Number(i.qty) || 1;
@@ -301,19 +312,19 @@
             '</div></div>';
         }).join('');
       }
-      var subtotal = items.reduce(function(s, i) { return s + (Number(i.price) || 0) * (Number(i.qty) || 1); }, 0);
-      var discount = calcDiscount(subtotal);
-      var total = Math.max(0, subtotal - discount);
+      var subtotal = round2(items.reduce(function(s, i) { return s + (Number(i.price) || 0) * (Number(i.qty) || 1); }, 0));
+      var discount = round2(calcDiscount(subtotal));
+      var total = round2(Math.max(0, subtotal - discount));
       var couponEl = document.getElementById('checkoutCoupon');
       if (couponEl) {
-        couponEl.innerHTML = (discount > 0 ? '-¥' + discount : '未使用') +
+        couponEl.innerHTML = (discount > 0 ? '-¥' + discount.toFixed(2) : '未使用') +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>';
-        couponEl.style.color = discount > 0 ? 'var(--error)' : 'var(--text-3)';
+        couponEl.style.color = discount > 0 ? 'var(--error)' : 'var(--text-tertiary)';
       }
       var labelEl = document.getElementById('checkoutTotalLabel');
-      if (labelEl) labelEl.textContent = discount > 0 ? '合计（已优惠 ¥' + discount + '）' : '合计（含优惠）';
+      if (labelEl) labelEl.textContent = discount > 0 ? '合计（已优惠 ¥' + discount.toFixed(2) + '）' : '合计（含优惠）';
       var totalEl = document.getElementById('checkoutTotal');
-      if (totalEl) totalEl.textContent = '¥' + total;
+      if (totalEl) totalEl.textContent = '¥' + total.toFixed(2);
       return { items: items, subtotal: subtotal, discount: discount, total: total };
     }
 
@@ -376,20 +387,32 @@
         invoice: needInvoice,
         address: snapshotAddress(),
         couponCode: couponCode,
+        pointsUsed: (function () { try { return parseInt(localStorage.getItem('h5_points_used') || '0', 10) || 0; } catch (e) { return 0; } })(),
         status: '待付款',
         statusCode: 'pending',
-        createdAt: new Date().toISOString(),
-        logistics: []
+        createdAt: new Date().toISOString()
       };
-      var list = JSON.parse(localStorage.getItem('h5_orders') || '[]');
+      /* 落库必须原子化：任一步失败都要回滚并明确提示，禁止出现「提示成功但数据丢失」 */
+      var list = [];
+      try { list = JSON.parse(localStorage.getItem('h5_orders') || '[]'); }
+      catch (e) { list = []; }
+      if (!Array.isArray(list)) list = [];
       list.unshift(order);
-      localStorage.setItem('h5_orders', JSON.stringify(list));
-      if (needInvoice) pushInvoiceApply(orderNo, data.total);
-      localStorage.removeItem('h5_cart');
-      localStorage.removeItem('h5_checkout_single');
-      localStorage.removeItem('h5_checkout_draft');
-      // 券码一次性使用，下单后清除，避免下次下单静默复用上次优惠
-      MallCoupons.clear();
+      try {
+        localStorage.setItem('h5_orders', JSON.stringify(list));
+      } catch (err) {
+        showToast('订单保存失败（浏览器存储不可用），请检查隐私模式或清理空间后重试');
+        return;
+      }
+      if (needInvoice) { try { pushInvoiceApply(orderNo, data.total); } catch (e) {} }
+      try {
+        localStorage.removeItem('h5_cart');
+        localStorage.removeItem('h5_checkout_single');
+        localStorage.removeItem('h5_checkout_draft');
+        localStorage.removeItem('h5_points_used');
+        // 券码一次性使用，下单后清除，避免下次下单静默复用上次优惠
+        MallCoupons.clear();
+      } catch (e) {}
       showToast('订单已生成：' + orderNo + '，使用' + payment + (needInvoice ? '，已申请发票' : ''));
       setTimeout(function() { window.location.href = 'h5_order.html?focus=' + orderNo; }, 1200);
     }

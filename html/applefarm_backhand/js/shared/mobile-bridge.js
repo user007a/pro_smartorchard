@@ -132,7 +132,9 @@
         executor: r.operator || '现场人员',
         date: fmtDate(r.createTime),
         time: fmtTime(r.createTime),
-        status: 'pending',
+        // 读取移动端回写状态（后台审批结果），保证「待处理 → 已处理」闭环
+        status: r.status || 'pending',
+        auditRemark: r.auditRemark || '',
         source: 'mobile',
         remark: r.remark || '',
         gps: r.gps || null,

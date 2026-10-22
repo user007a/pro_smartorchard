@@ -137,6 +137,39 @@
       font-size: var(--font-sm);
       color: var(--text-secondary);
     }
+
+    /* 底部弹层查看完整消息 */
+    .msg-sheet-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: none;
+      z-index: 200;
+    }
+    .msg-sheet-overlay.show { display: block; }
+    .msg-sheet {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: var(--bg-white);
+      border-radius: 20px 20px 0 0;
+      max-height: 80vh;
+      padding: var(--space-4);
+      transform: translateY(100%);
+      transition: transform .25s ease;
+      z-index: 201;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .msg-sheet.show { transform: translateY(0); }
+    .msg-sheet-handle {
+      width: 36px; height: 4px;
+      background: var(--gray-300);
+      border-radius: 2px;
+      margin: 0 auto var(--space-3);
+    }
+    .msg-sheet-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-3); }
+    .msg-sheet-title { font-size: var(--font-md); font-weight: var(--font-semibold); color: var(--text); flex: 1; }
+    .msg-sheet-close { font-size: var(--font-base); color: var(--text-tertiary); cursor: pointer; padding: 4px 8px; }
+    .msg-sheet-meta { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); font-size: var(--font-xs); color: var(--text-tertiary); }
+    .msg-sheet-body { font-size: var(--font-base); color: var(--text); line-height: 1.75; white-space: pre-wrap; word-break: break-word; }
   </style>
 </head>
 <body>
@@ -172,15 +205,30 @@
     </nav>
   </div>
 
+  <!-- 消息详情底部弹层 -->
+  <div class="msg-sheet-overlay" id="msgSheetOverlay" onclick="closeMessageSheet()"></div>
+  <div class="msg-sheet" id="msgSheet" role="dialog" aria-modal="true">
+    <div class="msg-sheet-handle"></div>
+    <div class="msg-sheet-header">
+      <div class="msg-sheet-title" id="msgSheetTitle">消息标题</div>
+      <div class="msg-sheet-close" onclick="closeMessageSheet()">关闭</div>
+    </div>
+    <div class="msg-sheet-meta">
+      <span class="message-type" id="msgSheetType">系统通知</span>
+      <span id="msgSheetTime">2026.09.18 10:30</span>
+    </div>
+    <div class="msg-sheet-body" id="msgSheetBody">消息内容</div>
+  </div>
+
   <script>
     function navigateTo(page) { window.location.href = page; }
 
     var MESSAGE_DATA = [
-      { id: 1, type: 'system',   time: '2026.09.18 10:30', title: '您的认养果树已完成套袋操作', content: '您认养的A1-001花牛苹果果树已完成套袋保护操作，采用双层纸袋技术，可有效防止害虫入侵。点击查看详细操作记录和照片。' },
-      { id: 2, type: 'activity', time: '2026.09.01 09:00', title: '春季认养特惠活动火热进行中', content: '春季果树认养特惠活动已开启，认养享8折优惠，还赠送有机肥料套装。活动截止至2026.09.30，快来认养您的专属果树吧！' },
-      { id: 3, type: 'order',    time: '2026.09.12 14:20', title: '您的订单已发货，请注意查收', content: '订单号：SN20260612001，花牛苹果5斤装已通过冷链物流发出，预计2-3天内送达。您可在溯源页面查看配送进度。' },
-      { id: 4, type: 'system',   time: '2026.09.25 16:00', title: '农残检测报告已生成', content: '您认养的果树已完成采摘前农残检测，共检测68项指标，全部未检出。检测报告符合有机产品标准，点击查看详细报告。' },
-      { id: 5, type: 'order',    time: '2026.09.10 10:15', title: '订单已签收，感谢您的支持', content: '订单号：SN20260610002已成功签收。如有任何问题请及时联系客服，祝您品尝愉快！' }
+      { id: 1, type: 'system',   time: '2026.10.18 10:30', title: '您的认养果树已进入采收期', content: '您认养的A1-001花牛苹果已完成上色，果径与糖度达到采收标准。预计本周起按成熟度分批采收，采后将分级预冷并按溯源批次统一入库。点击查看实时生长报告。' },
+      { id: 2, type: 'activity', time: '2026.10.10 09:00', title: '秋采认养活动火热进行中', content: '秋采果树认养活动已开启：认养即享采收期直送到家，免邮并赠送果园采摘体验名额；老用户邀请好友双方各得100积分。活动截止至 2026-12-31，欢迎前往「认养」页了解详情。' },
+      { id: 3, type: 'order',    time: '2026.10.15 14:20', title: '您的订单已发货，请注意查收', content: '订单号：ORD20261015001，花牛苹果5斤装已通过冷链物流发出，预计2-3天内送达。您可在溯源页面查看配送进度。如需调整收货时间，请联系在线客服。' },
+      { id: 4, type: 'system',   time: '2026.10.12 16:00', title: '农残检测报告已生成', content: '您认养的果树已完成采摘前农残检测，共检测68项指标，全部未检出。检测报告符合有机产品标准，点击查看详细报告与第三方机构出具的编号。' },
+      { id: 5, type: 'order',    time: '2026.10.08 10:15', title: '订单已签收，感谢您的支持', content: '订单号：ORD20261005002 已成功签收。如有任何问题请及时联系客服，祝您品尝愉快！' }
     ];
     var MESSAGE_READ_KEY = 'h5_messages_read';
 
@@ -213,10 +261,36 @@
     }
 
     function viewMessage(id) {
+      var msg = MESSAGE_DATA.find(function (m) { return m.id === id; });
+      if (!msg) return;
+      // 标记已读并刷新列表
       var all = MESSAGE_DATA.map(function(m) { return m.id; }).concat(readReadIds());
       localStorage.setItem(MESSAGE_READ_KEY, JSON.stringify(all.filter(function(v, i, a) { return a.indexOf(v) === i; })));
       renderMessages();
-      showToast('查看消息详情...');
+      // 打开底部弹层显示完整内容
+      var labelMap = { system: '系统通知', activity: '活动提醒', order: '订单通知' };
+      var titleEl = document.getElementById('msgSheetTitle');
+      var typeEl = document.getElementById('msgSheetType');
+      var timeEl = document.getElementById('msgSheetTime');
+      var bodyEl = document.getElementById('msgSheetBody');
+      if (titleEl) titleEl.textContent = msg.title;
+      if (typeEl) { typeEl.textContent = labelMap[msg.type] || '通知'; typeEl.className = 'message-type ' + msg.type; }
+      if (timeEl) timeEl.textContent = msg.time;
+      if (bodyEl) bodyEl.textContent = msg.content;
+      var overlay = document.getElementById('msgSheetOverlay');
+      var sheet = document.getElementById('msgSheet');
+      if (overlay) overlay.classList.add('show');
+      if (sheet) {
+        sheet.classList.add('show');
+        sheet.scrollTop = 0;
+      }
+    }
+
+    function closeMessageSheet() {
+      var overlay = document.getElementById('msgSheetOverlay');
+      var sheet = document.getElementById('msgSheet');
+      if (overlay) overlay.classList.remove('show');
+      if (sheet) sheet.classList.remove('show');
     }
 
     function markAllRead() {

@@ -21,6 +21,7 @@
     </script>
     <script src="vendor/tailwind.min.js"></script>
     <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+    <script src="js/shared/alert-data.js"></script>
     <style>
         * { font-family:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
         .menu-arrow { transition:transform 0.2s ease; display:inline-block; }
@@ -198,6 +199,9 @@
                     </a>
                     <a href="trace_statistics.html" target="mainFrame" onclick="openPage('trace_statistics.html','溯源统计')" class="flex items-center px-4 py-3 text-sm text-gray-300 hover:bg-white/10 rounded-md transition-all">
                         <span class="iconify mr-3 text-lg" data-icon="ri:line-chart-line"></span><span>溯源统计</span>
+                    </a>
+                    <a href="trace_blockchain.html" target="mainFrame" onclick="openPage('trace_blockchain.html','区块链存证')" class="flex items-center px-4 py-3 text-sm text-gray-300 hover:bg-white/10 rounded-md transition-all">
+                        <span class="iconify mr-3 text-lg" data-icon="ri:node-index"></span><span>区块链存证</span>
                     </a>
                 </div>
             </div>
@@ -512,11 +516,35 @@
                 </nav>
             </div>
             <div class="flex items-center gap-5 flex-shrink-0 ml-4">
-                <button class="relative p-1 text-gray-500 hover:text-gray-700 transition-colors" title="通知">
-                    <span class="iconify text-xl" data-icon="ri:notification-3-line"></span>
-                    <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
-                </button>
-                <span class="iconify text-gray-500 text-xl cursor-pointer hover:text-gray-700 transition-colors" data-icon="ri:search-line" title="搜索"></span>
+                <!-- 站内搜索：点击展开输入框，回车跳转搜索页 -->
+                <div class="relative flex items-center" id="topSearchWrap">
+                    <input id="topSearchInput" type="search" autocomplete="off" placeholder="搜索菜单 / 页面"
+                           aria-label="站内搜索"
+                           class="hidden w-56 h-8 pl-8 pr-3 text-sm rounded-lg border border-gray-300 bg-white
+                                  focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                    <button id="topSearchBtn" type="button" title="搜索" aria-label="搜索" aria-expanded="false"
+                            class="p-1 text-gray-500 hover:text-gray-700 transition-colors">
+                        <span class="iconify text-xl" data-icon="ri:search-line"></span>
+                    </button>
+                </div>
+                <!-- 通知：点击展开未读预警面板 -->
+                <div class="relative flex items-center" id="topNotifyWrap">
+                    <button id="topNotifyBtn" type="button" title="通知" aria-label="通知中心" aria-expanded="false"
+                            class="relative p-1 text-gray-500 hover:text-gray-700 transition-colors">
+                        <span class="iconify text-xl" data-icon="ri:notification-3-line"></span>
+                        <span id="topNotifyDot" class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                    </button>
+                    <div id="topNotifyPanel" role="dialog" aria-label="预警通知"
+                         class="hidden absolute right-0 top-full mt-2 w-80 max-h-96 overflow-y-auto bg-white
+                                border border-gray-200 rounded-xl shadow-xl z-50">
+                        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                            <span class="text-sm font-semibold text-gray-800">预警通知</span>
+                            <button type="button" onclick="openPage('alert_overview.html','预警总览')"
+                                    class="text-xs text-blue-600 hover:underline">全部</button>
+                        </div>
+                        <ul id="topNotifyList" class="divide-y divide-gray-100"></ul>
+                    </div>
+                </div>
                 <div class="h-4 w-px bg-gray-200"></div>
                 <span id="topDate" class="text-sm font-medium text-gray-700">--</span>
             </div>
@@ -592,6 +620,7 @@
             'trace_code.html': '溯源管理',
             'trace_query.html': '溯源管理',
             'trace_config.html': '溯源管理',
+            'trace_blockchain.html': '溯源管理',
             'trace_statistics.html': '溯源管理',
 
             'adoption_tree.html': '认养管理',
@@ -694,6 +723,141 @@
             var p = function (n) { return (n < 10 ? '0' : '') + n; };
             document.getElementById('topDate').textContent =
                 d.getFullYear() + '年' + p(d.getMonth() + 1) + '月' + p(d.getDate()) + '日';
+        })();
+
+        // ========== 顶栏站内搜索（菜单项索引 + 跳转） ==========
+        (function () {
+            var btn = document.getElementById('topSearchBtn');
+            var input = document.getElementById('topSearchInput');
+            if (!btn || !input) return;
+            var pages = [];
+            document.querySelectorAll('.sidebar-nav a[href]').forEach(function (a) {
+                var url = a.getAttribute('href');
+                var name = (a.querySelector('span:last-child') || a).textContent.trim();
+                if (url && name && pages.every(function (p) { return p.url !== url; })) {
+                    pages.push({ url: url, name: name, group: MENU_GROUP_MAP[url] || '系统首页' });
+                }
+            });
+            function toggle(open) {
+                input.classList.toggle('hidden', !open);
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (open) input.focus();
+            }
+            btn.addEventListener('click', function () { toggle(input.classList.contains('hidden')); });
+            input.addEventListener('keydown', function (e) {
+                if (e.key !== 'Enter') return;
+                var kw = input.value.trim().toLowerCase();
+                if (!kw) return;
+                var hit = pages.filter(function (p) {
+                    return p.name.toLowerCase().indexOf(kw) >= 0 || p.url.toLowerCase().indexOf(kw) >= 0;
+                });
+                if (!hit.length) { alert('未找到匹配的页面：' + input.value.trim()); return; }
+                openPage(hit[0].url, hit[0].name);
+                input.value = '';
+                toggle(false);
+            });
+            document.addEventListener('click', function (e) {
+                var wrap = document.getElementById('topSearchWrap');
+                if (wrap && !wrap.contains(e.target)) toggle(false);
+            });
+        })();
+
+        // ========== 顶栏预警通知（读取 AlertStore 待处理项） ==========
+        (function () {
+            var btn = document.getElementById('topNotifyBtn');
+            var panel = document.getElementById('topNotifyPanel');
+            var list = document.getElementById('topNotifyList');
+            var dot = document.getElementById('topNotifyDot');
+            if (!btn || !panel || !list) return;
+            var LEVEL_CLS = { urgent: 'text-red-600', important: 'text-amber-600', reminder: 'text-blue-600', notice: 'text-gray-500' };
+            function render() {
+                var items = [];
+                if (window.AlertStore) {
+                    try { items = AlertStore.byStatus('pending') || []; } catch (e) { items = []; }
+                }
+                dot.classList.toggle('hidden', items.length === 0);
+                if (!items.length) {
+                    list.innerHTML = '<li class="px-4 py-6 text-center text-xs text-gray-400">暂无待处理预警</li>';
+                    return;
+                }
+                list.innerHTML = items.slice(0, 20).map(function (a) {
+                    return '<li class="px-4 py-2.5 hover:bg-gray-50 cursor-pointer" onclick="openPage(\'' +
+                        (a.type === 'device' ? 'alert_device.html' : 'alert_farming.html') +
+                        '\',\'预警详情\');closeNotifyPanel();">' +
+                        '<div class="flex items-start gap-2">' +
+                        '<span class="mt-1 w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0"></span>' +
+                        '<span class="text-xs text-gray-800 leading-5 flex-1">' + (a.title || a.name || '预警') + '</span>' +
+                        '</div><div class="text-[11px] text-gray-400 mt-1 pl-3.5">' +
+                        (a.source || a.location || '—') + ' · ' + (a.time || a.createTime || '') + '</div></li>';
+                }).join('');
+            }
+            window.closeNotifyPanel = function () {
+                panel.classList.add('hidden');
+                btn.setAttribute('aria-expanded', 'false');
+            };
+            btn.addEventListener('click', function () {
+                var open = panel.classList.contains('hidden');
+                render();
+                panel.classList.toggle('hidden', !open);
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+            document.addEventListener('click', function (e) {
+                var wrap = document.getElementById('topNotifyWrap');
+                if (wrap && !wrap.contains(e.target)) window.closeNotifyPanel();
+            });
+            document.addEventListener('DOMContentLoaded', render);
+            window.addEventListener('storage', render);
+            document.addEventListener('alertStoreChange', render);
+        })();
+
+        // ========== 角色菜单权限过滤（消费 system_settings 保存的 snzg_permissions） ==========
+        (function applyMenuPermission() {
+            var user = null;
+            try { user = JSON.parse(sessionStorage.getItem('snzg_user') || 'null'); } catch (e) {}
+            var roleCode = (user && (user.roleCode || user.role)) || 'admin';
+            var saved;
+            try { saved = JSON.parse(localStorage.getItem('snzg_permissions') || 'null'); } catch (e) {}
+            if (!saved || roleCode === 'admin') return;   // 无配置或超管：不做过滤
+
+            /* 该角色是否已有任何配置项：
+               有配置 → 白名单模式（未列出的一律隐藏，避免「漏配即放行」）
+               无配置 → 不过滤（保持默认全可见，便于未配置权限的角色正常使用） */
+            var hasConfig = Object.keys(saved).some(function (k) {
+                return k.split(':')[0] === roleCode && saved[k] === true;
+            });
+            if (!hasConfig) {
+                console.info('[权限] 角色 ' + roleCode + ' 尚无权限配置，暂不隐藏任何菜单');
+                return;
+            }
+
+            var menus = document.querySelectorAll('.sidebar-nav a[href]');
+            var hiddenMenus = 0, hiddenGroups = 0;
+            menus.forEach(function (a) {
+                var url = a.getAttribute('href');
+                var name = (a.querySelector('span:last-child') || a).textContent.trim();
+                var group = MENU_GROUP_MAP[url] || '';
+                var key = roleCode + ':' + group + ':' + name;
+                var menuKey = roleCode + ':' + group;
+                var allowed = (key in saved) ? !!saved[key] : ((menuKey in saved) ? !!saved[menuKey] : false);
+                if (!allowed) {
+                    a.style.display = 'none';
+                    hiddenMenus++;
+                }
+            });
+
+            /* 逐个分组检查：若该分组下已无任何可见子项，则连分组标题一起隐藏 */
+            document.querySelectorAll('.sidebar-nav .menu-items').forEach(function (box) {
+                var visible = Array.prototype.filter.call(box.querySelectorAll('a[href]'), function (x) {
+                    return x.style.display !== 'none';
+                });
+                if (visible.length) return;
+                var head = box.previousElementSibling;
+                if (head) { head.style.display = 'none'; hiddenGroups++; }
+                box.style.display = 'none';
+            });
+
+            console.info('[权限] 角色 ' + roleCode + '：已隐藏 ' + hiddenMenus +
+                         ' 个菜单项、' + hiddenGroups + ' 个分组');
         })();
 
         // ========== 菜单高亮 ==========

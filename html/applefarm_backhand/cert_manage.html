@@ -211,6 +211,15 @@
   .status-tag.disabled::before {
     background:var(--text-tertiary);
   }
+  /* 即将到期（30 天内）：橙色警示 */
+  .status-tag.warning {
+    background:var(--warning-bg);
+    color:#ad8b00;
+    border:1px solid var(--warning-border);
+  }
+  .status-tag.warning::before {
+    background:var(--warning);
+  }
   .action-btns {
     display:flex;
     gap:6px;
@@ -447,6 +456,18 @@ function renderRemainTag(days) {
   return `<span class="remain-tag enabled">剩余 ${days} 天</span>`;
 }
 
+// 状态标签：按「今天」实时判定，30 天内到期 = 即将到期（橙），已过期 = 已过期（红）
+// revoked/disabled（人工作废）优先于到期判定，保持原状态语义
+const CERT_EXPIRING_DAYS = 30;
+function certStatusView(item) {
+  if (item.status === 'disabled') return { cls: 'disabled', text: '已撤销' };
+  const days = certRemainDays(item);
+  if (days === null) return { cls: 'enabled', text: '有效' };
+  if (days < 0) return { cls: 'error', text: '已过期' };
+  if (days <= CERT_EXPIRING_DAYS) return { cls: 'warning', text: '即将到期' };
+  return { cls: 'enabled', text: '有效' };
+}
+
 // 到期预警汇总
 function renderExpirySummary(data) {
   const box = document.getElementById('expirySummary');
@@ -522,6 +543,19 @@ let certFilteredData = [...mockCertData];
 // 渲染行
 function renderCertRow(item, seq) {
   const remainDays = certRemainDays(item);
+  const sv = certStatusView(item);
+  const actions = [];
+  actions.push(`<button class="action-btn" onclick="PageActions.showDetail('${item.id}')">查看</button>`);
+  if (sv.cls === 'enabled' || sv.cls === 'warning') {
+    actions.push(`<button class="action-btn" onclick="PageActions.downloadCert('${item.id}')">下载</button>`);
+    actions.push(`<button class="action-btn delete" onclick="PageActions.revokeCert('${item.id}')">作废</button>`);
+  }
+  if (sv.cls === 'error') {
+    actions.push(`<button class="action-btn" onclick="PageActions.renewCert('${item.id}')">续期</button>`);
+  }
+  if (sv.cls === 'disabled') {
+    actions.push(`<button class="action-btn delete" onclick="PageActions.deleteItem('${item.id}')">删除</button>`);
+  }
   return `
     <tr data-id="${item.id}">
       <td>${seq}</td>
@@ -531,14 +565,9 @@ function renderCertRow(item, seq) {
       <td>${item.supplier}</td>
       <td><span class="validity-text">${item.validity}</span></td>
       <td>${renderRemainTag(remainDays)}</td>
-      <td><span class="status-tag ${item.status}">${item.statusText}</span></td>
+      <td><span class="status-tag ${sv.cls}">${sv.text}</span></td>
       <td>
-        <div class="action-btns">
-          <button class="action-btn" onclick="PageActions.showDetail('${item.id}')">查看</button>
-          ${item.status === 'enabled' ? `<button class="action-btn" onclick="PageActions.downloadCert('${item.id}')">下载</button><button class="action-btn delete" onclick="PageActions.revokeCert('${item.id}')">作废</button>` : ''}
-          ${item.status === 'error' ? `<button class="action-btn" onclick="PageActions.renewCert('${item.id}')">续期</button>` : ''}
-          ${item.status === 'disabled' ? `<button class="action-btn delete" onclick="PageActions.deleteItem('${item.id}')">删除</button>` : ''}
-        </div>
+        <div class="action-btns">${actions.join('')}</div>
       </td>
     </tr>
   `;

@@ -88,10 +88,10 @@
         </div>
         <div class="profile-info">
           <div class="profile-name-row">
-            <span class="profile-name">刘友宝</span>
-            <span class="role-tag">VIP会员</span>
+            <span class="profile-name" id="memberName">未登录</span>
+            <span class="role-tag" id="memberLevel">普通会员</span>
           </div>
-          <div class="profile-area">已认养 2 棵果树</div>
+          <div class="profile-area" id="memberArea">未认养果树</div>
         </div>
       </div>
       <div class="profile-stats" id="profileStats">
@@ -149,6 +149,13 @@
         <div class="mb-list-content"><div class="mb-list-title">我的消息</div></div>
         <div class="mb-list-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
       </div>
+      <div class="mb-list-item" onclick="navigateTo('h5_community.html')">
+        <div class="mb-list-icon menu-icon green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20h5v-2a3 3 0 0 0-5.4-1.8"/><path d="M12 20H7v-2a5 5 0 0 1 9.9-1.1"/><circle cx="9" cy="7" r="4"/><circle cx="17" cy="11" r="3"/></svg>
+        </div>
+        <div class="mb-list-content"><div class="mb-list-title">认养社区</div><div class="mb-list-desc">晒果树、分享种植日记</div></div>
+        <div class="mb-list-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
       <div class="mb-list-item" onclick="navigateTo('h5_settings.html')">
         <div class="mb-list-icon menu-icon green">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -192,26 +199,79 @@ function readArr(key) {
   try { var v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; }
   catch (e) { return []; }
 }
+
+// 会员等级（与后台 mall_member.html 一致）：消费≥3000 VIP，≥1000 金卡，其余普通
+function computeMemberLevel(totalSpend) {
+  if (totalSpend >= 3000) return { name: 'VIP会员', min: 3000 };
+  if (totalSpend >= 1000) return { name: '金卡会员', min: 1000 };
+  return { name: '普通会员', min: 0 };
+}
+
+// 仅统计「当前登录用户」的订单总额
+function currentUserSpend(orders) {
+  var loginUser = sessionStorage.getItem('loginUser') || '';
+  if (!Array.isArray(orders) || !orders.length) return 0;
+  var s = 0;
+  for (var i = 0; i < orders.length; i++) {
+    var o = orders[i];
+    if (!o) continue;
+    var byUser = !loginUser || (o.user === loginUser) || (o.userName === loginUser) || (o.username === loginUser);
+    if (!byUser) continue;
+    var amt = parseFloat(o.amount || o.totalAmount || o.total || 0);
+    if (!isNaN(amt)) s += amt;
+  }
+  return s;
+}
+
+// 仅统计「当前登录用户」的认养数；未登录或无匹配时显示 0
+function currentUserAdoptions(all) {
+  var loginUser = sessionStorage.getItem('loginUser') || '';
+  if (!loginUser || !Array.isArray(all) || !all.length) return 0;
+  var n = 0;
+  for (var i = 0; i < all.length; i++) {
+    var a = all[i];
+    if (!a) continue;
+    if (a.user === loginUser || a.userName === loginUser || a.username === loginUser) n++;
+  }
+  return n;
+}
+
 function refreshMemberStats() {
   var orders = readArr('h5_orders');
   var favs = readArr('h5_favorites');
   var points = readArr('h5_points').reduce(function(s, p) { return s + (p.amount || 0); }, 0);
-  // 认养数只读不播种：认养记录是真实消费行为，无数据即显示 0，
-  // 由「我的认养」页统一写入 snzg_adoptions（不再自动写入演示数据）
-  var adoptions = readArr('snzg_adoptions');
-  // 积分为纯展示型演示值，无数据时保留基础额度，保证会员中心有可解释的初始态
-  if (!points) {
+  var allAdoptions = readArr('snzg_adoptions');
+
+  // 演示值（仅无任何数据时回填一次），避免污染正常账号的数据
+  var isEmptyData = !orders.length && !favs.length && !allAdoptions.length && !points;
+  if (isEmptyData) {
     try {
       localStorage.setItem('h5_points', JSON.stringify([{ amount: 1280, source: '消费返积分' }]));
-    } catch (e) { /* 隐私模式等写入失败时按 0 展示 */ }
+    } catch (e) {}
     points = readArr('h5_points').reduce(function(s, p) { return s + (p.amount || 0); }, 0);
   }
+
+  // 顶部用户信息从 sessionStorage 读取
+  var loginUser = sessionStorage.getItem('loginUser') || '';
+  var nameEl = document.getElementById('memberName');
+  var levelEl = document.getElementById('memberLevel');
+  var areaEl = document.getElementById('memberArea');
+  if (nameEl) nameEl.textContent = loginUser || '未登录';
+  var spend = currentUserSpend(orders);
+  var level = computeMemberLevel(spend);
+  if (levelEl) levelEl.textContent = level.name;
+  var adoptionsN = currentUserAdoptions(allAdoptions);
+  if (areaEl) areaEl.textContent = loginUser ? ('已认养 ' + adoptionsN + ' 棵果树') : '请先登录后查看认养数据';
+
   document.getElementById('statOrders').textContent = orders.length;
-  document.getElementById('statAdoptions').textContent = adoptions.length;
+  document.getElementById('statAdoptions').textContent = adoptionsN;
   document.getElementById('statFavs').textContent = favs.length;
   document.getElementById('statPoints').textContent = points;
 }
 document.addEventListener('DOMContentLoaded', refreshMemberStats);
+window.addEventListener('storage', function (e) {
+  if (e.key && (/^h5_|^snzg_adoptions/).test(e.key)) refreshMemberStats();
+});
 
 function confirmLogout() {
   if (!confirm('确定要退出登录吗？')) return;

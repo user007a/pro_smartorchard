@@ -174,6 +174,8 @@ const PageActions = (function() {
   let currentPage = 1;
   let pageSize = 10;
   let totalPages = 1;
+  // 最近一次 renderPagination 的上下文，供 changePage 重绘复用
+  let paginationContext = null;
 
   // 获取状态文本
   function getStatusText(status, type = 'default') {
@@ -350,6 +352,8 @@ const PageActions = (function() {
     const container = document.querySelector(containerSelector);
     if (!container) return;
 
+    currentColumns = columns || [];
+
     let html = '<thead><tr>';
     html += '<th style="width:60px;">序号</th>';
     columns.forEach(col => {
@@ -357,26 +361,7 @@ const PageActions = (function() {
     });
     html += '<th>操作</th></tr></thead><tbody>';
 
-    data.forEach((row, index) => {
-      html += `<tr data-id="${row.id}" data-index="${index}">`;
-      html += `<td>${index + 1}</td>`;
-      columns.forEach(col => {
-        let value = row[col.field];
-        if (col.type === 'status') {
-          value = `<span class="${getStatusClass(value)}">${getStatusText(value, col.statusType)}</span>`;
-        } else if (col.type === 'action') {
-          value = col.render(row);
-        } else if (col.render) {
-          value = col.render(value, row);
-        }
-        html += `<td>${value}</td>`;
-      });
-      html += `<td><div class="action-btns">
-        <button class="action-btn" onclick="PageActions.showDetail('${row.id}')">查看</button>
-        <button class="action-btn" onclick="PageActions.showEdit('${row.id}')">编辑</button>
-        <button class="action-btn delete" onclick="PageActions.deleteItem('${row.id}')">删除</button>
-      </div></td></tr>`;
-    });
+    html += data.map((row, index) => renderRowHtml(row, index, currentColumns)).join('');
 
     html += '</tbody>';
     container.innerHTML = html;
@@ -388,6 +373,7 @@ const PageActions = (function() {
     if (!container) return;
 
     totalPages = Math.ceil(total / pageSize);
+    paginationContext = { total, containerSelector };
 
     let html = '<div class="pagination">';
     html += `<button class="page-btn ${current === 1 ? 'disabled' : ''}" onclick="PageActions.changePage(${current - 1})">‹</button>`;
@@ -938,11 +924,54 @@ const PageActions = (function() {
     }, 1000);
   }
 
-  // 分页切换
+  // 分页切换：真实生效——更新当前页并重绘分页条与数据表格
   function changePage(page) {
     if (page < 1 || page > totalPages) return;
     currentPage = page;
-    Toast.show(`切换到第 ${page} 页`, 'info');
+    if (!paginationContext) {
+      Toast.show('分页由列表组件统一接管，本页未启用通用分页', 'info');
+      return;
+    }
+    // 列表数据源按当前页切片后重绘 tbody
+    const rows = sliceByPage(mockData[document.body.dataset.activePage] || mockData.certificates);
+    const tbody = document.querySelector('.data-table tbody');
+    if (tbody && rows.length) {
+      const columns = currentColumns || [];
+      if (columns.length) {
+        tbody.innerHTML = rows.map((row, i) => renderRowHtml(row, i + (currentPage - 1) * pageSize, columns)).join('');
+      }
+    }
+    renderPagination(paginationContext.total, currentPage, paginationContext.containerSelector);
+  }
+
+  // 通用分页所用的列定义与行模板（由 renderTable 记录，供 changePage 复用）
+  let currentColumns = [];
+  function renderRowHtml(row, index, columns) {
+    let html = `<tr data-id="${row.id}" data-index="${index}">`;
+    html += `<td>${index + 1}</td>`;
+    columns.forEach(col => {
+      let value = row[col.field];
+      if (col.type === 'status') {
+        value = `<span class="${getStatusClass(value)}">${getStatusText(value, col.statusType)}</span>`;
+      } else if (col.type === 'action') {
+        value = col.render(row);
+      } else if (col.render) {
+        value = col.render(value, row);
+      }
+      html += `<td>${value}</td>`;
+    });
+    html += `<td><div class="action-btns">
+      <button class="action-btn" onclick="PageActions.showDetail('${row.id}')">查看</button>
+      <button class="action-btn" onclick="PageActions.showEdit('${row.id}')">编辑</button>
+      <button class="action-btn delete" onclick="PageActions.deleteItem('${row.id}')">删除</button>
+    </div></td></tr>`;
+    return html;
+  }
+
+  function sliceByPage(list) {
+    const arr = Array.isArray(list) ? list : [];
+    const start = (currentPage - 1) * pageSize;
+    return arr.slice(start, start + pageSize);
   }
 
   // 已签发合格证的本地存储键（证书管理页会合并展示）

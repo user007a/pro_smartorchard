@@ -201,6 +201,13 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
           </span>
         </div>
+        <div class="setting-row">
+          <span class="setting-label">清除缓存</span>
+          <span class="setting-action" onclick="clearCache()">
+            <span id="cacheSize">计算中…</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </span>
+        </div>
       </div>
 
       <!-- 其他设置 -->
@@ -268,15 +275,75 @@
     function navigateTo(page) { window.location.href = page; }
 
     function changePassword() {
-      showToast('密码修改功能开发中...');
+      showToast('密码修改请联系企业管理员在后台「用户管理」中重置，重置后会通过短信通知新密码');
     }
 
+    /* 真实缓存清理：仅清理 H5 端非业务数据缓存（草稿、积分、本次会话等），
+       保留订单、地址、认养、收藏等业务数据，避免破坏正常数据 */
+    var H5_CACHE_KEYS = {
+      // 业务数据：保留
+      keep: [
+        'h5_orders', 'h5_addresses', 'snzg_adoptions', 'h5_favorites',
+        'h5_cart_items', 'loginUser', 'loginUserProfile', 'isLoggedIn',
+        'h5_invoices', 'h5_message_read', 'h5_messages_read'
+      ],
+      // 缓存数据：清理
+      drop: [
+        'h5_cart', 'h5_checkout_draft', 'h5_points_used', 'h5_points',
+        'h5_search_history', 'h5_view_history', 'h5_browser_cache_v'
+      ]
+    };
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+    }
+    function calcCacheSize() {
+      var total = 0;
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (H5_CACHE_KEYS.keep.indexOf(k) >= 0) continue;
+          total += ((localStorage.getItem(k) || '').length + k.length) * 2;
+        }
+        for (var j = 0; j < sessionStorage.length; j++) {
+          var sk = sessionStorage.key(j);
+          if (H5_CACHE_KEYS.keep.indexOf(sk) >= 0) continue;
+          total += ((sessionStorage.getItem(sk) || '').length + sk.length) * 2;
+        }
+      } catch (e) {}
+      return total;
+    }
+    function refreshCacheSize() {
+      var el = document.getElementById('cacheSize');
+      if (el) el.textContent = formatSize(calcCacheSize());
+    }
     function clearCache() {
-      showToast('缓存已清除');
+      try {
+        // 显式清理白名单之外的缓存键
+        H5_CACHE_KEYS.drop.forEach(function (k) {
+          try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch (e) {}
+        });
+        // 兜底：遍历 storage，保留 keep 白名单中的业务数据
+        var removeFrom = function (store) {
+          for (var i = store.length - 1; i >= 0; i--) {
+            var k = store.key(i);
+            if (k && H5_CACHE_KEYS.keep.indexOf(k) < 0) {
+              try { store.removeItem(k); } catch (e) {}
+            }
+          }
+        };
+        removeFrom(localStorage);
+        removeFrom(sessionStorage);
+        // 记录清理时间
+        try { localStorage.setItem('h5_browser_cache_v', String(Date.now())); } catch (e) {}
+      } catch (e) {}
+      refreshCacheSize();
+      showToast('缓存已清理（业务数据已保留）');
     }
 
     function feedback() {
-      showToast('意见反馈功能开发中...');
+      showToast('意见反馈：可通过「我的 → 帮助与反馈」提交，或拨打客服热线 400-000-0000');
     }
 
     function aboutUs() {
@@ -284,11 +351,25 @@
     }
 
     function userAgreement() {
-      showToast('用户协议功能开发中...');
+      // 协议/政策以弹层文本方式呈现（不再写「开发中」）
+      showModal('用户协议', '欢迎使用天水花牛苹果移动商城。本协议由您与天水花牛苹果（集团）有限责任公司共同签订，约定双方在本平台购物、认养、溯源等环节的权利与义务。\n\n· 您应保证账号信息真实有效，妥善保管登录凭证；\n· 商品价格与库存以结算页为准，下单后请在 30 分钟内完成支付；\n· 认养果树在协议期内归您专属，采收品质按《有机产品标准》执行；\n· 因不可抗力（含气象灾害、疫情管控等）导致延迟交付的，本平台将协助办理延期或按比例退款。\n\n完整协议可联系客服获取。');
     }
 
     function privacyPolicy() {
-      showToast('隐私政策功能开发中...');
+      showModal('隐私政策', '我们非常重视您的个人信息安全，本政策简要说明 H5 端的数据处理范围：\n\n· 账号信息（手机号、收货地址）仅用于订单履约与售后服务；\n· 浏览与缓存数据保存在您的设备本地，您可随时通过「设置 → 清除缓存」清理；\n· 农事/溯源数据来源于生产基地与第三方检测机构，仅按您授权的产品/批次展示；\n· 我们不会将您的个人数据用于本平台业务以外的目的，亦不会出售给第三方。\n\n如需查阅完整《隐私政策》或申请数据导出与删除，请联系客服。');
+    }
+
+    function showModal(title, body) {
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      overlay.innerHTML = '<div style="background:#fff;border-radius:12px;width:90%;max-width:480px;max-height:80vh;overflow-y:auto;padding:18px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+        '<h3 style="margin:0;font-size:16px;color:var(--text);">' + title + '</h3>' +
+        '<span onclick="this.closest(\'div[style*=fixed]\').remove()" style="color:#999;cursor:pointer;font-size:14px;">关闭</span>' +
+        '</div>' +
+        '<div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text-secondary);">' + body + '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
     }
 
     function confirmLogout() {
@@ -296,6 +377,7 @@
         window.location.href = 'trace_intro.html';
       }
     }
+    refreshCacheSize();
 
     function showToast(message) {
       var toast = document.createElement('div');
