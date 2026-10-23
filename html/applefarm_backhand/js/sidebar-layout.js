@@ -36,6 +36,7 @@ const MENU_ICONS = {
   collapseLeft: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3L6 9L11 15"/><path d="M14 3V15"/></svg>',
   expandRight: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3L12 9L7 15"/><path d="M4 3V15"/></svg>',
   gear: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2L10 2L10.5 4L12.5 5L14.5 4L15.5 5.5L14 7.2L14.5 9.5L16.5 10V12L14.5 12.5L14 14.5L15.5 16L14.5 17.2L12.5 16.2L10.5 17L10 19H8L7.5 17L5.5 16.2L3.5 17.2L2.5 16L4 14.5L3.5 12.5L1.5 12V10L3.5 9.5L4 7.2L2.5 5.5L3.5 4L5.5 5L7.5 4L8 2Z"/><circle cx="9" cy="10.5" r="2.5"/></svg>',
+  database: '<svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="9" cy="4.5" rx="6" ry="2.5"/><path d="M3 4.5V9C3 10.4 5.7 11.5 9 11.5C12.3 11.5 15 10.4 15 9V4.5"/><path d="M3 9V13.5C3 14.9 5.7 16 9 16C12.3 16 15 14.9 15 13.5V9"/></svg>',
 };
 
 /* ============================================
@@ -793,6 +794,9 @@ const MENU_CONFIG = [
   ]},
 
   { id: 'device', icon: 'cpu', label: '设备管理', children: [
+    { id: 'device-access', label: '设备接入配置', path: 'device_access.html' },
+    { id: 'gateway-config', label: '网关与协议', path: 'gateway_config.html' },
+    { id: 'video-monitor', label: '视频监控', path: 'video_monitor.html' },
     { id: 'device-info', label: '设备信息', path: 'device_info.html' },
     { id: 'device-log', label: '设备日志', path: 'device_log.html' },
     { id: 'device-maintain', label: '设备维护', path: 'device_maintain.html' },
@@ -855,6 +859,10 @@ const MENU_CONFIG = [
     { id: 'system-settings', label: '系统设置', path: 'system_settings.html' },
     { id: 'user-settings', label: '用户设置', path: 'user_settings.html' },
     { id: 'task-assign', label: '任务分配', path: 'task_assign.html' },
+  ]},
+
+  { id: 'dataops', icon: 'database', label: '数据运营', children: [
+    { id: 'data-source', label: '数据源接入', path: 'data_source.html' },
   ]},
 
   { id: 'tools', icon: 'book-open', label: '农事工具', children: [

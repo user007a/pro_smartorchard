@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 网关与协议管理</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .stat-card-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-lg);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-lg);
+  }
+  .stat-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 6px; }
+  .stat-value {
+    font-size: 28px; font-weight: 700; line-height: 1.2;
+    color: var(--text-primary); font-variant-numeric: tabular-nums;
+  }
+  .stat-value .unit { font-size: 13px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; }
+  .stat-sub { margin-top: 6px; font-size: 12px; color: var(--text-tertiary); }
+  .stat-sub.warn { color: var(--warning); }
+  .stat-sub.err { color: var(--error); }
+
+  .status-tag {
+    display: inline-block; padding: 3px 10px; border-radius: var(--radius-full);
+    font-size: 12px; font-weight: 500; white-space: nowrap;
+  }
+  .status-tag.online  { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
+  .status-tag.warning { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); }
+  .status-tag.offline { background: var(--gray-100); color: var(--text-secondary); border: 1px solid var(--border-default); }
+
+  .proto-badge {
+    display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm);
+    font-size: 12px; font-weight: 500; color: #0969da;
+    background: rgba(9,105,218,.08); border: 1px solid rgba(9,105,218,.2);
+  }
+  /* 网关负载条 */
+  .load-bar {
+    width: 100%; min-width: 90px; height: 6px; border-radius: 3px;
+    background: var(--gray-100); overflow: hidden; margin-top: 5px;
+  }
+  .load-fill { height: 100%; border-radius: 3px; background: var(--primary-500); }
+  .load-fill.warn { background: var(--warning); }
+  .load-text { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+  /* 协议说明卡 */
+  .proto-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 12px; margin-top: 4px;
+  }
+  .proto-card {
+    border: 1px solid var(--border-light); border-radius: var(--radius-md);
+    padding: 12px 14px; background: var(--bg-hover);
+  }
+  .proto-card .pc-head {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+  }
+  .proto-card .pc-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .proto-card .pc-desc { font-size: 12px; color: var(--text-tertiary); line-height: 1.6; }
+
+  .data-table { min-width: 1080px; }
+  .data-table th { white-space: nowrap; }
+  .empty-row td { text-align: center; color: var(--text-tertiary); padding: 40px 0; }
+  #pagination-container { padding: 12px 16px; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="device" data-active-submenu="gateway-config">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+
+        <div class="page-header">
+          <div>
+            <div class="page-title">网关与协议管理</div>
+            <div class="page-subtitle">配置边缘网关的 MQTT Broker、Modbus TCP、ONVIF 接入凭证与 Topic 规则，是设备接入配置的上游依赖</div>
+          </div>
+          <div class="page-actions">
+            <button class="jg-btn jg-btn-primary" onclick="openGatewayModal(null)">新增网关</button>
+            <button class="jg-btn" onclick="openProtoGuide()">协议说明</button>
+          </div>
+        </div>
+
+        <div class="stat-card-row" id="statCards"></div>
+
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="protocolSelect">
+              <option value="">全部协议</option>
+              <option value="MQTT">MQTT</option>
+              <option value="Modbus TCP">Modbus TCP</option>
+              <option value="ONVIF">ONVIF</option>
+              <option value="WebSocket">WebSocket</option>
+              <option value="RTSP">RTSP</option>
+              <option value="GB/T 28181">GB/T 28181</option>
+            </select>
+            <select class="search-select" id="statusSelect">
+              <option value="">全部状态</option>
+              <option value="online">运行中</option>
+              <option value="warning">连接不稳定</option>
+              <option value="offline">已离线</option>
+            </select>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索网关名称 / IP 地址 / Topic...">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="handleSearch()">搜索</button>
+              <button class="jg-btn" onclick="smartReset()">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:90px;">网关编号</th>
+                  <th style="width:140px;">网关名称</th>
+                  <th style="width:110px;">型号</th>
+                  <th style="width:100px;">厂商</th>
+                  <th style="width:110px;">通信协议</th>
+                  <th style="width:170px;">IP / 端口</th>
+                  <th style="width:130px;">Topic 前缀</th>
+                  <th style="width:150px;">接入负载</th>
+                  <th style="width:90px;">心跳(s)</th>
+                  <th style="width:130px;">安装位置</th>
+                  <th style="width:110px;">状态</th>
+                  <th style="width:150px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 新增/编辑网关模态框 -->
+<div id="modal-gateway" class="modal-overlay">
+  <div class="modal-box" style="max-width:820px;">
+    <div class="modal-header">
+      <h3 class="modal-title" id="gatewayModalTitle">新增网关</h3>
+      <button class="modal-close" onclick="closeGatewayModal()">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="form-gateway">
+        <div class="form-row" style="display:flex;gap:16px;margin-bottom:18px;">
+          <div class="form-field" style="flex:1;">
+            <label class="required">网关名称</label>
+            <input type="text" name="name" placeholder="如 A区边缘网关">
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label class="required">型号</label>
+            <input type="text" name="model" placeholder="如 EG-2000">
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label class="required">厂商</label>
+            <input type="text" name="vendor" placeholder="如 数农智果">
+          </div>
+        </div>
+
+        <div class="form-row" style="display:flex;gap:16px;margin-bottom:18px;">
+          <div class="form-field" style="flex:1;">
+            <label class="required">通信协议</label>
+            <select name="protocol" id="gwProtocolSelect">
+              <option value="MQTT">MQTT</option>
+              <option value="Modbus TCP">Modbus TCP</option>
+              <option value="ONVIF">ONVIF</option>
+              <option value="WebSocket">WebSocket</option>
+              <option value="RTSP">RTSP</option>
+              <option value="GB/T 28181">GB/T 28181</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label class="required">IP 地址</label>
+            <input type="text" name="ip" placeholder="如 10.20.1.1">
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label class="required">端口</label>
+            <input type="number" name="port" value="1883" min="1" max="65535">
+          </div>
+        </div>
+
+        <div class="form-row" style="display:flex;gap:16px;margin-bottom:18px;">
+          <div class="form-field" style="flex:1;">
+            <label>账号</label>
+            <input type="text" name="username" placeholder="如 gw_a">
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label>密码</label>
+            <input type="text" name="password" placeholder="保存后自动脱敏">
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label class="required">Topic 前缀</label>
+            <input type="text" name="topicPrefix" placeholder="如 farm/a">
+          </div>
+        </div>
+
+        <div class="form-row" style="display:flex;gap:16px;margin-bottom:18px;">
+          <div class="form-field" style="flex:1;">
+            <label class="required">心跳周期（秒）</label>
+            <input type="number" name="heartbeat" value="60" min="10" step="10">
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label class="required">最大接入设备数</label>
+            <input type="number" name="maxDevices" value="50" min="1" step="10">
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label>安装位置</label>
+            <input type="text" name="location" placeholder="如 A区中心机房">
+          </div>
+        </div>
+
+        <div class="form-row" style="display:flex;gap:16px;">
+          <div class="form-field" style="flex:1;">
+            <label>运行状态</label>
+            <select name="status">
+              <option value="online">运行中</option>
+              <option value="warning">连接不稳定</option>
+              <option value="offline">已离线</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:2;">
+            <label>备注</label>
+            <input type="text" name="remark" placeholder="选填">
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeGatewayModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitGateway()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 网关详情模态框 -->
+<div id="modal-gateway-detail" class="modal-overlay">
+  <div class="modal-box" style="max-width:720px;">
+    <div class="modal-header">
+      <h3 class="modal-title" id="gwDetailTitle">网关详情</h3>
+      <button class="modal-close" onclick="closeGwDetailModal()">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body" id="gwDetailBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeGwDetailModal()">关闭</button>
+      <button class="jg-btn jg-btn-primary" onclick="editFromGwDetail()">编辑</button>
+    </div>
+  </div>
+</div>
+
+<!-- 协议说明模态框 -->
+<div id="modal-proto" class="modal-overlay">
+  <div class="modal-box" style="max-width:760px;">
+    <div class="modal-header">
+      <h3 class="modal-title">接入协议说明</h3>
+      <button class="modal-close" onclick="closeProtoModal()">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4L12 12M12 4L4 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body" id="protoBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn jg-btn-primary" onclick="closeProtoModal()">知道了</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/shared/device-store.js"></script>
+<script>
+/* ============================================================
+ * 网关与协议管理
+ * 数据源：js/shared/device-store.js → gateways()
+ *
+ * 同 device_access.html，不引用 common-functions.js（Modal 重复声明）。
+ * ============================================================ */
+
+// 分页组件（与农事计划 / 基地管理一致）
+const Pagination = {
+  currentPage: 1, pageSize: 10, filteredData: [],
+  containerId: 'pagination-container', tbodyId: 'dataTableBody', renderRow: null,
+  init: function(options) {
+    this.currentPage = options.currentPage || 1;
+    this.pageSize = options.pageSize || 10;
+    this.filteredData = options.data || [];
+    this.containerId = options.containerId || 'pagination-container';
+    this.tbodyId = options.tbodyId || 'dataTableBody';
+    this.renderRow = options.renderRow || null;
+    this.render();
+  },
+  renderTable: function() {
+    const tbody = document.getElementById(this.tbodyId);
+    if (!tbody || !this.renderRow) return;
+    const start = (this.currentPage - 1) * this.pageSize;
+    const pageData = this.filteredData.slice(start, start + this.pageSize);
+    tbody.innerHTML = pageData.map((item, i) => this.renderRow(item, start + i + 1)).join('');
+  },
+  render: function() {
+    const container = document.getElementById(this.containerId);
+    if (!container) return;
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    let html = '<div class="pagination">';
+    html += `<button class="page-btn ${this.currentPage <= 1 ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage - 1})">‹</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= this.currentPage - 1 && i <= this.currentPage + 1)) {
+        html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}" onclick="Pagination.goToPage(${i})">${i}</button>`;
+      } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
+        html += '<span class="page-ellipsis" style="padding:0 8px;color:#6b7b6b;">...</span>';
+      }
+    }
+    html += `<button class="page-btn ${this.currentPage >= totalPages ? 'disabled' : ''}" onclick="Pagination.goToPage(${this.currentPage + 1})">›</button>`;
+    html += `<span style="margin-left:16px;font-size:13px;color:#6b7b6b;">第 ${this.currentPage} 页/共 ${totalPages} 页，共 ${this.filteredData.length} 条记录</span>`;
+    html += '</div>';
+    container.innerHTML = html;
+    this.renderTable();
+  },
+  goToPage: function(page) {
+    const totalPages = Math.ceil(this.filteredData.length / this.pageSize);
+    if (page < 1 || page > totalPages) return;
+    this.currentPage = page;
+    this.render();
+  },
+  updateData: function(data) {
+    this.filteredData = data;
+    this.currentPage = 1;
+    this.render();
+  }
+};
+
+var GW_STATUS_TEXT = { online: '运行中', warning: '连接不稳定', offline: '已离线' };
+var editingGwId = null;
+var gwDetailId = null;
+
+// 协议默认端口，切换协议时自动带出
+var PROTO_PORT = { 'MQTT': 1883, 'Modbus TCP': 502, 'ONVIF': 80, 'WebSocket': 8080, 'RTSP': 554, 'GB/T 28181': 5060 };
+
+var PROTO_DOCS = [
+  ['MQTT', '轻量级发布/订阅消息协议，适用于气象站、墒情仪、虫情仪等高频上报设备。Topic 规则为 {前缀}/{设备类型}/{设备编号}/{测点}，QoS 建议 1。'],
+  ['Modbus TCP', '工业以太网寄存器协议，适用于水肥一体机、墒情仪等支持 Modbus 从站的设备。按功能码映射测点，03 读保持寄存器、06 写单个寄存器。'],
+  ['ONVIF', '网络摄像头通用协议，用于云台控制、设备发现与 PTZ 预置位管理。视频取流仍走 RTSP，两者配合使用。'],
+  ['WebSocket', '长连接双向通信，适用于需要下行指令控制的网关，如远程重启、参数下发。'],
+  ['RTSP', '实时流传输协议，用于监控摄像头取流地址，常见于 NVR 通道拼接路径。'],
+  ['GB/T 28181', '国标视频监控平台级联协议，用于多平台互联互通与国标视频巡查。']
+];
+
+/* ---------- 统计卡 ---------- */
+function renderStats() {
+  var s = DeviceStore.gatewaySummary();
+  document.getElementById('statCards').innerHTML =
+    '<div class="stat-card"><div class="stat-label">网关总数</div>' +
+    '<div class="stat-value">' + s.total + '<span class="unit">台</span></div>' +
+    '<div class="stat-sub">MQTT 网关 ' + s.protocols + ' 台</div></div>' +
+    '<div class="stat-card"><div class="stat-label">运行中</div>' +
+    '<div class="stat-value">' + s.online + '<span class="unit">台</span></div>' +
+    '<div class="stat-sub">通信正常</div></div>' +
+    '<div class="stat-card"><div class="stat-label">连接不稳定</div>' +
+    '<div class="stat-value">' + s.warning + '<span class="unit">台</span></div>' +
+    '<div class="stat-sub ' + (s.warning ? 'warn' : '') + '">建议排查链路</div></div>' +
+    '<div class="stat-card"><div class="stat-label">已离线</div>' +
+    '<div class="stat-value">' + s.offline + '<span class="unit">台</span></div>' +
+    '<div class="stat-sub ' + (s.offline ? 'err' : '') + '">总接入容量 ' + s.capacity + ' 个</div></div>';
+}
+
+/* ---------- 接入负载（按关联的接入配置数 / 最大容量） ---------- */
+function loadOf(g) {
+  var used = DeviceStore.accessConfigs().filter(function (x) { return x.gatewayId === g.id; }).length;
+  var max = g.maxDevices || 0;
+  var pct = max ? Math.min(100, Math.round(used / max * 100)) : 0;
+  return { used: used, max: max, pct: pct };
+}
+
+/* ---------- 行渲染 ---------- */
+function renderRow(item, index) {
+  var ld = loadOf(item);
+  var full = ld.pct >= 80;
+  return '<tr>' +
+    '<td><strong>' + esc(item.id) + '</strong></td>' +
+    '<td>' + esc(item.name) + '</td>' +
+    '<td>' + esc(item.model) + '</td>' +
+    '<td>' + esc(item.vendor) + '</td>' +
+    '<td><span class="proto-badge">' + esc(item.protocol) + '</span></td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + esc(item.ip) + ' : ' + esc(item.port) + '</td>' +
+    '<td style="font-size:12px;">' + esc(item.topicPrefix) + ' / …</td>' +
+    '<td><div class="load-text">' + ld.used + ' / ' + ld.max + ' 个设备</div>' +
+      '<div class="load-bar"><div class="load-fill ' + (full ? 'warn' : '') + '" style="width:' + ld.pct + '%"></div></div></td>' +
+    '<td>' + esc(item.heartbeat) + '</td>' +
+    '<td>' + esc(item.location || '-') + '</td>' +
+    '<td><span class="status-tag ' + item.status + '">' + (GW_STATUS_TEXT[item.status] || item.statusText) + '</span></td>' +
+    '<td><div class="action-btns">' +
+      '<button class="action-btn detail" data-act="detail" data-id="' + item.id + '">详情</button>' +
+      '<button class="action-btn edit" data-act="edit" data-id="' + item.id + '">编辑</button>' +
+      '<button class="action-btn delete" data-act="del" data-id="' + item.id + '">删除</button>' +
+    '</div></td>' +
+  '</tr>';
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+/* ---------- 搜索 ---------- */
+function filteredList() {
+  var proto = document.getElementById('protocolSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var kw = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+
+  return DeviceStore.gateways().filter(function (x) {
+    if (proto && x.protocol !== proto) return false;
+    if (status && x.status !== status) return false;
+    if (kw) {
+      var hay = [x.name, x.ip, x.topicPrefix, x.id, x.model, x.vendor].join(' ').toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function handleSearch() {
+  var list = filteredList();
+  Pagination.updateData(list);
+  Toast.show('找到 ' + list.length + ' 条记录', 'info');
+}
+
+function smartReset() {
+  document.getElementById('protocolSelect').value = '';
+  document.getElementById('statusSelect').value = '';
+  document.getElementById('searchInput').value = '';
+  Pagination.updateData(DeviceStore.gateways());
+  Toast.show('已重置搜索条件', 'info');
+}
+
+/* ---------- 协议切换带出默认端口 ---------- */
+document.getElementById('gwProtocolSelect').addEventListener('change', function (e) {
+  var p = PROTO_PORT[e.target.value];
+  if (p) document.getElementById('form-gateway').port.value = p;
+});
+
+/* ---------- 新增 / 编辑 ---------- */
+function openGatewayModal(item) {
+  editingGwId = item ? item.id : null;
+  document.getElementById('gatewayModalTitle').textContent = item ? '编辑网关' : '新增网关';
+  var form = document.getElementById('form-gateway');
+  form.reset();
+
+  if (item) {
+    form.name.value = item.name;
+    form.model.value = item.model;
+    form.vendor.value = item.vendor;
+    form.protocol.value = item.protocol;
+    form.ip.value = item.ip;
+    form.port.value = item.port;
+    form.username.value = item.username || '';
+    form.password.value = '';
+    form.password.placeholder = '已设置（留空则不修改）';
+    form.topicPrefix.value = item.topicPrefix;
+    form.heartbeat.value = item.heartbeat;
+    form.maxDevices.value = item.maxDevices;
+    form.location.value = item.location || '';
+    form.status.value = item.status;
+    form.remark.value = item.remark || '';
+  } else {
+    form.port.value = PROTO_PORT.MQTT;
+    form.heartbeat.value = 60;
+    form.maxDevices.value = 50;
+    form.status.value = 'online';
+  }
+  document.getElementById('modal-gateway').classList.add('show');
+}
+
+function closeGatewayModal() { document.getElementById('modal-gateway').classList.remove('show'); }
+
+function submitGateway() {
+  var form = document.getElementById('form-gateway');
+  var name = (form.name.value || '').trim();
+  var ip = (form.ip.value || '').trim();
+  var prefix = (form.topicPrefix.value || '').trim();
+  if (!name) { Toast.show('请填写网关名称', 'warning'); return; }
+  if (!ip) { Toast.show('请填写 IP 地址', 'warning'); return; }
+  if (!prefix) { Toast.show('请填写 Topic 前缀', 'warning'); return; }
+
+  var old = editingGwId
+    ? DeviceStore.gateways().filter(function (x) { return x.id === editingGwId; })[0]
+    : null;
+
+  var status = form.status.value;
+  DeviceStore.upsertGateway({
+    id: editingGwId || genGwId(),
+    name: name,
+    model: (form.model.value || '').trim(),
+    vendor: (form.vendor.value || '').trim(),
+    protocol: form.protocol.value,
+    ip: ip,
+    port: Number(form.port.value) || 1883,
+    username: (form.username.value || '').trim(),
+    // 密码不覆盖原值，避免详情脱敏后被写成明文
+    password: (form.password.value || '').trim() || (old ? old.password : '******'),
+    topicPrefix: prefix,
+    heartbeat: Number(form.heartbeat.value) || 60,
+    maxDevices: Number(form.maxDevices.value) || 50,
+    status: status,
+    statusText: GW_STATUS_TEXT[status],
+    location: (form.location.value || '').trim(),
+    remark: (form.remark.value || '').trim(),
+    updatedAt: nowStamp()
+  });
+
+  closeGatewayModal();
+  Toast.show(editingGwId ? '网关配置已更新' : '网关已创建', 'success');
+}
+
+function genGwId() {
+  var max = 0;
+  DeviceStore.gateways().forEach(function (x) {
+    var n = parseInt(String(x.id || '').replace(/\D/g, ''), 10);
+    if (!isNaN(n) && n > max) max = n;
+  });
+  return 'GW-' + String(max + 1).padStart(3, '0');
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function nowStamp() {
+  var d = new Date();
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+    ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
+/* ---------- 详情 ---------- */
+function openGwDetail(id) {
+  var item = DeviceStore.gateways().filter(function (x) { return x.id === id; })[0];
+  if (!item) return;
+  gwDetailId = id;
+  document.getElementById('gwDetailTitle').textContent = '网关详情 · ' + item.name;
+
+  var ld = loadOf(item);
+  var rows = [
+    ['网关编号', esc(item.id)],
+    ['网关名称', esc(item.name)],
+    ['型号 / 厂商', esc(item.model) + ' · ' + esc(item.vendor)],
+    ['通信协议', esc(item.protocol)],
+    ['IP / 端口', esc(item.ip) + ' : ' + esc(item.port)],
+    ['账号', esc(item.username) || '-'],
+    ['密码', esc(item.password) || '-'],
+    ['Topic 前缀', esc(item.topicPrefix) + ' / {设备类型}/{设备编号}/{测点}'],
+    ['心跳周期', item.heartbeat + ' 秒'],
+    ['接入负载', ld.used + ' / ' + ld.max + ' 个设备（' + ld.pct + '%）'],
+    ['安装位置', esc(item.location) || '-'],
+    ['运行状态', '<span class="status-tag ' + item.status + '">' + (GW_STATUS_TEXT[item.status] || item.statusText) + '</span>'],
+    ['备注', esc(item.remark) || '-'],
+    ['更新时间', esc(item.updatedAt)]
+  ].map(function (r) {
+    return '<div class="detail-row"><span class="detail-label">' + r[0] + '</span>' +
+      '<span class="detail-value">' + r[1] + '</span></div>';
+  }).join('');
+
+  // 挂载在该网关下的接入配置
+  var attached = DeviceStore.accessConfigs().filter(function (x) { return x.gatewayId === item.id; });
+  var attachedHtml = attached.length
+    ? attached.map(function (x) {
+        return '<div class="point-item" style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px dashed var(--border-light);">' +
+          '<span>' + esc(x.deviceName) + ' · ' + esc(x.deviceType) + '</span>' +
+          '<span class="pi-unit" style="font-size:11px;color:var(--text-tertiary);">' + esc(x.freq) + '</span></div>';
+      }).join('')
+    : '<div class="form-hint">暂无设备挂载到该网关</div>';
+
+  document.getElementById('gwDetailBody').innerHTML =
+    '<div class="detail-info">' + rows + '</div>' +
+    '<div style="margin-top:18px;">' +
+      '<div style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">已挂载设备（' + attached.length + ' 个）</div>' +
+      attachedHtml +
+    '</div>';
+
+  document.getElementById('modal-gateway-detail').classList.add('show');
+}
+
+function closeGwDetailModal() { document.getElementById('modal-gateway-detail').classList.remove('show'); }
+
+function editFromGwDetail() {
+  var id = gwDetailId;
+  closeGwDetailModal();
+  var item = DeviceStore.gateways().filter(function (x) { return x.id === id; })[0];
+  if (item) openGatewayModal(item);
+}
+
+/* ---------- 协议说明 ---------- */
+function openProtoGuide() {
+  document.getElementById('protoBody').innerHTML =
+    '<div class="proto-grid">' + PROTO_DOCS.map(function (p) {
+      return '<div class="proto-card">' +
+        '<div class="pc-head"><span class="pc-name">' + esc(p[0]) + '</span>' +
+        '<span class="proto-badge">默认端口 ' + (PROTO_PORT[p[0]] || '-') + '</span></div>' +
+        '<div class="pc-desc">' + esc(p[1]) + '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  document.getElementById('modal-proto').classList.add('show');
+}
+
+function closeProtoModal() { document.getElementById('modal-proto').classList.remove('show'); }
+
+/* ---------- 删除 ---------- */
+function handleDelete(id) {
+  var item = DeviceStore.gateways().filter(function (x) { return x.id === id; })[0];
+  if (!item) return;
+  var used = loadOf(item).used;
+  var warn = used ? '该网关下仍有 ' + used + ' 个设备接入配置，删除后这些配置将失去网关。' : '';
+  Confirm.delete('确定要删除网关「' + item.name + '」吗？' + warn + '此操作不可撤销。').then(function (ok) {
+    if (!ok) return;
+    DeviceStore.removeGateway(id);
+    Toast.show('删除成功', 'success');
+  });
+}
+
+/* ---------- 事件绑定 ---------- */
+document.getElementById('dataTableBody').addEventListener('click', function (e) {
+  var btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  var id = btn.getAttribute('data-id');
+  var act = btn.getAttribute('data-act');
+  if (act === 'detail') openGwDetail(id);
+  else if (act === 'edit') {
+    var item = DeviceStore.gateways().filter(function (x) { return x.id === id; })[0];
+    if (item) openGatewayModal(item);
+  } else handleDelete(id);
+});
+
+/* ---------- 初始化 ---------- */
+document.addEventListener('DOMContentLoaded', function () {
+  renderStats();
+  Pagination.init({
+    currentPage: 1,
+    pageSize: 10,
+    data: DeviceStore.gateways(),
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow
+  });
+  DeviceStore.subscribe(function () {
+    renderStats();
+    Pagination.updateData(filteredList());
+  });
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>
