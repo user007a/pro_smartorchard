@@ -167,6 +167,16 @@
 
 **处置**：接入后端后全部移除本地存储，改为服务端校验 + 令牌。
 
+### L-MENU-01 菜单存在两套互不同步的真源
+
+| 项 | 内容 |
+| --- | --- |
+| **位置** | 真源 A：[menu_settings.html](file:///d:/dev/pro_smartorchard/html/applefarm_backhand/menu_settings.html#L308) 的 `MENU_KEY='smartorchard_menus'` + `DEFAULT_MENUS`；真源 B：[index.html](file:///d:/dev/pro_smartorchard/html/applefarm_backhand/index.html#L660) 的 `MENU_GROUP_MAP` 硬编码常量（侧栏渲染、面包屑分组、站内搜索索引三处均读它，见 `index.html:776` / `:809` / `:1022`） |
+| **缺陷** | `menu_settings.html` 提供完整的菜单树增删改、排序、显隐、搜索（`readMenus/writeMenus/toggleNode/saveSort` L484-L676），但**侧栏从不读 `smartorchard_menus`**。用户在「菜单设置」里改名/隐藏/排序，侧栏、面包屑、站内搜索全部不变 |
+| **后果** | 菜单配置功能**完全无效**（写了但没人读）；且 `system_settings.html` 的 `permissionMenus` 维护的是第三份菜单清单（见 `pages/pc-admin/06` PC-SYS-001 的 `PERM-MENU-01`），三份清单需手工保持同步 |
+| **处置** | 确立 `smartorchard_menus` 为菜单唯一真源：`index.html` 的 `MENU_GROUP_MAP` 与 `system_settings.html` 的 `permissionMenus` 均改为从该键派生；接入后端后由接口下发 |
+| **任务卡** | `TC-SYS-005`（2026-10-23 裁决：不新建 `TC-MENU-001`，归并入 `TC-SYS-005`，见 `13-任务卡集.md` §0.2.2 与 L1006-L1037 卡面） |
+
 ---
 
 ## 3. 🟡 规范不一致（snake_case 改造时统一）
@@ -265,6 +275,7 @@
 | **L-DEAD-04** | `device_log_cleared_at` | 仅 `removeItem`，**写入方已丢失** | 确认后删除 |
 | **L-DEAD-05** | `snzg_adoption_income` | 仅 `report_overview.html` 读 `amount`，**无写入方** | 确认：补写入方或删除该读取逻辑 |
 | **L-DEAD-06** | `MobileBridge.droneEvents()` / `droneAbnormal()` | 方法已实现但**零调用**；PC 端无页面消费无人机事件 | 批次 4 详设 `drone_patrol.html` 时确认是否接入；不接入则连同 2 个 key 删除 |
+| **L-DEAD-07** | `menu_settings.html`（894 行） | **PC 后台第 96 个 HTML 页，侧栏「系统管理 > 菜单设置」可正常打开**（`index.html:496-498` 菜单项 + `index.html:763` 分组映射），但**批次 4 页面详设的 95 页清单完全遗漏此页**；同时 `smartorchard_menus` 键未登记进附录 C | 补写该页详设（归入系统管理，与 PC-SYS-001~003 同组），页面总数由 95 修正为 96；键已补登记进附录 C |
 
 > **删除前必须全局搜索确认**：包括 HTML 内联字符串（弹窗模板里可能有引用）、`demo-seed.js`（可能是这些 key 的 schema 权威源）。
 
@@ -301,9 +312,9 @@
 | 优先级 | 编号 | 理由 |
 | --- | --- | --- |
 | **P0** | L-A01 · L-D03 · L-D04 · L-D06 · L-D09 · L-PERM-01 · L-PERM-02 · L-DEP-01 · L-DEP-05 · L-ENG-04 | 安全/数据不一致 / 阻塞后续批次 |
-| **P1** | L-CERT-001 · L-D07 · L-D01 · L-PERM-03 · L-PERM-04 · L-PERM-07 · L-ENG-01 · L-ENG-02 · L-ENG-03 · L-DEP-02 · L-DEP-03 · L-DEP-04 · L-DS-01 · L-DS-04 | 功能失效 / 接入后端前必须处理 / 阻塞页面改造 |
+| **P1** | L-CERT-001 · L-D07 · L-D01 · L-MENU-01 · L-PERM-03 · L-PERM-04 · L-PERM-07 · L-ENG-01 · L-ENG-02 · L-ENG-03 · L-DEP-02 · L-DEP-03 · L-DEP-04 · L-DS-01 · L-DS-04 | 功能失效 / 接入后端前必须处理 / 阻塞页面改造 |
 | **P2** | L-D02 · L-D05 · L-D08 · L-D10~L-D13 · L-PERM-05~L-PERM-10 · L-CMP-03~L-CMP-06 · L-ENG-05 · L-ENG-06 · L-DS-02 · L-DS-03 · L-DS-06 · L-DS-07 · L-DEP-06 · L-DEP-07 · L-DEP-09 | 规范不一致 / 影响可维护性 |
-| **P3** | L-DEAD-01~06 · L-CMP-07~L-CMP-09 · L-ENG-07 · L-ENG-08 · L-DS-05 · L-DEP-08 | 死代码清理 |
+| **P3** | L-DEAD-01~07 · L-CMP-07~L-CMP-09 · L-ENG-07 · L-ENG-08 · L-DS-05 · L-DEP-08 | 死代码清理 |
 
 **批次 4（页面详设）开始前必须完成**：
 
@@ -321,10 +332,10 @@
 | 类别 | 数量 | 登记位置 |
 | --- | --- | --- |
 | 🔵 架构边界（不修） | 4 | 本章 §1（L-1 · L-9 · L-10 · L-12） |
-| 🔴 设计缺陷 | 15 | 本章 §2（15 条，均有完整条目） |
+| 🔴 设计缺陷 | 16 | 本章 §2（16 条，均有完整条目） |
 | 🟡 规范不一致 | 26 | 本章 §3（9 条）+ 各章末尾（17 条） |
-| ⚪ 死代码 | 15 | 本章 §4（6 条）+ 各章末尾（9 条） |
-| **合计** | **60** | — |
+| ⚪ 死代码 | 16 | 本章 §4（7 条）+ 各章末尾（9 条） |
+| **合计** | **62** | — |
 
 ### 8.1 本章未展开条目的登记位置
 

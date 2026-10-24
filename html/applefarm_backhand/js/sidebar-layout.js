@@ -857,6 +857,7 @@ const MENU_CONFIG = [
 
   { id: 'system', icon: 'settings', label: '系统运维', children: [
     { id: 'system-settings', label: '系统设置', path: 'system_settings.html' },
+    { id: 'menu-settings', label: '菜单设置', path: 'menu_settings.html' },
     { id: 'user-settings', label: '用户设置', path: 'user_settings.html' },
     { id: 'task-assign', label: '任务分配', path: 'task_assign.html' },
   ]},

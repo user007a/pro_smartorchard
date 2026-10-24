@@ -12,10 +12,10 @@
 | PC Store 键 | 6 | 6 个 PC Store |
 | 移动端共享键 | 9 | `MobileStore` |
 | 桥接读取键 | 11 | `MobileBridge` |
-| PC 后台散落键 | 18 | ⚠️ 无 Store，页面直写 |
-| H5 端键 | 20 | 部分有数据层脚本 |
+| PC 后台散落键 | 19 | ⚠️ 无 Store，页面直写 |
+| H5 端键 | 21 | 部分有数据层脚本 |
 | UI 偏好键 | 4 | 页面直写（允许） |
-| **localStorage 合计** | **52**（去重后） | — |
+| **localStorage 合计** | **54**（去重后） | — |
 | sessionStorage 键 | 5–7 | 登录态 |
 
 ---
@@ -50,6 +50,7 @@
 | `h5_points` | 数组 | 页面直写 | ST-H5-006 | — |
 | `h5_points_used` | **字符串** | 页面直写 | ST-H5-007 | — |
 | `h5_sales_orders` | 数组 | 页面直写 + **移动端** | ST-H5-012 | ⚠️ 唯一 C 端与移动端共写 |
+| `h5_trace_stages` | 数组 | `trace-stages.js`（读）← `trace_config.html`（写） | ST-H5-021 | ⚠️ 本轮补登（原台账遗漏） |
 | `mall_coupons` | 数组 | `mall-coupons.js` | ST-H5-017 | — |
 | `mall_products` | 数组 | `mall-products.js` | ST-H5-016 | — |
 | `mall_promotions` | 数组 | `mall-promotions.js` | ST-H5-018 | 🟡 空数组不回填 |
@@ -97,6 +98,7 @@
 | `snzg_user` | 对象 | `login.html` | §2.7 | — |
 | `snzg_user_accounts` | 对象 | 页面直写 | ST-USER-001 | 🔴 密码明文 |
 | `snzg_user_states` | 对象 | 页面直写 | ST-USER-005 | 🟡 与 disabled 重复 |
+| `smartorchard_menus` | 数组 | `menu_settings.html` | — | ⚠️ 本轮补登 · 菜单真源，但侧栏 `MENU_GROUP_MAP` 未读它（见 D 台账 L-MENU-01） |
 
 ### sessionStorage
 
@@ -123,6 +125,7 @@
 | `h5_community_comments` | `{ [postId]: Array }` | 需自定义读取 |
 | `h5_community_likes` | `{ [postId]: number }` | 需自定义读取 |
 | `h5_checkout_draft` | 对象 | 需自定义读取 |
+| `h5_trace_stages` | `Array<{key,name,title,icon,img,desc,enabled,order}>` | `TraceStages.all()` / `onSale()` |
 | `snzg_user_accounts` | `{ [username]: {...} }` | 需自定义读取 |
 | `snzg_permissions` | `{ [key]: boolean }` | 需自定义读取 |
 | `snzg_passwords` | `{ [username]: string }` | 需自定义读取 |

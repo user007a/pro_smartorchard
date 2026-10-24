@@ -1,0 +1,115 @@
+# 数农智果智慧果园平台 · Cursor 规则
+# 完整条款见 docs/详细设计/（01 章为硬约束与禁止清单，不可协商）
+
+项目：纯静态前端。157 个 HTML，零构建、零框架、零后端。数据在 localStorage / sessionStorage。
+源码即产物，页面必须双击以 file:// 协议直接运行。5 端 156 页：PC 后台 96 / 移动端 33 / H5 16 / 大屏 10 / 门户 1。
+工作形态是「在既有原型上定点改造」，DOM 已锁定，不可重设计。
+
+== 契约优先级（冲突逐级向下比对，命中即停）==
+1. docs/详细设计/01-技术栈与工程约束.md（硬约束 + 禁止清单，不可协商）
+2. 03 数据 / 04 存储 / 05 接口 / 06 事件 / 07 跨端联动 契约
+3. 08 设计系统 / 09 组件 / 10 工程化 / 11 权限 / 12 部署 规范
+4. pages/ 页面详设 → 5. html/ 现有代码 → 6. docs/需求说明书.md V4.1
+铁律：原型结构 > 一切文档描述；契约未覆盖的字段/状态/枚举禁止自行发明（挂起提问）；禁止清单优先级最高。
+禁止折中妥协（如写成 stock ?? qty）——选一边执行 + 记录分歧。
+
+== 硬约束 ==
+- 双击即开（file://）；只用具名 <script> 顺序加载，全局变量即依赖；无 ES Module；完全无构建
+- ES 边界：ES5 全语法 + 箭头函数 + 模板字符串 + let/const + Array 扩展方法
+- 数据流唯一入口：页面 → Store → localStorage；业务数据读写必经 Store
+- Store 五铁律：禁止内存缓存 / 必须容错 / 禁止写坏数据 / 必须广播 / 读取只读快照
+- 两级回退：读权威源 → 失败回退种子 → 绝不回写权威源
+- 字段 snake_case；时间 ISO 8601；空值禁止 null；ID = 'id_' + Date.now() + '_' + random5
+- 存储键：smartorchard_{域}_{对象}[_v版本] 或 applefarm_{域}_{对象}_v版本
+- 编码 UTF-8 无 BOM；登录守卫在 <head> 内联脚本中；登录态必须 sessionStorage（域冻结）
+- 移动端必须给 GPS 失败降级路径；禁止假设 navigator.onLine 为 true
+- 金额一律「元」+ toFixed(2)；统计卡数字必须由数据推导
+- 大屏固定 1920×1080 + transform: scale()，禁止响应式重排；大屏是只读消费端
+- 改动范围严格限定在任务卡「允许改动文件」清单内
+
+== 🔴 禁止清单（违反即交付失败，不接受「功能能跑」的辩解）==
+禁止引入：
+- npm / yarn / pnpm 任何依赖；任何打包器（webpack/vite/rollup/parcel）及配置
+- 任何前端框架（React/Vue/Angular/Svelte）；jQuery / Zepto 等类库；TypeScript / tsconfig.json
+- CSS 预处理器（sass/less/stylus）；import / export / 动态 import() / CommonJS require
+- Service Worker、WebSocket / SSE 长连接（除非任务卡明确授权）
+- 新增任何指向 CDN 的 <script src>（iconify CDN 为存量，不得新增）
+- package.json / node_modules/ / playwright.config.js
+- Jest / Vitest / Mocha / Jasmine / Playwright / Cypress / Puppeteer / jsdom
+- ESLint / Prettier / Stylelint；CI 流水线与覆盖率工具
+禁止修改（除任务卡明确授权）：
+- html/common/**（全部 157 页共享）· html/fonts/**（原则禁止）· docs/** 契约文档（走 README §7 变更流程）
+- 三份设计系统 CSS（design-system / mobile-design-system / dashboard-design-system）：仅改 token 取值，禁改名与改结构
+- html/*/js/** 的 Store 类文件（须单独卡 + 回归跨端链路）
+禁止的代码行为：
+- 禁止同时引用 js/common-functions.js 与 js/components/modal.js（两者都 const Modal → SyntaxError: Identifier 'Modal' has already been declared → 该页全部弹窗静默失效）
+- 禁止页面直写业务 localStorage key（白名单仅：登录态 / 纯 UI 偏好 / h5_* 系列）——必须走 Store
+- 禁止自创未在 03-数据契约.md 定义的字段名与枚举值
+- 禁止 Store 内存缓存（MaterialStore 已移除，勿加回）
+- 禁止 alert() / confirm() 替代 Toast / ConfirmDialog
+- 禁止 CSS 写死颜色十六进制（须 var(--token)，内嵌 SVG 的 fill/stroke 除外）
+- 禁止 console.log；禁止 TODO / FIXME 注释；禁止注释掉的死代码；禁止内联事件处理器写复杂逻辑
+- 禁止 localStorage 存敏感信息（密码 / token / credential）
+- 禁止 ?? （本项目零使用）；禁止新代码用 async/await（用 Promise.then）；禁止无兜底的可选链 ?.
+- 禁止重新声明全局名：Modal LegacyModal Toast LegacyToast ConfirmDialog LegacyConfirmDialog Pagination
+  Search PageActions MaterialStore BizStore DataStore TraceStatStore AlertStore MobileBridge MobileStore H5Auth USER_OPTIONS
+- 禁止依赖方向：Store→页面 / 页面A→页面B 局部变量 / 大屏写任何 Store / 大屏绕过 Store 直读 h5_*、snzg_*
+  / PC 直读 smartorchard_*（须经 MobileBridge）/ 移动端读 applefarm_*
+- 禁止顺手优化：var→const/let、格式化整文件、加调试输出、给别的页面「修个一样的问题」、
+  删除「看起来没用」的变量（删除前须全局搜索确认）
+
+== 关于自动化测试（重要）==
+本项目无任何自动化测试框架，且禁止引入。
+html/applefarm_mobile/ 下的 package.json + package-lock.json + playwright.config.js
+已于 2026-10-23 作为死配置删除（其 testDir: './tests' 指向不存在的目录）。
+🔴 不得声称本项目已有 E2E 能力，不得依赖，不得写进任何验收材料。
+验收走 PowerShell 静态扫描 + 浏览器控制台脚本（14 章 §8）。
+
+== 代码标记制（只动目标标记）==
+【保留】禁止改动（不提及、不优化、不改格式）    【改造】只改标记处指明部分，不动同一函数内其他逻辑
+【替换】整段重写，保持外部调用签名不变    【补齐】新增，位置由详设指定    【缺口】新增 + 必须补齐验收断言
+代码锚点 file:///路径#L起-L止；行号可能漂移，一律以实际文件内容为准。
+详设每个改造点须有 位置 / 现状 / 目标 / 约束 四要素。
+
+== 工作流 ==
+① 接卡：13-任务卡集.md 领取 TC- 卡（共 172 张）。一次只做一张，禁止多卡并行写同一文件
+② 加载：按卡内编号加载 2~4 个契约文件 + 1~2 页详设。🔴 禁止通读 156 页详设，禁止一次读 10+ 契约文件
+③ 定位：按【标记】+ 锚点打开目标文件确认现状    ④ 改：只改清单内文件、只改目标标记片段
+⑤ 自检：跑下面的清单 + 14 章 §2.1 任务卡 DoD    ⑥ 回报：六段格式，断言逐条 PASS / FAIL / 挂起
+失败后：原锚点 + 错误信息重试一次；仍失败则挂起转人工，禁止第三次猜测式重改。
+不确定时挂起而非猜测（优先级高于任务卡）：契约未定义的字段/枚举 → 挂起回报；不确定能否编辑 → 保守按不可编辑
+实现并标注存疑；找不到样式类 → 先查 08 章有无现成 token。
+
+== 交付前自检（14 章 §5 共 50 条 SR 规则，本次涉及文件须全 PASS）==
+必查：SR-01 非双引用 modal · SR-11 无依赖与框架配置 · SR-12 无 ?? import async · SR-13 无 BOM
+SR-33 无 console.log 与死代码 · SR-03 innerHTML 已转义 · SR-04 走 Store · SR-05 setItem 有 try-catch 且有提示
+SR-16 字段来自 03 · SR-40 枚举来自 03 · SR-18 无 Store 缓存 · SR-26 不回写权威源 · SR-29 无敏感信息落盘
+PC 后台额外：SR-06 分页容器 id=pagination-container 且文案「‹ 1 2 3 › 第 X 页/共 Y 页，共 Z 条记录」
+SR-10 iconify.min.js 早于 js/icons.js、js/iframe-hide.js 为最后一个 script · SR-08 无 alert() 且 ConfirmDialog.show
+显式写 danger · SR-09 无硬编码色值 · SR-27 有边界态且空态为兄弟节点 · SR-47 弹层可关闭 · SR-48 控件有 name
+SR-23 渲染函数内不写存储 · SR-45 空态先清空再渲染
+端特有：SR-07 金额 toFixed(2) · SR-50 统计卡由数据推导 · SR-21 口径自洽 · SR-19 setInterval 有 clearInterval
+SR-20 大屏无 Math.random() 与 @media 重排 · SR-22 大屏不绕过 Store · SR-46 GPS 有降级 · SR-49 导出真实产出格式
+收尾：PowerShell 静态扫描（14 §8.4.3）→ 浏览器 Console 粘贴只读脚本（14 §8.4.1）→ 打开页面 console 报错数 = 0
+
+== 回报格式（禁止「大致完成」「应该没问题」）==
+任务卡：TC-XXX-NNN
+完成：  改动了哪些文件、各改了什么
+断言：  AC-XXX-NNN-1 PASS（证据：实际读到的值）｜ FAIL（期望 x / 实际 y / 缺陷 L-XXX-NN）｜ 挂起（契约未覆盖 XX）
+实测：  浏览器打开 xxx.html，控制台报错数 = 0
+存疑：  契约未覆盖的 XX 点，我按 YY 方式处理，请确认
+
+== 目录地图 ==
+html/applefarm_backhand/   PC 后台 96 页 · PC- · index.html 外壳（MENU_GROUP_MAP + 登录守卫）
+html/applefarm_mobile/     移动端 33 页 · MB- · 最大宽 750px · MobileStore
+html/applefarm_h5/         H5 16 页 · H5- · H5Auth
+html/applefarm_dataanlye/  大屏 10 页 · DA- · 1920×1080 只读端（目录名拼写如此，不得改名）
+html/portal.html           门户 1 页（无独立目录）· html/common/ 与 html/fonts/ 禁止改动
+6 个 PC Store：BizStore DataStore TraceStatStore AlertStore DeviceStore（shared/）MaterialStore（js/）
+Store 写入必须广播：bizStoreChange / dataStoreChange / traceStatStoreChange / alertStoreChange / deviceStoreChange
+⚠️ storage 事件不跨 iframe；页面订阅须用 Store.subscribe()；storage 回调用 e.key === k 精确匹配，禁止前缀正则。
+
+== 架构边界（不是 bug，不得「修复」）==
+L-1 跨端联动依赖同源 localStorage，换设备即失效 → 接后端替换 Store 的 load/save，页面无需改动（04 章 §8）
+L-9 离线队列上传由 setTimeout 模拟 → 接后端替换（同上）
+L-4 文件上传无法端到端自动化 → Node 内置 vm + 手写 DOM 桩直接调用处理函数（不引入 npm）
