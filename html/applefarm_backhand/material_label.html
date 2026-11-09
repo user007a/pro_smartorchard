@@ -14,16 +14,29 @@
 <style>
   .stat-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: var(--space-md);
-    margin-bottom: var(--space-lg);
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
   }
   .stat-card {
-    background: var(--bg-card);
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--bg-card) 0%, #fbfdff 100%);
     border: 1px solid var(--border-light);
-    border-radius: var(--radius-lg);
-    padding: var(--space-lg);
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+    --accent: #1890ff;
+    --accent-bg: #e8f4ff;
   }
+  .stat-card::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--accent);
+  }
+  .stat-card:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(16, 24, 40, 0.08); }
+  .stat-card.tone-green  { --accent: #16a34a; --accent-bg: #e9f7ee; }
+  .stat-card.tone-orange { --accent: #f59e0b; --accent-bg: #fef4e2; }
+  .stat-card.tone-purple { --accent: #7c3aed; --accent-bg: #f1ebfd; }
   .stat-label {
     font-size: var(--font-size-sm);
     color: var(--text-tertiary);
@@ -42,7 +55,42 @@
     color: var(--text-tertiary);
     margin-left: 4px;
   }
+  .stat-card.is-low { --accent: #f59e0b; --accent-bg: #fef4e2; }
   .stat-card.is-low .stat-value { color: var(--warning); }
+  .stat-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .stat-chip {
+    font-size: 11px; line-height: 1.6;
+    padding: 1px 8px; border-radius: 20px;
+    background: var(--gray-50); color: var(--text-tertiary);
+    border: 1px solid var(--border-light);
+  }
+  /* 页内 Tab */
+  .seg-tabs {
+    display: inline-flex; gap: 4px; padding: 4px;
+    background: var(--gray-50); border: 1px solid var(--border-light);
+    border-radius: 12px; margin-bottom: var(--space-lg);
+  }
+  .seg-tab {
+    border: none; background: transparent; cursor: pointer;
+    padding: 9px 20px; border-radius: 9px;
+    font-size: 14px; font-weight: 500; color: var(--text-secondary);
+    transition: all 0.2s ease;
+  }
+  .seg-tab:hover { color: var(--text-primary); }
+  .seg-tab.active {
+    background: var(--bg-card); color: var(--primary-500);
+    font-weight: 600; box-shadow: 0 1px 4px rgba(16, 24, 40, 0.1);
+  }
+  .pane { display: none; }
+  .pane.active { display: block; animation: paneIn 0.25s ease; }
+  @keyframes paneIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .card-head {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .card-head-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .card-head-sub { font-size: 12px; color: var(--text-tertiary); }
   .status-tag {
     display: inline-block;
     padding: 3px 10px;
@@ -52,6 +100,7 @@
     white-space: nowrap;
   }
   .status-tag.processing { background: var(--warning-bg); color: var(--warning); }
+  .status-tag.waiting { background: var(--info-bg); color: var(--primary-500); }
   .status-tag.passed { background: var(--success-bg); color: var(--success); }
   .status-tag.rejected { background: var(--error-bg); color: var(--error); }
   .cell-sub {
@@ -81,7 +130,7 @@
     color: var(--text-primary);
     margin-bottom: var(--space-sm);
   }
-  .modal-field textarea, .modal-field input {
+  .modal-field textarea, .modal-field input, .modal-field select {
     width: 100%;
     padding: 10px 14px;
     border: 1.5px solid var(--border-default);
@@ -91,7 +140,7 @@
     background: var(--bg-card);
   }
   .modal-field textarea { min-height: 100px; resize: vertical; line-height: 1.6; }
-  .modal-field textarea:focus, .modal-field input:focus {
+  .modal-field textarea:focus, .modal-field input:focus, .modal-field select:focus {
     border-color: var(--primary-500);
     box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.12);
     outline: none;
@@ -204,7 +253,7 @@
   }
 </style>
 </head>
-<body data-active-menu="material" data-active-submenu="material-label">
+<body data-active-menu="trace" data-active-submenu="trace-label">
 
 <div class="main-wrapper">
   <div class="tab-bar">
@@ -221,7 +270,7 @@
     <div class="page-header">
       <div>
         <div class="page-title">标签管理</div>
-        <div class="page-subtitle">维护各类溯源标签库存，并审批移动端标签领用申请</div>
+        <div class="page-subtitle">溯源标签库存与领用打印管理（隶属溯源管理）</div>
       </div>
       <div class="page-actions">
         <button class="jg-btn" onclick="openTypeModal()">标签类型</button>
@@ -235,43 +284,119 @@
       <div class="stat-row" id="stockStatRow"></div>
     </div>
 
-    <!-- 搜索栏区 -->
-    <div class="page-section search-section">
-      <div class="search-bar">
-        <select class="search-select" id="statusSelect">
-          <option value="">全部状态</option>
-          <option value="待打印">待打印</option>
-          <option value="已打印">已打印</option>
-          <option value="已驳回">已驳回</option>
-        </select>
-        <input type="text" class="search-input" placeholder="搜索标签名称或使用地块..." id="searchInput">
-        <div class="search-actions">
-          <button class="jg-btn jg-btn-primary" onclick="renderTable()">搜索</button>
-          <button class="jg-btn" onclick="resetFilter()">重置</button>
+    <!-- 页内 Tab -->
+    <div class="seg-tabs" id="labelTabs">
+      <button class="seg-tab active" data-pane="pane-records">领用审批</button>
+      <button class="seg-tab" data-pane="pane-templates">标签模板</button>
+      <button class="seg-tab" data-pane="pane-printjobs">打印任务</button>
+    </div>
+
+    <!-- ===== Tab：领用审批 ===== -->
+    <div class="pane active" id="pane-records">
+      <!-- 搜索栏区 -->
+      <div class="page-section search-section">
+        <div class="search-bar">
+          <select class="search-select" id="statusSelect">
+            <option value="">全部状态</option>
+            <option value="待审批">待审批</option>
+            <option value="待打印">待打印</option>
+            <option value="已打印">已打印</option>
+            <option value="已驳回">已驳回</option>
+          </select>
+          <input type="text" class="search-input" placeholder="搜索领用单号、标签名称、申请人与地块..." id="searchInput">
+          <div class="search-actions">
+            <button class="jg-btn jg-btn-primary" onclick="renderTable()">搜索</button>
+            <button class="jg-btn" onclick="resetFilter()">重置</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 领用记录表 -->
+      <div class="page-section data-section">
+        <div class="data-table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="checkbox-col" style="width:60px;">序号</th>
+                <th style="width:140px;">领用单号</th>
+                <th style="width:150px;">领用时间</th>
+                <th>标签名称</th>
+                <th style="width:150px;">标签编码</th>
+                <th style="width:140px;">溯源批次号</th>
+                <th style="width:110px;">标签类型</th>
+                <th style="width:130px;">规格</th>
+                <th style="width:80px;">数量</th>
+                <th style="width:150px;">使用地块</th>
+                <th style="width:90px;">申请人</th>
+                <th style="width:90px;">打印人</th>
+                <th style="width:90px;">状态</th>
+                <th>备注</th>
+                <th style="width:160px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="recordBody"></tbody>
+          </table>
+        </div>
+        <div id="emptyHint" class="empty-state" style="display:none;">暂无标签领用记录</div>
+      </div>
+    </div>
+
+    <!-- ===== Tab：标签模板 ===== -->
+    <div class="pane" id="pane-templates">
+      <div class="page-section data-section">
+        <div class="card-head">
+          <div>
+            <div class="card-head-title">标签模板与版本</div>
+            <div class="card-head-sub">模板按版本管理，启用版本用于新打印任务</div>
+          </div>
+          <button class="jg-btn jg-btn-primary" onclick="createLabelTemplate()">新建模板</button>
+        </div>
+        <div class="data-table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>模板名称</th>
+                <th>版式</th>
+                <th style="width:90px;">当前版本</th>
+                <th style="width:90px;">状态</th>
+                <th style="width:150px;">更新时间</th>
+                <th style="width:230px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="templateBody"></tbody>
+          </table>
         </div>
       </div>
     </div>
 
-    <!-- 领用记录表 -->
-    <div class="page-section data-section">
-      <div class="data-table-wrapper">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th class="checkbox-col" style="width:60px;">序号</th>
-              <th style="width:150px;">领用时间</th>
-              <th>标签名称</th>
-              <th style="width:90px;">数量</th>
-              <th style="width:150px;">使用地块</th>
-              <th style="width:100px;">状态</th>
-              <th>备注</th>
-              <th style="width:160px;">操作</th>
-            </tr>
-          </thead>
-          <tbody id="recordBody"></tbody>
-        </table>
+    <!-- ===== Tab：打印任务 ===== -->
+    <div class="pane" id="pane-printjobs">
+      <div class="page-section data-section">
+        <div class="card-head">
+          <div>
+            <div class="card-head-title">标签打印任务</div>
+            <div class="card-head-sub">每次打印生成任务并扣减库存；支持重打与报废，均写入溯源存证</div>
+          </div>
+        </div>
+        <div class="data-table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:160px;">任务号</th>
+                <th style="width:140px;">溯源批次</th>
+                <th>标签名称</th>
+                <th style="width:80px;">数量</th>
+                <th style="width:120px;">模板版本</th>
+                <th style="width:100px;">打印人</th>
+                <th style="width:150px;">创建时间</th>
+                <th style="width:90px;">状态</th>
+                <th style="width:150px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="printJobBody"></tbody>
+          </table>
+        </div>
       </div>
-      <div id="emptyHint" class="empty-state" style="display:none;">暂无标签领用记录</div>
     </div>
   </main>
 </div>
@@ -285,8 +410,32 @@
     </div>
     <div class="modal-body">
       <div class="detail-row">
+        <div class="detail-label">领用单号</div>
+        <div class="detail-value" id="apOrderNo"></div>
+      </div>
+      <div class="detail-row">
         <div class="detail-label">标签名称</div>
         <div class="detail-value" id="apName"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">标签编码</div>
+        <div class="detail-value" id="apCode"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">溯源批次号</div>
+        <div class="detail-value" id="apTraceBatchNo"></div>
+      </div>
+      <div class="modal-field" style="margin-top:var(--space-md);">
+        <label>标签类型</label>
+        <select id="apLabelType">
+          <option value="一物一码">一物一码</option>
+          <option value="批次码">批次码</option>
+          <option value="箱码">箱码</option>
+        </select>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">规格</div>
+        <div class="detail-value" id="apSpec"></div>
       </div>
       <div class="detail-row">
         <div class="detail-label">领用数量</div>
@@ -297,8 +446,20 @@
         <div class="detail-value" id="apPlot"></div>
       </div>
       <div class="detail-row">
+        <div class="detail-label">申请人</div>
+        <div class="detail-value" id="apApplicant"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">打印人</div>
+        <div class="detail-value" id="apPrinter"></div>
+      </div>
+      <div class="detail-row">
         <div class="detail-label">领用时间</div>
         <div class="detail-value" id="apTime"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">备注</div>
+        <div class="detail-value" id="apRemarkText"></div>
       </div>
       <div class="detail-row">
         <div class="detail-label">当前状态</div>
@@ -309,14 +470,15 @@
         <div class="detail-value" id="apPrint"></div>
       </div>
       <div class="modal-field" style="margin-top:var(--space-lg);" id="apRemarkField">
-        <label>驳回原因</label>
+        <label>审批意见</label>
         <textarea id="apRemark" placeholder="驳回时请填写原因，移动端领用人可见"></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button class="jg-btn" onclick="closeApproveModal()">关闭</button>
+      <button class="jg-btn jg-btn-primary" id="apApproveBtn" onclick="submitApprove('通过')">审批通过</button>
       <button class="jg-btn" id="apRejectBtn" onclick="submitApprove('已驳回')">驳回</button>
-      <button class="jg-btn jg-btn-primary" id="apPrintBtn" onclick="goPrint()">去打印</button>
+      <button class="jg-btn" id="apPrintBtn" onclick="goPrint()">去打印</button>
     </div>
   </div>
 </div>
@@ -366,6 +528,8 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mobile-bridge.js"></script>
+<script src="js/shared/harvest-store.js"></script>
+<script src="js/shared/trace-store.js"></script>
 <script src="js/shared/demo-seed.js"></script>
 <script>
 /* ============================================================
@@ -377,10 +541,16 @@
  * 审批结果回写 MobileBridge.KEYS.labelRecords，库存维护回写 KEYS.labelStock
  * ============================================================ */
 
-/* 状态归一：pending → 待打印（移动端已提交申请，尚未打印扣减） */
-var STATUS_TEXT = { '审批中': '审批中', '待打印': '待打印', '已审批': '待打印', '已打印': '已打印', '已驳回': '已驳回' };
+/* 状态归一：pending 分为「待审批」与「待打印」
+ * 通过审批后保持 status='pending' 并写入 printReady，既满足本页状态字典，
+ * 也保持与 trace_code.html 打印环节（仅关联 status==='pending'）的兼容。 */
+var STATUS_TEXT = {
+  '待审批': '待审批', 'pending': '待审批', '审批中': '待审批',
+  '待打印': '待打印', '已审批': '待打印',
+  '已打印': '已打印', '已驳回': '已驳回'
+};
 /* 状态 → 标签样式类 */
-var STATUS_CLASS = { '审批中': 'processing', '待打印': 'processing', '已打印': 'passed', '已驳回': 'rejected' };
+var STATUS_CLASS = { '待审批': 'waiting', '待打印': 'processing', '已打印': 'passed', '已驳回': 'rejected' };
 
 /* 库存低于该值时用告警色提示 */
 var LOW_STOCK_THRESHOLD = 1000;
@@ -416,10 +586,27 @@ function readStock() {
   }
 }
 
-/* 状态归一：pending → 待打印 */
+/* 状态归一：pending 未审批 → 待审批，审批通过 → 待打印
+ * 兼容演示数据：历史「待打印」记录若没有审批留痕（approvedBy/approveResult），
+ * 视为尚未完成审批，展示为「待审批」，审批通过后写入留痕再转为「待打印」。 */
 function statusText(item) {
-  if (item.status === 'pending') return '待打印';
-  return STATUS_TEXT[item.status] || item.status || '待打印';
+  if (!item) return '待审批';
+  if (item.status === 'pending') {
+    return (item.printReady || item.approvedForPrint) ? '待打印' : '待审批';
+  }
+  if (isAwaitingApproval(item)) return '待审批';
+  return STATUS_TEXT[item.status] || item.status || '待审批';
+}
+
+/* 是否为待审批（尚未审批，可执行通过/驳回） */
+function isAwaitingApproval(item) {
+  if (!item) return false;
+  if (item.status === '待审批') return true;
+  if (item.status === 'pending') return !(item.printReady || item.approvedForPrint || item.printTime);
+  if (item.status === '待打印') {
+    return !item.approvedBy && !item.approvedForPrint && !item.printTime && !item.approveResult;
+  }
+  return false;
 }
 
 /* 是否为待打印（尚未由后台打印环节扣减库存）的记录 */
@@ -427,24 +614,90 @@ function isPendingPrint(item) {
   return statusText(item) === '待打印';
 }
 
+/* 新增字段读取：移动端老数据缺失时给出默认值 */
+function orderNoOf(item) {
+  return item.orderNo || item.applyNo || item.id || '-';
+}
+function labelCodeOf(item) {
+  return item.labelCode || item.code || '—';
+}
+function traceBatchNoOf(item) {
+  return item.traceBatchNo || 'PC-2026-001';
+}
+function labelTypeOf(item) {
+  return item.labelType || '一物一码';
+}
+function specOf(item) {
+  return item.spec || '标准规格';
+}
+function applicantOf(item) {
+  return item.applicant || item.operator || '移动端用户';
+}
+function printerOf(item) {
+  return item.printer || item.printOperator || (item.printTime ? '后台打印' : '—');
+}
+
 /* 渲染各标签库存统计卡 */
 function renderStockStats() {
+  var records = readRecords();
+  var stockMap = window.TraceStore ? TraceStore.stock() : null;
   var stock = readStock();
   var row = document.getElementById('stockStatRow');
-  var names = Object.keys(stock);
+  var names = stockMap ? Object.keys(stockMap) : Object.keys(stock);
+
+  /* 本月领用张数：优先当前月，数据不在当前月时回退到最新月份 */
+  var now = new Date();
+  var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+  var currentMonth = now.getFullYear() + '-' + pad(now.getMonth() + 1);
+  var month = currentMonth;
+  if (!records.some(function (item) {
+    return String(item.time || item.createTime || '').indexOf(currentMonth) === 0;
+  })) {
+    month = '';
+    records.forEach(function (item) {
+      var m = String(item.time || item.createTime || '').slice(0, 7);
+      if (m > month) month = m;
+    });
+  }
+  var monthQty = records.reduce(function (sum, item) {
+    var t = String(item.time || item.createTime || '');
+    if (month && t.indexOf(month) !== 0) return sum;
+    var qty = Number(item.qty);
+    return sum + (isFinite(qty) ? qty : 0);
+  }, 0);
+  var pendingApproval = records.filter(isAwaitingApproval).length;
+
+  var summary =
+    '<div class="stat-card">' +
+      '<div class="stat-label">本月领用张数</div>' +
+      '<div class="stat-value">' + monthQty.toLocaleString('zh-CN') + '<span class="stat-unit">张</span></div>' +
+      '<div class="stat-meta"><span class="stat-chip">按领用时间统计</span></div>' +
+    '</div>' +
+    '<div class="stat-card' + (pendingApproval ? ' is-low' : '') + '">' +
+      '<div class="stat-label">待审批数</div>' +
+      '<div class="stat-value">' + pendingApproval + '<span class="stat-unit">条</span></div>' +
+      '<div class="stat-meta"><span class="stat-chip">' + (pendingApproval ? '待处理，请及时审批' : '暂无待办') + '</span></div>' +
+    '</div>';
 
   if (!names.length) {
-    row.innerHTML = '<div class="stat-card"><div class="stat-label">标签库存</div>' +
+    row.innerHTML = summary + '<div class="stat-card"><div class="stat-label">标签库存</div>' +
       '<div class="stat-value" style="font-size:15px;color:var(--text-tertiary);">暂无库存数据，可点击右上角「库存管理」初始化</div></div>';
     return;
   }
 
-  row.innerHTML = names.map(function (name) {
-    var num = Number(stock[name]) || 0;
-    var low = num < LOW_STOCK_THRESHOLD ? ' is-low' : '';
+  var TONES = ['tone-green', 'tone-purple', 'tone-orange'];
+  row.innerHTML = summary + names.map(function (name, idx) {
+    var s = stockMap
+      ? stockMap[name]
+      : { stock: Number(stock[name]) || 0, reserved: 0, available: Number(stock[name]) || 0 };
+    var low = s.available < LOW_STOCK_THRESHOLD ? ' is-low' : ' ' + TONES[idx % TONES.length];
     return '<div class="stat-card' + low + '">' +
       '<div class="stat-label">' + esc(name) + '</div>' +
-      '<div class="stat-value">' + num.toLocaleString('zh-CN') + '<span class="stat-unit">张</span></div>' +
+      '<div class="stat-value">' + s.available.toLocaleString('zh-CN') + '<span class="stat-unit">张可用</span></div>' +
+      '<div class="stat-meta">' +
+        '<span class="stat-chip">库存 ' + s.stock.toLocaleString('zh-CN') + '</span>' +
+        '<span class="stat-chip">预占 ' + s.reserved + '</span>' +
+      '</div>' +
     '</div>';
   }).join('');
 }
@@ -456,7 +709,9 @@ function filteredRecords() {
   return readRecords().filter(function (item) {
     if (status && statusText(item) !== status) return false;
     if (kw) {
-      var hay = ((item.name || '') + ' ' + (item.plot || '') + ' ' + (item.remark || '')).toLowerCase();
+      var hay = ((item.name || '') + ' ' + (item.plot || '') + ' ' + (item.remark || '') + ' ' +
+        orderNoOf(item) + ' ' + labelCodeOf(item) + ' ' + applicantOf(item) + ' ' +
+        traceBatchNoOf(item) + ' ' + labelTypeOf(item)).toLowerCase();
       if (hay.indexOf(kw) === -1) return false;
     }
     return true;
@@ -465,6 +720,8 @@ function filteredRecords() {
 
 function renderTable() {
   renderStockStats();
+  renderTemplates();
+  renderPrintJobs();
   var list = filteredRecords();
 
   var body = document.getElementById('recordBody');
@@ -488,18 +745,35 @@ function renderTable() {
       extra = '<div class="approve-box">处理意见：' + esc(item.approveRemark) +
         (item.approveTime ? '<br>处理时间：' + esc(item.approveTime) : '') + '</div>';
     }
-    var btnText = isPendingPrint(item) ? '去打印' : '查看';
+
+    var actions = '<div class="action-btns">';
+    var recordId = esc(item.id);
+    if (isAwaitingApproval(item)) {
+      actions += '<button class="action-btn approve" onclick="openApproveModal(\'' + recordId + '\')">审批</button>' +
+        '<button class="action-btn reject" onclick="openApproveModal(\'' + recordId + '\', \'reject\')">驳回</button>';
+    } else if (isPendingPrint(item)) {
+      actions += '<button class="action-btn detail" onclick="openApproveModal(\'' + recordId + '\')">去打印</button>';
+    } else {
+      actions += '<button class="action-btn detail" onclick="openApproveModal(\'' + recordId + '\')">查看</button>';
+    }
+    actions += '</div>';
+
     return '<tr>' +
       '<td class="checkbox-col">' + (i + 1) + '</td>' +
+      '<td class="text-mono">' + esc(orderNoOf(item)) + '</td>' +
       '<td class="text-mono">' + esc(item.time || item.createTime || '-') + '</td>' +
       '<td><strong>' + esc(item.name || '-') + '</strong></td>' +
+      '<td class="text-mono">' + esc(labelCodeOf(item)) + '</td>' +
+      '<td class="text-mono">' + esc(traceBatchNoOf(item)) + '</td>' +
+      '<td>' + esc(labelTypeOf(item)) + '</td>' +
+      '<td>' + esc(specOf(item)) + '</td>' +
       '<td>' + esc(item.qty != null ? item.qty : '-') + '</td>' +
       '<td>' + esc(item.plot || '-') + '</td>' +
+      '<td>' + esc(applicantOf(item)) + '</td>' +
+      '<td>' + esc(printerOf(item)) + '</td>' +
       '<td><span class="status-tag ' + cls + '">' + esc(st) + '</span></td>' +
       '<td><div class="cell-sub">' + esc(item.remark || '-') + '</div>' + extra + '</td>' +
-      '<td><div class="action-btns">' +
-        '<button class="action-btn detail" onclick="openApproveModal(\'' + esc(item.id) + '\')">' + btnText + '</button>' +
-      '</div></td>' +
+      '<td>' + actions + '</td>' +
     '</tr>';
   }).join('');
 }
@@ -516,7 +790,9 @@ function refreshAll() {
 }
 
 /* ---------- 审批弹窗 ---------- */
-function openApproveModal(id) {
+var approveIntent = 'normal';
+
+function openApproveModal(id, mode) {
   var list = readRecords();
   var target = null;
   for (var i = 0; i < list.length; i++) {
@@ -525,14 +801,35 @@ function openApproveModal(id) {
   if (!target) { Toast.error('未找到该领用记录'); return; }
 
   currentId = target.id;
+  approveIntent = mode || 'normal';
   var st = statusText(target);
+  var awaiting = isAwaitingApproval(target);
   var pending = isPendingPrint(target);
 
-  document.getElementById('approveTitle').textContent = pending ? '待打印领用申请' : '领用记录详情';
+  document.getElementById('approveTitle').textContent =
+    approveIntent === 'reject' ? '驳回标签领用'
+      : (awaiting ? '标签领用审批' : (pending ? '待打印领用申请' : '领用记录详情'));
+  document.getElementById('apOrderNo').textContent = orderNoOf(target);
   document.getElementById('apName').textContent = target.name || '-';
+  document.getElementById('apCode').textContent = labelCodeOf(target);
+  document.getElementById('apTraceBatchNo').textContent = traceBatchNoOf(target);
+  var labelTypeSel = document.getElementById('apLabelType');
+  var lt = labelTypeOf(target);
+  if (!Array.prototype.some.call(labelTypeSel.options, function (o) { return o.value === lt; })) {
+    var opt = document.createElement('option');
+    opt.value = lt;
+    opt.textContent = lt;
+    labelTypeSel.appendChild(opt);
+  }
+  labelTypeSel.value = lt;
+  labelTypeSel.disabled = !awaiting;
+  document.getElementById('apSpec').textContent = specOf(target);
   document.getElementById('apQty').textContent = target.qty != null ? target.qty : '-';
   document.getElementById('apPlot').textContent = target.plot || '-';
+  document.getElementById('apApplicant').textContent = applicantOf(target);
+  document.getElementById('apPrinter').textContent = printerOf(target);
   document.getElementById('apTime').textContent = target.time || target.createTime || '-';
+  document.getElementById('apRemarkText').textContent = target.remark || '-';
   document.getElementById('apStatus').innerHTML =
     '<span class="status-tag ' + (STATUS_CLASS[st] || 'processing') + '">' + esc(st) + '</span>';
   document.getElementById('apRemark').value = target.approveRemark || '';
@@ -547,12 +844,16 @@ function openApproveModal(id) {
     printWrap.style.display = 'none';
   }
 
-  // 待打印：可驳回并跳转打印；已打印 / 已驳回：只读查看
-  document.getElementById('apRemarkField').style.display = pending ? '' : 'none';
-  document.getElementById('apRejectBtn').style.display = pending ? '' : 'none';
+  // 待审批：可通过 / 驳回；待打印：可去打印；已打印 / 已驳回：只读查看
+  document.getElementById('apRemarkField').style.display = awaiting ? '' : 'none';
+  document.getElementById('apApproveBtn').style.display = (awaiting && approveIntent !== 'reject') ? '' : 'none';
+  document.getElementById('apRejectBtn').style.display = awaiting ? '' : 'none';
   document.getElementById('apPrintBtn').style.display = pending ? '' : 'none';
 
   document.getElementById('approveModal').classList.add('show');
+  if (approveIntent === 'reject') {
+    setTimeout(function () { document.getElementById('apRemark').focus(); }, 1);
+  }
 }
 
 /* 跳转到打印环节：带上标签类型，便于直接打印扣减库存 */
@@ -577,7 +878,7 @@ function closeApproveModal() {
   currentId = null;
 }
 
-/* 提交驳回；驳回需二次确认。库存扣减不在本页发生，交由打印环节处理 */
+/* 提交审批：通过后转为待打印，驳回需二次确认。库存扣减不在本页发生，交由打印环节处理 */
 function submitApprove(decision) {
   var remark = document.getElementById('apRemark').value.trim();
 
@@ -590,24 +891,71 @@ function submitApprove(decision) {
     });
     return;
   }
+
+  if (decision === '通过') {
+    doApprove(decision, remark || '审批通过');
+    return;
+  }
   doApprove(decision, remark);
 }
 
+/* 审批落库：通过 → 待打印；驳回 → 已驳回 */
 function doApprove(decision, remark) {
   if (typeof MobileBridge === 'undefined') {
     Toast.error('数据桥接未加载，无法保存审批结果');
     return;
   }
-  var ok = MobileBridge.updateRecord(MobileBridge.KEYS.labelRecords, currentId, {
-    status: decision,
-    approveRemark: remark,
-    approveTime: MobileBridge.stampNow()
-  });
-  if (!ok) { Toast.error('审批结果保存失败，请刷新后重试'); return; }
 
+  var target = null;
+  var all = readRecords();
+  for (var i = 0; i < all.length; i++) {
+    if (String(all[i].id) === String(currentId)) { target = all[i]; break; }
+  }
+  var labelTypeSel = document.getElementById('apLabelType');
+
+  var patch = {
+    approveRemark: remark,
+    approveTime: MobileBridge.stampNow(),
+    traceBatchNo: target ? traceBatchNoOf(target) : document.getElementById('apTraceBatchNo').textContent || 'PC-2026-001',
+    labelType: (labelTypeSel && labelTypeSel.value) || (target ? labelTypeOf(target) : '一物一码')
+  };
+  var resultText = decision;
+
+  if (decision === '通过' || decision === '待打印') {
+    /* 保持 status='pending' 以兼容 trace_code.html 的打印关联逻辑，
+     * 通过 printReady 标记区分「待审批」与「待打印」。 */
+    patch.status = 'pending';
+    patch.printReady = true;
+    patch.approvedBy = '管理员';
+    patch.approveResult = '通过';
+    resultText = '待打印';
+  } else {
+    patch.status = decision;
+    patch.approveResult = decision;
+  }
+
+  // 通过审批即预占库存，驳回则释放预占；实际扣减发生在打印环节
+  var reservationId = '';
+  if (window.TraceStore && target) {
+    if (decision === '通过' || decision === '待打印') {
+      if (target.labelReservationId) {
+        reservationId = target.labelReservationId;
+      } else {
+        var rv = TraceStore.reserveStock(target.name, target.qty, { ref: orderNoOf(target), operator: '管理员' });
+        if (!rv.ok) { Toast.error(rv.message || '标签库存预占失败'); return; }
+        reservationId = rv.reservation.id;
+      }
+    } else if (target.labelReservationId) {
+      TraceStore.releaseReservation(target.labelReservationId);
+    }
+  }
+  patch.labelReservationId = reservationId;
+
+  var ok = MobileBridge.updateRecord(MobileBridge.KEYS.labelRecords, currentId, patch);
+  if (!ok) { Toast.error('审批结果保存失败，请刷新后重试'); return; }
   closeApproveModal();
   renderTable();
-  Toast.success('审批结果已保存（' + decision + '），移动端可查看');
+  Toast.success('审批结果已保存（' + resultText + '），移动端可查看');
 }
 
 /* ---------- 库存管理弹窗 ---------- */
@@ -658,6 +1006,11 @@ function saveStock() {
   } catch (e) {
     Toast.error('本地存储写入失败，库存未能保存');
     return;
+  }
+
+  // 同步到溯源库存（预占/可用/打印扣减的统一数据源）
+  if (window.TraceStore) {
+    names.forEach(function (n) { TraceStore.setStock(n, stock[n]); });
   }
 
   closeStockModal();
@@ -802,6 +1155,145 @@ function saveTypes() {
   renderTable();
   Toast.success('标签类型已保存，移动端领用清单即时生效');
 }
+
+/* ---------- 标签模板与版本 ---------- */
+function renderTemplates() {
+  var tbody = document.getElementById('templateBody');
+  if (!tbody) return;
+  if (!window.TraceStore) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#999;">溯源数据服务未加载</td></tr>';
+    return;
+  }
+  var list = TraceStore.templates();
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#999;">暂无标签模板</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(function (t) {
+    var ly = t.layout || {};
+    var fields = (ly.fields || []).join(' / ');
+    var statusCls = t.status === 'active' ? 'active' : 'inactive';
+    return '<tr>' +
+      '<td><strong>' + esc(t.name) + '</strong></td>' +
+      '<td style="font-size:12px;">' + esc(ly.size || '—') + ' · ' + esc(ly.material || '—') +
+        '<div style="color:#999;">' + esc(fields) + '</div></td>' +
+      '<td>v' + esc(t.version) + '</td>' +
+      '<td><span class="status-tag ' + statusCls + '">' + (t.status === 'active' ? '启用' : '停用') + '</span></td>' +
+      '<td class="text-mono" style="font-size:12px;">' + esc(t.updatedAt || '—') + '</td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn edit" onclick="bumpLabelTemplate(\'' + esc(t.id) + '\')">新建版本</button>' +
+        '<button class="action-btn ' + (t.status === 'active' ? 'reject' : 'detail') + '" onclick="toggleLabelTemplate(\'' + esc(t.id) + '\')">' +
+          (t.status === 'active' ? '停用' : '启用') + '</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function createLabelTemplate() {
+  if (!window.TraceStore) return;
+  var name = window.prompt('请输入标签模板名称，例如：花牛苹果礼盒标签');
+  if (!name) return;
+  var res = TraceStore.saveTemplate({ name: name });
+  if (!res.ok) { Toast.error(res.message || '新建失败'); return; }
+  renderTemplates();
+  Toast.success('标签模板已创建');
+}
+
+function bumpLabelTemplate(id) {
+  if (!window.TraceStore) return;
+  var note = window.prompt('请输入版本变更说明（如：新增合格证编号字段）') || '版式调整';
+  var res = TraceStore.saveTemplate({ id: id, bumpVersion: true, note: note });
+  if (!res.ok) { Toast.error(res.message || '新建版本失败'); return; }
+  renderTemplates();
+  Toast.success('已创建 v' + res.template.version);
+}
+
+function toggleLabelTemplate(id) {
+  if (!window.TraceStore) return;
+  var t = TraceStore.template(id);
+  if (!t) return;
+  var res = TraceStore.saveTemplate({ id: id, status: t.status === 'active' ? 'inactive' : 'active' });
+  if (!res.ok) { Toast.error(res.message || '操作失败'); return; }
+  renderTemplates();
+  Toast.success(t.status === 'active' ? '模板已停用' : '模板已启用');
+}
+
+/* ---------- 打印任务（TraceStore 统一数据源） ---------- */
+function renderPrintJobs() {
+  var tbody = document.getElementById('printJobBody');
+  if (!tbody) return;
+  if (!window.TraceStore) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:#999;">溯源数据服务未加载</td></tr>';
+    return;
+  }
+  var jobs = TraceStore.printJobs().slice().sort(function (a, b) {
+    return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+  }).slice(0, 10);
+  if (!jobs.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:#999;">暂无打印任务，可在「溯源编码」页打印标签</td></tr>';
+    return;
+  }
+  var statusMap = { printed: '已打印', reprinted: '已重打', scrapped: '已报废' };
+  tbody.innerHTML = jobs.map(function (j) {
+    var cls = j.status === 'scrapped' ? 'inactive' : 'active';
+    var actions = '<div class="action-btns">';
+    if (j.status !== 'scrapped') {
+      actions += '<button class="action-btn edit" onclick="reprintLabelJob(\'' + esc(j.id) + '\')">重打</button>' +
+        '<button class="action-btn reject" onclick="scrapLabelJob(\'' + esc(j.id) + '\')">报废</button>';
+    } else {
+      actions += '<span style="font-size:12px;color:var(--text-tertiary);">已终止</span>';
+    }
+    actions += '</div>';
+    return '<tr>' +
+      '<td class="text-mono">' + esc(j.id) + '</td>' +
+      '<td class="text-mono">' + esc(j.batchNo || '-') + '</td>' +
+      '<td><strong>' + esc(j.labelName || '-') + '</strong></td>' +
+      '<td>' + esc(j.qty) + '</td>' +
+      '<td>' + (j.templateVersion ? 'v' + esc(j.templateVersion) : '—') + '</td>' +
+      '<td>' + esc(j.operator || '-') + '</td>' +
+      '<td class="text-mono">' + esc(j.createdAt || '-') + '</td>' +
+      '<td><span class="status-tag ' + cls + '">' + (statusMap[j.status] || esc(j.status)) + '</span></td>' +
+      '<td>' + actions + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function reprintLabelJob(id) {
+  if (!window.TraceStore) return;
+  var reason = window.prompt('请输入重打原因（必填）');
+  if (!reason) return;
+  var res = TraceStore.reprintJob(id, reason);
+  if (!res.ok) { Toast.error(res.message || '重打失败'); return; }
+  renderTable();
+  Toast.success('已创建重打任务：' + res.job.id);
+}
+
+function scrapLabelJob(id) {
+  if (!window.TraceStore) return;
+  var reason = window.prompt('请输入报废原因（选填）') || '标签报废';
+  var res = TraceStore.scrapJob(id, reason);
+  if (!res.ok) { Toast.error(res.message || '报废失败'); return; }
+  renderTable();
+  Toast.success('打印任务已标记报废');
+}
+
+/* 页内 Tab 切换 */
+document.addEventListener('DOMContentLoaded', function () {
+  var wrap = document.getElementById('labelTabs');
+  if (wrap) {
+    wrap.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.seg-tab') : null;
+      if (!btn) return;
+      var tabs = wrap.querySelectorAll('.seg-tab');
+      for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+      btn.classList.add('active');
+      var panes = document.querySelectorAll('.main-content > .content-wrapper > .pane, .main-content > .pane');
+      for (var j = 0; j < panes.length; j++) panes[j].classList.remove('active');
+      var pane = document.getElementById(btn.getAttribute('data-pane'));
+      if (pane) pane.classList.add('active');
+    });
+  }
+});
 
 document.addEventListener('DOMContentLoaded', function () {
   seedLabelData();

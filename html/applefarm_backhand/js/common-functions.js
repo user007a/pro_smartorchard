@@ -71,7 +71,9 @@ const Modal = {
   // 隐藏所有模态框
   hideAll: function() {
     document.querySelectorAll('.modal-overlay').forEach(modal => {
-      modal.classList.remove('show');
+      // 动态创建的弹层（如确认框）直接移除，静态弹层只隐藏
+      if (modal.getAttribute('data-dynamic') === '1') modal.remove();
+      else modal.classList.remove('show');
     });
     document.body.style.overflow = '';
   }
@@ -223,15 +225,21 @@ const Search = {
 // 删除确认对话框（独立命名，避免覆盖 components/confirm.js 的 ConfirmDialog）
 const LegacyConfirmDialog = {
   show: function(options) {
-    const { title, message, onConfirm, onCancel } = options;
+    const opts = options || {};
+    const title = opts.title || '确认操作';
+    const message = opts.message || '';
+    const onConfirm = opts.onConfirm;
+    const onCancel = opts.onCancel;
 
     const dialog = document.createElement('div');
     dialog.className = 'modal-overlay show';
+    // 标记为动态弹层：关闭时需整体移除，否则会在 body 里残留空节点
+    dialog.setAttribute('data-dynamic', '1');
     dialog.innerHTML = `
       <div class="modal-box" style="max-width: 420px;">
         <div class="modal-header">
-          <h3 class="modal-title">${title}</h3>
-          <button class="modal-close" onclick="LegacyConfirmDialog.hide(this)">
+          <h3 class="modal-title"></h3>
+          <button class="modal-close" type="button" data-action="close">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 4L12 12M12 4L4 12"/>
             </svg>
@@ -239,20 +247,39 @@ const LegacyConfirmDialog = {
         </div>
         <div class="modal-body" style="text-align: center;">
           <div style="font-size: 36px; margin-bottom: 12px;">⚠</div>
-          <p style="color: var(--text-secondary);">${message}</p>
+          <p style="color: var(--text-secondary);"></p>
         </div>
         <div class="modal-footer">
-          <button class="jg-btn" onclick="LegacyConfirmDialog.hide(this); if (typeof onCancel === 'function') onCancel();">取消</button>
-          <button class="jg-btn jg-btn-danger" onclick="LegacyConfirmDialog.hide(this); if (typeof onConfirm === 'function') onConfirm();">确认删除</button>
+          <button class="jg-btn" type="button" data-action="cancel">取消</button>
+          <button class="jg-btn jg-btn-danger" type="button" data-action="confirm">确认删除</button>
         </div>
       </div>
     `;
+    // 文本走 textContent，避免标题/提示里的特殊字符被当作 HTML 解析
+    dialog.querySelector('.modal-title').textContent = title;
+    dialog.querySelector('.modal-body p').textContent = message;
+
+    // 回调必须以闭包方式绑定：内联 onclick 里的 onConfirm 是局部变量，作用域外取不到
+    const close = () => LegacyConfirmDialog.hide(dialog);
+    dialog.querySelector('[data-action="close"]').addEventListener('click', close);
+    dialog.querySelector('[data-action="cancel"]').addEventListener('click', () => {
+      close();
+      if (typeof onCancel === 'function') onCancel();
+    });
+    dialog.querySelector('[data-action="confirm"]').addEventListener('click', () => {
+      close();
+      if (typeof onConfirm === 'function') onConfirm();
+    });
+    // 点击遮罩空白处等同取消
+    dialog.addEventListener('click', function (e) {
+      if (e.target === dialog) close();
+    });
 
     document.body.appendChild(dialog);
   },
 
   hide: function(btn) {
-    const overlay = btn.closest('.modal-overlay');
+    const overlay = btn.closest ? btn.closest('.modal-overlay') : btn;
     if (overlay) {
       overlay.remove();
       document.body.style.overflow = '';
@@ -316,7 +343,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 点击遮罩层关闭
     if (e.target.classList.contains('modal-overlay')) {
-      e.target.classList.remove('show');
+      if (e.target.getAttribute('data-dynamic') === '1') e.target.remove();
+      else e.target.classList.remove('show');
       document.body.style.overflow = '';
     }
   });

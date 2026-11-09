@@ -23,6 +23,7 @@
   .rtk-tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:500; }
   .rtk-tag.fixed { background:#d9f7be; color:#3a8618; }
   .rtk-tag.float { background:#fff1b8; color:#8c6d10; }
+  .source-badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; line-height:1.6; background:#e6f4ff; color:#0958d9; margin-left:4px; vertical-align:middle; }
   /* 航线回放示意 */
   .route-play { border:1px solid var(--border-light); border-radius:10px; padding:14px; background:var(--gray-50); }
   .route-svg { width:100%; height:auto; display:block; }
@@ -35,6 +36,12 @@
   .waypoint-item { display:flex; justify-content:space-between; padding:6px 4px; font-size:12px; border-bottom:1px dashed #f0f0f0; }
   .waypoint-item span:first-child { color:var(--text-tertiary); font-weight:600; }
   .waypoint-item span:last-child { color:var(--text-secondary); font-variant-numeric:tabular-nums; }
+  /* 页内 Tab 切换 */
+  .view-tabs { display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--border-light); }
+  .view-tab { padding:10px 20px; border:none; background:none; font-size:14px; font-family:inherit;
+    color:var(--text-secondary); cursor:pointer; border-bottom:2px solid transparent; transition:all 0.2s; }
+  .view-tab:hover { color:var(--primary-500); }
+  .view-tab.active { color:var(--primary-500); font-weight:600; border-bottom-color:var(--primary-500); }
 </style>
 <style id="standalone-fix">
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -59,6 +66,14 @@
     <main class="main-content">
       <div class="content-wrapper">
 
+        <!-- 页签：巡检任务 / 飞行日志 / 巡检异常 -->
+        <div class="view-tabs">
+          <button class="view-tab active" id="tabTask" onclick="switchDroneTab('task')">巡检任务</button>
+          <button class="view-tab" id="tabLog" onclick="switchDroneTab('log')">飞行日志</button>
+          <button class="view-tab" id="tabAnomaly" onclick="switchDroneTab('anomaly')">巡检异常</button>
+        </div>
+
+        <div id="viewTask">
         <!-- 搜索栏 -->
           <div class="page-section search-section">
             <div class="search-bar">
@@ -104,19 +119,20 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th style="width:60px;">序号</th>
-                    <th>任务编号</th>
-                    <th>架次</th>
-                    <th>所属基地</th>
-                    <th>无人机</th>
-                    <th>巡查地块</th>
-                    <th>飞行面积</th>
-                    <th>进度</th>
-                    <th>RTK</th>
-                    <th>航高</th>
-                    <th>计划时间</th>
-                    <th>状态</th>
-                    <th>操作</th>
+                    <th style="width:120px;">任务编号</th>
+                    <th style="width:76px;">架次</th>
+                    <th style="width:150px;">来源计划</th>
+                    <th style="width:130px;">所属基地</th>
+                    <th style="width:88px;">无人机</th>
+                    <th style="width:170px;">巡查地块</th>
+                    <th style="width:88px;">航线</th>
+                    <th style="width:84px;">飞行面积</th>
+                    <th style="width:120px;">进度</th>
+                    <th style="width:74px;">RTK</th>
+                    <th style="width:68px;">航高</th>
+                    <th style="width:140px;">计划时间</th>
+                    <th style="width:76px;">状态</th>
+                    <th style="width:200px;">操作</th>
                   </tr>
                 </thead>
                 <tbody id="dataTableBody"></tbody>
@@ -124,15 +140,101 @@
             </div>
             <div id="pagination-container"></div>
           </div>
+        </div><!-- /viewTask -->
+
+        <!-- 飞行日志 -->
+        <div id="viewLog" style="display:none;">
+          <div class="page-section search-section">
+            <div class="search-bar">
+              <select class="search-select" id="logEventSelect">
+                <option value="">全部事件</option>
+                <option value="起飞">起飞</option>
+                <option value="暂停">暂停</option>
+                <option value="恢复">恢复</option>
+                <option value="返航">返航</option>
+                <option value="降落">降落</option>
+              </select>
+              <input type="text" class="search-input" placeholder="搜索架次/任务编号/基地..." id="logSearchInput">
+              <div class="search-actions">
+                <button class="jg-btn jg-btn-primary" onclick="searchLogs()">搜索</button>
+                <button class="jg-btn" onclick="resetLogs()">重置</button>
+              </div>
+            </div>
+          </div>
+          <div class="page-section data-section">
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:52px;">序号</th>
+                    <th style="width:120px;">日志编号</th>
+                    <th style="width:84px;">架次</th>
+                    <th style="width:130px;">关联任务</th>
+                    <th style="width:130px;">所属基地</th>
+                    <th style="width:170px;">巡查地块</th>
+                    <th style="width:80px;">事件</th>
+                    <th style="width:80px;">航高</th>
+                    <th style="width:84px;">速度</th>
+                    <th style="width:76px;">电量</th>
+                    <th style="width:150px;">时间</th>
+                    <th>备注</th>
+                  </tr>
+                </thead>
+                <tbody id="logTableBody"></tbody>
+              </table>
+            </div>
+            <div id="log-pagination-container"></div>
+          </div>
+        </div>
+
+        <!-- 巡检异常 -->
+        <div id="viewAnomaly" style="display:none;">
+          <div class="page-section search-section">
+            <div class="search-bar">
+              <select class="search-select" id="daStatusSelect">
+                <option value="">全部状态</option>
+                <option value="waitHandle">待处理</option>
+                <option value="handling">处理中</option>
+                <option value="closed">已关闭</option>
+              </select>
+              <input type="text" class="search-input" placeholder="搜索地块/异常说明..." id="daSearchInput">
+              <div class="search-actions">
+                <button class="jg-btn jg-btn-primary" onclick="searchDroneAnomaly()">搜索</button>
+                <button class="jg-btn" onclick="resetDroneAnomaly()">重置</button>
+              </div>
+            </div>
+          </div>
+          <div class="page-section data-section">
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:52px;">序号</th>
+                    <th style="width:120px;">异常编号</th>
+                    <th style="width:84px;">架次</th>
+                    <th style="width:100px;">地块</th>
+                    <th style="width:110px;">异常类型</th>
+                    <th>异常说明</th>
+                    <th style="width:150px;">上报时间</th>
+                    <th style="width:90px;">状态</th>
+                    <th style="width:170px;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="droneAnomalyBody"></tbody>
+              </table>
+            </div>
+            <div id="drone-anomaly-pagination-container"></div>
+          </div>
+        </div>
 
       </div>
     </main>
   </div>
 </div>
 
-<!-- 新建任务弹窗 -->
+<!-- 新建巡检任务弹窗 -->
 <div id="modal-add" class="modal-overlay">
-  <div class="modal-box" style="max-width:600px;">
+  <div class="modal-box" style="max-width:640px;">
     <div class="modal-header">
       <h3 class="modal-title">新建巡检任务</h3>
       <button class="modal-close">
@@ -145,24 +247,31 @@
       <form>
         <div class="form-row">
           <div class="form-item">
-            <label>任务编号</label>
-            <input type="text" class="form-input" placeholder="自动生成" readonly>
+            <label>任务名称</label>
+            <input type="text" class="form-input" id="addName" placeholder="如：东区1号地秋梢巡检">
           </div>
           <div class="form-item">
-            <label>所属基地</label>
-            <select class="form-select">
-              <option value="">请选择基地</option>
-              <option value="天水麦积区基地">天水麦积区基地</option>
-              <option value="天水秦州基地">天水秦州基地</option>
-              <option value="青岛莱西基地">青岛莱西基地</option>
-              <option value="招远基地">招远基地</option>
+            <label>来源计划（可选）</label>
+            <select class="form-select" id="addPlan">
+              <option value="">不关联计划</option>
             </select>
           </div>
         </div>
         <div class="form-row">
           <div class="form-item">
+            <label>所属基地</label>
+            <select class="form-select" id="addBase">
+              <option value="">请选择基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水秦州基地">天水秦州基地</option>
+              <option value="青岛莱西基地">青岛莱西基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水甘谷基地">天水甘谷基地</option>
+            </select>
+          </div>
+          <div class="form-item">
             <label>执行无人机</label>
-            <select class="form-select">
+            <select class="form-select" id="addDrone">
               <option value="">请选择无人机</option>
               <option value="DJI-01">DJI-01 · 大疆 Mavic 3M</option>
               <option value="DJI-02">DJI-02 · 大疆 Mavic 3M</option>
@@ -170,44 +279,29 @@
               <option value="DJI-04">DJI-04 · 大疆 Mavic 3E</option>
             </select>
           </div>
+        </div>
+        <div class="form-row">
           <div class="form-item">
             <label>巡查地块</label>
-            <select class="form-select">
+            <select class="form-select" id="addPlot">
               <option value="">请选择地块</option>
-              <option value="D-001">D-001 · 东区1号地</option>
-              <option value="D-002">D-002 · 东区2号地</option>
-              <option value="D-003">D-003 · 西区1号地</option>
-              <option value="D-004">D-004 · 北区1号地</option>
-              <option value="D-005">D-005 · 南区1号地</option>
-              <option value="D-006">D-006 · 中区1号地</option>
-              <option value="D-007">D-007 · 南区2号地</option>
-              <option value="D-008">D-008 · 西区2号地</option>
-              <option value="D-009">D-009 · 北区2号地</option>
-              <option value="D-010">D-010 · 东区3号地</option>
-              <option value="D-011">D-011 · 南区3号地</option>
-              <option value="D-012">D-012 · 西区3号地</option>
-              <option value="D-013">D-013 · 北区3号地</option>
-              <option value="D-014">D-014 · 中区2号地</option>
-              <option value="D-015">D-015 · 东区4号地</option>
-              <option value="D-016">D-016 · 南区4号地</option>
-              <option value="D-017">D-017 · 西区4号地</option>
-              <option value="D-018">D-018 · 北区4号地</option>
-              <option value="D-019">D-019 · 中区3号地</option>
-              <option value="D-020">D-020 · 东区5号地</option>
-              <option value="D-021">D-021 · 南区5号地</option>
-              <option value="D-022">D-022 · 西区5号地</option>
-              <option value="D-023">D-023 · 北区5号地</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>巡航线</label>
+            <select class="form-select" id="addRoute">
+              <option value="">使用默认航线</option>
             </select>
           </div>
         </div>
         <div class="form-row">
           <div class="form-item">
             <label>飞行面积(亩)</label>
-            <input type="number" class="form-input" value="80" min="1" max="1000">
+            <input type="number" class="form-input" id="addArea" value="80" min="1" max="1000">
           </div>
           <div class="form-item">
             <label>计划时间</label>
-            <input type="datetime-local" class="form-input">
+            <input type="datetime-local" class="form-input" id="addTime">
           </div>
         </div>
       </form>
@@ -260,36 +354,7 @@
       </button>
     </div>
     <div class="modal-body">
-      <div class="detail-grid">
-        <div class="detail-item">
-          <span class="detail-label">任务编号</span>
-          <span class="detail-value">DRONE-001</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">所属基地</span>
-          <span class="detail-value">天水麦积区基地</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">执行无人机</span>
-          <span class="detail-value">DJI-01</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">巡查地块</span>
-          <span class="detail-value">D-001 · 东区1号地</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">飞行面积</span>
-          <span class="detail-value">120亩</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">计划时间</span>
-          <span class="detail-value">2026-09-20 08:00</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">状态</span>
-          <span class="detail-value"><span class="status-tag done">已完成</span></span>
-        </div>
-      </div>
+      <div class="detail-grid" id="droneDetailBody"></div>
     </div>
     <div class="modal-footer">
       <button class="jg-btn jg-btn-primary" onclick="Modal.hide('modal-detail')">关闭</button>
@@ -412,239 +477,545 @@
   </div>
 </div>
 
+<script src="js/shared/mobile-bridge.js"></script>
+<script src="js/shared/demo-seed.js"></script>
+<script src="js/shared/production-store.js"></script>
 <script src="js/common-functions.js"></script>
 <script>
-// Mock数据 - 18条巡检任务
-const mockData = [
-  { id: 1, code: 'DRONE-001', sortie: '#014', base: '天水麦积区基地', drone: 'DJI-01', plot: 'D-001 · 东区1号地', area: 120, progress: 100, rtk: '固定解', altitude: 120, speed: 8.5, time: '2026-09-20 08:00', status: '已完成' },
-  { id: 2, code: 'DRONE-002', sortie: '#015', base: '天水秦州基地', drone: 'DJI-02', plot: 'D-006 · 中区1号地', area: 95, progress: 100, rtk: '固定解', altitude: 110, speed: 8.2, time: '2026-09-20 10:00', status: '已完成' },
-  { id: 3, code: 'DRONE-003', sortie: '#016', base: '天水麦积区基地', drone: 'DJI-03', plot: 'D-005 · 南区1号地', area: 80, progress: 62, rtk: '固定解', altitude: 100, speed: 9.1, time: '2026-09-23 08:30', status: '执行中' },
-  { id: 4, code: 'DRONE-004', sortie: '#017', base: '青岛莱西基地', drone: 'DJI-04', plot: 'D-010 · 东区3号地', area: 150, progress: 100, rtk: '固定解', altitude: 130, speed: 8.8, time: '2026-09-22 09:00', status: '已完成' },
-  { id: 5, code: 'DRONE-005', sortie: '#018', base: '招远基地', drone: 'DJI-01', plot: 'D-015 · 东区4号地', area: 110, progress: 100, rtk: '浮点解', altitude: 105, speed: 7.6, time: '2026-09-21 14:00', status: '已完成' },
-  { id: 6, code: 'DRONE-006', sortie: '#019', base: '天水麦积区基地', drone: 'DJI-02', plot: 'D-003 · 西区1号地', area: 90, progress: 0, rtk: '固定解', altitude: 115, speed: 0, time: '2026-09-23 14:00', status: '待执行' },
-  { id: 7, code: 'DRONE-007', sortie: '#020', base: '天水秦州基地', drone: 'DJI-03', plot: 'D-008 · 西区2号地', area: 75, progress: 0, rtk: '固定解', altitude: 100, speed: 0, time: '2026-09-23 15:30', status: '待执行' },
-  { id: 8, code: 'DRONE-008', sortie: '#021', base: '青岛莱西基地', drone: 'DJI-04', plot: 'D-012 · 西区3号地', area: 130, progress: 100, rtk: '固定解', altitude: 125, speed: 8.4, time: '2026-09-19 08:00', status: '已完成' },
-  { id: 9, code: 'DRONE-009', sortie: '#022', base: '招远基地', drone: 'DJI-01', plot: 'D-020 · 东区5号地', area: 105, progress: 100, rtk: '固定解', altitude: 112, speed: 8.0, time: '2026-09-18 10:00', status: '已完成' },
-  { id: 10, code: 'DRONE-010', sortie: '#023', base: '天水麦积区基地', drone: 'DJI-02', plot: 'D-007 · 南区2号地', area: 88, progress: 100, rtk: '固定解', altitude: 108, speed: 8.6, time: '2026-09-17 08:30', status: '已完成' },
-  { id: 11, code: 'DRONE-011', sortie: '#024', base: '天水秦州基地', drone: 'DJI-03', plot: 'D-013 · 北区3号地', area: 72, progress: 0, rtk: '浮点解', altitude: 100, speed: 0, time: '2026-09-16 09:00', status: '已取消' },
-  { id: 12, code: 'DRONE-012', sortie: '#025', base: '青岛莱西基地', drone: 'DJI-04', plot: 'D-016 · 南区4号地', area: 140, progress: 100, rtk: '固定解', altitude: 128, speed: 8.9, time: '2026-09-15 14:00', status: '已完成' },
-  { id: 13, code: 'DRONE-013', sortie: '#026', base: '招远基地', drone: 'DJI-01', plot: 'D-022 · 西区5号地', area: 98, progress: 100, rtk: '固定解', altitude: 106, speed: 8.3, time: '2026-09-14 08:00', status: '已完成' },
-  { id: 14, code: 'DRONE-014', sortie: '#027', base: '天水麦积区基地', drone: 'DJI-04', plot: 'D-009 · 北区2号地', area: 86, progress: 100, rtk: '固定解', altitude: 118, speed: 8.1, time: '2026-09-13 10:30', status: '已完成' },
-  { id: 15, code: 'DRONE-015', sortie: '#028', base: '天水秦州基地', drone: 'DJI-01', plot: 'D-017 · 西区4号地', area: 115, progress: 100, rtk: '固定解', altitude: 116, speed: 8.7, time: '2026-09-12 08:00', status: '已完成' },
-  { id: 16, code: 'DRONE-016', sortie: '#029', base: '青岛莱西基地', drone: 'DJI-02', plot: 'D-019 · 中区3号地', area: 102, progress: 100, rtk: '浮点解', altitude: 112, speed: 7.9, time: '2026-09-11 14:00', status: '已完成' },
-  { id: 17, code: 'DRONE-017', sortie: '#030', base: '招远基地', drone: 'DJI-03', plot: 'D-023 · 北区5号地', area: 90, progress: 0, rtk: '固定解', altitude: 105, speed: 0, time: '2026-09-24 08:00', status: '待执行' },
-  { id: 18, code: 'DRONE-018', sortie: '#031', base: '天水麦积区基地', drone: 'DJI-04', plot: 'D-011 · 南区3号地', area: 78, progress: 0, rtk: '固定解', altitude: 100, speed: 0, time: '2026-09-10 09:00', status: '已取消' }
-];
+/* ==========================================================
+ * 无人机巡检 —— 巡检任务 / 飞行日志 / 巡检异常
+ * 数据源：ProductionStore
+ * ========================================================== */
+var PS = window.ProductionStore;
+var currentSortieId = '';
 
-// 航线回放：由任务编号 + 架次生成稳定的航点坐标（示意用）
-function buildWaypoints(task) {
-  let seed = 0;
-  const key = String(task.code || '') + (task.sortie || '');
-  for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) % 9973;
-  const pts = [];
-  const count = 6;
-  for (let i = 0; i < count; i++) {
+var SORTIE_STATUS = {
+  '待执行': '<span class="status-tag normal">待执行</span>',
+  '执行中': '<span class="status-tag warning">执行中</span>',
+  '已完成': '<span class="status-tag done">已完成</span>',
+  '已取消': '<span class="status-tag normal">已取消</span>'
+};
+
+function switchDroneTab(tab) {
+  var views = { task: 'viewTask', log: 'viewLog', anomaly: 'viewAnomaly' };
+  var tabs = { task: 'tabTask', log: 'tabLog', anomaly: 'tabAnomaly' };
+  Object.keys(views).forEach(function (k) {
+    var v = document.getElementById(views[k]);
+    var t = document.getElementById(tabs[k]);
+    if (v) v.style.display = (k === tab) ? '' : 'none';
+    if (t) t.classList.toggle('active', k === tab);
+  });
+  if (tab === 'task') mountSortiePager();
+  else if (tab === 'log') searchLogs();
+  else searchDroneAnomaly();
+}
+
+/* ---------------- 巡检任务 ---------------- */
+function sortieList() {
+  return PS.sorties().slice().sort(function (a, b) {
+    return String(b.time || '').localeCompare(String(a.time || ''));
+  });
+}
+
+function mountSortiePager(list) {
+  Pagination.init({
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    pageSize: 10,
+    renderRow: renderRow,
+    data: list || sortieList()
+  });
+}
+
+function renderRow(item, index) {
+  var running = item.status === '执行中';
+  var progress = Math.max(0, Math.min(100, Number(item.progress) || 0));
+  var rtkFixed = item.rtk === '固定解';
+  var plan = item.planId ? PS.get('plans', item.planId) : null;
+  var route = PS.routeList().filter(function (r) { return r.routeId === item.routeId; })[0];
+  var btns = '<button class="action-btn detail" onclick="showTaskDetail(\'' + item.id + '\')">查看</button>' +
+    '<button class="action-btn edit" onclick="showRouteReplay(\'' + item.id + '\')">航线回放</button>';
+  if (item.status === '待执行') btns += '<button class="action-btn approve" onclick="startSortie(\'' + item.id + '\')">开始</button>';
+  if (item.status === '执行中') btns += '<button class="action-btn approve" onclick="finishSortie(\'' + item.id + '\')">完成</button>';
+  btns += '<button class="action-btn delete" onclick="handleDelete(\'' + item.id + '\')">删除</button>';
+  return '<tr>' +
+    '<td><strong style="font-family:var(--font-mono,monospace);font-size:12px;">' + item.taskId + '</strong></td>' +
+    '<td><span class="sortie-no' + (running ? ' running' : '') + '">' + item.sortieNo + '</span></td>' +
+    '<td style="font-size:12px;">' + (plan ? plan.id + '<br><span style="color:var(--text-tertiary);">' + plan.name + '</span>' : '<span style="color:var(--text-tertiary);">独立飞巡</span>') + '</td>' +
+    '<td>' + item.base + '</td>' +
+    '<td>' + item.drone + '</td>' +
+    '<td>' + item.plot + '</td>' +
+    '<td>' + (route ? route.routeName : (item.routeId || '—')) + '</td>' +
+    '<td>' + item.area + '亩</td>' +
+    '<td><div class="progress-cell' + (running ? ' running' : '') + '"><div class="progress"><div class="progress-fill" style="width:' + progress + '%;"></div></div><span class="progress-text">' + progress + '%</span></div></td>' +
+    '<td><span class="rtk-tag ' + (rtkFixed ? 'fixed' : 'float') + '">' + (item.rtk || '—') + '</span></td>' +
+    '<td>' + (item.altitude || 0) + 'm</td>' +
+    '<td>' + item.time + '</td>' +
+    '<td>' + (SORTIE_STATUS[item.status] || SORTIE_STATUS['待执行']) + '</td>' +
+    '<td><div class="action-btns">' + btns + '</div></td>' +
+    '</tr>';
+}
+
+function getStatusTag(status) { return SORTIE_STATUS[status] || SORTIE_STATUS['待执行']; }
+
+function showTaskDetail(id) {
+  currentSortieId = id;
+  var s = PS.get('sorties', id);
+  if (!s) return;
+  var plan = s.planId ? PS.get('plans', s.planId) : null;
+  var task = s.taskId ? PS.get('tasks', s.taskId) : null;
+  var logs = PS.flightLogs().filter(function (l) { return l.sortieId === s.id; }).length;
+  var rows = [
+    ['任务编号', s.taskId], ['架次', s.sortieNo],
+    ['来源计划', plan ? plan.id + ' · ' + plan.name : '独立飞巡'],
+    ['关联任务', task ? task.name + '（' + (PS.STATUS_TEXT[task.status] || task.status) + '）' : '—'],
+    ['所属基地', s.base], ['执行无人机', s.drone], ['巡查地块', s.plot],
+    ['飞行面积', s.area + ' 亩'], ['航高 / 速度', (s.altitude || 0) + 'm / ' + (s.speed || 0) + 'm/s'],
+    ['RTK 状态', s.rtk], ['计划时间', s.time], ['飞行日志', logs + ' 条'], ['状态', s.status]
+  ];
+  document.getElementById('droneDetailBody').innerHTML = rows.map(function (r) {
+    return '<div class="detail-item"><span class="detail-label">' + r[0] + '</span><span class="detail-value">' + (r[1] == null || r[1] === '' ? '—' : r[1]) + '</span></div>';
+  }).join('');
+  Modal.show('modal-detail');
+}
+
+function startSortie(id) {
+  var s = PS.get('sorties', id);
+  if (!s) { Toast.error('架次不存在或已被删除'); return; }
+  if (s.status === '执行中') { Toast.warning('该架次正在执行中'); return; }
+  if (s.status === '已完成') { Toast.error('已完成的架次不能重新开始'); return; }
+  PS.upsert('sorties', { id: id, status: '执行中', progress: 5, speed: 8.2 });
+  mountSortiePager();
+  Toast.success('架次已开始执行');
+}
+
+function finishSortie(id) {
+  var s = PS.get('sorties', id);
+  if (!s) { Toast.error('架次不存在或已被删除'); return; }
+  if (s.status === '已完成') { Toast.error('该架次已完成，请勿重复提交'); return; }
+  if (s.status !== '执行中') { Toast.error('请先开始架次，再提交完成'); return; }
+  if (!PS.get('tasks', s.taskId)) { Toast.error('关联巡检任务不存在，无法同步任务状态'); return; }
+  PS.upsert('sorties', { id: id, status: '已完成', progress: 100, speed: s.speed || 8.2 });
+  // 完成后自动写入飞行日志，保证「任务 → 架次 → 日志」可追溯
+  var base = s.time ? s.time.slice(0, 10) : PS.today();
+  ['起飞', '暂停', '恢复', '返航', '降落'].forEach(function (ev, i) {
+    PS.upsert('flightLogs', {
+      id: PS.nextId('flightLogs'),
+      sortieId: s.id, sortieNo: s.sortieNo, taskId: s.taskId,
+      base: s.base, plot: s.plot, event: ev,
+      altitude: s.altitude, speed: ev === '暂停' ? 0 : (s.speed || 8.2),
+      battery: Math.max(12, 96 - i * 18),
+      time: base + ' ' + (i + 8) + ':' + (i * 7 % 60 < 10 ? '0' : '') + (i * 7 % 60),
+      remark: ev === '返航' ? '电量低于阈值自动返航' : ''
+    });
+  });
+  PS.upsert('tasks', { id: s.taskId, status: 'completed' });
+  mountSortiePager();
+  Toast.success('架次已完成，飞行日志与任务状态已同步');
+}
+
+function handleSearch() {
+  var base = document.getElementById('baseSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var drone = document.getElementById('droneSelect').value;
+  var keyword = (document.getElementById('searchInput').value || '').trim();
+  var list = sortieList().filter(function (item) {
+    if (base && item.base !== base) return false;
+    if (status && item.status !== status) return false;
+    if (drone && item.drone !== drone) return false;
+    if (keyword && String(item.taskId).indexOf(keyword) < 0 && String(item.sortieNo).indexOf(keyword) < 0) return false;
+    return true;
+  });
+  mountSortiePager(list);
+  Toast.info('找到 ' + list.length + ' 条记录');
+}
+
+function smartReset() {
+  ['searchInput', 'baseSelect', 'statusSelect', 'droneSelect'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  mountSortiePager();
+  Toast.info('已重置搜索条件');
+}
+
+/* ---------------- 新建巡检任务（任务 + 架次） ---------------- */
+function fillAddOptions() {
+  var planSel = document.getElementById('addPlan');
+  if (planSel) {
+    planSel.innerHTML = '<option value="">不关联计划</option>' + PS.plans().map(function (p) {
+      return '<option value="' + p.id + '">' + p.id + ' ' + p.name + '</option>';
+    }).join('');
+  }
+  var plotSel = document.getElementById('addPlot');
+  if (plotSel) {
+    plotSel.innerHTML = '<option value="">请选择地块</option>' + PS.PLOTS.map(function (p) {
+      return '<option value="' + p + '">' + PS.plotLabel(p) + '</option>';
+    }).join('');
+  }
+  var routeSel = document.getElementById('addRoute');
+  if (routeSel) {
+    routeSel.innerHTML = '<option value="">使用默认航线</option>' + PS.routeList().map(function (r) {
+      return '<option value="' + r.routeId + '">' + r.routeName + '</option>';
+    }).join('');
+  }
+}
+
+function handleAdd() {
+  var name = document.getElementById('addName').value.trim();
+  var base = document.getElementById('addBase').value;
+  var drone = document.getElementById('addDrone').value;
+  var plot = document.getElementById('addPlot').value;
+  var routeId = document.getElementById('addRoute').value;
+  var area = document.getElementById('addArea').value;
+  var time = document.getElementById('addTime').value;
+  if (!name || !base || !drone || !plot || !area || !time) { Toast.error('请填写完整任务信息'); return; }
+
+  var planId = document.getElementById('addPlan').value;
+  var task = {
+    id: PS.nextId('tasks'),
+    planId: planId,
+    name: name,
+    base: base,
+    plot: PS.plotLabel(plot).split(' · ')[1] || plot,
+    plotId: plot,
+    type: '飞巡', typeCode: 'drone',
+    taskCategory: 'drone',
+    executorType: 'drone',
+    priority: 'medium',
+    person: '飞控中心', worker: drone, team: '飞控组',
+    planTime: time,
+    deadline: time.slice(0, 10),
+    status: 'pending',
+    desc: '无人机巡检任务',
+    createdBy: '后台录入', createdAt: PS.stampNow()
+  };
+  var seq = PS.sorties().length + 14;
+  var sortie = {
+    id: PS.nextId('sorties'),
+    sortieNo: '#' + (seq < 10 ? '0' + seq : seq),
+    taskId: task.id,
+    planId: planId,
+    routeId: routeId,
+    base: base, drone: drone, plot: PS.plotLabel(plot),
+    area: parseFloat(area) || 0, progress: 0, rtk: '固定解',
+    altitude: 120, speed: 0, time: time.replace('T', ' '),
+    status: '待执行', createdBy: '后台录入'
+  };
+  var invalid = PS.validate.task(task);
+  if (invalid) { Toast.error(invalid); return; }
+  PS.upsert('tasks', task);
+  invalid = PS.validate.sortie(sortie);
+  if (invalid) { PS.remove('tasks', task.id); Toast.error(invalid); return; }
+  PS.upsert('sorties', sortie);
+
+  Modal.hide('modal-add');
+  mountSortiePager();
+  Toast.success('巡检任务已创建：' + task.id);
+}
+
+function handleDelete(id) {
+  var s = PS.get('sorties', id);
+  if (!s) { Toast.error('巡检任务不存在或已被删除'); return; }
+  if (s.status === '执行中') { Toast.error('执行中的架次不能删除，请先完成架次'); return; }
+  ConfirmDialog.show({
+    title: '确认删除',
+    message: '确定要删除该巡检任务吗？相关飞行日志将一并移除。',
+    onConfirm: function () {
+      if (!PS.remove('sorties', id)) { Toast.error(PS.lastError() || '删除失败'); return; }
+      mountSortiePager();
+      Toast.success('巡检任务已删除');
+    }
+  });
+}
+
+function handleExport() {
+  var rows = [['任务编号', '架次', '来源计划', '基地', '无人机', '地块', '面积', '进度', 'RTK', '航高', '速度', '时间', '状态']];
+  sortieList().forEach(function (r) {
+    rows.push([r.taskId, r.sortieNo, r.planId || '', r.base, r.drone, r.plot, r.area, r.progress, r.rtk, r.altitude, r.speed, r.time, r.status]);
+  });
+  var csv = rows.map(function (row) {
+    return row.map(function (c) { return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"'; }).join(',');
+  }).join('\r\n');
+  var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '无人机巡检任务_' + PS.today() + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  Modal.hide('modal-export');
+  Toast.success('已导出无人机巡检任务');
+}
+
+/* ---------------- 航线回放 ---------------- */
+function buildWaypoints(item) {
+  var seed = 0;
+  var key = String(item.taskId || '') + (item.sortieNo || '');
+  for (var i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) % 9973;
+  var pts = [];
+  for (var k = 0; k < 6; k++) {
     seed = (seed * 9301 + 49297) % 233280;
-    const jitterX = (seed / 233280) * 40 - 20;
+    var jitterX = (seed / 233280) * 40 - 20;
     seed = (seed * 9301 + 49297) % 233280;
-    const jitterY = (seed / 233280) * 30 - 15;
+    var jitterY = (seed / 233280) * 30 - 15;
     pts.push({
-      no: i + 1,
-      lng: (34.580 + i * 0.021 + jitterX / 900).toFixed(6),
-      lat: (34.760 + (i % 2 === 0 ? 1 : -1) * (0.018 * (i + 1)) + jitterY / 900).toFixed(6)
+      no: k + 1,
+      lng: (34.580 + k * 0.021 + jitterX / 900).toFixed(6),
+      lat: (34.760 + (k % 2 === 0 ? 1 : -1) * (0.018 * (k + 1)) + jitterY / 900).toFixed(6)
     });
   }
   return pts;
 }
 
-// 航线回放 Modal：内联 SVG 折线轨迹 + 航点列表
-function showRouteReplay(code) {
-  const task = mockData.find(t => t.code === code);
+function showRouteReplay(id) {
+  var task = PS.get('sorties', id);
   if (!task) return;
-  const wps = buildWaypoints(task);
-  const w = 520, h = 200;
-  const xs = wps.map((_, i) => 40 + i * ((w - 80) / (wps.length - 1)));
-  const ys = wps.map((_, i) => h / 2 + (i % 2 === 0 ? -1 : 1) * (26 + (i * 7)));
-  const poly = xs.map((x, i) => x + ',' + ys[i]).join(' ');
-  const pointsHtml = wps.map((p, i) =>
-    `<circle class="route-point${i === 0 ? ' start' : ''}" cx="${xs[i]}" cy="${ys[i]}" r="4"></circle>` +
-    `<text class="route-point-label" x="${xs[i]}" y="${ys[i] - 9}" text-anchor="middle">WP${p.no}</text>`
-  ).join('');
-  const listHtml = wps.map(p =>
-    `<div class="waypoint-item"><span>航点 ${p.no}</span><span>${p.lng}°E / ${p.lat}°N</span></div>`
-  ).join('');
+  currentSortieId = id;
+  var wps = buildWaypoints(task);
+  var w = 520, h = 200;
+  var xs = wps.map(function (_, i) { return 40 + i * ((w - 80) / (wps.length - 1)); });
+  var ys = wps.map(function (_, i) { return h / 2 + (i % 2 === 0 ? -1 : 1) * (26 + (i * 7)); });
+  var poly = xs.map(function (x, i) { return x + ',' + ys[i]; }).join(' ');
+  var pointsHtml = wps.map(function (p, i) {
+    return '<circle class="route-point' + (i === 0 ? ' start' : '') + '" cx="' + xs[i] + '" cy="' + ys[i] + '" r="4"></circle>' +
+      '<text class="route-point-label" x="' + xs[i] + '" y="' + (ys[i] - 9) + '" text-anchor="middle">WP' + p.no + '</text>';
+  }).join('');
+  var listHtml = wps.map(function (p) {
+    return '<div class="waypoint-item"><span>航点 ' + p.no + '</span><span>' + p.lng + '°E / ' + p.lat + '°N</span></div>';
+  }).join('');
 
-  document.getElementById('routeReplayTitle').textContent = '航线回放 · 架次 ' + (task.sortie || '—');
+  document.getElementById('routeReplayTitle').textContent = '航线回放 · 架次 ' + (task.sortieNo || '—');
   document.getElementById('routeReplayBody').innerHTML =
-      `<div class="route-play">` +
-        `<svg class="route-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">` +
-          `<polygon class="route-line-area" points="${poly}"></polygon>` +
-          `<polyline class="route-line" points="${poly}"></polyline>` +
-          pointsHtml +
-        `</svg>` +
-        `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--text-tertiary);">` +
-          `<span>任务编号：<strong>${task.code}</strong></span>` +
-          `<span>巡查地块：<strong>${task.plot}</strong></span>` +
-          `<span>航高：<strong>${task.altitude || 0}m</strong></span>` +
-          `<span>速度：<strong>${task.speed || 0}m/s</strong></span>` +
-          `<span>RTK：<strong>${task.rtk || '—'}</strong></span>` +
-          `<span>进度：<strong>${task.progress || 0}%</strong></span>` +
-        `</div>` +
-        `<div class="waypoint-list">${listHtml}</div>` +
-      `</div>`;
+    '<div class="route-play">' +
+      '<svg class="route-svg" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="xMidYMid meet">' +
+        '<polygon class="route-line-area" points="' + poly + '"></polygon>' +
+        '<polyline class="route-line" points="' + poly + '"></polyline>' +
+        pointsHtml +
+      '</svg>' +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--text-tertiary);">' +
+        '<span>任务编号：<strong>' + task.taskId + '</strong></span>' +
+        '<span>巡查地块：<strong>' + task.plot + '</strong></span>' +
+        '<span>航高：<strong>' + (task.altitude || 0) + 'm</strong></span>' +
+        '<span>速度：<strong>' + (task.speed || 0) + 'm/s</strong></span>' +
+        '<span>RTK：<strong>' + (task.rtk || '—') + '</strong></span>' +
+        '<span>进度：<strong>' + (task.progress || 0) + '%</strong></span>' +
+      '</div>' +
+      '<div class="waypoint-list">' + listHtml + '</div>' +
+    '</div>';
   Modal.show('modal-route');
 }
 
-// 获取状态标签
-function getStatusTag(status) {
-  const map = {
-    '待执行': '<span class="status-tag normal">待执行</span>',
-    '执行中': '<span class="status-tag warning">执行中</span>',
-    '已完成': '<span class="status-tag done">已完成</span>',
-    '已取消': '<span class="status-tag normal">已取消</span>'
-  };
-  return map[status] || map['待执行'];
+/* ---------------- 飞行日志 ---------------- */
+/* 移动端 mb_drone_patrol.html 写入的飞行事件（暂停/恢复/返航） */
+function mobileLogs() {
+  try {
+    if (typeof MobileBridge === 'undefined' || typeof MobileBridge.droneEvents !== 'function') return [];
+    var map = { pause: '暂停', resume: '恢复', return: '返航' };
+    var list = MobileBridge.droneEvents();
+    return (Array.isArray(list) ? list : []).map(function (e, i) {
+      return {
+        id: e.id || ('MDE-' + i),
+        sortieNo: '—',
+        taskId: e.taskId || '—',
+        base: '—',
+        plot: '—',
+        event: map[e.type] || e.type || '事件',
+        altitude: null,
+        speed: null,
+        battery: null,
+        time: e.createTime || '',
+        remark: e.text || '',
+        source: 'mobile'
+      };
+    });
+  } catch (err) { return []; }
 }
 
-// 渲染表格行
-function renderRow(item, index) {
-  const running = item.status === '执行中';
-  const progress = Math.max(0, Math.min(100, Number(item.progress) || 0));
-  const rtkFixed = item.rtk === '固定解';
-  return `<tr>
-    <td>${index + 1}</td>
-    <td><strong>${item.code}</strong></td>
-    <td><span class="sortie-no${running ? ' running' : ''}">${item.sortie || '—'}</span></td>
-    <td>${item.base}</td>
-    <td>${item.drone}</td>
-    <td>${item.plot}</td>
-    <td>${item.area}亩</td>
-    <td>
-      <div class="progress-cell${running ? ' running' : ''}">
-        <div class="progress"><div class="progress-fill" style="width:${progress}%;"></div></div>
-        <span class="progress-text">${progress}%</span>
-      </div>
-    </td>
-    <td><span class="rtk-tag ${rtkFixed ? 'fixed' : 'float'}">${item.rtk || '—'}</span></td>
-    <td>${item.altitude || 0}m</td>
-    <td>${item.time}</td>
-    <td>${getStatusTag(item.status)}</td>
-    <td>
-      <div class="action-btns">
-        <button class="action-btn detail" onclick="Modal.show('modal-detail')">查看</button>
-        <button class="action-btn edit" onclick="showRouteReplay('${item.code}')">航线回放</button>
-        <button class="action-btn edit" onclick="Modal.show('modal-edit')">编辑</button>
-        <button class="action-btn delete" onclick="handleDelete()">删除</button>
-      </div>
-    </td>
-  </tr>`;
+function logList() {
+  var event = (document.getElementById('logEventSelect') || {}).value || '';
+  var kw = ((document.getElementById('logSearchInput') || {}).value || '').trim();
+  return PS.flightLogs().concat(mobileLogs()).filter(function (l) {
+    if (event && l.event !== event) return false;
+    if (kw) {
+      var hay = [l.sortieNo, l.taskId, l.base, l.plot, l.event, l.remark, l.time].join(' ');
+      if (hay.indexOf(kw) < 0) return false;
+    }
+    return true;
+  }).sort(function (a, b) {
+    return String(b.time || '').localeCompare(String(a.time || ''));
+  });
 }
 
-// 搜索
-function handleSearch() {
-  const keyword = document.getElementById('searchInput').value;
-  const base = document.getElementById('baseSelect').value;
-  const status = document.getElementById('statusSelect').value;
-  const drone = document.getElementById('droneSelect').value;
+function renderLogRow(item, index) {
+  var eventColor = { '起飞': 'normal', '暂停': 'warning', '恢复': 'done', '返航': 'warning', '降落': 'normal' };
+  var sourceTag = item.source === 'mobile' ? '<span class="source-badge">移动端</span>' : '';
+  return '<tr>' +
+    '<td>' + (index + 1) + '</td>' +
+    '<td><span style="font-family:var(--font-mono,monospace);font-size:12px;">' + (item.id || '—') + '</span>' + sourceTag + '</td>' +
+    '<td><span class="sortie-no">' + (item.sortieNo || '—') + '</span></td>' +
+    '<td style="font-family:var(--font-mono,monospace);font-size:12px;">' + (item.taskId || '—') + '</td>' +
+    '<td>' + (item.base || '—') + '</td>' +
+    '<td>' + (item.plot || '—') + '</td>' +
+    '<td><span class="status-tag ' + (eventColor[item.event] || 'normal') + '">' + (item.event || '—') + '</span></td>' +
+    '<td>' + (item.altitude != null && item.altitude !== '' ? item.altitude + 'm' : '—') + '</td>' +
+    '<td>' + (item.speed != null && item.speed !== '' ? item.speed + 'm/s' : '—') + '</td>' +
+    '<td>' + (item.battery != null && item.battery !== '' ? item.battery + '%' : '—') + '</td>' +
+    '<td>' + (item.time || '—') + '</td>' +
+    '<td style="font-size:12px;color:var(--text-tertiary);">' + (item.remark || '—') + '</td>' +
+    '</tr>';
+}
 
-  const filtered = mockData.filter(item => {
-    if (base && item.base !== base) return false;
-    if (status && item.status !== status) return false;
-    if (drone && item.drone !== drone) return false;
-    if (keyword && !item.code.includes(keyword)) return false;
+function searchLogs() {
+  var list = logList();
+  Pagination.init({
+    containerId: 'log-pagination-container',
+    tbodyId: 'logTableBody',
+    pageSize: 10,
+    renderRow: renderLogRow,
+    data: list
+  });
+  return list;
+}
+
+function resetLogs() {
+  document.getElementById('logEventSelect').value = '';
+  document.getElementById('logSearchInput').value = '';
+  searchLogs();
+}
+
+/* ---------------- 巡检异常 ---------------- */
+function droneAnomalyList() {
+  PS.importMobile();
+  var status = (document.getElementById('daStatusSelect') || {}).value || '';
+  var kw = ((document.getElementById('daSearchInput') || {}).value || '').trim();
+  return PS.anomalies().filter(function (a) {
+    if (a.source !== 'drone') return false;
+    if (status && a.status !== status) return false;
+    if (kw && String(a.plot).indexOf(kw) < 0 && String(a.remark).indexOf(kw) < 0) return false;
     return true;
   });
-
-  Pagination.updateData(filtered);
-  Toast.info('找到 ' + filtered.length + ' 条记录');
 }
 
-// 重置
-function smartReset() {
-  document.getElementById('searchInput').value = '';
-  document.getElementById('baseSelect').value = '';
-  document.getElementById('statusSelect').value = '';
-  document.getElementById('droneSelect').value = '';
-  Pagination.updateData(mockData);
-  Toast.info('已重置搜索条件');
-}
-
-// 新增
-function handleAdd() {
-  var name = (document.getElementById('addName') || {}).value || '';
-  var drone = (document.getElementById('droneSelect') || {}).value || '';
-  var area = (document.getElementById('addArea') || {}).value || '';
-  var time = (document.getElementById('addTime') || {}).value || '';
-  if (!name || !drone || !area || !time) { Toast.error('请填写完整任务信息'); return; }
-  var record = {
-    id: 'TASK' + Date.now(),
-    name: name,
-    drone: drone,
-    area: area,
-    time: time,
-    status: '待执行',
-    statusCode: 'pending',
-    createdAt: new Date().toISOString()
+function renderAnomalyRow(item, index) {
+  var statusMap = {
+    waitHandle: '<span class="status-tag warning">待处理</span>',
+    handling: '<span class="status-tag done">处理中</span>',
+    closed: '<span class="status-tag normal">已关闭</span>'
   };
-  mockData.unshift(record);
-  Pagination.updateData(mockData);
-  Modal.hide('modal-add');
-  Toast.success('任务已创建：' + name);
+  var sortie = PS.sorties().filter(function (s) { return s.id === item.sortieId; })[0];
+  return '<tr>' +
+    '<td>' + (index + 1) + '</td>' +
+    '<td><span style="font-family:var(--font-mono,monospace);font-size:12px;">' + item.id + '</span></td>' +
+    '<td><span class="sortie-no">' + (sortie ? sortie.sortieNo : (item.sortieNo || '—')) + '</span></td>' +
+    '<td>' + (item.plot || '—') + '</td>' +
+    '<td>' + item.type + '</td>' +
+    '<td>' + (item.remark || '—') + '</td>' +
+    '<td>' + (item.reportTime || '—') + '</td>' +
+    '<td>' + (statusMap[item.status] || statusMap.waitHandle) + '</td>' +
+    '<td><div class="action-btns">' +
+    '<button class="action-btn approve" onclick="generateTaskFromDroneAnomaly(\'' + item.id + '\')">生成处置任务</button>' +
+    '<button class="action-btn detail" onclick="showDroneAnomalyDetail(\'' + item.id + '\')">查看</button>' +
+    '</div></td>' +
+    '</tr>';
 }
 
-// 导出
-function handleExport() {
-  Modal.hide('modal-export');
-  var csv = '任务编号,架次,所属基地,无人机,巡查地块,飞行面积,进度(%),RTK,航高(m),速度(m/s),计划时间,状态\n' + mockData.map(function(r){
-    return [r.code, r.sortie, r.base, r.drone, r.plot, r.area, r.progress, r.rtk, r.altitude, r.speed, r.time, r.status].join(',');
-  }).join('\n');
-  var blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `无人机巡检任务_${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
-  Toast.success('已导出无人机巡检任务');
+function searchDroneAnomaly() {
+  var list = droneAnomalyList();
+  Pagination.init({
+    containerId: 'drone-anomaly-pagination-container',
+    tbodyId: 'droneAnomalyBody',
+    pageSize: 10,
+    renderRow: renderAnomalyRow,
+    data: list
+  });
+  return list;
 }
 
-// 编辑
-function handleEdit() {
-  var name = (document.getElementById('editName') || {}).value || '';
-  var status = (document.getElementById('editStatus') || {}).value || '';
-  if (!name) { Toast.error('任务名为空'); return; }
-  var idx = mockData.findIndex(function(m){ return m.name === name; });
-  if (idx === -1) { Toast.error('未找到该任务'); return; }
-  mockData[idx].status = status || mockData[idx].status;
-  Pagination.updateData(mockData);
-  Modal.hide('modal-edit');
-  Toast.success('任务已更新');
+function resetDroneAnomaly() {
+  document.getElementById('daStatusSelect').value = '';
+  document.getElementById('daSearchInput').value = '';
+  searchDroneAnomaly();
 }
 
-// 删除
-function handleDelete(taskId) {
+function showDroneAnomalyDetail(id) {
+  var a = PS.get('anomalies', id);
+  if (!a) return;
+  currentSortieId = a.sortieId || '';
+  var rows = [
+    ['异常编号', a.id], ['来源', '无人机巡检'], ['地块', a.plot], ['异常类型', a.type],
+    ['异常说明', a.remark], ['上报时间', a.reportTime], ['处理结果', a.handleResult],
+    ['处理意见', a.handleRemark], ['处理时间', a.handleTime]
+  ];
+  document.getElementById('droneDetailBody').innerHTML = rows.map(function (r) {
+    return '<div class="detail-item"><span class="detail-label">' + r[0] + '</span><span class="detail-value">' + (r[1] || '—') + '</span></div>';
+  }).join('');
+  Modal.show('modal-detail');
+}
+
+function generateTaskFromDroneAnomaly(id) {
+  var a = PS.get('anomalies', id);
+  if (!a) { Toast.error('巡检异常不存在或已被删除'); return; }
+  if (a.taskId && PS.get('tasks', a.taskId)) { Toast.warning('该异常已生成处置任务：' + a.taskId); return; }
   ConfirmDialog.show({
-    title: '确认删除',
-    message: '确定要删除这个任务吗？此操作不可撤销。',
-    onConfirm: function() {
-      var idx = mockData.findIndex(function(m){ return m.id === taskId || m.name === taskId; });
-      if (idx !== -1) mockData.splice(idx, 1);
-      Pagination.updateData(mockData);
-      Toast.success('删除成功');
+    title: '生成处置任务',
+    message: '将针对「' + a.type + '（' + a.plot + '）」生成处置任务，是否继续？',
+    onConfirm: function () {
+      var anomalyPlot = String(a.plot || 'D-001').split(' · ')[0].trim();
+      if (PS.PLOTS.indexOf(anomalyPlot) < 0) anomalyPlot = 'D-001';
+      var task = {
+        id: PS.nextId('tasks'),
+        planId: '',
+        anomalyId: a.id,
+        name: '飞巡异常处置 · ' + a.type + ' · ' + a.plot,
+        base: '天水麦积区基地',
+        plot: (PS.plotLabel(anomalyPlot).split(' · ')[1] || anomalyPlot),
+        plotId: anomalyPlot,
+        type: /病害|病虫害/.test(a.type) ? '施药' : '其他',
+        typeCode: /病害|病虫害/.test(a.type) ? 'pesticide' : 'other',
+        taskCategory: 'farming',
+        executorType: 'person',
+        priority: 'high',
+        person: '黄忠坚', worker: '黄忠坚', team: '一班',
+        planTime: PS.today() + 'T09:00',
+        deadline: PS.today(),
+        status: 'pending',
+        desc: '来源飞巡异常 ' + a.id + '：' + a.remark,
+        createdBy: '飞巡异常', createdAt: PS.stampNow()
+      };
+      var invalid = PS.validate.task(task);
+      if (invalid) { Toast.error(invalid); return; }
+      PS.upsert('tasks', task);
+      PS.upsert('anomalies', { id: a.id, status: 'handling', taskId: task.id, handleResult: '已生成处置任务', handleTime: PS.stampNow() });
+      searchDroneAnomaly();
+      Toast.success('已生成任务 ' + task.id + '，可在「任务管理」查看');
     }
   });
 }
 
-// 初始化分页
-document.addEventListener('DOMContentLoaded', function() {
-  Pagination.init({
-    currentPage: 1,
-    pageSize: 10,
-    data: mockData,
-    containerId: 'pagination-container',
-    tbodyId: 'dataTableBody',
-    renderRow: renderRow
+/* ---------------- 初始化 ---------------- */
+document.addEventListener('DOMContentLoaded', function () {
+  if (window.DemoSeed) DemoSeed.ensure(['drone-events', 'drone-abnormal']);
+  PS.importMobile();
+  fillAddOptions();
+  mountSortiePager();
+  searchLogs();
+  searchDroneAnomaly();
+
+  var addBtn = document.querySelector('button[onclick="Modal.show(\'modal-add\')"]');
+  if (addBtn) addBtn.addEventListener('click', fillAddOptions);
+
+  var dt = new Date();
+  var local = dt.getFullYear() + '-' + (dt.getMonth() + 1 < 10 ? '0' : '') + (dt.getMonth() + 1) + '-' +
+    (dt.getDate() < 10 ? '0' : '') + dt.getDate() + 'T08:00';
+  var timeEl = document.getElementById('addTime');
+  if (timeEl && !timeEl.value) timeEl.value = local;
+
+  window.addEventListener('productionStoreChange', function () {
+    var active = document.querySelector('.view-tab.active');
+    var id = active ? active.id : 'tabTask';
+    if (id === 'tabTask') mountSortiePager();
+    if (id === 'tabLog') searchLogs();
+    if (id === 'tabAnomaly') searchDroneAnomaly();
   });
 });
 </script>

@@ -175,6 +175,35 @@
     font-weight:500;
   }
 
+  /* 顶部统计卡：5 列栅格，复用全站 .stat-card 样式 */
+  .inventory-stats {
+    display:grid;
+    grid-template-columns:repeat(5, minmax(0, 1fr));
+    gap:16px;
+    margin-bottom:20px;
+  }
+
+  .inventory-stats .stat-card {
+    margin-top:0 !important;
+    cursor:default;
+  }
+
+  @media (max-width:1280px) {
+    .inventory-stats { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+  }
+
+  @media (max-width:900px) {
+    .inventory-stats { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  }
+
+  /* 主库存表列较多，允许横向滚动 */
+  .data-section .data-table {
+    min-width:1780px;
+  }
+  .data-section:not(.dense-view) .data-table {
+    min-width:2400px;
+  }
+
   /* 分页输入框 */
   .pagination-input {
     width:50px;
@@ -184,6 +213,9 @@
     text-align:center;
     margin:0 4px;
   }
+
+  /* 宽表精简：默认隐藏次要字段列 */
+  .dense-view .col-extra { display:none; }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -218,15 +250,16 @@
     <main class="main-content">
       <div class="content-wrapper">
         <!-- ===== 顶部统计卡 ===== -->
-        <div class="patrol-stats" id="inventoryStats"></div>
+        <div class="inventory-stats" id="inventoryStats"></div>
 
         <!-- ===== 搜索栏区 ===== -->
         <div class="page-section search-section">
           <div class="search-bar">
-            <select class="search-select" id="warehouseSelect">
+            <select class="search-select" id="warehouseSelect" data-dict="warehouse">
               <option value="">全部仓库</option>
-              <option value="warehouse1">一号仓库</option>
-              <option value="warehouse2">二号仓库</option>
+              <option value="warehouse1">中心仓库</option>
+              <option value="warehouse2">东区仓库</option>
+              <option value="warehouse3">西区仓库</option>
             </select>
             <select class="search-select" style="min-width:120px;">
               <option value="">全部状态</option>
@@ -257,10 +290,11 @@
             </svg>
             库存盘点
           </button>
+          <button class="jg-btn-outline" id="denseToggleBtn" onclick="toggleDenseView()">显示全部字段</button>
         </div>
 
         <!-- ===== 数据列表区 ===== -->
-        <div class="page-section data-section">
+        <div class="page-section data-section dense-view">
           <div class="data-table-wrapper">
             <table class="data-table">
               <thead>
@@ -268,14 +302,24 @@
                   <th style="width:60px;">序号</th>
                   <th style="width:100px;">仓库</th>
                   <th style="width:100px;">农资编号</th>
-                  <th>农资名称</th>
+                  <th style="width:140px;">农资名称</th>
                   <th style="width:120px;">规格型号</th>
                   <th style="width:60px;">单位</th>
+                  <th style="width:130px;">批次号</th>
+                  <th class="col-extra" style="width:110px;">生产日期</th>
+                  <th style="width:110px;">有效期至</th>
+                  <th class="col-extra" style="width:100px;">货位</th>
                   <th style="width:100px;text-align:right;">库存数量</th>
-                  <th style="width:100px;text-align:right;">最低库存</th>
-                  <th style="width:100px;">库存状态</th>
-                  <th style="width:110px;text-align:right;">可覆盖天数</th>
-                  <th style="width:130px;">补货建议</th>
+                  <th style="width:100px;text-align:right;">可用库存</th>
+                  <th style="width:90px;text-align:right;">锁定</th>
+                  <th class="col-extra" style="width:120px;text-align:right;">库存金额(元)</th>
+                  <th style="width:100px;text-align:right;">安全库存</th>
+                  <th style="width:130px;">库存状态</th>
+                  <th class="col-extra" style="width:110px;text-align:right;">可覆盖天数</th>
+                  <th class="col-extra" style="width:150px;">补货建议</th>
+                  <th class="col-extra" style="width:150px;">最近入库时间</th>
+                  <th class="col-extra" style="width:150px;">最近出库时间</th>
+                  <th style="width:120px;">供应商</th>
                   <th style="width:140px;">操作</th>
                 </tr>
               </thead>
@@ -299,16 +343,47 @@
                 <tr>
                   <th>农资名称</th>
                   <th style="text-align:right;">当前库存</th>
-                  <th style="text-align:right;">最低库存</th>
+                  <th style="text-align:right;">安全库存</th>
                   <th style="text-align:right;">日均消耗</th>
                   <th style="text-align:right;">可覆盖天数</th>
                   <th style="text-align:right;">建议补货量</th>
+                  <th style="width:120px;">建议采购日期</th>
+                  <th style="width:120px;">供应商</th>
+                  <th style="width:120px;">操作</th>
                 </tr>
               </thead>
               <tbody id="replenishBody"></tbody>
             </table>
           </div>
           <div id="replenishEmpty" class="empty-hint" style="display:none;padding:32px;text-align:center;color:var(--text-tertiary);font-size:var(--font-size-sm);">当前无紧急补货项</div>
+        </div>
+
+        <!-- ===== 盘点/调整记录区 ===== -->
+        <div class="page-section" id="recordSection" style="margin-top:var(--space-lg);">
+          <div class="search-bar" style="margin-bottom:var(--space-md);padding:var(--space-lg);">
+            <h2 class="section-title" style="margin:0;">盘点/调整记录</h2>
+            <span style="font-size:var(--font-size-sm);color:var(--text-tertiary);">库存盘点与调整的每一次变动均在此留痕，便于对账追溯</span>
+          </div>
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:160px;">单号</th>
+                  <th style="width:90px;">类型</th>
+                  <th style="width:100px;">仓库</th>
+                  <th style="width:140px;">农资名称</th>
+                  <th style="width:100px;text-align:right;">账面数量</th>
+                  <th style="width:130px;text-align:right;">实盘/调整数量</th>
+                  <th style="width:90px;text-align:right;">差异</th>
+                  <th style="width:100px;">操作人</th>
+                  <th style="width:110px;">日期</th>
+                  <th>备注</th>
+                </tr>
+              </thead>
+              <tbody id="recordBody"></tbody>
+            </table>
+          </div>
+          <div id="recordEmpty" class="empty-hint" style="display:none;padding:32px;text-align:center;color:var(--text-tertiary);font-size:var(--font-size-sm);">暂无盘点/调整记录</div>
         </div>
 
       </div>
@@ -337,10 +412,11 @@
           </div>
           <div class="form-item">
             <label>仓库</label>
-            <select id="countWarehouse">
-              <option value="">全部仓库</option>
-              <option value="warehouse1">一号仓库</option>
-              <option value="warehouse2">二号仓库</option>
+            <select id="countWarehouse" data-dict="warehouse">
+              <option value="">请选择仓库</option>
+              <option value="warehouse1">中心仓库</option>
+              <option value="warehouse2">东区仓库</option>
+              <option value="warehouse3">西区仓库</option>
             </select>
           </div>
         </div>
@@ -352,8 +428,18 @@
             </select>
           </div>
           <div class="form-item">
+            <label>账面数量</label>
+            <input type="text" id="countBookQty" placeholder="选择农资后自动带出" readonly>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
             <label>实盘数量</label>
             <input type="number" id="countQty" placeholder="请输入实盘数量" min="0">
+          </div>
+          <div class="form-item">
+            <label>差异</label>
+            <input type="text" id="countDiff" placeholder="实盘数量 - 账面数量" readonly>
           </div>
         </div>
         <div class="form-row">
@@ -413,11 +499,39 @@
           <span class="detail-value" id="viewUnit">-</span>
         </div>
         <div class="detail-row">
+          <span class="detail-label">批次号</span>
+          <span class="detail-value" id="viewBatch">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">生产日期</span>
+          <span class="detail-value" id="viewProd">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">有效期至</span>
+          <span class="detail-value" id="viewExpire">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">货位</span>
+          <span class="detail-value" id="viewLocation">-</span>
+        </div>
+        <div class="detail-row">
           <span class="detail-label">库存数量</span>
           <span class="detail-value" id="viewStock">-</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">最低库存</span>
+          <span class="detail-label">可用库存</span>
+          <span class="detail-value" id="viewAvailable">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">锁定数量</span>
+          <span class="detail-value" id="viewLocked">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">库存金额(元)</span>
+          <span class="detail-value" id="viewAmount">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">安全库存</span>
           <span class="detail-value" id="viewMin">-</span>
         </div>
         <div class="detail-row">
@@ -435,6 +549,22 @@
         <div class="detail-row">
           <span class="detail-label">库存状态</span>
           <span class="detail-value" id="viewStatus">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">最近入库时间</span>
+          <span class="detail-value" id="viewLastIn">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">最近出库时间</span>
+          <span class="detail-value" id="viewLastOut">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">供应商</span>
+          <span class="detail-value" id="viewSupplier">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">入库单号</span>
+          <span class="detail-value" id="viewInboundNo">-</span>
         </div>
       </div>
     </div>
@@ -464,8 +594,23 @@
             <input type="text" id="adjustName" readonly>
           </div>
           <div class="form-item">
-            <label>当前库存</label>
+            <label>仓库</label>
+            <select id="adjustWarehouse" data-dict="warehouse">
+              <option value="">请选择仓库</option>
+              <option value="warehouse1">中心仓库</option>
+              <option value="warehouse2">东区仓库</option>
+              <option value="warehouse3">西区仓库</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>调整前库存</label>
             <input type="text" id="adjustCurrent" readonly>
+          </div>
+          <div class="form-item">
+            <label>调整后库存</label>
+            <input type="text" id="adjustAfter" readonly>
           </div>
         </div>
         <div class="form-row">
@@ -539,20 +684,133 @@
 // 库存数据来自共享仓库 MaterialStore，与出入库/退货/使用页面实时联动
 let inventoryData = [];
 
+// 盘点/调整记录
+let inventoryRecords = [];
+
+// 仓库字典（统一为中心仓库 / 东区仓库 / 西区仓库）
+const WAREHOUSE_NAMES = { warehouse1: '中心仓库', warehouse2: '东区仓库', warehouse3: '西区仓库' };
+
+function warehouseNameOf(code, fallbackName) {
+  if (WAREHOUSE_NAMES[code]) return WAREHOUSE_NAMES[code];
+  if (fallbackName === '东区仓库') return '东区仓库';
+  if (fallbackName === '西区仓库') return '西区仓库';
+  return '中心仓库';
+}
+
+function warehouseCodeOf(m) {
+  if (m.warehouseCode) return m.warehouseCode;
+  if (m.warehouse === '东区仓库') return 'warehouse2';
+  if (m.warehouse === '西区仓库') return 'warehouse3';
+  return 'warehouse1';
+}
+
+// 农资单价（元）：来源于农资档案，用于计算库存金额
+const MATERIAL_PRICE = {
+  'M-001': 180, 'M-002': 65, 'M-003': 120, 'M-004': 85, 'M-005': 88,
+  'M-006': 220, 'M-007': 45, 'M-008': 68, 'M-009': 35, 'M-010': 120,
+  'M-011': 320, 'M-012': 190, 'M-013': 55, 'M-014': 25, 'M-015': 95,
+  'M-016': 78, 'M-017': 150, 'M-018': 45, 'M-019': 85, 'M-020': 85,
+  'M-021': 110, 'M-022': 480, 'M-023': 165
+};
+
+// 批次/效期/货位等仓储信息（前 12 条为显式数据，其余按规则自动补齐）
+const BATCH_META = {
+  'M-001': { batch: 'B20260815-01', prod: '2026-08-15', expire: '2027-08-14', location: 'A-01-03', lastIn: '2026-10-12 09:20' },
+  'M-002': { batch: 'B20260902-02', prod: '2026-09-02', expire: '2027-09-01', location: 'A-02-01', lastIn: '2026-10-18 14:05' },
+  'M-003': { batch: 'B20260720-01', prod: '2026-07-20', expire: '2027-07-19', location: 'B-01-02', lastIn: '2026-09-28 10:30' },
+  'M-004': { batch: 'B20260610-03', prod: '2026-06-10', expire: '2027-06-09', location: 'C-01-05', lastIn: '2026-09-15 08:45' },
+  'M-005': { batch: 'B20251205-01', prod: '2025-12-05', expire: '2026-12-05', location: 'A-02-04', lastIn: '2026-09-30 16:10' },
+  'M-006': { batch: 'B20260801-02', prod: '2026-08-01', expire: '2027-07-31', location: 'A-01-06', lastIn: '2026-10-08 11:00' },
+  'M-007': { batch: 'B20260820-01', prod: '2026-08-20', expire: '2027-08-19', location: 'B-02-02', lastIn: '2026-10-20 09:15' },
+  'M-008': { batch: 'B20260505-01', prod: '2026-05-05', expire: '2027-05-04', location: 'C-01-01', lastIn: '2026-08-18 15:40' },
+  'M-009': { batch: 'B20260910-01', prod: '2026-09-10', expire: '2027-09-09', location: 'B-01-04', lastIn: '2026-10-22 13:25' },
+  'M-010': { batch: 'B20260715-02', prod: '2026-07-15', expire: '2027-07-14', location: 'A-03-02', lastIn: '2026-09-25 10:10' },
+  'M-012': { batch: 'B20260625-01', prod: '2026-06-25', expire: '2027-06-24', location: 'A-01-02', lastIn: '2026-09-05 09:00' },
+  'M-013': { batch: 'B20251020-01', prod: '2025-10-20', expire: '2026-10-20', location: 'B-02-05', lastIn: '2026-08-30 14:20' }
+};
+
+function batchMetaOf(code, idx) {
+  if (BATCH_META[code]) return BATCH_META[code];
+  const mm = String((idx % 9) + 1).padStart(2, '0');
+  return {
+    batch: 'B2026' + mm + '01-0' + ((idx % 8) + 1),
+    prod: '2026-' + mm + '-01',
+    expire: '2027-' + mm + '-28',
+    location: 'D-0' + ((idx % 6) + 1) + '-0' + ((idx % 9) + 1),
+    lastIn: '2026-10-0' + ((idx % 8) + 1) + ' 10:00'
+  };
+}
+
+// 供应商 / 入库单号 / 最近出库时间 / 锁定数量（被待审核领用、待出库占用）
+const INVENTORY_EXTRA = {
+  'M-001': { supplier: '甘肃化肥厂',   inboundNo: 'RK-20261012-001', lastOutDate: '2026-11-08 09:20', lockedQty: 0 },
+  'M-002': { supplier: '青岛农药公司', inboundNo: 'RK-20261018-002', lastOutDate: '2026-11-07 14:10', lockedQty: 5 },
+  'M-003': { supplier: '天水有机肥厂', inboundNo: 'RK-20260928-003', lastOutDate: '2026-11-06 10:30', lockedQty: 0 },
+  'M-004': { supplier: '临沂工具厂',   inboundNo: 'RK-20260915-004', lastOutDate: '2026-11-05 08:45', lockedQty: 0 },
+  'M-005': { supplier: '潍坊农药厂',   inboundNo: 'RK-20260930-005', lastOutDate: '2026-11-08 16:10', lockedQty: 3 },
+  'M-006': { supplier: '甘肃化肥厂',   inboundNo: 'RK-20261008-006', lastOutDate: '2026-11-09 07:50', lockedQty: 10 },
+  'M-007': { supplier: '青岛农药公司', inboundNo: 'RK-20261020-007', lastOutDate: '2026-11-07 09:15', lockedQty: 0 },
+  'M-008': { supplier: '临沂工具厂',   inboundNo: 'RK-20260818-008', lastOutDate: '2026-10-30 15:40', lockedQty: 0 },
+  'M-009': { supplier: '青海钾肥厂',   inboundNo: 'RK-20261022-009', lastOutDate: '2026-11-08 13:25', lockedQty: 12 },
+  'M-010': { supplier: '济南农化公司', inboundNo: 'RK-20260925-010', lastOutDate: '2026-11-04 10:10', lockedQty: 2 },
+  'M-011': { supplier: '台州喷雾器厂', inboundNo: 'RK-20261003-011', lastOutDate: '2026-11-02 11:00', lockedQty: 0 },
+  'M-012': { supplier: '甘肃化肥厂',   inboundNo: 'RK-20260905-012', lastOutDate: '2026-11-06 09:00', lockedQty: 8 },
+  'M-013': { supplier: '潍坊农药厂',   inboundNo: 'RK-20260830-013', lastOutDate: '2026-10-29 14:20', lockedQty: 5 },
+  'M-014': { supplier: '临沂工具厂',   inboundNo: 'RK-20261006-014', lastOutDate: '2026-11-03 10:00', lockedQty: 0 },
+  'M-015': { supplier: '甘肃化肥厂',   inboundNo: 'RK-20261007-015', lastOutDate: '2026-11-09 08:10', lockedQty: 20 },
+  'M-016': { supplier: '济南农化公司', inboundNo: 'RK-20261008-016', lastOutDate: '2026-11-05 09:30', lockedQty: 0 },
+  'M-017': { supplier: '台州喷雾器厂', inboundNo: 'RK-20261001-017', lastOutDate: '2026-11-01 15:00', lockedQty: 2 },
+  'M-018': { supplier: '天水有机肥厂', inboundNo: 'RK-20261002-018', lastOutDate: '2026-11-04 08:20', lockedQty: 0 },
+  'M-019': { supplier: '潍坊农药厂',   inboundNo: 'RK-20261003-019', lastOutDate: '2026-11-02 13:40', lockedQty: 0 },
+  'M-020': { supplier: '临沂工具厂',   inboundNo: 'RK-20261004-020', lastOutDate: '2026-10-28 10:00', lockedQty: 0 },
+  'M-021': { supplier: '青海钾肥厂',   inboundNo: 'RK-20261005-021', lastOutDate: '2026-11-06 14:50', lockedQty: 4 },
+  'M-022': { supplier: '台州喷雾器厂', inboundNo: 'RK-20261006-022', lastOutDate: '2026-10-25 09:10', lockedQty: 0 },
+  'M-023': { supplier: '甘肃土壤科技', inboundNo: 'RK-20261007-023', lastOutDate: '2026-11-03 16:30', lockedQty: 0 }
+};
+
+// 距离有效期天数
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr + 'T00:00:00');
+  if (isNaN(target.getTime())) return null;
+  return Math.round((target - today) / 86400000);
+}
+
+// 效期标签：已过期 danger / 30 天内临期 warning
+function expiryTag(dateStr) {
+  const days = daysUntil(dateStr);
+  if (days === null) return '';
+  if (days < 0) return '<span class="status-tag danger">已过期</span>';
+  if (days < 30) return '<span class="status-tag warning">临期</span>';
+  return '';
+}
+
+function formatMoney(value) {
+  return Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function loadInventoryData() {
-  inventoryData = MaterialStore.all().map(function (m) {
+  inventoryData = MaterialStore.all().map(function (m, idx) {
     const stock = Number(m.stock) || 0;
     const dailyUse = Number(m.dailyUse) || 0;
     const safety = Number(m.safety) || 0;
     const leadDays = Number(m.leadDays) || 7;
     // 可覆盖天数 = 当前库存 / 日均消耗（取整）
     const coverDays = dailyUse > 0 ? Math.floor(stock / dailyUse) : 999;
-    // 建议补货量 = 最低库存 × 2 - 当前库存（向上取整，最小 0）
+    // 建议补货量 = 安全库存 × 2 - 当前库存（向上取整，最小 0）
     const suggestQty = Math.max(0, Math.ceil(safety * 2 - stock));
+    const meta = batchMetaOf(m.code, idx);
+    const extra = INVENTORY_EXTRA[m.code] || {};
+    const price = MATERIAL_PRICE[m.code] || 0;
+    // 锁定数量（不超过当前库存），可用库存 = 库存数量 - 锁定数量
+    const lockedQty = Math.min(Number(extra.lockedQty) || 0, stock);
+    const availableQty = stock - lockedQty;
     return {
       id: m.code,
-      warehouse: m.warehouse,
-      warehouseCode: m.warehouseCode,
+      warehouse: warehouseNameOf(m.warehouseCode, m.warehouse),
+      warehouseCode: warehouseCodeOf(m),
       code: m.code,
       name: m.name,
       spec: m.spec,
@@ -563,7 +821,19 @@ function loadInventoryData() {
       leadDays: leadDays,
       coverDays: coverDays,
       suggestQty: suggestQty,
-      status: MaterialStore.statusOf(m.code)
+      status: MaterialStore.statusOf(m.code),
+      batchNo: meta.batch,
+      prodDate: meta.prod,
+      expireDate: meta.expire,
+      location: meta.location,
+      price: price,
+      amount: stock * price,
+      lastIn: meta.lastIn,
+      availableQty: availableQty,
+      lockedQty: lockedQty,
+      supplier: extra.supplier || '甘肃化肥厂',
+      inboundNo: extra.inboundNo || ('RK-20261001-' + String(idx + 1).padStart(3, '0')),
+      lastOutDate: extra.lastOutDate || '-'
     };
   });
 }
@@ -601,11 +871,12 @@ function init() {
   renderTable();
   renderPagination();
   renderReplenish();
+  renderRecords();
   bindEvents();
   populateMaterialSelect();
 }
 
-// 顶部统计卡：物料种类 / 库存不足种类数 / 需立即补货种类数 / 平均可覆盖天数
+// 顶部统计卡：物料种类 / 库存不足种类数 / 需立即补货种类数 / 平均可覆盖天数 / 库存总金额
 function renderStats() {
   const box = document.getElementById('inventoryStats');
   if (!box) return;
@@ -616,11 +887,14 @@ function renderStats() {
   const avgCover = coverList.length
     ? Math.round(coverList.reduce(function (s, i) { return s + i.coverDays; }, 0) / coverList.length)
     : 0;
+  const totalAmount = inventoryData.reduce(function (s, i) { return s + i.amount; }, 0);
+
   box.innerHTML =
-    '<div class="patrol-stat-card"><div class="stat-value">' + total + '</div><div class="stat-label">物料种类</div></div>' +
-    '<div class="patrol-stat-card"><div class="stat-value">' + lowStock + '</div><div class="stat-label">库存不足种类</div></div>' +
-    '<div class="patrol-stat-card"><div class="stat-value">' + urgent + '</div><div class="stat-label">需立即补货种类</div></div>' +
-    '<div class="patrol-stat-card"><div class="stat-value">' + avgCover + '</div><div class="stat-label">平均可覆盖天数</div></div>';
+    '<div class="stat-card"><div class="stat-label">物料种类</div><div class="stat-value">' + total + '</div></div>' +
+    '<div class="stat-card"><div class="stat-label">库存不足种类</div><div class="stat-value">' + lowStock + '</div></div>' +
+    '<div class="stat-card"><div class="stat-label">需立即补货种类</div><div class="stat-value">' + urgent + '</div></div>' +
+    '<div class="stat-card"><div class="stat-label">平均可覆盖天数</div><div class="stat-value">' + avgCover + '</div></div>' +
+    '<div class="stat-card"><div class="stat-label">库存总金额（元）</div><div class="stat-value">' + formatMoney(totalAmount) + '</div></div>';
 }
 
 // 可覆盖天数单元格样式：≤7 error / 8~20 warning / >20 正常
@@ -641,6 +915,30 @@ function replenishCell(item) {
   return '<span class="status-tag normal">库存充足</span>';
 }
 
+// 建议采购日期 = 今天 + max(可覆盖天数, 0) 天
+const TODAY = '2026-11-09';
+// 已生成的采购单（按农资 id 记录，重新渲染后保持按钮禁用）
+const generatedPO = {};
+
+function suggestPurchaseDate(coverDays) {
+  const d = new Date(TODAY.replace(/-/g, '/'));
+  d.setDate(d.getDate() + Math.max(Number(coverDays) || 0, 0));
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// 生成采购单
+function generatePurchaseOrder(id) {
+  const item = inventoryData.find(function (i) { return i.id === id; });
+  if (!item || generatedPO[id]) return;
+  if (!confirm('确认为「' + item.name + '」生成采购单吗？')) return;
+  const list = inventoryData.filter(function (i) { return i.coverDays <= 7; });
+  const seq = String(list.indexOf(item) + 1).padStart(3, '0');
+  const no = 'CG-20261109-' + seq;
+  generatedPO[id] = no;
+  alert('已生成采购单 ' + no);
+  renderReplenish();
+}
+
 // 渲染补货提醒区：列出所有可覆盖天数 ≤7 天的物料
 function renderReplenish() {
   const body = document.getElementById('replenishBody');
@@ -654,6 +952,7 @@ function renderReplenish() {
   }
   if (empty) empty.style.display = 'none';
   body.innerHTML = list.map(function (item) {
+    const poNo = generatedPO[item.id];
     return '<tr>' +
       '<td><strong>' + item.name + '</strong><div style="font-size:12px;color:var(--text-tertiary);">' + item.code + ' · ' + item.warehouse + '</div></td>' +
       '<td class="text-right">' + item.stock + ' ' + item.unit + '</td>' +
@@ -661,8 +960,55 @@ function renderReplenish() {
       '<td class="text-right">' + item.dailyUse + '</td>' +
       '<td class="text-right" style="' + coverDaysStyle(item.coverDays) + '">' + item.coverDays + ' 天</td>' +
       '<td class="text-right"><strong>' + item.suggestQty + ' ' + item.unit + '</strong></td>' +
+      '<td>' + suggestPurchaseDate(item.coverDays) + '</td>' +
+      '<td>' + item.supplier + '</td>' +
+      '<td>' + (poNo
+        ? '<button class="action-btn void" disabled title="' + poNo + '">已生成</button>'
+        : '<button class="action-btn approve" onclick="generatePurchaseOrder(\'' + item.id + '\')">生成采购单</button>') + '</td>' +
     '</tr>';
   }).join('');
+}
+
+// 渲染盘点/调整记录（最新记录置顶）
+function renderRecords() {
+  const body = document.getElementById('recordBody');
+  const empty = document.getElementById('recordEmpty');
+  if (!body) return;
+
+  if (!inventoryRecords.length) {
+    body.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  body.innerHTML = inventoryRecords.map(function (r) {
+    const diffStyle = r.diff > 0
+      ? 'color:var(--success);font-weight:600;'
+      : (r.diff < 0 ? 'color:var(--error);font-weight:600;' : 'color:var(--text-secondary);');
+    return '<tr>' +
+      '<td><strong>' + r.no + '</strong></td>' +
+      '<td><span class="status-tag ' + (r.type === '盘点' ? 'normal' : 'warning') + '">' + r.type + '</span></td>' +
+      '<td>' + r.warehouse + '</td>' +
+      '<td>' + r.name + '</td>' +
+      '<td class="text-right">' + r.bookQty + '</td>' +
+      '<td class="text-right">' + r.actualQty + '</td>' +
+      '<td class="text-right" style="' + diffStyle + '">' + (r.diff > 0 ? '+' : '') + r.diff + '</td>' +
+      '<td>' + (r.operator || '-') + '</td>' +
+      '<td>' + r.date + '</td>' +
+      '<td>' + (r.remark || '-') + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+// 宽表精简 / 全部字段切换（默认精简）
+let denseView = true;
+function toggleDenseView() {
+  denseView = !denseView;
+  const section = document.querySelector('.data-section');
+  if (section) section.classList.toggle('dense-view', denseView);
+  const btn = document.getElementById('denseToggleBtn');
+  if (btn) btn.textContent = denseView ? '显示全部字段' : '精简字段';
 }
 
 // 渲染表格
@@ -674,7 +1020,7 @@ function renderTable() {
   // 空态友好：筛选无结果时给出提示行，避免页面看起来像没数据
   if (!pageData.length) {
     tableBody.innerHTML =
-      '<tr><td colspan="12" style="text-align:center;padding:40px 0;color:var(--text-tertiary);font-size:13px;">' +
+      '<tr><td colspan="22" style="text-align:center;padding:40px 0;color:var(--text-tertiary);font-size:13px;">' +
       (inventoryData.length ? '没有符合筛选条件的农资' : '暂无农资库存数据') +
       '</td></tr>';
     return;
@@ -690,11 +1036,21 @@ function renderTable() {
         <td>${item.name}</td>
         <td>${item.spec}</td>
         <td>${item.unit}</td>
+        <td>${item.batchNo}</td>
+        <td class="col-extra">${item.prodDate}</td>
+        <td>${item.expireDate}</td>
+        <td class="col-extra">${item.location}</td>
         <td class="text-right" ${stockClass}>${item.stock}</td>
+        <td class="text-right">${item.availableQty}</td>
+        <td class="text-right">${item.lockedQty}</td>
+        <td class="col-extra text-right">${formatMoney(item.amount)}</td>
         <td class="text-right">${item.minStock}</td>
-        <td><span class="status-tag ${item.status}">${getStatusText(item.status)}</span></td>
-        <td class="text-right" style="${coverDaysStyle(item.coverDays)}">${item.coverDays}</td>
-        <td>${replenishCell(item)}</td>
+        <td><span class="status-tag ${item.status}">${getStatusText(item.status)}</span> ${expiryTag(item.expireDate)}</td>
+        <td class="col-extra text-right" style="${coverDaysStyle(item.coverDays)}">${item.coverDays}</td>
+        <td class="col-extra">${replenishCell(item)}</td>
+        <td class="col-extra">${item.lastIn}</td>
+        <td class="col-extra">${item.lastOutDate}</td>
+        <td>${item.supplier}</td>
         <td>
           <div class="action-btns">
             <button class="action-btn detail" onclick="viewInventory('${item.id}')">详情</button>
@@ -793,7 +1149,7 @@ function search() {
   });
   
   totalItems = filteredData.length;
-  totalPages = Math.ceil(totalItems / pageSize);
+  totalPages = Math.ceil(totalItems / pageSize) || 1;
   currentPage = 1;
   
   renderStats();
@@ -817,6 +1173,14 @@ function bindEvents() {
 
   exportBtn.addEventListener('click', openExportModal);
   countBtn.addEventListener('click', openCountModal);
+
+  // 盘点：选择农资自动带出账面数量，输入实盘数量自动计算差异
+  document.getElementById('countMaterial').addEventListener('change', updateCountBookQty);
+  document.getElementById('countQty').addEventListener('input', updateCountDiff);
+
+  // 调整：输入调整数量/切换类型时自动计算调整后库存
+  document.getElementById('adjustQty').addEventListener('input', updateAdjustAfter);
+  document.getElementById('adjustType').addEventListener('change', updateAdjustAfter);
 
   // 点击遮罩层关闭弹窗
   countModal.addEventListener('click', function(e) {
@@ -853,7 +1217,9 @@ function openCountModal() {
   document.getElementById('countCode').value = 'PD-' + Date.now().toString(36).toUpperCase();
   document.getElementById('countWarehouse').value = '';
   document.getElementById('countMaterial').value = '';
+  document.getElementById('countBookQty').value = '';
   document.getElementById('countQty').value = '';
+  document.getElementById('countDiff').value = '';
   document.getElementById('countDate').value = new Date().toISOString().split('T')[0];
   document.getElementById('countOperator').value = '';
   document.getElementById('countRemark').value = '';
@@ -865,14 +1231,43 @@ function closeCountModal() {
   countModal.classList.remove('show');
 }
 
-// 保存盘点：将库存更新为实盘数量
+// 选择农资后带出账面数量
+function updateCountBookQty() {
+  const id = document.getElementById('countMaterial').value;
+  const item = inventoryData.find(i => i.id === id);
+  document.getElementById('countBookQty').value = item ? item.stock : '';
+  updateCountDiff();
+}
+
+// 差异 = 实盘数量 - 账面数量
+function updateCountDiff() {
+  const book = parseFloat(document.getElementById('countBookQty').value);
+  const qty = document.getElementById('countQty').value;
+  const diffEl = document.getElementById('countDiff');
+  if (qty === '' || isNaN(parseFloat(qty)) || isNaN(book)) {
+    diffEl.value = '';
+    return;
+  }
+  const diff = parseFloat(qty) - book;
+  diffEl.value = (diff > 0 ? '+' : '') + diff;
+}
+
+// 保存盘点：将库存更新为实盘数量并写入盘点记录
 function saveCount() {
   const materialId = document.getElementById('countMaterial').value;
+  const warehouseCode = document.getElementById('countWarehouse').value;
   const qty = document.getElementById('countQty').value;
   const operator = document.getElementById('countOperator').value;
+  const date = document.getElementById('countDate').value;
+  const remark = document.getElementById('countRemark').value;
+  const no = document.getElementById('countCode').value;
 
   if (!materialId) {
     alert('请选择盘点农资');
+    return;
+  }
+  if (!warehouseCode) {
+    alert('请选择仓库');
     return;
   }
   if (qty === '' || isNaN(parseInt(qty)) || parseInt(qty) < 0) {
@@ -884,16 +1279,38 @@ function saveCount() {
     return;
   }
 
-  const result = MaterialStore.setStock(materialId, parseInt(qty));
+  const item = inventoryData.find(i => i.id === materialId);
+  if (!item) {
+    alert('未找到该农资');
+    return;
+  }
+
+  const bookQty = parseInt(item.stock) || 0;
+  const actualQty = parseInt(qty);
+  const result = MaterialStore.setStock(materialId, actualQty);
   if (!result.ok) {
     alert(result.message);
     return;
   }
 
+  inventoryRecords.unshift({
+    no: no,
+    type: '盘点',
+    warehouse: WAREHOUSE_NAMES[warehouseCode] || item.warehouse,
+    name: item.name,
+    bookQty: bookQty,
+    actualQty: actualQty,
+    diff: actualQty - bookQty,
+    operator: operator,
+    date: date,
+    remark: remark
+  });
+
   alert('盘点完成，库存已按实盘数量更新');
   closeCountModal();
   loadInventoryData();
   search();
+  renderRecords();
 }
 
 // 查看库存详情
@@ -905,12 +1322,23 @@ function viewInventory(id) {
     document.getElementById('viewName').textContent = item.name;
     document.getElementById('viewSpec').textContent = item.spec;
     document.getElementById('viewUnit').textContent = item.unit;
+    document.getElementById('viewBatch').textContent = item.batchNo;
+    document.getElementById('viewProd').textContent = item.prodDate;
+    document.getElementById('viewExpire').innerHTML = item.expireDate + ' ' + expiryTag(item.expireDate);
+    document.getElementById('viewLocation').textContent = item.location;
     document.getElementById('viewStock').textContent = item.stock;
+    document.getElementById('viewAvailable').textContent = item.availableQty;
+    document.getElementById('viewLocked').textContent = item.lockedQty;
+    document.getElementById('viewAmount').textContent = formatMoney(item.amount);
     document.getElementById('viewMin').textContent = item.minStock;
     document.getElementById('viewDailyUse').textContent = item.dailyUse + ' ' + item.unit + '/天';
     document.getElementById('viewCoverDays').textContent = item.coverDays === 999 ? '无消耗' : item.coverDays + ' 天';
     document.getElementById('viewSuggest').textContent = replenishCell(item).replace(/<[^>]+>/g, '');
-    document.getElementById('viewStatus').textContent = getStatusText(item.status);
+    document.getElementById('viewStatus').innerHTML = '<span class="status-tag ' + item.status + '">' + getStatusText(item.status) + '</span> ' + expiryTag(item.expireDate);
+    document.getElementById('viewLastIn').textContent = item.lastIn;
+    document.getElementById('viewLastOut').textContent = item.lastOutDate;
+    document.getElementById('viewSupplier').textContent = item.supplier;
+    document.getElementById('viewInboundNo').textContent = item.inboundNo;
     viewModal.classList.add('show');
   }
 }
@@ -926,7 +1354,9 @@ function adjustInventory(id) {
   if (item) {
     document.getElementById('adjustId').value = item.id;
     document.getElementById('adjustName').value = item.name;
+    document.getElementById('adjustWarehouse').value = item.warehouseCode;
     document.getElementById('adjustCurrent').value = item.stock;
+    document.getElementById('adjustAfter').value = item.stock;
     document.getElementById('adjustType').value = 'increase';
     document.getElementById('adjustQty').value = '';
     document.getElementById('adjustDate').value = new Date().toISOString().split('T')[0];
@@ -941,28 +1371,63 @@ function closeAdjustModal() {
   adjustModal.classList.remove('show');
 }
 
-// 保存调整
+// 调整后库存 = 调整前库存 ± 调整数量
+function updateAdjustAfter() {
+  const before = parseInt(document.getElementById('adjustCurrent').value) || 0;
+  const qty = parseInt(document.getElementById('adjustQty').value) || 0;
+  const type = document.getElementById('adjustType').value;
+  const after = type === 'increase' ? before + qty : before - qty;
+  document.getElementById('adjustAfter').value = after;
+}
+
+// 保存调整：更新库存并写入调整记录
 function saveAdjust() {
   const id = document.getElementById('adjustId').value;
+  const warehouseCode = document.getElementById('adjustWarehouse').value;
   const type = document.getElementById('adjustType').value;
   const qty = document.getElementById('adjustQty').value;
+  const date = document.getElementById('adjustDate').value;
+  const operator = document.getElementById('adjustOperator').value;
+  const reason = document.getElementById('adjustReason').value;
 
   if (!qty || parseInt(qty) <= 0) {
     alert('请输入有效数量');
     return;
   }
 
+  const item = inventoryData.find(i => i.id === id);
+  if (!item) {
+    alert('未找到该农资');
+    return;
+  }
+
+  const before = parseInt(item.stock) || 0;
   const delta = type === 'increase' ? parseInt(qty) : -parseInt(qty);
+  const after = before + delta;
   const result = MaterialStore.applyDelta(id, delta);
   if (!result.ok) {
     alert(result.message);
     return;
   }
 
+  inventoryRecords.unshift({
+    no: 'TZ-' + Date.now().toString(36).toUpperCase(),
+    type: '调整',
+    warehouse: WAREHOUSE_NAMES[warehouseCode] || item.warehouse,
+    name: item.name,
+    bookQty: before,
+    actualQty: after,
+    diff: after - before,
+    operator: operator,
+    date: date,
+    remark: reason
+  });
+
   alert('调整成功');
   closeAdjustModal();
   loadInventoryData();
   search();
+  renderRecords();
 }
 
 // 打开导出弹窗
@@ -990,5 +1455,6 @@ document.addEventListener('DOMContentLoaded', init);
 <script src="js/common-functions.js"></script>
   <script src="js/search-helper.js"></script>
   <script src="js/typography.js"></script>
+<script src="js/material-dict.js"></script>
 </body>
 </html>

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 采收日报</title>
+<!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  #pagination-container { padding:12px 16px; }
+  .stat-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; margin-bottom:16px; }
+  .stat-card { background:var(--bg-card, #fff); border:1px solid var(--border-color, #e8ece8); border-radius:var(--radius-card, 12px); padding:16px 18px; }
+  .stat-label { font-size:12px; color:var(--text-tertiary); margin-bottom:6px; }
+  .stat-value { font-size:22px; font-weight:600; line-height:1.2; }
+  .stat-value small { font-size:12px; font-weight:400; color:var(--text-tertiary); margin-left:4px; }
+  .stat-sub { margin-top:6px; font-size:12px; color:var(--text-tertiary); }
+  @media (max-width: 1100px) { .stat-grid { grid-template-columns:repeat(2, 1fr); } }
+  .tabs { margin-bottom:16px; }
+  .muted { color:var(--text-tertiary); font-size:12px; }
+  .text-right { text-align:right; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="harvest" data-active-submenu="harvest-report">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+
+        <!-- 搜索栏区 -->
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="baseSelect">
+              <option value="">全部基地</option>
+            </select>
+            <input type="date" class="search-input date-input" id="startDate" placeholder="开始日期">
+            <span class="date-separator">至</span>
+            <input type="date" class="search-input date-input" id="endDate" placeholder="结束日期">
+            <input type="text" class="search-input" placeholder="搜索批次、地块或品种..." id="searchInput">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="handleSearch()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                </svg>搜索
+              </button>
+              <button class="jg-btn" onclick="smartReset()">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="page-section">
+          <div class="stat-grid" id="statGrid"></div>
+        </div>
+
+        <!-- Tab 切换 -->
+        <div class="tabs" id="reportTabs">
+          <div class="tab-item active" data-tab="daily">采收日报</div>
+          <div class="tab-item" data-tab="recon">批次对账</div>
+        </div>
+
+        <!-- 操作按钮区 -->
+        <div class="page-section action-bar">
+          <button class="jg-btn" onclick="exportView()">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+              <path d="M3 10L8 15L13 10"/><path d="M8 15V3"/>
+            </svg>
+            导出当前视图
+          </button>
+          <label id="abnormalOnlyWrap" style="display:none;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);margin-left:8px;">
+            <input type="checkbox" id="abnormalOnly" onchange="handleSearch()">
+            仅看对账异常
+          </label>
+        </div>
+
+        <!-- 数据列表区 -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead id="reportThead"></thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 引入交互脚本 -->
+<script src="js/common-functions.js"></script>
+<script src="js/export-helper.js"></script>
+<script src="js/shared/harvest-store.js"></script>
+<script>
+// 采收日报 / 批次对账：数据全部来自共享数据源 harvest-store.js
+let currentTab = 'daily';
+
+function baseFilter() { return document.getElementById('baseSelect').value; }
+function startFilter() { return document.getElementById('startDate').value; }
+function endFilter() { return document.getElementById('endDate').value; }
+function keywordFilter() { return document.getElementById('searchInput').value.trim().toLowerCase(); }
+
+/** 记录级公共筛选：基地 + 采收日期 + 关键词 */
+function filteredRecords() {
+  const base = baseFilter();
+  const start = startFilter();
+  const end = endFilter();
+  const kw = keywordFilter();
+  return HarvestStore.records().filter(function (r) {
+    const day = String(r.endTime || r.startTime || '').slice(0, 10);
+    if (base && r.base !== base) return false;
+    if (start && day < start) return false;
+    if (end && day > end) return false;
+    if (kw) {
+      const hay = [r.batchNo, r.plot, r.plotName, r.variety, r.harvesters].join(' ').toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  });
+}
+
+/** 日报：按采收日期聚合 */
+function dailyRows() {
+  const map = {};
+  filteredRecords().forEach(function (r) {
+    const day = String(r.endTime || r.startTime || '').slice(0, 10) || '-';
+    if (!map[day]) map[day] = { day: day, batches: 0, completed: 0, qty: 0, plots: {}, harvesters: {} };
+    const row = map[day];
+    row.batches += 1;
+    if (r.status === 'completed') {
+      row.completed += 1;
+      row.qty += Number(r.qty || 0);
+    }
+    if (r.plot) row.plots[r.plot] = 1;
+    if (r.harvesters) row.harvesters[r.harvesters] = 1;
+  });
+  return Object.keys(map).sort().reverse().map(function (k) {
+    const row = map[k];
+    row.plotCount = Object.keys(row.plots).length;
+    row.harvesterNames = Object.keys(row.harvesters).join('、');
+    return row;
+  });
+}
+
+/** 批次对账：实采 → 处理 → 在库/发运 的缺口归因 */
+function reconRows() {
+  const recMap = {};
+  HarvestStore.records().forEach(function (r) { recMap[r.batchNo] = r; });
+
+  const base = baseFilter();
+  const start = startFilter();
+  const end = endFilter();
+  const kw = keywordFilter();
+  const onlyAbnormal = document.getElementById('abnormalOnly').checked;
+
+  return HarvestStore.reconcile().map(function (row) {
+    const rec = recMap[row.batchNo] || {};
+    return {
+      batchNo: row.batchNo,
+      plot: rec.plot || '-',
+      plotName: rec.plotName || '',
+      variety: rec.variety || '-',
+      harvested: row.harvested,
+      processed: row.processed,
+      inProcess: row.inProcess,
+      stored: row.stored,
+      shipped: row.shipped,
+      pending: row.pending,
+      pendingProcess: row.pendingProcess,
+      balance: row.balance,
+      abnormal: row.abnormal,
+      day: String(rec.endTime || rec.startTime || '').slice(0, 10),
+      base: rec.base || ''
+    };
+  }).filter(function (row) {
+    if (base && row.base !== base) return false;
+    if (start && row.day && row.day < start) return false;
+    if (end && row.day && row.day > end) return false;
+    if (kw) {
+      const hay = [row.batchNo, row.plot, row.plotName, row.variety].join(' ').toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    if (onlyAbnormal && !row.abnormal) return false;
+    return true;
+  }).sort(function (a, b) {
+    if (a.abnormal !== b.abnormal) return a.abnormal ? -1 : 1;
+    return a.batchNo < b.batchNo ? 1 : -1;
+  });
+}
+
+function currentRows() { return currentTab === 'daily' ? dailyRows() : reconRows(); }
+
+function renderStats() {
+  const records = filteredRecords();
+  const completed = records.filter(function (r) { return r.status === 'completed'; });
+  const qty = completed.reduce(function (a, r) { return a + Number(r.qty || 0); }, 0);
+  const plots = {};
+  records.forEach(function (r) { if (r.plot) plots[r.plot] = 1; });
+  const abnormal = HarvestStore.reconcile().filter(function (r) { return r.abnormal; }).length;
+  const cards = [
+    { label: '实采量', value: qty.toLocaleString(), unit: 'kg', sub: '仅统计已完成采收' },
+    { label: '采收批次', value: records.length, unit: '批', sub: '已完成 ' + completed.length + ' 批' },
+    { label: '涉及地块', value: Object.keys(plots).length, unit: '块', sub: '跨基地采收' },
+    { label: '对账异常', value: abnormal, unit: '批', sub: abnormal ? '存在数量缺口，请核查' : '全链路数量守恒' }
+  ];
+  document.getElementById('statGrid').innerHTML = cards.map(function (c) {
+    return '<div class="stat-card"><div class="stat-label">' + c.label + '</div>' +
+      '<div class="stat-value">' + c.value + ' <small>' + c.unit + '</small></div>' +
+      '<div class="stat-sub">' + c.sub + '</div></div>';
+  }).join('');
+}
+
+function plotText(row) {
+  if (!row.plot || row.plot === '-') return '-';
+  return row.plotName ? row.plot + ' · ' + row.plotName : row.plot;
+}
+
+function renderRow(item, index) {
+  if (currentTab === 'daily') {
+    return '<tr>' +
+      '<td>' + (index + 1) + '</td>' +
+      '<td><strong>' + item.day + '</strong></td>' +
+      '<td class="text-right">' + item.batches + '</td>' +
+      '<td class="text-right">' + item.completed + '</td>' +
+      '<td class="text-right">' + item.qty.toLocaleString() + '</td>' +
+      '<td class="text-right">' + item.plotCount + '</td>' +
+      '<td>' + (item.harvesterNames || '-') + '</td>' +
+    '</tr>';
+  }
+  const tag = item.abnormal
+    ? '<span class="status-tag abnormal">有缺口</span>'
+    : '<span class="status-tag normal">对账平衡</span>';
+  return '<tr>' +
+    '<td>' + (index + 1) + '</td>' +
+    '<td><strong>' + item.batchNo + '</strong></td>' +
+    '<td>' + plotText(item) + '</td>' +
+    '<td>' + item.variety + '</td>' +
+    '<td class="text-right">' + Number(item.harvested).toLocaleString() + '</td>' +
+    '<td class="text-right">' + Number(item.processed).toLocaleString() + '</td>' +
+    '<td class="text-right">' + Number(item.inProcess).toLocaleString() + '</td>' +
+    '<td class="text-right">' + Number(item.stored).toLocaleString() + '</td>' +
+    '<td class="text-right">' + Number(item.shipped).toLocaleString() + '</td>' +
+    '<td class="text-right">' + Number(item.pending).toLocaleString() + '</td>' +
+    '<td class="text-right">' + Number(item.pendingProcess).toLocaleString() + '</td>' +
+    '<td class="text-right">' + Number(item.balance).toLocaleString() + '</td>' +
+    '<td>' + tag + '</td>' +
+  '</tr>';
+}
+
+function renderHead() {
+  const thead = document.getElementById('reportThead');
+  if (currentTab === 'daily') {
+    thead.innerHTML = '<tr>' +
+      '<th style="width:60px;">序号</th>' +
+      '<th style="width:140px;">采收日期</th>' +
+      '<th style="width:110px;">采收批次</th>' +
+      '<th style="width:110px;">完成批次</th>' +
+      '<th style="width:130px;">实采量(kg)</th>' +
+      '<th style="width:110px;">涉及地块</th>' +
+      '<th>采收人员</th>' +
+    '</tr>';
+  } else {
+    thead.innerHTML = '<tr>' +
+      '<th style="width:56px;">序号</th>' +
+      '<th style="width:140px;">批次号</th>' +
+      '<th style="width:150px;">地块</th>' +
+      '<th style="width:100px;">品种</th>' +
+      '<th style="width:90px;">实采</th>' +
+      '<th style="width:90px;">已处理</th>' +
+      '<th style="width:90px;">处理中</th>' +
+      '<th style="width:90px;">在库</th>' +
+      '<th style="width:90px;">已发</th>' +
+      '<th style="width:90px;">待发</th>' +
+      '<th style="width:110px;">待建处理单</th>' +
+      '<th style="width:100px;">处理缺口</th>' +
+      '<th style="width:100px;">结论</th>' +
+    '</tr>';
+  }
+}
+
+function handleSearch() {
+  renderStats();
+  Pagination.init({
+    currentPage: 1,
+    pageSize: 10,
+    data: currentRows(),
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow
+  });
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('#reportTabs .tab-item').forEach(function (el) {
+    el.classList.toggle('active', el.getAttribute('data-tab') === tab);
+  });
+  document.getElementById('abnormalOnlyWrap').style.display = tab === 'recon' ? 'inline-flex' : 'none';
+  renderHead();
+  handleSearch();
+}
+
+async function exportView() {
+  const rows = currentRows();
+  if (!rows.length) { Toast.info('当前视图暂无可导出数据'); return; }
+  let headers, data;
+  if (currentTab === 'daily') {
+    headers = ['采收日期', '采收批次', '完成批次', '实采量(kg)', '涉及地块', '采收人员'];
+    data = rows.map(function (r) { return [r.day, r.batches, r.completed, r.qty, r.plotCount, r.harvesterNames]; });
+  } else {
+    headers = ['批次号', '地块', '品种', '实采', '已处理', '处理中', '在库', '已发', '待发', '待建处理单', '处理缺口', '结论'];
+    data = rows.map(function (r) {
+      return [r.batchNo, plotText(r), r.variety, r.harvested, r.processed, r.inProcess, r.stored,
+        r.shipped, r.pending, r.pendingProcess, r.balance, r.abnormal ? '有缺口' : '对账平衡'];
+    });
+  }
+  const result = await ExportHelper.exportData({
+    filename: (currentTab === 'daily' ? '采收日报_' : '批次对账_') + ExportHelper.stamp(),
+    format: 'excel',
+    headers: headers,
+    rows: data
+  });
+  Toast.success(result === 'csv-fallback' ? 'Excel 组件加载失败，已导出为 CSV' : '导出成功，文件已下载');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const baseSelect = document.getElementById('baseSelect');
+  HarvestStore.bases().forEach(function (b) {
+    const opt = document.createElement('option');
+    opt.value = b;
+    opt.textContent = b;
+    baseSelect.appendChild(opt);
+  });
+
+  document.querySelectorAll('#reportTabs .tab-item').forEach(function (el) {
+    el.addEventListener('click', function () { switchTab(el.getAttribute('data-tab')); });
+  });
+
+  renderHead();
+  handleSearch();
+  if (HarvestStore.subscribe) HarvestStore.subscribe(handleSearch);
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

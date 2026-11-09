@@ -260,6 +260,7 @@
     <div class="modal-footer">
       <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
       <button class="jg-btn" onclick="showDetailQRCode()">二维码</button>
+      <button class="jg-btn" onclick="exportEvidencePack()">导出证据包</button>
       <button class="jg-btn jg-btn-primary" onclick="previewConsumerPage()">预览消费者页</button>
     </div>
   </div>
@@ -277,6 +278,7 @@
     <div class="modal-body">
       <div class="qrcode-container">
         <div class="qrcode-box">
+          <div id="qrcodeCanvas" style="width:100%;height:100%;display:none;align-items:center;justify-content:center;"></div>
           <img id="qrcodeImg" alt="溯源二维码" src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221%22%20height%3D%221%22%2F%3E" style="width:100%;height:100%;display:none;">
           <div class="qrcode-placeholder" id="qrcodePlaceholder">
             <svg viewBox="0 0 24 24" fill="none" stroke="#1890ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:80px;height:80px;">
@@ -308,59 +310,26 @@
   <span id="toastMessage">操作成功</span>
 </div>
 
+<script src="js/shared/harvest-store.js"></script>
+<script src="js/shared/trace-store.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-// Mock数据 - 23条追溯码（与溯源编码 trace_code.html 同一批数据）
-const mockData = [
-  { code: 'SNZG-20260901-0001', batch: 'PC-20260901-001', status: 'active',   queries: 156, lastQuery: '2026-09-22 14:30:00' },
-  { code: 'SNZG-20260901-0002', batch: 'PC-20260901-001', status: 'active',   queries: 98,  lastQuery: '2026-09-21 11:20:00' },
-  { code: 'SNZG-20260902-0003', batch: 'PC-20260902-002', status: 'active',   queries: 134, lastQuery: '2026-09-22 09:15:00' },
-  { code: 'SNZG-20260902-0004', batch: 'PC-20260902-002', status: 'active',   queries: 87,  lastQuery: '2026-09-20 16:40:00' },
-  { code: 'SNZG-20260903-0005', batch: 'PC-20260903-003', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260903-0006', batch: 'PC-20260903-003', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260904-0007', batch: 'PC-20260904-004', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260905-0008', batch: 'PC-20260905-005', status: 'active',   queries: 112, lastQuery: '2026-09-19 10:05:00' },
-  { code: 'SNZG-20260906-0009', batch: 'PC-20260906-006', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260907-0010', batch: 'PC-20260907-007', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260908-0011', batch: 'PC-20260908-008', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260909-0012', batch: 'PC-20260909-009', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260910-0013', batch: 'PC-20260910-010', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260911-0014', batch: 'PC-20260911-011', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260912-0015', batch: 'PC-20260912-012', status: 'active',   queries: 76,  lastQuery: '2026-09-21 15:25:00' },
-  { code: 'SNZG-20260913-0016', batch: 'PC-20260913-013', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260914-0017', batch: 'PC-20260914-014', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260915-0018', batch: 'PC-20260915-015', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260916-0019', batch: 'PC-20260916-016', status: 'inactive', queries: 0,   lastQuery: '—' },
-  { code: 'SNZG-20260917-0020', batch: 'PC-20260917-017', status: 'active',   queries: 64,  lastQuery: '2026-09-20 09:35:00' },
-  { code: 'SNZG-20260918-0021', batch: 'PC-20260918-018', status: 'expired',  queries: 42,  lastQuery: '2026-09-22 14:00:00' },
-  { code: 'SNZG-20260919-0022', batch: 'PC-20260919-019', status: 'expired',  queries: 29,  lastQuery: '2026-09-21 10:20:00' },
-  { code: 'SNZG-20260920-0023', batch: 'PC-20260920-020', status: 'inactive', queries: 0,   lastQuery: '—' }
-];
+// 追溯码统一来自 TraceStore
+function allCodes() { return TraceStore.codes(); }
 
 /* ---------- 上游数据源（用于动态组装溯源轨迹） ---------- */
 
-// 批次主数据（与批次管理 trace_batch.html 一致）
-const BATCH_SOURCE = [
-  {batchNo:'PC-20260901-001',plotCode:'D-001',plotName:'东区1号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-01',planNo:'HS-2026-001',processNo:'PP-2026-001',quantity:5000,grade:'一级'},
-  {batchNo:'PC-20260902-002',plotCode:'D-002',plotName:'东区2号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-02',planNo:'HS-2026-002',processNo:'PP-2026-002',quantity:4600,grade:'一级'},
-  {batchNo:'PC-20260903-003',plotCode:'D-003',plotName:'西区1号地',base:'天水麦积区基地',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-03',planNo:'HS-2026-003',processNo:'PP-2026-003',quantity:3200,grade:'二级'},
-  {batchNo:'PC-20260904-004',plotCode:'D-004',plotName:'北区1号地',base:'天水秦州基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-04',planNo:'HS-2026-004',processNo:'PP-2026-004',quantity:4200,grade:'一级'},
-  {batchNo:'PC-20260905-005',plotCode:'D-005',plotName:'南区1号地',base:'天水秦州基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-05',planNo:'HS-2026-005',processNo:'PP-2026-005',quantity:5800,grade:'一级'},
-  {batchNo:'PC-20260906-006',plotCode:'D-006',plotName:'中区1号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-06',planNo:'HS-2026-006',processNo:'PP-2026-006',quantity:3600,grade:'二级'},
-  {batchNo:'PC-20260907-007',plotCode:'D-007',plotName:'南区2号地',base:'甘肃麦积区苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-07',planNo:'HS-2026-007',processNo:'PP-2026-007',quantity:4400,grade:'一级'},
-  {batchNo:'PC-20260908-008',plotCode:'D-008',plotName:'西区2号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-08',planNo:'HS-2026-008',processNo:'PP-2026-008',quantity:5200,grade:'一级'},
-  {batchNo:'PC-20260909-009',plotCode:'D-009',plotName:'北区2号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-09',planNo:'HS-2026-009',processNo:'PP-2026-009',quantity:3900,grade:'二级'},
-  {batchNo:'PC-20260910-010',plotCode:'D-010',plotName:'东区3号地',base:'天水麦积区苹果基地',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-10',planNo:'HS-2026-010',processNo:'PP-2026-010',quantity:3100,grade:'二级'},
-  {batchNo:'PC-20260911-011',plotCode:'D-011',plotName:'南区3号地',base:'甘肃麦积区苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-11',planNo:'HS-2026-011',processNo:'PP-2026-011',quantity:4700,grade:'一级'},
-  {batchNo:'PC-20260912-012',plotCode:'D-012',plotName:'西区3号地',base:'天水麦积区苹果基地',product:'秦冠苹果',spec:'6kg/箱',harvestDate:'2026-09-12',planNo:'HS-2026-012',processNo:'PP-2026-012',quantity:3400,grade:'特级'},
-  {batchNo:'PC-20260913-013',plotCode:'D-013',plotName:'北区3号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-13',planNo:'HS-2026-013',processNo:'PP-2026-013',quantity:4300,grade:'一级'},
-  {batchNo:'PC-20260914-014',plotCode:'D-014',plotName:'中区2号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-14',planNo:'HS-2026-014',processNo:'PP-2026-014',quantity:5100,grade:'一级'},
-  {batchNo:'PC-20260915-015',plotCode:'D-015',plotName:'东区4号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-15',planNo:'HS-2026-015',processNo:'PP-2026-015',quantity:3700,grade:'二级'},
-  {batchNo:'PC-20260916-016',plotCode:'D-016',plotName:'南区4号地',base:'甘肃麦积区苹果园',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-16',planNo:'HS-2026-016',processNo:'PP-2026-016',quantity:2900,grade:'二级'},
-  {batchNo:'PC-20260917-017',plotCode:'D-017',plotName:'西区4号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-17',planNo:'HS-2026-017',processNo:'PP-2026-017',quantity:4900,grade:'一级'},
-  {batchNo:'PC-20260918-018',plotCode:'D-018',plotName:'北区4号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-18',planNo:'HS-2026-018',processNo:'PP-2026-018',quantity:4500,grade:'一级'},
-  {batchNo:'PC-20260919-019',plotCode:'D-019',plotName:'中区3号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-19',planNo:'HS-2026-019',processNo:'PP-2026-019',quantity:3800,grade:'二级'},
-  {batchNo:'PC-20260920-020',plotCode:'D-020',plotName:'东区5号地',base:'天水麦积区苹果基地',product:'秦冠苹果',spec:'6kg/箱',harvestDate:'2026-09-20',planNo:'HS-2026-020',processNo:'PP-2026-020',quantity:3300,grade:'特级'}
-];
+// 批次主数据统一来自 TraceStore（由采收记录生成）
+function batchSource() {
+  return TraceStore.batches().map(function (b) {
+    return {
+      batchNo: b.batchNo, plotCode: b.plotCode, plotName: b.plotName, base: b.base,
+      product: b.product, spec: b.spec, harvestDate: b.harvestDate, planNo: b.planNo,
+      processNo: b.processNo, quantity: b.quantity, grade: b.grade, status: b.status,
+      shipment: b.shipment
+    };
+  });
+}
 
 // 农事作业（取自农事记录 farming_record.html，按地块）
 const FARM_BY_PLOT = {
@@ -408,6 +377,30 @@ const MATERIAL_BY_PLOT = {
   'D-018':{name:'杀螨剂',spec:'1L/瓶',quantity:'4瓶',operator:'方超',date:'2026-09-16'},
   'D-019':{name:'高效杀虫剂',spec:'500ml/瓶',quantity:'5瓶',operator:'曹红英',date:'2026-09-19'},
   'D-020':{name:'NPK复合肥',spec:'40kg/袋',quantity:'2袋',operator:'崔新根',date:'2026-09-20'}
+};
+
+// 农资追溯字段（登记证号 / 有效成分 / 安全间隔期）：暂由页面 mock 增强，后续可接物资 Store
+const MATERIAL_TRACE = {
+  '尿素':{'regNo':'农肥（2019）准字1234号','ingredient':'总氮≥46%','safety':'—'},
+  '杀虫灯':{'regNo':'农机具（免登记）','ingredient':'—','safety':'—'},
+  '绑枝机':{'regNo':'农机具（免登记）','ingredient':'—','safety':'—'},
+  '生长调节剂':{'regNo':'PD86101-8','ingredient':'芸苔素内酯 0.01%','safety':'7 天'},
+  '微量元素肥':{'regNo':'农肥（2020）准字2210号','ingredient':'铁+锌+硼≥10%','safety':'—'},
+  '喷雾器':{'regNo':'农机具（免登记）','ingredient':'—','safety':'—'},
+  '保鲜剂':{'regNo':'PD20182345','ingredient':'1-甲基环丙烯 0.14%','safety':'3 天'},
+  '嫁接刀':{'regNo':'农机具（免登记）','ingredient':'—','safety':'—'},
+  '钙肥':{'regNo':'农肥（2021）准字3321号','ingredient':'氧化钙≥30%','safety':'—'},
+  '生物农药':{'regNo':'PD20201234','ingredient':'苏云金杆菌 16000IU/mg','safety':'7 天'},
+  '授粉器':{'regNo':'农机具（免登记）','ingredient':'—','safety':'—'},
+  '除草剂':{'regNo':'PD20096789','ingredient':'草铵膦 20%','safety':'30 天'},
+  '钾肥':{'regNo':'农肥（2018）准字1120号','ingredient':'氧化钾≥60%','safety':'—'},
+  '修枝剪':{'regNo':'农机具（免登记）','ingredient':'—','safety':'—'},
+  '叶面肥':{'regNo':'农肥（2021）准字4456号','ingredient':'氨基酸≥100g/L','safety':'—'},
+  '杀菌剂':{'regNo':'PD20173456','ingredient':'苯醚甲环唑 10%','safety':'21 天'},
+  '磷酸二铵':{'regNo':'农肥（2017）准字0912号','ingredient':'N≥18% · P₂O₅≥46%','safety':'—'},
+  '杀螨剂':{'regNo':'PD20161234','ingredient':'阿维菌素 1.8%','safety':'14 天'},
+  '高效杀虫剂':{'regNo':'PD20194567','ingredient':'氯虫苯甲酰胺 200g/L','safety':'14 天'},
+  'NPK复合肥':{'regNo':'农肥（2019）准字7788号','ingredient':'N-P₂O₅-K₂O 15-15-15','safety':'—'}
 };
 
 // 质量检测（取自证书管理 cert_manage.html，按批次）
@@ -459,12 +452,13 @@ const STATUS_TEXT = { inactive:'未激活', active:'已激活', expired:'已过�
 // H5 溯源端地址
 const H5_BASE = window.location.href.split('?')[0].replace(/[^/]*$/, '').replace(/applefarm_backhand\/$/, 'applefarm_h5/');
 const H5_TRACE_PAGE = H5_BASE + 'trace_h5.html';
-function buildH5Url(code) { return H5_TRACE_PAGE + '?code=' + encodeURIComponent(code); }
+function buildH5Url(code) { return TraceStore.shortUrlOf(code); }
+function buildPreviewUrl(code) { return H5_TRACE_PAGE + '?code=' + encodeURIComponent(code); }
 
 let currentDetailCode = '';
 
 function getBatchInfo(batchNo) {
-  return BATCH_SOURCE.find(b => b.batchNo === batchNo) || null;
+  return batchSource().find(b => b.batchNo === batchNo) || null;
 }
 function enrichCode(item) {
   const b = getBatchInfo(item.batch) || { product:'—', base:'—', plotCode:'—', plotName:'—' };
@@ -559,7 +553,7 @@ function searchData() {
   const status = document.getElementById('statusSelect').value;
   const batch = document.getElementById('batchInput').value.trim().toLowerCase();
 
-  const filtered = mockData.filter(item => {
+  const filtered = allCodes().filter(item => {
     const c = enrichCode(item);
     if (code && !c.code.toLowerCase().includes(code)) return false;
     if (product && !c.product.toLowerCase().includes(product)) return false;
@@ -577,7 +571,7 @@ function resetSearch() {
   document.getElementById('productNameInput').value = '';
   document.getElementById('statusSelect').value = '';
   document.getElementById('batchInput').value = '';
-  Pagination.updateData(mockData);
+  Pagination.updateData(allCodes());
   showToast('已重置筛选条件');
 }
 
@@ -632,10 +626,13 @@ function buildTrack(batchNo) {
   } : { title: '农事作业', time: '—', desc: '暂无该地块的农事记录', warn: true });
 
   const mat = MATERIAL_BY_PLOT[b.plotCode];
+  const mt = mat ? (MATERIAL_TRACE[mat.name] || {}) : null;
   stages.push(mat ? {
     title: `农资投入 · ${mat.name}`,
     time: mat.date,
-    desc: `规格：${mat.spec}　用量：${mat.quantity}　领用人：${mat.operator}`,
+    desc: `规格：${mat.spec}　用量：${mat.quantity}　领用人：${mat.operator}` +
+      (mt ? `<br>登记证号：${mt.regNo}　有效成分：${mt.ingredient}　安全间隔期：${mt.safety}` +
+        (mt.safety && mt.safety !== '—' ? `　最后施药：${mat.date}` : '') : ''),
     warn: false
   } : { title: '农资投入', time: '—', desc: '暂无该地块的农资使用记录', warn: true });
 
@@ -646,16 +643,17 @@ function buildTrack(batchNo) {
     warn: false
   });
 
-  const certs = CERT_BY_BATCH[batchNo] || [];
-  if (certs.length) {
-    certs.forEach(c => stages.push({
-      title: `质量检测 · ${c.type}`,
-      time: c.date,
-      desc: `证书编号：${c.certNo}　结论：${c.status}`,
-      warn: c.status !== '有效'
-    }));
+  const gate = TraceStore.inspectionState(batchNo);
+  if (gate.latest) {
+    const ins = gate.latest;
+    stages.push({
+      title: `质量检测 · ${ins.reportType || '检测报告'}`,
+      time: ins.issueDate,
+      desc: `报告编号：${ins.reportNo}　机构：${ins.institution}　结论：${ins.conclusion}　有效期至：${ins.validUntil || '—'}`,
+      warn: !gate.hasValid
+    });
   } else {
-    stages.push({ title: '质量检测', time: '—', desc: '暂无该批次的检测或认证记录', warn: true });
+    stages.push({ title: '质量检测', time: '—', desc: '该批次尚未上传检测报告，赋码与销售前必须补录', warn: true });
   }
 
   const ship = SHIP_BY_PROCESS[b.processNo];
@@ -671,10 +669,20 @@ function buildTrack(batchNo) {
 
 function viewDetail(code) {
   currentDetailCode = code;
-  const item = mockData.find(d => d.code === code);
-  if (!item) return;
+  const item = TraceStore.code(code);
+  if (!item) { showToast('未找到该追溯码', 'error'); return; }
   const c = enrichCode(item);
   const b = getBatchInfo(item.batch);
+
+  const gate = TraceStore.inspectionState(item.batch);
+  const ins = gate.latest;
+  const env = TraceStore.environmentOf(item.batch);
+  const scanRes = TraceStore.recordScan(item.code, { source: 'PC', region: '甘肃省天水市', device: 'PC 查询台' });
+  const firstEvent = TraceStore.events().filter(e => e.code === item.code && e.type === 'code')[0];
+  const queryTip = scanRes.firstScan
+    ? '<span style="color:#16a34a;font-weight:600;">首次查询，验证为正品首次查询</span>'
+    : `该码已被查询 <strong>${scanRes.queries}</strong> 次，最后查询：${scanRes.lastQuery}` +
+      (scanRes.risk ? `<span style="color:#ef4444;"> · ${scanRes.riskReason}</span>` : '');
 
   const traceHtml = buildTrack(item.batch).map(t => `
     <div class="trace-item">
@@ -686,6 +694,28 @@ function viewDetail(code) {
         <div class="trace-time">${t.time}</div>
         <div class="trace-desc">${t.desc}</div>
       </div>
+    </div>
+  `).join('');
+
+  const reportHtml = ins ? `
+    <div class="chain-box" style="margin-top:16px;">
+      <div class="chain-title">检测报告（必需）</div>
+      <div class="detail-grid"><span class="detail-label">报告编号</span><span class="detail-value">${ins.reportNo}</span></div>
+      <div class="detail-grid"><span class="detail-label">检测机构</span><span class="detail-value">${ins.institution}</span></div>
+      <div class="detail-grid"><span class="detail-label">检测结论</span><span class="detail-value"><span class="status-tag ${ins.conclusion === '合格' && gate.hasValid ? 'active' : 'inactive'}">${ins.conclusion}${gate.hasValid ? '' : '（不可用作赋码依据）'}</span></span></div>
+      <div class="detail-grid"><span class="detail-label">有效期至</span><span class="detail-value">${ins.validUntil || '—'}</span></div>
+      <div class="detail-grid"><span class="detail-label">附件</span><span class="detail-value">${ins.attachment ? ins.attachment.name : '未上传'}</span></div>
+    </div>` : `
+    <div class="chain-box" style="margin-top:16px;border:1px solid #fecaca;background:#fff5f5;">
+      <div class="chain-title" style="color:#ef4444;">检测报告缺失</div>
+      <div class="detail-value" style="font-size:13px;color:#b91c1c;">该批次尚未上传检测报告，追溯数据不完整，禁止赋码与销售。</div>
+    </div>`;
+
+  const capturesHtml = env.captures.map(x => `
+    <div style="flex:1;min-width:110px;">
+      <img src="../applefarm_h5/images/${x.file}" alt="${x.name}" style="width:100%;height:76px;object-fit:cover;border-radius:8px;border:1px solid var(--border-default);" onerror="this.style.display='none'">
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:6px;">${x.name}</div>
+      <div style="font-size:11px;color:var(--text-tertiary);">${x.time}</div>
     </div>
   `).join('');
 
@@ -705,9 +735,18 @@ function viewDetail(code) {
     <div class="detail-grid"><span class="detail-label">批次号</span><span class="detail-value">${c.batch}</span></div>
     <div class="detail-grid"><span class="detail-label">产地</span><span class="detail-value">${c.base} / ${c.plotCode} · ${c.plotName}</span></div>
     <div class="detail-grid"><span class="detail-label">溯源状态</span><span class="detail-value"><span class="status-tag ${statusTagClass(c.status)}">${c.statusText}</span></span></div>
-    <div class="detail-grid"><span class="detail-label">查询次数</span><span class="detail-value">${c.queries} 次</span></div>
-    <div class="detail-grid"><span class="detail-label">最后查询</span><span class="detail-value">${c.lastQuery}</span></div>
-    <div class="detail-grid"><span class="detail-label">二维码链接</span><span class="detail-value" style="word-break:break-all;font-size:12px;">${buildH5Url(c.code)}</span></div>
+    <div class="detail-grid"><span class="detail-label">查询提示</span><span class="detail-value" style="font-size:13px;">${queryTip}</span></div>
+    <div class="detail-grid"><span class="detail-label">对外短链</span><span class="detail-value" style="word-break:break-all;font-size:12px;">${buildH5Url(c.code)}</span></div>
+    <div class="detail-grid"><span class="detail-label">存证哈希</span><span class="detail-value" style="word-break:break-all;font-size:12px;">${firstEvent ? firstEvent.hash : '待上链'}</span></div>
+    ${reportHtml}
+    <div class="chain-box" style="margin-top:16px;">
+      <div class="chain-title">基地实景与环境（带时间戳）</div>
+      <div class="detail-grid"><span class="detail-label">VR 实景</span><span class="detail-value">${env.vrUrl ? '<a href="' + env.vrUrl + '" target="_blank" style="color:#1890ff;">进入基地 VR 全景</a>' : '未接入'}</span></div>
+      <div class="detail-grid"><span class="detail-label">视频监控</span><span class="detail-value">${env.videoAvailable ? '已接入视频流' : '视频流未接入，展示最近监控快照'}</span></div>
+      <div class="detail-grid"><span class="detail-label">气象站</span><span class="detail-value">${env.weather.condition} ${env.weather.temp}℃ · 湿度 ${env.weather.humidity}% · 降雨 ${env.weather.rainfall}mm · 风速 ${env.weather.wind}m/s<br><span style="font-size:12px;color:var(--text-tertiary);">${env.weather.source} · ${env.weather.updatedAt}</span></span></div>
+      <div class="detail-grid"><span class="detail-label">土壤墒情</span><span class="detail-value">温度 ${env.soil.temp}℃ · 含水量 ${env.soil.moisture}% · pH ${env.soil.ph} · EC ${env.soil.ec}μS/cm<br><span style="font-size:12px;color:var(--text-tertiary);">${env.soil.source} · ${env.soil.updatedAt}</span></span></div>
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">${capturesHtml}</div>
+    </div>
     <div style="margin-top:16px; font-weight:500; color:var(--text-primary);">溯源轨迹</div>
     <div class="trace-timeline">${traceHtml}</div>
   `;
@@ -721,13 +760,31 @@ function showQRCode(code) {
   document.getElementById('qrcodeValue').textContent = code;
   document.getElementById('qrcodeUrl').textContent = url;
 
+  const holder = document.getElementById('qrcodeCanvas');
   const img = document.getElementById('qrcodeImg');
   const ph = document.getElementById('qrcodePlaceholder');
+  holder.innerHTML = '';
+  holder.style.display = 'none';
   img.style.display = 'none';
-  ph.style.display = 'flex';
-  img.onload = function() { img.style.display = 'block'; ph.style.display = 'none'; };
-  img.onerror = function() { img.style.display = 'none'; ph.style.display = 'flex'; };
-  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=' + encodeURIComponent(url);
+  ph.style.display = 'none';
+
+  let rendered = false;
+  try {
+    if (typeof QRCode === 'function') {
+      new QRCode(holder, {
+        text: url, width: 180, height: 180,
+        colorDark: '#1f1f1f', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H
+      });
+      holder.style.display = 'flex';
+      rendered = true;
+    }
+  } catch (e) { rendered = false; }
+
+  if (!rendered) {
+    img.onload = function() { img.style.display = 'block'; ph.style.display = 'none'; };
+    img.onerror = function() { img.style.display = 'none'; ph.style.display = 'flex'; };
+    img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=0&data=' + encodeURIComponent(url);
+  }
 
   openModal('qrcodeModal');
 }
@@ -747,9 +804,53 @@ function previewConsumerPage() {
   openH5Page();
 }
 
+/* P2：导出批次证据包（检测报告、追溯码、存证事件、扫码记录、打印任务、环境快照） */
+function exportEvidencePack() {
+  if (!currentDetailCode) return;
+  const item = TraceStore.code(currentDetailCode);
+  if (!item) { showToast('未找到该追溯码', 'error'); return; }
+  const data = TraceStore.exportEvidence(item.batch);
+  if (!data) { showToast('证据包生成失败', 'error'); return; }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'trace_evidence_' + item.batch + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('证据包已导出');
+}
+
 function downloadQRCode() {
   if (!currentDetailCode) return;
-  showToast(`已导出二维码：${currentDetailCode}`);
+  const holder = document.getElementById('qrcodeCanvas');
+  const canvas = holder ? holder.querySelector('canvas') : null;
+  if (!canvas) { showToast('二维码尚未生成，请稍后重试', 'error'); return; }
+  const out = document.createElement('canvas');
+  out.width = 360; out.height = 404;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(canvas, 30, 8, 300, 300);
+  ctx.fillStyle = '#1f1f1f';
+  ctx.font = 'bold 18px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('智慧果园溯源', 180, 336);
+  ctx.font = '12px "Microsoft YaHei", sans-serif';
+  ctx.fillStyle = '#666';
+  ctx.fillText(currentDetailCode, 180, 358);
+  out.toBlob(function (blob) {
+    if (!blob) { showToast('二维码导出失败', 'error'); return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'trace_' + currentDetailCode + '.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+    showToast(`已导出二维码：${currentDetailCode}`);
+  }, 'image/png');
 }
 
 function openModal(id) {
@@ -774,10 +875,14 @@ document.addEventListener('DOMContentLoaded', function() {
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
-    data: mockData,
+    data: allCodes(),
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderCodeRow
+  });
+
+  TraceStore.subscribe(function () {
+    Pagination.updateData(allCodes());
   });
 
   // 由其它页面跳转过来时按溯源码直接打开详情

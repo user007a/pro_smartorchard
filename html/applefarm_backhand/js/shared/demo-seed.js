@@ -12,9 +12,9 @@
  *   3. 单一开关：DSEED_DISABLED 置为 '1' 可整体关闭播种。
  *
  * 播种范围（键 → 消费页面）：
- *   smartorchard_drone_events      飞行事件        drone_log.html
- *   smartorchard_drone_abnormal    巡检异常        drone_log.html
- *   mb_patrol_routes               巡园路线        patrol_route.html
+ *   smartorchard_drone_events      飞行事件        无人机巡检 › 飞行日志
+ *   smartorchard_drone_abnormal    巡检异常        无人机巡检 › 巡检异常
+ *   mb_patrol_routes               巡园路线        巡园管理 › 路线配置
  *   smartorchard_label_records     标签领用        material_label.html
  *   h5_adoption_photos             成长相册        adoption_photo.html
  *   snzg_adoptions                 认养果树        adoption_cert / adoption_photo / 会员 / H5
@@ -204,7 +204,7 @@
   /* ============================================================
    * 场景 3：巡园路线（24 条）
    * 结构：{ routeId, routeName, base, points[], enabled, remark, updatedAt }
-   * base 需落在 patrol_route.html 的下拉选项内
+   * base 需落在「巡园管理 › 路线配置」的基地选项内
    * ============================================================ */
   function patrolRoutes() {
     var bases = ['麦积区基地 A区', '麦积区基地 B区', '麦积区基地 C区', '白水基地 A区', '宜川基地 A区'];

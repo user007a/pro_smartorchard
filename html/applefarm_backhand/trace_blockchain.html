@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智慧果园 - 溯源区块链</title>
+<title>智慧果园 - 区块链存证</title>
 <link rel="stylesheet" href="css/design-system.css">
 <link rel="stylesheet" href="css/sidebar-layout.css">
 <link rel="stylesheet" href="css/page-content.css">
@@ -151,16 +151,15 @@
 
         <div class="search-section">
           <div class="search-bar">
-            <input type="text" class="search-input" placeholder="输入溯源码..." id="traceCodeInput" style="width:180px;">
+            <input type="text" class="search-input" placeholder="溯源码 / 批次 / 事件..." id="traceCodeInput" style="width:200px;">
             <input type="text" class="search-input" placeholder="输入交易哈希..." id="txHashInput" style="width:200px;">
             <select class="search-select" id="statusSelect" style="width:140px;">
               <option value="">全部状态</option>
               <option value="passed">已通过</option>
               <option value="failed">未通过</option>
-              <option value="pending">验证中</option>
             </select>
             
-          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="resetSearch()">重置</button></div>
+          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="verifyWholeChain()">验证全链</button><button class="jg-btn" onclick="resetSearch()">重置</button></div>
           </div>
         </div>
 
@@ -168,7 +167,7 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>溯源码</th>
+                <th>事件 / 溯源码</th>
                 <th>交易哈希</th>
                 <th>区块高度</th>
                 <th>上链时间</th>
@@ -228,8 +227,9 @@
   <span id="toastMessage">操作成功</span>
 </div>
 
+<script src="js/shared/harvest-store.js"></script>
+<script src="js/shared/trace-store.js"></script>
 <script>
-// 真实 Hash：使用简化 SHA-256 哈希算法对追溯码+时间戳生成
 function sha256Hex(s) {
   // 简化版 FNV-1a + SHA-256 风格摘要（仅前端演示用途）
   function ror(x, n) { return (x >>> n) | (x << (32 - n)); }
@@ -269,37 +269,24 @@ function realHash(code, time) {
   var seed = (code || '') + '|' + (time || '');
   return '0x' + sha256Hex(seed).substring(0, 60);
 }
-function mockDataGen() {
-  var codes = [
-    ['SNZG-20260901-0001','2026-09-01 18:30:00','passed'],
-    ['SNZG-20260901-0002','2026-09-01 18:45:00','passed'],
-    ['SNZG-20260902-0003','2026-09-02 17:20:00','passed'],
-    ['SNZG-20260902-0004','2026-09-02 17:35:00','passed'],
-    ['SNZG-20260903-0005','2026-09-03 19:10:00','failed'],
-    ['SNZG-20260903-0006','2026-09-03 19:22:00','passed'],
-    ['SNZG-20260904-0007','2026-09-04 18:50:00','passed'],
-    ['SNZG-20260905-0008','2026-09-05 18:15:00','passed'],
-    ['SNZG-20260906-0009','2026-09-06 17:58:00','passed'],
-    ['SNZG-20260907-0010','2026-09-07 19:30:00','passed'],
-    ['SNZG-20260908-0011','2026-09-08 18:40:00','passed'],
-    ['SNZG-20260909-0012','2026-09-09 18:05:00','passed'],
-    ['SNZG-20260910-0013','2026-09-10 18:25:00','failed'],
-    ['SNZG-20260911-0014','2026-09-11 19:15:00','passed'],
-    ['SNZG-20260912-0015','2026-09-12 19:00:00','passed'],
-    ['SNZG-20260913-0016','2026-09-13 17:45:00','passed'],
-    ['SNZG-20260914-0017','2026-09-14 18:55:00','passed'],
-    ['SNZG-20260915-0018','2026-09-15 19:25:00','passed'],
-    ['SNZG-20260916-0019','2026-09-16 17:30:00','passed'],
-    ['SNZG-20260917-0020','2026-09-17 18:35:00','passed'],
-    ['SNZG-20260918-0021','2026-09-18 19:40:00','failed'],
-    ['SNZG-20260919-0022','2026-09-19 18:20:00','pending'],
-    ['SNZG-20260920-0023','2026-09-20 17:50:00','pending']
-  ];
-  return codes.map(function(r, i){
-    return { code: r[0], hash: realHash(r[0], r[1]), block: 1847301 + i, time: r[1], status: r[2] };
+/* 存证事件统一来自 TraceStore：每条事件都是一次链式存证，验证结果实时计算 */
+function loadChainEvents() {
+  if (!window.TraceStore) return [];
+  return TraceStore.events().map(function (ev) {
+    var r = TraceStore.verifyEvent(ev.id);
+    return {
+      id: ev.id, title: ev.title || '溯源事件', type: ev.type || 'event',
+      code: ev.code || '', batchNo: ev.batchNo || '',
+      hash: ev.hash || '', prevHash: ev.prevHash || '', txId: ev.txId || '',
+      block: ev.blockHeight || 0, time: ev.chainTime || '',
+      summary: ev.summary || '', payload: ev.payload || {},
+      contract: ev.contract || '', node: ev.node || '', tsa: ev.tsa || '',
+      status: r.ok ? 'passed' : 'failed',
+      reason: r.reason || ''
+    };
   });
 }
-var mockData = mockDataGen();
+var mockData = [];
 
 // 验证状态说明：批次检测报告已过期时，对应存证校验不通过
 const VERIFY_TEXT = { passed: '已通过', failed: '未通过', pending: '验证中' };
@@ -364,16 +351,16 @@ const Pagination = {
 
 function renderChainRow(item, seq) {
   return `
-    <tr data-id="${item.code}">
-      <td><strong>${item.code}</strong></td>
-      <td style="font-family:monospace; color:var(--text-secondary);">${item.hash}</td>
-      <td>${item.block.toLocaleString()}</td>
+    <tr data-id="${item.id}">
+      <td><strong>${item.title}</strong><div style="font-size:12px;color:var(--text-tertiary);">${item.code || item.batchNo || '—'}</div></td>
+      <td style="font-family:monospace; color:var(--text-secondary);font-size:12px;">${item.hash.slice(0, 26)}…</td>
+      <td>${Number(item.block).toLocaleString()}</td>
       <td>${item.time}</td>
       <td><span class="status-tag ${verifyTagClass(item.status)}">${VERIFY_TEXT[item.status]}</span></td>
       <td>
         <div class="action-btns">
-          <button class="action-btn detail" onclick="viewDetail('${item.code}')">详情</button>
-          <button class="action-btn qrcode" onclick="verifyRecord('${item.code}')">验证</button>
+          <button class="action-btn detail" onclick="viewDetail('${item.id}')">详情</button>
+          <button class="action-btn qrcode" onclick="verifyRecord('${item.id}')">验证</button>
         </div>
       </td>
     </tr>
@@ -386,8 +373,8 @@ function searchData() {
   const status = document.getElementById('statusSelect').value;
 
   const filtered = mockData.filter(item => {
-    if (code && !item.code.toLowerCase().includes(code)) return false;
-    if (hash && !item.hash.toLowerCase().includes(hash)) return false;
+    if (code && !(item.code.toLowerCase().includes(code) || item.batchNo.toLowerCase().includes(code) || item.title.toLowerCase().includes(code))) return false;
+    if (hash && !(item.hash.toLowerCase().includes(hash) || item.txId.toLowerCase().includes(hash))) return false;
     if (status && item.status !== status) return false;
     return true;
   });
@@ -404,30 +391,39 @@ function resetSearch() {
   showToast('已重置筛选条件');
 }
 
-function viewDetail(code) {
-  currentDetailCode = code;
-  const item = mockData.find(d => d.code === code);
-  if (!item) return;
-  
+function viewDetail(id) {
+  currentDetailCode = id;
+  const item = mockData.find(d => d.id === id || d.code === id);
+  if (!item) { showToast('未找到该存证事件'); return; }
+  const payload = JSON.stringify(item.payload || {}, null, 2);
+
   document.getElementById('detailContent').innerHTML = `
-    <div class="detail-grid"><span class="detail-label">溯源码</span><span class="detail-value">${item.code}</span></div>
-    <div class="detail-grid"><span class="detail-label">交易哈希</span><span class="detail-value" style="font-family:monospace;">${item.hash}</span></div>
-    <div class="detail-grid"><span class="detail-label">区块高度</span><span class="detail-value">${item.block.toLocaleString()}</span></div>
+    <div class="detail-grid"><span class="detail-label">事件</span><span class="detail-value">${item.title}（${item.type}）</span></div>
+    <div class="detail-grid"><span class="detail-label">溯源码 / 批次</span><span class="detail-value">${item.code || '—'} / ${item.batchNo || '—'}</span></div>
+    <div class="detail-grid"><span class="detail-label">事件摘要</span><span class="detail-value">${item.summary || '—'}</span></div>
+    <div class="detail-grid"><span class="detail-label">原文（Payload）</span><span class="detail-value" style="font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;">${payload}</span></div>
+    <div class="detail-grid"><span class="detail-label">前序哈希</span><span class="detail-value" style="font-family:monospace;font-size:12px;word-break:break-all;">${item.prevHash}</span></div>
+    <div class="detail-grid"><span class="detail-label">事件哈希</span><span class="detail-value" style="font-family:monospace;font-size:12px;word-break:break-all;">${item.hash}</span></div>
+    <div class="detail-grid"><span class="detail-label">交易哈希</span><span class="detail-value" style="font-family:monospace;font-size:12px;word-break:break-all;">${item.txId}</span></div>
+    <div class="detail-grid"><span class="detail-label">区块高度</span><span class="detail-value">${Number(item.block).toLocaleString()}</span></div>
     <div class="detail-grid"><span class="detail-label">上链时间</span><span class="detail-value">${item.time}</span></div>
-    <div class="detail-grid"><span class="detail-label">验证状态</span><span class="detail-value"><span class="status-tag ${verifyTagClass(item.status)}">${VERIFY_TEXT[item.status]}</span></span></div>
-    <div class="detail-grid"><span class="detail-label">数据摘要</span><span class="detail-value" style="font-family:monospace; font-size:12px;">SHA256: ${item.hash.replace('0x', '')}</span></div>
+    <div class="detail-grid"><span class="detail-label">存证合约</span><span class="detail-value" style="font-family:monospace;font-size:12px;word-break:break-all;">${item.contract}</span></div>
+    <div class="detail-grid"><span class="detail-label">链节点</span><span class="detail-value">${item.node}</span></div>
+    <div class="detail-grid"><span class="detail-label">可信时间戳</span><span class="detail-value">${item.tsa}</span></div>
+    <div class="detail-grid"><span class="detail-label">验证状态</span><span class="detail-value"><span class="status-tag ${verifyTagClass(item.status)}">${VERIFY_TEXT[item.status]}</span> ${item.reason || ''}</span></div>
   `;
   openModal('detailModal');
 }
 
-function verifyRecord(code) {
-  if (code) currentDetailCode = code;
-  const item = mockData.find(d => d.code === currentDetailCode);
-  if (!item) return;
-  
+function verifyRecord(id) {
+  if (id) currentDetailCode = id;
+  const item = mockData.find(d => d.id === currentDetailCode || d.code === currentDetailCode);
+  if (!item) { showToast('未找到该存证事件'); return; }
+
   closeModal('detailModal');
-  
-  const isPassed = item.status === 'passed';
+
+  const res = window.TraceStore ? TraceStore.verifyEvent(item.id) : { ok: false, reason: '存证数据不可用' };
+  const isPassed = !!res.ok;
   document.getElementById('verifyContent').innerHTML = `
     <div class="verify-result">
       <div class="verify-icon ${isPassed ? 'success' : 'error'}">
@@ -436,11 +432,14 @@ function verifyRecord(code) {
         </svg>
       </div>
       <div class="verify-title">${isPassed ? '验证通过' : '验证失败'}</div>
-      <div class="verify-desc">${isPassed ? '该溯源信息已在区块链上存证，验证通过。' : '该溯源信息验证失败，数据可能被篡改或不存在。'}</div>
+      <div class="verify-desc">${isPassed ? '事件哈希与原文一致，且与前序区块哈希连续。' : (res.reason || '该溯源信息验证失败，数据可能被篡改。')}</div>
     </div>
-    <div class="detail-grid"><span class="detail-label">溯源码</span><span class="detail-value">${item.code}</span></div>
-    <div class="detail-grid"><span class="detail-label">交易哈希</span><span class="detail-value" style="font-family:monospace;">${item.hash}</span></div>
-    <div class="detail-grid"><span class="detail-label">区块高度</span><span class="detail-value">${item.block.toLocaleString()}</span></div>
+    <div class="detail-grid"><span class="detail-label">事件</span><span class="detail-value">${item.title}</span></div>
+    <div class="detail-grid"><span class="detail-label">溯源码</span><span class="detail-value">${item.code || '—'}</span></div>
+    <div class="detail-grid"><span class="detail-label">事件哈希</span><span class="detail-value" style="font-family:monospace;font-size:12px;word-break:break-all;">${item.hash}</span></div>
+    <div class="detail-grid"><span class="detail-label">前序哈希</span><span class="detail-value" style="font-family:monospace;font-size:12px;word-break:break-all;">${item.prevHash}</span></div>
+    <div class="detail-grid"><span class="detail-label">区块高度</span><span class="detail-value">${Number(item.block).toLocaleString()}</span></div>
+    <div class="detail-grid"><span class="detail-label">验证结论</span><span class="detail-value">${res.reason || '—'}</span></div>
     <div class="detail-grid"><span class="detail-label">验证时间</span><span class="detail-value">${new Date().toLocaleString()}</span></div>
   `;
   openModal('verifyModal');
@@ -463,13 +462,37 @@ function showToast(message) {
   setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
+function verifyWholeChain() {
+  const res = window.TraceStore ? TraceStore.verifyChain() : { ok: false, total: 0, broken: [], checkedAt: '' };
+  const isPassed = !!res.ok;
+
+  document.getElementById('verifyContent').innerHTML = `
+    <div class="verify-result">
+      <div class="verify-icon ${isPassed ? 'success' : 'error'}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px;">
+          ${isPassed ? '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>' : '<circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/>'}
+        </svg>
+      </div>
+      <div class="verify-title">${isPassed ? '全链验证通过' : '全链验证失败'}</div>
+      <div class="verify-desc">${isPassed ? '所有事件的哈希与原文一致，且前序哈希连续，未发现篡改。' : '存在哈希不一致或前序哈希断链的事件，请立即排查。'}</div>
+    </div>
+    <div class="detail-grid"><span class="detail-label">验证范围</span><span class="detail-value">全部 ${res.total} 条存证事件</span></div>
+    <div class="detail-grid"><span class="detail-label">验证结论</span><span class="detail-value">${isPassed ? '全链连续，未发现篡改' : '发现 ' + res.broken.length + ' 处异常'}</span></div>
+    ${res.broken.length ? '<div class="detail-grid"><span class="detail-label">异常事件</span><span class="detail-value">' + res.broken.map(function(b){ return b.id + '：' + b.reason; }).join('<br>') + '</span></div>' : ''}
+    <div class="detail-grid"><span class="detail-label">验证时间</span><span class="detail-value">${res.checkedAt || new Date().toLocaleString()}</span></div>
+  `;
+  openModal('verifyModal');
+}
+
 // 页面初始化
 document.addEventListener('DOMContentLoaded', function() {
+  mockData = loadChainEvents();
+  const stats = window.TraceStore ? TraceStore.chainStats() : { latestHeight: 0, total: 0, latestTime: '' };
+
   // 最新区块信息取自当前存证数据
-  const latest = mockData.reduce((a, b) => (b.block > a.block ? b : a), mockData[0]);
-  document.getElementById('latestBlock').textContent = '#' + latest.block.toLocaleString();
-  document.getElementById('latestTxCount').textContent = mockData.length;
-  document.getElementById('latestTime').textContent = latest.time;
+  document.getElementById('latestBlock').textContent = stats.latestHeight ? '#' + Number(stats.latestHeight).toLocaleString() : '—';
+  document.getElementById('latestTxCount').textContent = stats.total || mockData.length;
+  document.getElementById('latestTime').textContent = stats.latestTime || '—';
 
   Pagination.init({
     currentPage: 1,
@@ -480,12 +503,18 @@ document.addEventListener('DOMContentLoaded', function() {
     renderRow: renderChainRow
   });
 
-  // 若 URL 带 ?code=xxx，自动打开对应溯源码的详情弹窗（溯源编码页"上链"入口）
+  // 若 URL 带 ?code=xxx，自动定位该溯源码的存证事件（溯源编码页"上链"入口）
   try {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
-    if (code && typeof viewDetail === 'function') {
-      viewDetail(code);
+    if (code) {
+      const hit = mockData.filter(d => d.code === code);
+      if (hit.length) {
+        Pagination.updateData(hit);
+        viewDetail(hit[hit.length - 1].id);
+      } else {
+        showToast('未找到该溯源码的存证记录');
+      }
     }
   } catch (e) { /* 忽略解析错误 */ }
 });

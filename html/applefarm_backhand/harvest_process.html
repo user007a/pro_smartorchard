@@ -20,6 +20,56 @@
   }
   /* 分页栏样式（与农事计划一致） */
   #pagination-container { padding:12px 16px; }
+  .stat-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; margin-bottom:16px; }
+  .stat-card { background:var(--bg-card, #fff); border:1px solid var(--border-color, #e8ece8); border-radius:var(--radius-card, 12px); padding:16px 18px; }
+  .stat-label { font-size:12px; color:var(--text-tertiary); margin-bottom:6px; }
+  .stat-value { font-size:22px; font-weight:600; line-height:1.2; }
+  .stat-value small { font-size:12px; font-weight:400; color:var(--text-tertiary); margin-left:4px; }
+  .stat-sub { margin-top:6px; font-size:12px; color:var(--text-tertiary); }
+  @media (max-width: 1100px) { .stat-grid { grid-template-columns:repeat(2, 1fr); } }
+
+  /* ===== 弹窗统一：宽度、栅格与间距 ===== */
+  #modal-create .modal-box { max-width:680px; }
+  #modal-inbound .modal-box { max-width:600px; }
+  #modal-standard .modal-box { max-width:560px; }
+  #modal-export .modal-box { max-width:520px; }
+  #modal-detail .detail-grid { gap:16px 20px !important; }
+
+  .modal-grid {
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:16px 20px;
+    align-items:start;
+  }
+  .modal-grid.cols-3 { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+  .modal-grid > .form-item { margin:0; min-width:0; }
+  .modal-grid > .full,
+  .modal-grid > .modal-hint { grid-column:1 / -1; }
+  .modal-grid .form-input[readonly] {
+    background:#f5f7f5;
+    color:var(--text-secondary);
+    cursor:default;
+  }
+  .modal-grid .form-textarea { min-height:88px; }
+  .req-mark { color:var(--status-danger, #ff4d4f); margin-left:2px; font-weight:600; }
+
+  /* 弹窗内的说明条 */
+  .modal-hint {
+    display:flex;
+    align-items:flex-start;
+    gap:6px;
+    padding:9px 12px;
+    border-radius:8px;
+    background:#f2f8f2;
+    border:1px solid #e2efe2;
+    font-size:12px;
+    line-height:1.6;
+    color:var(--text-tertiary);
+  }
+  .modal-hint svg { width:14px; height:14px; flex:none; margin-top:1px; }
+  @media (max-width:640px) {
+    .modal-grid, .modal-grid.cols-3 { grid-template-columns:1fr; }
+  }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -58,7 +108,6 @@
               <option value="grading">分级中</option>
               <option value="packaging">包装中</option>
               <option value="stored">已入库</option>
-              <option value="exported">已出库</option>
               <option value="abnormal">异常</option>
             </select>
             <input type="text" class="search-input" placeholder="搜索批次编号或地块..." id="searchInput">
@@ -66,8 +115,14 @@
           </div>
         </div>
 
+        <!-- 统计卡片 -->
+        <div class="page-section">
+          <div class="stat-grid" id="statGrid"></div>
+        </div>
+
         <!-- 操作按钮区 -->
         <div class="page-section action-bar">
+          <button class="jg-btn jg-btn-primary" onclick="showCreate()">新建处理单</button>
           <button class="jg-btn" onclick="Modal.show('modal-export')">导出记录</button>
         </div>
 
@@ -103,7 +158,7 @@
 
 <!-- 导出记录模态框 -->
 <div id="modal-export" class="modal-overlay">
-  <div class="modal-box" style="max-width:420px;">
+  <div class="modal-box">
     <div class="modal-header">
       <h3 class="modal-title">导出采后处理记录</h3>
       <button class="modal-close">
@@ -113,19 +168,17 @@
       </button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="form-item">
+      <div class="modal-grid">
+        <div class="form-item full">
           <label>选择导出格式</label>
           <select class="form-select" id="exportFormat">
             <option value="excel">Excel (.xlsx)</option>
             <option value="csv">CSV (.csv)</option>
           </select>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
+        <div class="form-item full">
           <label>导出范围</label>
-          <div style="display:flex;gap:16px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <label class="checkbox-label">
               <input type="radio" name="exportScope" value="all" checked>
               <span>全部数据</span>
@@ -147,7 +200,7 @@
 
 <!-- 详情模态框 -->
 <div id="modal-detail" class="modal-overlay">
-  <div class="modal-box" style="max-width:600px;">
+  <div class="modal-box">
     <div class="modal-header">
       <h3 class="modal-title">采后处理详情</h3>
       <button class="modal-close">
@@ -208,7 +261,7 @@
 
 <!-- 标准处理模态框 -->
 <div id="modal-standard" class="modal-overlay">
-  <div class="modal-box" style="max-width:420px;">
+  <div class="modal-box">
     <div class="modal-header">
       <h3 class="modal-title">标准处理</h3>
       <button class="modal-close">
@@ -218,35 +271,20 @@
       </button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
+      <div class="modal-grid">
         <div class="form-item">
           <label>批次编号</label>
           <input type="text" class="form-input" id="std-id" readonly>
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-item">
-          <label>处理类型</label>
-          <select class="form-select" id="std-type">
-            <option value="grading">分级处理</option>
-            <option value="packaging">包装处理</option>
-            <option value="cleaning">清洗处理</option>
-            <option value="storage">冷藏处理</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>处理结果</label>
+          <label>处理结果 <span class="req-mark">*</span></label>
           <select class="form-select" id="std-result">
-            <option value="pass">合格</option>
-            <option value="rework">返工</option>
-            <option value="discard">报废</option>
+            <option value="pass">合格（推进到下一环节）</option>
+            <option value="rework">返工（状态保持不变）</option>
+            <option value="discard">报废（转异常）</option>
           </select>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-item">
+        <div class="form-item full">
           <label>处理备注</label>
           <textarea class="form-textarea" id="std-remark" placeholder="请输入处理备注"></textarea>
         </div>
@@ -261,7 +299,7 @@
 
 <!-- 入库模态框 -->
 <div id="modal-inbound" class="modal-overlay">
-  <div class="modal-box" style="max-width:420px;">
+  <div class="modal-box">
     <div class="modal-header">
       <h3 class="modal-title">入库确认</h3>
       <button class="modal-close">
@@ -271,33 +309,28 @@
       </button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="form-item">
+      <div class="modal-grid">
+        <div class="form-item full">
           <label>批次编号</label>
           <input type="text" class="form-input" id="in-id" readonly>
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-item">
-          <label>入库数量(kg)</label>
-          <input type="number" class="form-input" id="in-quantity">
+          <label>入库数量(kg) <span class="req-mark">*</span></label>
+          <input type="number" class="form-input" id="in-quantity" placeholder="请输入入库数量">
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-item">
           <label>入库时间</label>
           <input type="datetime-local" class="form-input" id="in-time">
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-item">
-          <label>库位</label>
+          <label>库位 <span class="req-mark">*</span></label>
           <select class="form-select" id="in-location">
             <option value="">请选择库位</option>
-            <option value="A-001">A区-001</option>
-            <option value="A-002">A区-002</option>
-            <option value="B-001">B区-001</option>
           </select>
+        </div>
+        <div class="form-item">
+          <label>操作人</label>
+          <select class="form-select" id="in-operator"></select>
         </div>
       </div>
     </div>
@@ -308,11 +341,11 @@
   </div>
 </div>
 
-<!-- 出库模态框 -->
-<div id="modal-outbound" class="modal-overlay">
-  <div class="modal-box" style="max-width:420px;">
+<!-- 新建处理单模态框 -->
+<div id="modal-create" class="modal-overlay">
+  <div class="modal-box">
     <div class="modal-header">
-      <h3 class="modal-title">出库确认</h3>
+      <h3 class="modal-title">新建采后处理单</h3>
       <button class="modal-close">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 4L12 12M12 4L4 12"/>
@@ -320,34 +353,40 @@
       </button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="form-item">
-          <label>批次编号</label>
-          <input type="text" class="form-input" id="out-id" readonly>
+      <div class="modal-grid cols-3">
+        <div class="form-item full">
+          <label>关联采收记录 <span class="req-mark">*</span></label>
+          <select class="form-select" id="new-record" onchange="onRecordChange()">
+            <option value="">请选择已完成的采收记录</option>
+          </select>
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-item">
-          <label>出库数量(kg)</label>
-          <input type="number" class="form-input" id="out-quantity">
+          <label>批次号</label>
+          <input type="text" class="form-input" id="new-batch" placeholder="选择记录后自动带出" readonly>
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-item">
-          <label>出库时间</label>
-          <input type="datetime-local" class="form-input" id="out-time">
+          <label>处理量(kg) <span class="req-mark">*</span></label>
+          <input type="number" class="form-input" id="new-qty" placeholder="请输入处理量">
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-item">
+          <label>处理人</label>
+          <select class="form-select" id="new-operator"></select>
+        </div>
+        <div class="form-item full">
           <label>备注</label>
-          <textarea class="form-textarea" id="out-remark" placeholder="请输入出库备注"></textarea>
+          <textarea class="form-textarea" id="new-remark" placeholder="请输入备注"></textarea>
+        </div>
+        <div class="modal-hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>
+          </svg>
+          <span>创建后自动进入「分级中」，完成分级与包装后方可执行入库。</span>
         </div>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="jg-btn" onclick="Modal.hide('modal-outbound')">取消</button>
-      <button class="jg-btn jg-btn-primary" onclick="submitOutbound()">确认出库</button>
+      <button class="jg-btn" onclick="Modal.hide('modal-create')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitCreate()">确定</button>
     </div>
   </div>
 </div>
@@ -355,213 +394,254 @@
 <!-- 引入交互脚本 -->
 <script src="js/common-functions.js"></script>
 <script src="js/export-helper.js"></script>
+<script src="js/shared/harvest-store.js"></script>
 <script>
-// Mock数据 - 20条采后处理批次（record 关联采收记录 HSR-2026-xxx，batchNo 关联批次主数据 PC-YYYYMMDD-NNN）
-const processBatches = [
-  { id: 'PP-2026-001', record: 'HSR-2026-001', batchNo: 'PC-20260901-001', plot: 'D-001 · 东区1号地', grade: '一级', quantity: 1250, status: 'exported',  location: '',         time: '2026-09-01 14:30', operator: '惠加宁', remark: '品质优良，已完成分级包装' },
-  { id: 'PP-2026-002', record: 'HSR-2026-002', batchNo: 'PC-20260902-002', plot: 'D-002 · 东区2号地', grade: '一级', quantity: 890,  status: 'exported',  location: '',         time: '2026-09-02 15:00', operator: '黄忠坚', remark: '' },
-  { id: 'PP-2026-003', record: 'HSR-2026-003', batchNo: 'PC-20260903-003', plot: 'D-003 · 西区1号地', grade: '二级', quantity: 1560, status: 'stored',    location: 'A区-003', time: '2026-09-03 09:00', operator: '徐水应', remark: '金帅品种，已入库待发' },
-  { id: 'PP-2026-004', record: 'HSR-2026-004', batchNo: 'PC-20260904-004', plot: 'D-004 · 北区1号地', grade: '一级', quantity: 780,  status: 'packaging', location: '',         time: '2026-09-03 10:30', operator: '朱泉龙', remark: '正在装箱' },
-  { id: 'PP-2026-005', record: 'HSR-2026-005', batchNo: 'PC-20260905-005', plot: 'D-005 · 南区1号地', grade: '二级', quantity: 1100, status: 'stored',    location: 'A区-002', time: '2026-09-04 08:00', operator: '陈小忠', remark: '' },
-  { id: 'PP-2026-006', record: 'HSR-2026-006', batchNo: 'PC-20260906-006', plot: 'D-006 · 中区1号地', grade: '三级', quantity: 920,  status: 'stored',    location: 'A区-005', time: '2026-09-05 14:00', operator: '廖春亮', remark: '三级果用于果汁加工' },
-  { id: 'PP-2026-007', record: 'HSR-2026-007', batchNo: 'PC-20260907-007', plot: 'D-007 · 南区2号地', grade: '一级', quantity: 1340, status: 'stored',    location: 'B区-001', time: '2026-09-06 09:30', operator: '李建明', remark: '' },
-  { id: 'PP-2026-008', record: 'HSR-2026-008', batchNo: 'PC-20260908-008', plot: 'D-008 · 西区2号地', grade: '二级', quantity: 650,  status: 'stored',    location: 'B区-001', time: '2026-09-07 11:00', operator: '李根', remark: '' },
-  { id: 'PP-2026-009', record: 'HSR-2026-009', batchNo: 'PC-20260909-009', plot: 'D-009 · 北区2号地', grade: '一级', quantity: 1420, status: 'stored',    location: 'B区-002', time: '2026-09-08 08:30', operator: '张才孙', remark: '' },
-  { id: 'PP-2026-010', record: 'HSR-2026-010', batchNo: 'PC-20260910-010', plot: 'D-010 · 东区3号地', grade: '二级', quantity: 870,  status: 'stored',    location: 'A区-001', time: '2026-09-09 14:30', operator: '刘全国', remark: '' },
-  { id: 'PP-2026-011', record: 'HSR-2026-011', batchNo: 'PC-20260911-011', plot: 'D-011 · 南区3号地', grade: '一级', quantity: 1680, status: 'stored',    location: 'A区-004', time: '2026-09-10 09:00', operator: '毛定卫', remark: '' },
-  { id: 'PP-2026-012', record: 'HSR-2026-012', batchNo: 'PC-20260912-012', plot: 'D-012 · 西区3号地', grade: '三级', quantity: 720,  status: 'stored',    location: 'A区-002', time: '2026-09-11 11:30', operator: '叶三东', remark: '' },
-  { id: 'PP-2026-013', record: 'HSR-2026-013', batchNo: 'PC-20260913-013', plot: 'D-013 · 北区3号地', grade: '一级', quantity: 1200, status: 'stored',    location: 'B区-001', time: '2026-09-12 08:00', operator: '周才贵', remark: '' },
-  { id: 'PP-2026-014', record: 'HSR-2026-014', batchNo: 'PC-20260914-014', plot: 'D-014 · 中区2号地', grade: '二级', quantity: 980,  status: 'stored',    location: 'B区-002', time: '2026-09-13 14:00', operator: '程名高', remark: '' },
-  { id: 'PP-2026-015', record: 'HSR-2026-015', batchNo: 'PC-20260915-015', plot: 'D-015 · 东区4号地', grade: '一级', quantity: 1550, status: 'stored',    location: 'B区-001', time: '2026-09-14 09:30', operator: '邓小华', remark: '' },
-  { id: 'PP-2026-016', record: 'HSR-2026-016', batchNo: 'PC-20260916-016', plot: 'D-016 · 南区4号地', grade: '二级', quantity: 830,  status: 'grading',   location: '',         time: '2026-09-15 11:00', operator: '周成友', remark: '待分级' },
-  { id: 'PP-2026-017', record: 'HSR-2026-017', batchNo: 'PC-20260917-017', plot: 'D-017 · 西区4号地', grade: '一级', quantity: 1120, status: 'packaging', location: '',         time: '2026-09-16 08:30', operator: '危红卫', remark: '高产批次，正在装箱' },
-  { id: 'PP-2026-018', record: 'HSR-2026-018', batchNo: 'PC-20260918-018', plot: 'D-018 · 北区4号地', grade: '三级', quantity: 690,  status: 'grading',   location: '',         time: '2026-09-17 14:30', operator: '方超', remark: '待分级' },
-  { id: 'PP-2026-019', record: 'HSR-2026-019', batchNo: 'PC-20260919-019', plot: 'D-019 · 中区3号地', grade: '一级', quantity: 1380, status: 'packaging', location: '',         time: '2026-09-18 09:00', operator: '曹红英', remark: '正在装箱' },
-  { id: 'PP-2026-020', record: 'HSR-2026-020', batchNo: 'PC-20260920-020', plot: 'D-020 · 东区5号地', grade: '二级', quantity: 950,  status: 'grading',   location: '',         time: '2026-09-19 11:30', operator: '崔新根', remark: '待分级' }
-];
-
-// 当前操作批次
+// 数据统一来自共享数据源 harvest-store.js（采收管理唯一数据源）
 let currentBatchId = '';
 
-// 状态标签
+function allProcesses() { return HarvestStore.processes(); }
+
 function getStatusTag(status) {
-  const statusMap = {
-    'grading':   '<span class="status-tag processing">分级中</span>',
-    'packaging': '<span class="status-tag processing">包装中</span>',
-    'stored':    '<span class="status-tag stored">已入库</span>',
-    'exported':  '<span class="status-tag exported">已出库</span>',
-    'abnormal':  '<span class="status-tag abnormal">异常</span>'
-  };
-  return statusMap[status] || statusMap['stored'];
+  return '<span class="status-tag ' + HarvestStore.statusTag('processes', status) + '">' + HarvestStore.statusText('processes', status) + '</span>';
 }
 
-const STATUS_NAME = {
-  'grading': '分级中', 'packaging': '包装中', 'stored': '已入库', 'exported': '已出库', 'abnormal': '异常'
-};
+function plotText(p) {
+  if (!p.plot) return '-';
+  return p.plotName ? p.plot + ' · ' + p.plotName : p.plot;
+}
 
-// 渲染表格行（操作按钮按状态流转显示）
+/** 数据写入后统一刷新统计卡与列表 */
+function refresh() {
+  renderStats();
+  handleSearch();
+}
+
+function renderStats() {
+  const list = allProcesses();
+  const grading = list.filter(p => p.status === 'grading').length;
+  const packaging = list.filter(p => p.status === 'packaging').length;
+  // 在库口径与储藏页保持一致：只算仍有库存的批次（已全部发货的不再计在库）
+  const inStock = HarvestStore.storages();
+  const storedQty = inStock.reduce((s, i) => s + Number(i.qty || 0), 0);
+  const cards = [
+    { label: '处理单总数', value: list.length, unit: '单', sub: '覆盖全部采收批次' },
+    { label: '分级中', value: grading, unit: '单', sub: '待完成分级' },
+    { label: '包装中', value: packaging, unit: '单', sub: '待执行入库' },
+    { label: '在库批次', value: inStock.length, unit: '批', sub: '在库 ' + storedQty.toLocaleString() + ' kg' }
+  ];
+  document.getElementById('statGrid').innerHTML = cards.map(c =>
+    '<div class="stat-card"><div class="stat-label">' + c.label + '</div>' +
+    '<div class="stat-value">' + c.value + ' <small>' + c.unit + '</small></div>' +
+    '<div class="stat-sub">' + c.sub + '</div></div>'
+  ).join('');
+}
+
+// 渲染表格行（操作按钮严格按状态流转显示）
 function renderRow(item, index) {
   let actions = `<button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>`;
-  if (['grading', 'packaging', 'abnormal'].includes(item.status)) {
+  if (item.status === 'grading' || item.status === 'abnormal') {
     actions += `<button class="action-btn edit" onclick="showStandard('${item.id}')">标准处理</button>`;
   }
-  if (['grading', 'packaging'].includes(item.status)) {
+  if (item.status === 'packaging') {
     actions += `<button class="action-btn edit" onclick="showInbound('${item.id}')">入库</button>`;
-  }
-  if (item.status === 'stored') {
-    actions += `<button class="action-btn edit" onclick="showOutbound('${item.id}')">出库</button>`;
   }
 
   return `<tr>
     <td>${index + 1}</td>
     <td><strong>${item.id}</strong></td>
-    <td>${item.batchNo}</td>
-    <td>${item.plot}</td>
-    <td>${item.grade}</td>
-    <td class="text-right">${item.quantity.toLocaleString()}</td>
+    <td>${item.batchNo || '-'}</td>
+    <td>${plotText(item)}</td>
+    <td>${item.grade || '-'}</td>
+    <td class="text-right">${Number(item.qty || 0).toLocaleString()}</td>
     <td>${getStatusTag(item.status)}</td>
-    <td>${item.time}</td>
-    <td>${item.operator}</td>
+    <td>${item.updatedAt || '-'}</td>
+    <td>${item.operator || '-'}</td>
     <td><div class="action-btns">${actions}</div></td>
   </tr>`;
 }
 
-// 搜索：状态 + 关键词
-function handleSearch() {
+function filteredProcesses() {
   var status = document.getElementById('statusSelect').value;
   var keyword = document.getElementById('searchInput').value.trim().toLowerCase();
-
-  var filteredData = processBatches.filter(item => {
+  return allProcesses().filter(function (item) {
     if (status && item.status !== status) return false;
-    if (keyword && !item.id.toLowerCase().includes(keyword) && !item.plot.toLowerCase().includes(keyword)) return false;
+    if (keyword) {
+      var hay = [item.id, item.batchNo, item.plot, item.plotName, item.operator].join(' ').toLowerCase();
+      if (hay.indexOf(keyword) === -1) return false;
+    }
     return true;
   });
-
-  Pagination.updateData(filteredData);
-  Toast.info('找到 ' + filteredData.length + ' 条记录');
 }
 
-function findBatch(id) {
-  return processBatches.find(b => b.id === id);
+// 搜索：状态 + 关键词
+function handleSearch() {
+  var data = filteredProcesses();
+  Pagination.updateData(data);
+  Toast.info('找到 ' + data.length + ' 条记录');
+}
+
+// 订阅共享数据源（跨页改动后静默刷新，避免重复提示）
+function silentRefresh() {
+  renderStats();
+  Pagination.updateData(filteredProcesses());
+}
+
+function findProcess(id) {
+  return HarvestStore.get('processes', id);
 }
 
 // 详情（按行回填）
 function showDetail(id) {
-  const item = findBatch(id);
+  const item = findProcess(id);
   if (!item) return;
   document.getElementById('detail-id').textContent = item.id;
-  document.getElementById('detail-record').textContent = item.record || '-';
-  document.getElementById('detail-plot').textContent = item.plot;
-  document.getElementById('detail-grade').textContent = item.grade;
-  document.getElementById('detail-quantity').textContent = item.quantity.toLocaleString() + ' kg';
+  document.getElementById('detail-record').textContent = item.recordId || '-';
+  document.getElementById('detail-plot').textContent = plotText(item);
+  document.getElementById('detail-grade').textContent = item.grade || '-';
+  document.getElementById('detail-quantity').textContent = Number(item.qty || 0).toLocaleString() + ' kg';
   document.getElementById('detail-status').innerHTML = getStatusTag(item.status);
   document.getElementById('detail-location').textContent = item.location || '-';
-  document.getElementById('detail-time').textContent = item.time;
-  document.getElementById('detail-operator').textContent = item.operator;
+  document.getElementById('detail-time').textContent = item.updatedAt || '-';
+  document.getElementById('detail-operator').textContent = item.operator || '-';
   document.getElementById('detail-remark').textContent = item.remark || '-';
   Modal.show('modal-detail');
 }
 
-// 标准处理
+// 标准处理：分级中 →（合格）包装中；异常 →（合格）重新分级
 function showStandard(id) {
-  const item = findBatch(id);
+  const item = findProcess(id);
   if (!item) return;
   currentBatchId = id;
-  document.getElementById('std-id').value = item.id;
-  document.getElementById('std-type').value = 'grading';
+  document.getElementById('std-id').value = item.id + ' · ' + HarvestStore.statusText('processes', item.status);
   document.getElementById('std-result').value = 'pass';
   document.getElementById('std-remark').value = '';
   Modal.show('modal-standard');
 }
 
 function submitStandard() {
-  const item = findBatch(currentBatchId);
-  if (item) {
-    const result = document.getElementById('std-result').value;
-    const type = document.getElementById('std-type').value;
-    if (result === 'discard') {
-      item.status = 'abnormal';
-    } else if (result === 'pass') {
-      if (type === 'grading') item.status = 'grading';
-      else if (type === 'packaging' || type === 'cleaning') item.status = 'packaging';
-      else if (type === 'storage') item.status = 'stored';
+  const item = findProcess(currentBatchId);
+  if (!item) { Modal.hide('modal-standard'); Toast.error('处理单不存在'); return; }
+  const result = document.getElementById('std-result').value;
+  const remark = document.getElementById('std-remark').value.trim();
+  const patch = remark ? { remark: remark } : null;
+  let r = { ok: true };
+
+  if (result === 'discard') {
+    r = HarvestStore.advance('processes', currentBatchId, 'abnormal', patch);
+  } else if (result === 'rework') {
+    r = HarvestStore.updateProcess(currentBatchId, patch || {});
+    if (r.ok) {
+      Modal.hide('modal-standard');
+      refresh();
+      Toast.info('已记录返工，状态保持「' + HarvestStore.statusText('processes', item.status) + '」');
+      return;
     }
-    item.time = formatNow();
-    item.remark = document.getElementById('std-remark').value || item.remark;
+  } else {
+    const to = item.status === 'grading' ? 'packaging' : (item.status === 'abnormal' ? 'grading' : '');
+    if (!to) {
+      Modal.hide('modal-standard');
+      Toast.info('该批次已完成包装，请在列表执行入库');
+      return;
+    }
+    r = HarvestStore.advance('processes', currentBatchId, to, patch);
+  }
+
+  if (!r.ok) {
+    Toast.error(r.message);
+    return;
   }
   Modal.hide('modal-standard');
-  handleSearch();
-  Toast.success('处理完成');
+  refresh();
+  Toast.success('处理完成，当前状态：' + HarvestStore.statusText('processes', findProcess(currentBatchId).status));
 }
 
-// 入库
+// 入库：仅「包装中」可入库，数量/时间/库位全部写回
+function fillSlotOptions(selected) {
+  const used = {};
+  HarvestStore.storages().forEach(function (s) {
+    if (s.batchId !== currentBatchId) used[s.id] = (used[s.id] || 0) + Number(s.qty || 0);
+  });
+  const options = HarvestStore.slots().map(function (slot) {
+    const occupied = used[slot.id] || 0;
+    const label = slot.id + '（' + slot.type + ' · 已占 ' + occupied + '/' + slot.capacity + ' kg）';
+    return '<option value="' + slot.id + '"' + (occupied >= slot.capacity ? ' disabled' : '') +
+      (slot.id === selected ? ' selected' : '') + '>' + label + '</option>';
+  }).join('');
+  document.getElementById('in-location').innerHTML = '<option value="">请选择库位</option>' + options;
+}
+
 function showInbound(id) {
-  const item = findBatch(id);
+  const item = findProcess(id);
   if (!item) return;
   currentBatchId = id;
   document.getElementById('in-id').value = item.id;
-  document.getElementById('in-quantity').value = item.quantity;
+  document.getElementById('in-quantity').value = item.qty;
   document.getElementById('in-time').value = toLocalInput(new Date());
-  document.getElementById('in-location').value = '';
+  fillSlotOptions('');
+  document.getElementById('in-operator').value = item.operator || '';
   Modal.show('modal-inbound');
 }
 
 function submitInbound() {
-  const item = findBatch(currentBatchId);
-  if (item) {
-    item.status = 'stored';
-    item.time = formatNow();
-    item.location = document.getElementById('in-location').value || item.location;
-  }
+  const r = HarvestStore.inboundProcess(currentBatchId, {
+    qty: document.getElementById('in-quantity').value,
+    time: document.getElementById('in-time').value,
+    slot: document.getElementById('in-location').value,
+    operator: document.getElementById('in-operator').value,
+    remark: ''
+  });
+  if (!r.ok) { Toast.error(r.message); return; }
   Modal.hide('modal-inbound');
-  handleSearch();
-  Toast.success('入库成功');
+  refresh();
+  Toast.success('入库成功，库位 ' + r.item.location);
 }
 
-// 出库
-function showOutbound(id) {
-  const item = findBatch(id);
-  if (!item) return;
-  currentBatchId = id;
-  document.getElementById('out-id').value = item.id;
-  document.getElementById('out-quantity').value = item.quantity;
-  document.getElementById('out-time').value = toLocalInput(new Date());
-  document.getElementById('out-remark').value = '';
-  Modal.show('modal-outbound');
+// 新建处理单：从「已完成且未建处理单」的采收记录生成
+function showCreate() {
+  const records = HarvestStore.processableRecords();
+  const options = records.map(function (r) {
+    return '<option value="' + r.id + '">' + r.id + ' · ' + (r.batchNo || '-') + ' · ' + (r.plotName || r.plot) + ' · ' + r.qty + 'kg</option>';
+  }).join('');
+  document.getElementById('new-record').innerHTML = '<option value="">请选择已完成的采收记录</option>' + options;
+  document.getElementById('new-batch').value = '';
+  document.getElementById('new-qty').value = '';
+  document.getElementById('new-remark').value = '';
+  if (!records.length) Toast.info('暂无可建处理单的已完成采收记录');
+  Modal.show('modal-create');
 }
 
-function submitOutbound() {
-  const item = findBatch(currentBatchId);
-  if (item) {
-    item.status = 'exported';
-    item.time = formatNow();
-    const remark = document.getElementById('out-remark').value;
-    if (remark) item.remark = remark;
-  }
-  Modal.hide('modal-outbound');
-  handleSearch();
-  Toast.success('出库成功');
+function onRecordChange() {
+  const rec = HarvestStore.get('records', document.getElementById('new-record').value);
+  document.getElementById('new-batch').value = rec ? (rec.batchNo || '') : '';
+  document.getElementById('new-qty').value = rec ? rec.qty : '';
+}
+
+function submitCreate() {
+  const recordId = document.getElementById('new-record').value;
+  const r = HarvestStore.createProcess(recordId, {
+    qty: document.getElementById('new-qty').value,
+    operator: document.getElementById('new-operator').value,
+    remark: document.getElementById('new-remark').value
+  });
+  if (!r.ok) { Toast.error(r.message); return; }
+  Modal.hide('modal-create');
+  refresh();
+  Toast.success('已建立处理单 ' + r.item.id + '，批次 ' + r.item.batchNo);
 }
 
 // 真实导出（Excel / CSV）
 async function handleExport() {
   const scope = document.querySelector('input[name="exportScope"]:checked').value;
-  const rows = (scope === 'selected' ? Pagination.filteredData : processBatches);
+  const rows = (scope === 'selected' ? Pagination.filteredData : allProcesses());
   const result = await ExportHelper.exportData({
     filename: '采后处理记录_' + ExportHelper.stamp(),
     format: document.getElementById('exportFormat').value,
-    headers: ['批次编号', '来源记录', '地块', '等级', '数量(kg)', '状态', '库位', '操作时间', '操作人', '备注'],
-    rows: rows.map(b => [b.id, b.record || '', b.plot, b.grade, b.quantity, STATUS_NAME[b.status], b.location || '', b.time, b.operator, b.remark || ''])
+    headers: ['批次编号', '来源记录', '批次号', '地块', '品种', '等级', '数量(kg)', '状态', '库位', '更新时间', '操作人', '备注'],
+    rows: rows.map(b => [b.id, b.recordId || '', b.batchNo || '', plotText(b), b.variety || '', b.grade || '', b.qty,
+      HarvestStore.statusText('processes', b.status), b.location || '', b.updatedAt || '', b.operator || '', b.remark || ''])
   });
   Modal.hide('modal-export');
   Toast.success(result === 'csv-fallback' ? 'Excel 组件加载失败，已导出为 CSV' : '导出成功，文件已下载');
-}
-
-// 工具：当前时间
-function formatNow() {
-  const d = new Date();
-  const p = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 function toLocalInput(d) {
@@ -569,16 +649,20 @@ function toLocalInput(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-// 初始化分页
+// 初始化
 document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('in-operator').innerHTML = buildUserOptionsHtml('');
+  document.getElementById('new-operator').innerHTML = buildUserOptionsHtml('');
+  renderStats();
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
-    data: processBatches,
+    data: allProcesses(),
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderRow
   });
+  if (HarvestStore.subscribe) HarvestStore.subscribe(silentRefresh);
 });
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>

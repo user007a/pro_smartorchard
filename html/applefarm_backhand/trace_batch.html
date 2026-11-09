@@ -53,6 +53,13 @@
   .toast.success { border-left:4px solid var(--border-primary); }
   .toast.error { border-left:4px solid #ef4444; }
   .toast-icon { width:24px; height:24px; border-radius:50%; background:var(--gray-100); display:flex; align-items:center; justify-content:center; color:var(--primary-500); }
+  /* 检测项目行编辑 */
+  .ins-items { width:100%; border-collapse:collapse; font-size:13px; }
+  .ins-items th { text-align:left; color:var(--text-tertiary); font-weight:500; padding:6px 4px; border-bottom:1px solid var(--border-light); }
+  .ins-items td { padding:4px 4px; border-bottom:1px dashed var(--border-light); }
+  .ins-items input[type=text] { width:100%; padding:6px 8px; border:1px solid var(--border-default); border-radius:6px; font-size:13px; }
+  .ins-items select { padding:6px 8px; border:1px solid var(--border-default); border-radius:6px; font-size:13px; }
+  .ins-item-del { border:none; background:transparent; color:#ef4444; cursor:pointer; font-size:16px; line-height:1; padding:2px 6px; }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -107,6 +114,12 @@
               </svg>
               新建批次
             </button>
+            <button class="jg-btn" onclick="openHarvestModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
+                <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
+              </svg>
+              从采收记录建批
+            </button>
             <button class="jg-btn" onclick="exportBatches()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -127,6 +140,7 @@
                 <th>地块</th>
                 <th>采收计划</th>
                 <th>采收日期</th>
+                <th>检测报告</th>
                 <th>追溯码</th>
                 <th>状态</th>
                 <th>操作</th>
@@ -246,6 +260,131 @@
   </div>
 </div>
 
+<!-- 从采收记录建批 -->
+<div class="modal-overlay" id="harvestModal">
+  <div class="modal" style="width:560px;">
+    <div class="modal-header">
+      <h3>从采收记录建批</h3>
+      <button class="modal-close" onclick="closeModal('harvestModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>采收记录（仅显示尚未建批的记录）</label>
+        <select id="harvestRecordSelect" onchange="previewHarvestRecord()"></select>
+      </div>
+      <div class="chain-box" id="harvestPreview" style="margin-bottom:0;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('harvestModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="confirmHarvestBatch()">创建批次</button>
+    </div>
+  </div>
+</div>
+
+<!-- 检测报告 -->
+<div class="modal-overlay" id="inspectionModal">
+  <div class="modal" style="width:680px;">
+    <div class="modal-header">
+      <h3 id="inspectionModalTitle">检测报告</h3>
+      <button class="modal-close" onclick="closeModal('inspectionModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="edit-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>批次号</label>
+            <input type="text" id="insBatchNo" readonly>
+          </div>
+          <div class="form-group">
+            <label>报告编号 <span style="color:#ef4444;">*</span></label>
+            <input type="text" id="insReportNo" placeholder="如：JC-2026-9101">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>检测机构 <span style="color:#ef4444;">*</span></label>
+            <input type="text" id="insInstitution" placeholder="检测机构全称">
+          </div>
+          <div class="form-group">
+            <label>报告类型</label>
+            <select id="insReportType">
+              <option value="农药残留检测">农药残留检测</option>
+              <option value="质量安全检测">质量安全检测</option>
+              <option value="重金属检测">重金属检测</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>抽样日期</label>
+            <input type="date" id="insSampleDate">
+          </div>
+          <div class="form-group">
+            <label>出具日期</label>
+            <input type="date" id="insIssueDate">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>有效期至</label>
+            <input type="date" id="insValidUntil">
+          </div>
+          <div class="form-group">
+            <label>检测结论 <span style="color:#ef4444;">*</span></label>
+            <select id="insConclusion">
+              <option value="合格">合格</option>
+              <option value="不合格">不合格</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>CMA（选填）</label>
+            <input type="text" id="insCma" placeholder="不强制要求">
+          </div>
+          <div class="form-group">
+            <label>CNAS（选填）</label>
+            <input type="text" id="insCnas" placeholder="不强制要求">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>检测报告附件</label>
+          <input type="file" id="insAttachment" accept=".pdf,.jpg,.jpeg,.png">
+          <div class="form-hint" id="insAttachmentHint">支持 PDF / JPG / PNG；≤300KB 可在本地预览，超出仅保存文件信息。</div>
+        </div>
+        <div class="form-group">
+          <label>检测项目</label>
+          <div class="form-hint">按检测机构报告逐项录入，可增删；"是否合格"以报告结论为准。</div>
+          <table class="ins-items">
+            <thead>
+              <tr>
+                <th style="width:26%;">项目</th>
+                <th style="width:20%;">结果</th>
+                <th style="width:16%;">单位</th>
+                <th style="width:16%;">限量</th>
+                <th style="width:14%;">合格</th>
+                <th style="width:8%;"></th>
+              </tr>
+            </thead>
+            <tbody id="insItemsBody"></tbody>
+          </table>
+          <div>
+            <button type="button" class="jg-btn" style="margin-top:8px;" onclick="addInspectionItem()">+ 添加检测项</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('inspectionModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="saveInspectionForm()">保存报告</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast提示 -->
 <div class="toast" id="toast">
   <div class="toast-icon">
@@ -254,6 +393,8 @@
   <span id="toastMessage">操作成功</span>
 </div>
 
+<script src="js/shared/harvest-store.js"></script>
+<script src="js/shared/trace-store.js"></script>
 <script>
 /* ============================================================
  * 批次管理 —— 溯源链路的主数据页
@@ -266,7 +407,7 @@
 const PRODUCT_SOURCE = ['花牛苹果', '金帅苹果', '秦冠苹果', '礼盒装苹果'];
 
 // 基地（取自基地管理 enterprise_base.html）
-const BASE_SOURCE = ['天水麦积区基地', '天水秦州基地', '青岛莱西基地', '龙口南山基地', '天水甘谷基地'];
+const BASE_SOURCE = ['天水麦积区基地', '天水秦州基地', '青岛莱西基地', '龙口南山基地', '天水甘谷基地', '甘肃吉县苹果园', '甘肃麦积区苹果园', '天水麦积区苹果基地', '甘肃麦积区苹果基地', '天水张家川县基地'];
 
 // 地块（取自地块管理 enterprise_plot.html 的 mockPlotData）
 const PLOT_SOURCE = [
@@ -289,7 +430,9 @@ const PLOT_SOURCE = [
   {code:'D-017',name:'西区4号地',base:'天水麦积区苹果基地',variety:'花牛苹果'},
   {code:'D-018',name:'北区4号地',base:'甘肃麦积区苹果基地',variety:'花牛苹果'},
   {code:'D-019',name:'中区3号地',base:'甘肃吉县苹果园',variety:'花牛苹果'},
-  {code:'D-020',name:'东区5号地',base:'天水麦积区苹果基地',variety:'秦冠'}
+  {code:'D-020',name:'东区5号地',base:'天水麦积区苹果基地',variety:'秦冠'},
+  {code:'D-021',name:'东区6号地',base:'甘肃吉县苹果园',variety:'花牛苹果'},
+  {code:'D-022',name:'西区5号地',base:'天水张家川县基地',variety:'金帅'}
 ];
 
 // 采收计划（取自采收计划 harvest_plan.html）
@@ -324,25 +467,13 @@ const mockBatchData = [
 
 const STATUS_TEXT = { pending:'待包装', stored:'已入库', packed:'已包装', shipped:'已发货' };
 
-/* ---------- 批次持久化 ----------
-   key: smartorchard_trace_batches
-   首次访问自动播种内置样例，之后全部读写 localStorage，
-   使溯源编码页 / 溯源查询 / H5 溯源可与批次主数据共享同一份真源。 */
-const BATCH_STORE_KEY = 'smartorchard_trace_batches';
-
+/* ---------- 批次数据源 ----------
+   统一由 TraceStore 提供；批次由采收记录生成，检测报告 / 追溯码 / 存证同源。 */
 function loadBatches() {
-  try {
-    const raw = localStorage.getItem(BATCH_STORE_KEY);
-    if (raw) {
-      const v = JSON.parse(raw);
-      if (Array.isArray(v) && v.length) return v;
-    }
-  } catch (e) { /* 落到播种 */ }
-  localStorage.setItem(BATCH_STORE_KEY, JSON.stringify(mockBatchData));
-  return mockBatchData.slice();
+  return TraceStore.batches();
 }
-function saveBatches(list) {
-  localStorage.setItem(BATCH_STORE_KEY, JSON.stringify(list));
+function saveBatches() {
+  // 兼容旧调用：实际保存由 TraceStore.saveBatch 完成
 }
 
 let currentDetailId = null;
@@ -402,14 +533,23 @@ const Pagination = {
 
 /* ---------- 工具 ---------- */
 function getPlot(code) { return PLOT_SOURCE.find(p => p.code === code) || {code:code, name:'-', base:'-', variety:'-'}; }
-function getProduct(batch) { return VARIETY_PRODUCT[getPlot(batch.plotCode).variety] || '花牛苹果'; }
+function getProduct(batch) { return batch.product || VARIETY_PRODUCT[getPlot(batch.plotCode).variety] || '花牛苹果'; }
+function inspectBadge(batchNo) {
+  const st = TraceStore.inspectionState(batchNo);
+  if (st.hasValid) return '<span class="status-tag active">有效</span>';
+  if (!st.latest) return '<span class="status-tag inactive">缺失</span>';
+  const map = { expired: '已过期', revoked: '已撤销', invalid: '不合格', pending: '待出报告' };
+  const cls = st.latest.status === 'expired' || st.latest.status === 'revoked' || st.latest.status === 'invalid' ? 'inactive' : 'warning';
+  return `<span class="status-tag ${cls}">${map[st.latest.status] || '待补录'}</span>`;
+}
 function enrich(batch) {
   const plot = getPlot(batch.plotCode);
   return Object.assign({}, batch, {
-    plotName: plot.name,
-    base: plot.base,
-    variety: plot.variety,
+    plotName: batch.plotName || plot.name,
+    base: batch.base || plot.base,
+    variety: batch.variety || plot.variety,
     product: getProduct(batch),
+    codeCount: batch.codeCount != null ? batch.codeCount : (batch.traceCount || 0),
     statusText: STATUS_TEXT[batch.status] || batch.status
   });
 }
@@ -426,12 +566,14 @@ function renderBatchRow(batch, seq) {
       <td>${item.plotCode} · ${item.plotName}</td>
       <td>${item.planNo}</td>
       <td>${item.harvestDate}</td>
-      <td>${item.traceCount} 个</td>
+      <td>${inspectBadge(item.batchNo)}</td>
+      <td>${item.codeCount} 个</td>
       <td><span class="status-tag ${item.status === 'shipped' ? 'active' : item.status === 'pending' ? 'inactive' : 'warning'}">${item.statusText}</span></td>
       <td>
         <div class="action-btns">
           <button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>
           <button class="action-btn edit" onclick="showEdit('${item.id}')">编辑</button>
+          <button class="action-btn" onclick="openInspectionModal('${item.batchNo}')">检测报告</button>
           <button class="action-btn qrcode" onclick="gotoTraceCode('${item.batchNo}')">追溯码</button>
         </div>
       </td>
@@ -479,20 +621,25 @@ function showDetail(id) {
   if (!batch) return;
   currentDetailId = id;
   const item = enrich(batch);
+  const gate = TraceStore.inspectionState(item.batchNo);
+  const env = TraceStore.environmentOf(item.batchNo);
+  const ins = gate.latest;
+  const insText = ins ? `${ins.reportNo} · ${ins.institution} · ${ins.conclusion} · 有效期至 ${ins.validUntil || '—'}` : '未上传检测报告';
+  const gateColor = gate.canCode ? 'var(--primary-500)' : '#ef4444';
 
   document.getElementById('detailContent').innerHTML = `
     <div class="chain-box">
       <div class="chain-title">溯源链路</div>
       <div class="chain-list">
-        <span class="chain-node">${item.planNo} 采收计划</span>
+        <span class="chain-node">${item.planNo || '—'} 采收计划</span>
         <span class="chain-arrow">→</span>
         <span class="chain-node">${item.plotCode} · ${item.plotName}</span>
         <span class="chain-arrow">→</span>
         <span class="chain-node hl">${item.batchNo}</span>
         <span class="chain-arrow">→</span>
-        <span class="chain-node">${item.processNo} 采后处理</span>
+        <span class="chain-node">${item.processNo || '—'} 采后处理</span>
         <span class="chain-arrow">→</span>
-        <span class="chain-node">${item.traceCount} 个追溯码</span>
+        <span class="chain-node">${item.codeCount} 个追溯码</span>
       </div>
     </div>
     <div class="detail-grid"><span class="detail-label">批次号</span><span class="detail-value">${item.batchNo}</span></div>
@@ -501,12 +648,15 @@ function showDetail(id) {
     <div class="detail-grid"><span class="detail-label">规格</span><span class="detail-value">${item.spec}</span></div>
     <div class="detail-grid"><span class="detail-label">所属基地</span><span class="detail-value">${item.base}</span></div>
     <div class="detail-grid"><span class="detail-label">地块</span><span class="detail-value">${item.plotCode} · ${item.plotName}</span></div>
-    <div class="detail-grid"><span class="detail-label">采收计划</span><span class="detail-value">${item.planNo}</span></div>
-    <div class="detail-grid"><span class="detail-label">采后处理单</span><span class="detail-value">${item.processNo}</span></div>
+    <div class="detail-grid"><span class="detail-label">采收计划</span><span class="detail-value">${item.planNo || '—'}</span></div>
+    <div class="detail-grid"><span class="detail-label">采后处理单</span><span class="detail-value">${item.processNo || '—'}</span></div>
     <div class="detail-grid"><span class="detail-label">采收日期</span><span class="detail-value">${item.harvestDate}</span></div>
     <div class="detail-grid"><span class="detail-label">等级</span><span class="detail-value">${item.grade}</span></div>
     <div class="detail-grid"><span class="detail-label">采收数量</span><span class="detail-value">${item.quantity} kg</span></div>
-    <div class="detail-grid"><span class="detail-label">已生成追溯码</span><span class="detail-value">${item.traceCount} 个</span></div>
+    <div class="detail-grid"><span class="detail-label">已生成追溯码</span><span class="detail-value">${item.codeCount} 个</span></div>
+    <div class="detail-grid"><span class="detail-label">检测报告</span><span class="detail-value">${inspectBadge(item.batchNo)} ${insText}</span></div>
+    <div class="detail-grid"><span class="detail-label">赋码门禁</span><span class="detail-value" style="color:${gateColor};">${gate.message}</span></div>
+    <div class="detail-grid"><span class="detail-label">基地实景</span><span class="detail-value">VR ${env.vrUrl ? '已接入' : '未接入'} · 视频 ${env.videoAvailable ? '已接入' : '监控快照'} · 气象 ${env.weather.updatedAt} · 墒情 ${env.soil.updatedAt}</span></div>
     <div class="detail-grid"><span class="detail-label">状态</span><span class="detail-value"><span class="status-tag ${item.status === 'shipped' ? 'active' : item.status === 'pending' ? 'inactive' : 'warning'}">${item.statusText}</span></span></div>
     <div class="detail-grid"><span class="detail-label">备注</span><span class="detail-value">${item.remark || '—'}</span></div>
   `;
@@ -515,6 +665,14 @@ function showDetail(id) {
 
 function gotoTraceCode(batchNo) {
   const seq = batchNo || (currentDetailId ? (enrich(loadBatches().find(b => b.id === currentDetailId)) || {}).batchNo : '');
+  if (!seq) { showToast('未找到批次', 'error'); return; }
+  const batch = loadBatches().find(b => b.batchNo === seq);
+  const gate = TraceStore.inspectionState(seq);
+  if (!gate.canCode && (!batch || !batch.codeCount)) {
+    showToast(gate.message + '，请先补录检测报告', 'error');
+    openInspectionModal(seq);
+    return;
+  }
   closeModal('detailModal');
   showToast(`已跳转溯源编码，批次：${seq}`);
   const url = 'trace_code.html?batch=' + encodeURIComponent(seq);
@@ -554,8 +712,9 @@ function openCreateModal() {
   currentEditId = null;
   document.getElementById('editModalTitle').textContent = '新建批次';
   document.getElementById('editBatchNo').value = '';
+  document.getElementById('editBatchNo').removeAttribute('readonly');
   document.getElementById('editSpec').value = '';
-  document.getElementById('editHarvestDate').value = '2026-09-21';
+  document.getElementById('editHarvestDate').value = new Date().toISOString().slice(0, 10);
   document.getElementById('editQuantity').value = '';
   document.getElementById('editProcessNo').value = '';
   document.getElementById('editRemark').value = '';
@@ -568,18 +727,30 @@ function openCreateModal() {
   openModal('editModal');
 }
 
+function setSelectValue(el, value) {
+  if (!value) return;
+  let found = Array.from(el.options).some(o => o.value === value);
+  if (!found) {
+    const opt = document.createElement('option');
+    opt.value = value; opt.textContent = value;
+    el.appendChild(opt);
+  }
+  el.value = value;
+}
+
 function showEdit(id) {
-  const batch = mockBatchData.find(b => b.id === id);
+  const batch = TraceStore.batch(id) || TraceStore.batches().find(b => b.batchNo === id);
   if (!batch) return;
-  currentEditId = id;
+  currentEditId = batch.id;
   const item = enrich(batch);
   document.getElementById('editModalTitle').textContent = '编辑批次';
   document.getElementById('editBatchNo').value = item.batchNo;
-  document.getElementById('editPlanNo').value = item.planNo;
-  document.getElementById('editBase').value = BASE_SOURCE.indexOf(item.base) >= 0 ? item.base : BASE_SOURCE[0];
+  document.getElementById('editBatchNo').setAttribute('readonly', 'readonly');
+  setSelectValue(document.getElementById('editPlanNo'), item.planNo);
+  setSelectValue(document.getElementById('editBase'), item.base);
   refreshPlotOptions();
   document.getElementById('editPlot').value = item.plotCode;
-  document.getElementById('editProduct').value = item.product;
+  setSelectValue(document.getElementById('editProduct'), item.product);
   document.getElementById('editSpec').value = item.spec;
   document.getElementById('editHarvestDate').value = item.harvestDate;
   document.getElementById('editGrade').value = item.grade;
@@ -597,13 +768,18 @@ function saveBatch() {
   if (!/^PC-\d{8}-\d{3}$/.test(batchNo)) { showToast('批次号格式应为 PC-YYYYMMDD-NNN', 'error'); return; }
   if (!quantity || Number(quantity) <= 0) { showToast('请输入采收数量', 'error'); return; }
 
-  const batches = loadBatches();
-  const duplicated = batches.some(b => b.batchNo === batchNo && b.id !== currentEditId);
-  if (duplicated) { showToast('批次号已存在', 'error'); return; }
+  const exists = TraceStore.batches().some(b => b.batchNo === batchNo && b.id !== currentEditId);
+  if (exists) { showToast('批次号已存在', 'error'); return; }
 
+  const plotCode = document.getElementById('editPlot').value;
+  const plot = getPlot(plotCode);
   const payload = {
     batchNo: batchNo,
-    plotCode: document.getElementById('editPlot').value,
+    plotCode: plotCode,
+    plotName: plot.name,
+    base: plot.base,
+    variety: plot.variety,
+    product: document.getElementById('editProduct').value || getProduct({ plotCode: plotCode }),
     planNo: document.getElementById('editPlanNo').value,
     processNo: document.getElementById('editProcessNo').value.trim(),
     harvestDate: document.getElementById('editHarvestDate').value,
@@ -613,21 +789,188 @@ function saveBatch() {
     status: document.getElementById('editStatus').value,
     remark: document.getElementById('editRemark').value.trim()
   };
-
   if (currentEditId) {
-    const target = batches.find(b => b.id === currentEditId);
-    if (target) Object.assign(target, payload);
-    showToast('批次已保存');
-  } else {
-    payload.id = 'BAT' + Date.now();
-    payload.traceCount = 0;
-    payload.createdAt = new Date().toISOString();
-    batches.unshift(payload);
-    showToast('批次已创建');
+    const old = TraceStore.batch(currentEditId);
+    if (old) payload.sourceRecordId = old.sourceRecordId;
   }
-  saveBatches(batches);
+  const res = TraceStore.saveBatch(payload);
+  if (!res.ok) { showToast(res.message || '保存失败', 'error'); return; }
+  showToast(currentEditId ? '批次已保存' : '批次已创建');
   closeModal('editModal');
-  Pagination.updateData(batches);
+  Pagination.updateData(loadBatches());
+}
+
+/* ---------- 从采收记录建批 ---------- */
+let harvestWorking = [];
+
+function openHarvestModal() {
+  harvestWorking = TraceStore.harvestCandidates();
+  const select = document.getElementById('harvestRecordSelect');
+  if (!harvestWorking.length) {
+    select.innerHTML = '<option value="">暂无可建批的采收记录</option>';
+    document.getElementById('harvestPreview').innerHTML = '<div class="detail-value">所有采收记录均已建立批次，可直接新建或编辑批次。</div>';
+  } else {
+    select.innerHTML = harvestWorking.map((r, i) =>
+      `<option value="${i}">${r.recordId} · ${r.batchNo} · ${r.plotName} · ${r.harvestDate}</option>`
+    ).join('');
+    previewHarvestRecord();
+  }
+  openModal('harvestModal');
+}
+
+function previewHarvestRecord() {
+  const idx = Number(document.getElementById('harvestRecordSelect').value || 0);
+  const r = harvestWorking[idx];
+  const box = document.getElementById('harvestPreview');
+  if (!r) {
+    box.innerHTML = '<div class="detail-value">请选择采收记录</div>';
+    return;
+  }
+  box.innerHTML = `
+    <div class="chain-title">将创建批次</div>
+    <div class="detail-grid"><span class="detail-label">批次号</span><span class="detail-value">${r.batchNo}</span></div>
+    <div class="detail-grid"><span class="detail-label">基地 / 地块</span><span class="detail-value">${r.base} · ${r.plotCode} ${r.plotName}</span></div>
+    <div class="detail-grid"><span class="detail-label">产品</span><span class="detail-value">${r.product} / ${r.variety}</span></div>
+    <div class="detail-grid"><span class="detail-label">采收</span><span class="detail-value">${r.harvestDate} · ${r.quantity} kg · ${r.grade}</span></div>
+  `;
+}
+
+function confirmHarvestBatch() {
+  const idx = Number(document.getElementById('harvestRecordSelect').value || 0);
+  const r = harvestWorking[idx];
+  if (!r) { showToast('暂无采收记录可建批', 'error'); return; }
+  const res = TraceStore.createBatchFromHarvest(r.recordId);
+  if (!res.ok) { showToast(res.message || '建批失败', 'error'); return; }
+  showToast('已从采收记录创建批次 ' + r.batchNo);
+  closeModal('harvestModal');
+  Pagination.updateData(loadBatches());
+}
+
+/* ---------- 检测报告 ---------- */
+let currentInspectionBatch = '';
+
+const DEFAULT_INSPECTION_ITEMS = [
+  { name: '敌敌畏', result: '未检出', unit: 'mg/kg', limit: '≤0.2', qualified: true },
+  { name: '毒死蜱', result: '0.02', unit: 'mg/kg', limit: '≤1.0', qualified: true },
+  { name: '氯氰菊酯', result: '未检出', unit: 'mg/kg', limit: '≤2.0', qualified: true },
+  { name: '铅（Pb）', result: '0.01', unit: 'mg/kg', limit: '≤0.1', qualified: true },
+  { name: '镉（Cd）', result: '0.005', unit: 'mg/kg', limit: '≤0.05', qualified: true }
+];
+
+function inspectionItemRow(item) {
+  const it = item || { name: '', result: '', unit: 'mg/kg', limit: '', qualified: true };
+  return `<tr>
+    <td><input type="text" class="ins-item-name" value="${escapeAttr(it.name)}" placeholder="如 敌敌畏"></td>
+    <td><input type="text" class="ins-item-result" value="${escapeAttr(it.result)}" placeholder="如 未检出"></td>
+    <td><input type="text" class="ins-item-unit" value="${escapeAttr(it.unit)}"></td>
+    <td><input type="text" class="ins-item-limit" value="${escapeAttr(it.limit)}" placeholder="≤0.2"></td>
+    <td>
+      <select class="ins-item-qualified">
+        <option value="1"${it.qualified ? ' selected' : ''}>合格</option>
+        <option value="0"${it.qualified ? '' : ' selected'}>不合格</option>
+      </select>
+    </td>
+    <td><button type="button" class="ins-item-del" title="删除" onclick="this.closest('tr').remove()">×</button></td>
+  </tr>`;
+}
+
+function escapeAttr(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderInspectionItems(items) {
+  const list = Array.isArray(items) && items.length ? items : DEFAULT_INSPECTION_ITEMS;
+  document.getElementById('insItemsBody').innerHTML = list.map(inspectionItemRow).join('');
+}
+
+function addInspectionItem() {
+  document.getElementById('insItemsBody').insertAdjacentHTML('beforeend', inspectionItemRow(null));
+}
+
+function collectInspectionItems() {
+  const rows = document.querySelectorAll('#insItemsBody tr');
+  const out = [];
+  rows.forEach(function (tr) {
+    const name = tr.querySelector('.ins-item-name').value.trim();
+    if (!name) return;
+    out.push({
+      name: name,
+      result: tr.querySelector('.ins-item-result').value.trim(),
+      unit: tr.querySelector('.ins-item-unit').value.trim() || 'mg/kg',
+      limit: tr.querySelector('.ins-item-limit').value.trim(),
+      qualified: tr.querySelector('.ins-item-qualified').value === '1'
+    });
+  });
+  return out.length ? out : undefined;
+}
+
+function openInspectionModal(batchNo) {
+  currentInspectionBatch = batchNo;
+  const state = TraceStore.inspectionState(batchNo);
+  const ins = state.latest || {};
+  document.getElementById('inspectionModalTitle').textContent = '检测报告 · ' + batchNo;
+  document.getElementById('insBatchNo').value = batchNo;
+  document.getElementById('insReportNo').value = ins.reportNo || '';
+  document.getElementById('insInstitution').value = ins.institution || '';
+  document.getElementById('insReportType').value = ins.reportType || '农药残留检测';
+  document.getElementById('insSampleDate').value = ins.sampleDate || '';
+  document.getElementById('insIssueDate').value = ins.issueDate || new Date().toISOString().slice(0, 10);
+  document.getElementById('insValidUntil').value = ins.validUntil || '';
+  document.getElementById('insConclusion').value = ins.conclusion || '合格';
+  document.getElementById('insCma').value = ins.cma || '';
+  document.getElementById('insCnas').value = ins.cnas || '';
+  document.getElementById('insAttachment').value = '';
+  document.getElementById('insAttachmentHint').textContent = ins.attachment
+    ? `已上传：${ins.attachment.name}（${Math.round(ins.attachment.size / 1024)}KB）`
+    : '支持 PDF / JPG / PNG；≤300KB 可在本地预览，超出仅保存文件信息。';
+  renderInspectionItems(ins.items);
+  openModal('inspectionModal');
+}
+
+function readFileAttachment(file, cb) {
+  if (!file) { cb(null); return; }
+  const meta = { name: file.name, size: file.size, type: file.type || 'application/octet-stream', uploadedAt: new Date().toLocaleString('zh-CN', { hour12: false }) };
+  if (file.size <= 300 * 1024) {
+    const reader = new FileReader();
+    reader.onload = function () { meta.dataUrl = reader.result; cb(meta); };
+    reader.onerror = function () { cb(meta); };
+    reader.readAsDataURL(file);
+  } else {
+    cb(meta);
+  }
+}
+
+function saveInspectionForm() {
+  const batchNo = currentInspectionBatch || document.getElementById('insBatchNo').value;
+  const reportNo = document.getElementById('insReportNo').value.trim();
+  const institution = document.getElementById('insInstitution').value.trim();
+  if (!reportNo) { showToast('请填写检测报告编号', 'error'); return; }
+  if (!institution) { showToast('请填写检测机构', 'error'); return; }
+  const file = document.getElementById('insAttachment').files[0];
+  readFileAttachment(file, function (attachment) {
+    const old = TraceStore.inspectionState(batchNo).latest;
+    const payload = {
+      id: old ? old.id : undefined,
+      batchNo: batchNo,
+      reportNo: reportNo,
+      institution: institution,
+      reportType: document.getElementById('insReportType').value,
+      sampleDate: document.getElementById('insSampleDate').value,
+      issueDate: document.getElementById('insIssueDate').value,
+      validUntil: document.getElementById('insValidUntil').value,
+      conclusion: document.getElementById('insConclusion').value,
+      cma: document.getElementById('insCma').value.trim(),
+      cnas: document.getElementById('insCnas').value.trim(),
+      attachment: attachment || (old ? old.attachment : null),
+      items: collectInspectionItems() || (old ? old.items : undefined),
+      status: (old && old.status === 'revoked' && old.reportNo === reportNo) ? 'revoked' : undefined
+    };
+    const res = TraceStore.saveInspection(payload);
+    if (!res.ok) { showToast(res.message || '保存失败', 'error'); return; }
+    showToast('检测报告已保存');
+    closeModal('inspectionModal');
+    Pagination.updateData(loadBatches());
+  });
 }
 
 /* ---------- 弹窗 / 提示 ---------- */
@@ -651,7 +994,7 @@ function showToast(message, type = 'success') {
 /* ---------- 初始化 ---------- */
 document.addEventListener('DOMContentLoaded', function() {
   const baseSelect = document.getElementById('baseSelect');
-  [...new Set(PLOT_SOURCE.map(p => p.base))].forEach(b => {
+  BASE_SOURCE.forEach(b => {
     const opt = document.createElement('option');
     opt.value = b; opt.textContent = b;
     baseSelect.appendChild(opt);
@@ -673,6 +1016,10 @@ document.addEventListener('DOMContentLoaded', function() {
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderBatchRow
+  });
+
+  TraceStore.subscribe(function () {
+    Pagination.updateData(loadBatches());
   });
 
   // 点击遮罩关闭

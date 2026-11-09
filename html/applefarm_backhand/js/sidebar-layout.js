@@ -770,6 +770,7 @@ const MENU_CONFIG = [
 
   { id: 'production', icon: 'sprout', label: '生产管理', children: [
     { id: 'farming-plan', label: '农事计划', path: 'farming_plan.html' },
+    { id: 'task-assign', label: '任务管理', path: 'task_assign.html' },
     { id: 'farming-record', label: '农事记录', path: 'farming_record.html' },
     { id: 'farming-patrol', label: '巡园管理', path: 'farming_patrol.html' },
     { id: 'drone-patrol', label: '无人机巡检', path: 'drone_patrol.html' },
@@ -779,18 +780,20 @@ const MENU_CONFIG = [
   { id: 'harvest', icon: 'shopping-bag', label: '采收管理', children: [
     { id: 'harvest-plan', label: '采收计划', path: 'harvest_plan.html' },
     { id: 'harvest-record', label: '采收记录', path: 'harvest_record.html' },
+    { id: 'harvest-report', label: '采收日报', path: 'harvest_report.html' },
     { id: 'harvest-process', label: '采后处理', path: 'harvest_process.html' },
-    { id: 'harvest-post', label: '采收发货', path: 'harvest_post.html' },
     { id: 'harvest-storage', label: '储藏管理', path: 'harvest_storage.html' },
+    { id: 'harvest-post', label: '采收发货', path: 'harvest_post.html' },
   ]},
 
   { id: 'material', icon: 'package', label: '物资管理', children: [
-    { id: 'material-info', label: '农资信息', path: 'material_info.html' },
-    { id: 'material-inventory', label: '农资库存', path: 'material_inventory.html' },
-    { id: 'material-io', label: '农资出入库', path: 'material_io.html' },
-    { id: 'material-return', label: '农资退货', path: 'material_return.html' },
     { id: 'material-supplier', label: '农资供应商', path: 'material_supplier.html' },
-    { id: 'material-usage', label: '农资使用', path: 'material_usage.html' },
+    { id: 'material-info', label: '农资档案', path: 'material_info.html' },
+    { id: 'material-io', label: '农资出入库', path: 'material_io.html' },
+    { id: 'material-inventory', label: '农资库存', path: 'material_inventory.html' },
+    { id: 'material-usage', label: '领用与使用', path: 'material_usage.html' },
+    { id: 'material-return', label: '退库与退货', path: 'material_return.html' },
+    { id: 'material-config', label: '基础配置', path: 'material_config.html' },
   ]},
 
   { id: 'device', icon: 'cpu', label: '设备管理', children: [
@@ -814,8 +817,10 @@ const MENU_CONFIG = [
     { id: 'trace-batch', label: '批次管理', path: 'trace_batch.html' },
     { id: 'trace-code', label: '溯源编码', path: 'trace_code.html' },
     { id: 'trace-query', label: '溯源查询', path: 'trace_query.html' },
-    { id: 'trace-blockchain', label: '溯源区块链', path: 'trace_blockchain.html' },
     { id: 'trace-config', label: '溯源配置', path: 'trace_config.html' },
+    { id: 'trace-statistics', label: '溯源统计', path: 'trace_statistics.html' },
+    { id: 'trace-blockchain', label: '区块链存证', path: 'trace_blockchain.html' },
+    { id: 'trace-label', label: '标签管理', path: 'material_label.html' },
   ]},
 
   { id: 'sales', icon: 'trending-up', label: '销售运营', children: [
@@ -859,7 +864,6 @@ const MENU_CONFIG = [
     { id: 'system-settings', label: '系统设置', path: 'system_settings.html' },
     { id: 'menu-settings', label: '菜单设置', path: 'menu_settings.html' },
     { id: 'user-settings', label: '用户设置', path: 'user_settings.html' },
-    { id: 'task-assign', label: '任务分配', path: 'task_assign.html' },
   ]},
 
   { id: 'dataops', icon: 'database', label: '数据运营', children: [

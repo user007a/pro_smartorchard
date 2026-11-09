@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>智慧果园 - 任务分配</title>
+<title>智慧果园 - 任务管理</title>
 <link rel="stylesheet" href="css/design-system.css">
 <link rel="stylesheet" href="css/sidebar-layout.css">
 <link rel="stylesheet" href="css/page-content.css">
@@ -18,10 +18,11 @@
     display:flex;
     align-items:center;
     justify-content:center;
+    padding:24px;
     z-index:1000;
     opacity:0;
     visibility:hidden;
-    transition:all 0.3s ease;
+    transition:opacity 0.25s ease, visibility 0.25s ease;
   }
   .modal-overlay.active {
     opacity:1;
@@ -30,164 +31,729 @@
   .modal {
     background:var(--bg-card);
     border-radius:16px;
-    width:560px;
-    max-width:90vw;
+    width:660px;
+    max-width:94vw;
     max-height:90vh;
     overflow:hidden;
-    transform:scale(0.9);
-    transition:all 0.3s ease;
+    display:flex;
+    flex-direction:column;
+    box-shadow:0 12px 40px rgba(0, 0, 0, 0.18);
+    opacity:0;
+    transform:scale(0.96) translateY(10px);
+    transition:opacity 0.25s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .modal-overlay.active .modal {
-    transform:scale(1);
+    opacity:1;
+    transform:none;
   }
   .modal-header {
-    padding:20px 24px;
-    border-bottom:1px solid var(--border-default);
+    padding:18px 24px;
     display:flex;
     align-items:center;
     justify-content:space-between;
+    gap:16px;
     background:linear-gradient(135deg, #1890ff 0%, #1a8a3a 100%);
-    color:var(--text-inverse);
+    border-bottom:none;
+    position:relative;
+    flex:none;
+  }
+  .modal-header::before {
+    display:none;
   }
   .modal-header h3 {
-    font-size:18px;
+    font-size:17px;
     font-weight:600;
+    color:#fff;
     margin:0;
+    line-height:1.3;
   }
   .modal-close {
     width:32px;
     height:32px;
     border-radius:50%;
-    background:rgba(255,255,255,0.2);
+    background:rgba(255, 255, 255, 0.2);
     border:none;
-    color:var(--text-inverse);
+    color:#fff;
     cursor:pointer;
     display:flex;
     align-items:center;
     justify-content:center;
-    transition:all 0.2s;
+    flex:none;
+    transition:background 0.2s ease;
+  }
+  .modal-close::after {
+    display:none;
   }
   .modal-close:hover {
-    background:rgba(255,255,255,0.3);
+    background:rgba(255, 255, 255, 0.32);
+    color:#fff;
   }
   .modal-body {
-    padding:24px;
-    max-height:60vh;
+    padding:22px 24px 24px;
     overflow-y:auto;
+    flex:1 1 auto;
+    min-height:0;
+    max-height:none;
   }
   .modal-footer {
-    padding:16px 24px;
-    border-top:1px solid var(--border-default);
+    padding:14px 24px;
     display:flex;
     justify-content:flex-end;
+    align-items:center;
     gap:12px;
+    border-top:1px solid var(--border-light);
+    background:transparent;
+    flex:none;
   }
-  .detail-grid {
-    display:grid;
-    grid-template-columns:120px 1fr;
+
+  /* ---------- 头部左侧：图标 + 标题 + 副标题 ---------- */
+  .tm-hd {
+    display:flex;
+    align-items:center;
     gap:12px;
-    padding:8px 0;
-    border-bottom:1px solid var(--border-light);
+    min-width:0;
   }
-  .detail-grid:last-child {
-    border-bottom:none;
+  .tm-hd-icon {
+    width:38px;
+    height:38px;
+    border-radius:11px;
+    background:rgba(255, 255, 255, 0.18);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex:none;
   }
-  .detail-label {
-    color:var(--text-tertiary);
-    font-size:14px;
+  .tm-hd-icon svg {
+    width:20px;
+    height:20px;
+    stroke:#fff;
   }
-  .detail-value {
-    color:var(--text-primary);
-    font-size:14px;
-    font-weight:500;
+  .tm-hd-text {
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    min-width:0;
   }
-  .generate-form {
+  .tm-hd-sub {
+    font-size:12px;
+    line-height:1.3;
+    color:rgba(255, 255, 255, 0.82);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .tm-hd-code {
+    display:inline-flex;
+    align-items:center;
+    height:22px;
+    padding:0 8px;
+    border-radius:4px;
+    background:rgba(255, 255, 255, 0.18);
+    font-family:var(--u-font-mono, monospace);
+    font-size:12px;
+    letter-spacing:0.4px;
+    color:#fff;
+    flex:none;
+  }
+  .tm-hd-right {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex:none;
+  }
+
+  /* ---------- 详情：信息网格容器 ---------- */
+  .tm-stack {
     display:grid;
     gap:16px;
   }
-  .form-group {
+  .tm-fields {
+    display:grid;
+    gap:14px;
+  }
+  .tm-field {
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .tm-field > label {
+    font-size:14px;
+    font-weight:500;
+    color:var(--text-secondary);
+    line-height:1.4;
+  }
+  .tm-field > div {
+    display:flex;
+    align-items:center;
+    min-height:34px;
+    padding:8px 12px;
+    border:1.5px solid #e8ede8;
+    border-radius:8px;
+    background:#f5f7f5;
+    font-size:14px;
+    font-weight:500;
+    line-height:1.5;
+    color:var(--text-primary);
+    word-break:break-word;
+  }
+  .tm-field > div.empty {
+    color:var(--text-tertiary);
+    font-weight:400;
+  }
+
+  /* ---------- 正文分区标题 ---------- */
+  .tm-section {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:2px 0 4px;
+  }
+  .tm-section:first-child {
+    margin-top:0;
+  }
+  .tm-section-bar {
+    width:3px;
+    height:13px;
+    border-radius:2px;
+    background:linear-gradient(180deg, var(--primary-400), var(--primary-600));
+    flex:none;
+  }
+  .tm-section-title {
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:0.2px;
+    color:var(--text-secondary);
+    white-space:nowrap;
+  }
+  .tm-section-line {
+    flex:1;
+    height:1px;
+    background:var(--border-light);
+  }
+
+  /* ---------- 表单微调 ---------- */
+  .tm-form {
+    display:grid;
+    gap:14px;
+  }
+  .tm-row {
+    display:grid;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+    gap:14px 16px;
+  }
+  .tm-row > .form-group {
+    margin-bottom:0;
+  }
+  .tm-row:has(> .form-group:only-child) {
+    grid-template-columns:minmax(0, 1fr);
+  }
+  .tm-form .form-group label.required::after {
+    content:'*';
+    color:var(--error);
+    font-weight:600;
+    margin-left:2px;
+  }
+  .tm-form .form-group input.form-control,
+  .tm-form .form-group select.form-control,
+  .tm-form .form-group textarea.form-control {
+    width:100%;
+  }
+  .tm-tip {
+    display:flex;
+    align-items:center;
+    gap:5px;
+    font-size:12px;
+    line-height:1.5;
+    color:var(--text-tertiary);
+  }
+  .tm-tip svg {
+    width:13px;
+    height:13px;
+    flex:none;
+  }
+  .tm-qty {
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .tm-qty .form-control {
+    flex:1;
+    min-width:0;
+  }
+  .tm-qty-unit {
+    flex:none;
+    width:86px;
+    height:41px;
+    padding:0 26px 0 10px;
+    border:1.5px solid #e8ede8;
+    border-radius:8px;
+    background-color:#fafcfa;
+    font-size:13px;
+    color:var(--text-secondary);
+    appearance:none;
+    cursor:pointer;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c8c8c' stroke-width='2'%3E%3Cpath d='m6,9 6,6 6,-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 8px center;
+    transition:all 0.2s ease;
+  }
+  .tm-qty-unit:hover {
+    border-color:#c5cdc5;
+    background-color:#fff;
+  }
+  .tm-qty-unit:focus {
+    outline:none;
+    border-color:var(--primary-500);
+    box-shadow:0 0 0 3px rgba(24, 144, 255, 0.1);
+  }
+
+  /* ---------- 批量分配弹窗：补齐裸控件样式 ---------- */
+  #batchModal .generate-form {
+    display:grid;
+    gap:14px;
+  }
+  #batchModal .generate-form .form-group {
+    margin-bottom:0;
+  }
+  #batchModal .form-group select {
+    height:41px;
+    padding:0 36px 0 14px;
+    border:1.5px solid #e8ede8;
+    border-radius:8px;
+    background-color:#fafcfa;
+    font-size:13px;
+    color:var(--text-primary);
+    cursor:pointer;
+    appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c8c8c' stroke-width='2'%3E%3Cpath d='m6,9 6,6 6,-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 14px center;
+    transition:all 0.2s ease;
+  }
+  #batchModal .form-group select:focus {
+    outline:none;
+    border-color:var(--primary-500);
+    background-color:#fff;
+    box-shadow:0 0 0 3px rgba(24, 144, 255, 0.1);
+  }
+
+  /* ---------- 详情：概览卡 ---------- */
+  .tm-overview {
+    display:flex;
+    align-items:stretch;
+    justify-content:space-between;
+    gap:20px;
+    padding:16px 18px;
+    border:1px solid var(--border-light);
+    border-radius:12px;
+    background:linear-gradient(135deg, #f7fbff 0%, #f6faf6 100%);
+  }
+  .tm-ov-main {
+    min-width:0;
     display:flex;
     flex-direction:column;
     gap:8px;
   }
-  .form-group label {
-    font-size:14px;
-    font-weight:500;
+  .tm-ov-name {
+    font-size:17px;
+    font-weight:600;
+    line-height:1.4;
     color:var(--text-primary);
   }
-  .form-group input,
-  .form-group select,
-  .form-group textarea {
+  .tm-ov-sub {
+    font-size:12.5px;
+    line-height:1.5;
+    color:var(--text-tertiary);
+  }
+  .tm-ov-tags {
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .tm-ov-side {
+    flex:none;
+    width:190px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:8px;
+    padding-left:18px;
+    border-left:1px dashed var(--border-default);
+  }
+  .tm-ov-kpi {
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:8px;
+    font-size:12px;
+    color:var(--text-tertiary);
+  }
+  .tm-ov-kpi b {
+    font-size:18px;
+    font-weight:600;
+    color:var(--text-primary);
+    font-variant-numeric:tabular-nums;
+  }
+  .tm-bar {
+    height:6px;
+    border-radius:3px;
+    background:var(--gray-200);
+    overflow:hidden;
+  }
+  .tm-bar i {
+    display:block;
+    height:100%;
+    border-radius:3px;
+    background:linear-gradient(90deg, var(--primary-500), #1a8a3a);
+    transition:width 0.4s ease;
+  }
+  .tm-ov-note {
+    font-size:12px;
+    line-height:1.5;
+    color:var(--text-tertiary);
+  }
+  .tm-ov-note.warn {
+    color:#cf1322;
+  }
+
+  /* ---------- 详情：状态步骤条 ---------- */
+  .tm-steps {
+    display:flex;
+    align-items:flex-start;
+    padding:14px 18px;
+    border:1px solid var(--border-light);
+    border-radius:12px;
+    background:var(--bg-card);
+  }
+  .tm-step {
+    flex:1;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+  }
+  .tm-step::before {
+    content:'';
+    position:absolute;
+    top:11px;
+    left:-50%;
+    width:100%;
+    height:2px;
+    background:var(--border-default);
+  }
+  .tm-step:first-child::before {
+    display:none;
+  }
+  .tm-step.done::before,
+  .tm-step.now::before {
+    background:var(--primary-400);
+  }
+  .tm-step-dot {
+    width:24px;
+    height:24px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#fff;
+    border:2px solid var(--border-default);
+    font-size:11px;
+    font-weight:600;
+    color:var(--text-disabled);
+    z-index:1;
+  }
+  .tm-step.done .tm-step-dot {
+    background:var(--primary-50);
+    border-color:var(--primary-400);
+    color:var(--primary-600);
+  }
+  .tm-step.now .tm-step-dot {
+    background:var(--primary-500);
+    border-color:var(--primary-500);
+    color:#fff;
+    box-shadow:0 0 0 3px rgba(24, 144, 255, 0.15);
+  }
+  .tm-step-label {
+    font-size:12px;
+    color:var(--text-tertiary);
+    white-space:nowrap;
+  }
+  .tm-step.done .tm-step-label {
+    color:var(--text-secondary);
+  }
+  .tm-step.now .tm-step-label {
+    color:var(--primary-600);
+    font-weight:600;
+  }
+
+  /* ---------- 详情：提示条 ---------- */
+  .tm-note {
+    display:flex;
+    align-items:flex-start;
+    gap:8px;
     padding:10px 14px;
-    border:1px solid var(--border-default);
     border-radius:8px;
-    font-size:14px;
-    transition:all 0.2s;
+    border:1px solid var(--info-border);
+    background:var(--info-bg);
+    color:#096dd9;
+    font-size:12.5px;
+    line-height:1.6;
   }
-  .form-group input:focus,
-  .form-group select:focus,
-  .form-group textarea:focus {
-    outline:none;
-    border-color:var(--border-primary);
-    box-shadow:0 0 0 3px rgba(24,144,255,0.1);
+  .tm-note svg {
+    width:14px;
+    height:14px;
+    flex:none;
+    margin-top:2px;
   }
-  .form-row {
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:16px;
+  .tm-note.warn {
+    border-color:var(--warning-border);
+    background:var(--warning-bg);
+    color:#ad8b00;
   }
-  .form-row-3 {
-    display:grid;
-    grid-template-columns:1fr 1fr 1fr;
+  .tm-note.danger {
+    border-color:var(--error-border);
+    background:var(--error-bg);
+    color:#cf1322;
+  }
+
+  /* ---------- 详情：农事记录清单 ---------- */
+  .tm-records {
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .tm-record {
+    display:flex;
+    align-items:center;
     gap:12px;
+    padding:10px 14px;
+    border:1px solid var(--border-light);
+    border-radius:8px;
+    background:var(--bg-card);
+    transition:all 0.18s ease;
   }
-  .form-group textarea {
-    min-height:80px;
-    resize:vertical;
+  .tm-record:hover {
+    border-color:var(--primary-200);
+    background:var(--primary-50);
   }
+  .tm-record-id {
+    flex:none;
+    font-family:var(--u-font-mono, monospace);
+    font-size:12px;
+    color:var(--text-tertiary);
+  }
+  .tm-record-body {
+    flex:1;
+    min-width:0;
+    font-size:13px;
+    color:var(--text-primary);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .tm-record-qty {
+    flex:none;
+    font-size:13px;
+    font-weight:600;
+    color:var(--text-primary);
+    font-variant-numeric:tabular-nums;
+  }
+  .tm-empty {
+    padding:16px;
+    text-align:center;
+    font-size:13px;
+    color:var(--text-tertiary);
+    border:1px dashed var(--border-default);
+    border-radius:8px;
+    background:var(--gray-50);
+  }
+
+  /* ---------- 详情：任务描述 ---------- */
+  .tm-desc {
+    padding:12px 14px;
+    border:1px solid var(--border-light);
+    border-radius:8px;
+    background:var(--gray-50);
+    font-size:13px;
+    line-height:1.75;
+    color:var(--text-secondary);
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+
+  /* ---------- 状态/优先级小标签 ---------- */
+  .tm-pri {
+    display:inline-flex;
+    align-items:center;
+    height:22px;
+    padding:0 8px;
+    border-radius:4px;
+    font-size:12px;
+    font-weight:500;
+    line-height:1;
+    white-space:nowrap;
+  }
+  .tm-pri.high {
+    background:var(--error-bg);
+    color:var(--error);
+    border:1px solid var(--error-border);
+  }
+  .tm-pri.medium {
+    background:var(--warning-bg);
+    color:#ad8b00;
+    border:1px solid var(--warning-border);
+  }
+  .tm-pri.low {
+    background:var(--gray-100);
+    color:var(--text-tertiary);
+    border:1px solid var(--border-default);
+  }
+  .status-tag.blue {
+    background:var(--info-bg);
+    color:var(--info);
+    border:1px solid var(--info-border);
+  }
+  .status-tag.blue::before {
+    background:var(--info);
+  }
+  .status-tag.purple {
+    background:#f9f0ff;
+    color:#722ed1;
+    border:1px solid #d3adf7;
+  }
+  .status-tag.purple::before {
+    background:#9254de;
+  }
+
+  /* ---------- Toast ---------- */
   .toast {
     position:fixed;
     top:20px;
     right:20px;
-    padding:14px 20px;
+    padding:12px 18px;
     background:var(--bg-card);
+    border:1px solid var(--border-light);
+    border-left:4px solid var(--primary-500);
     border-radius:10px;
-    box-shadow:0 4px 20px rgba(0,0,0,0.15);
+    box-shadow:0 8px 24px rgba(0, 0, 0, 0.12);
     display:flex;
     align-items:center;
-    gap:12px;
+    gap:10px;
     z-index:2000;
+    max-width:380px;
     transform:translateX(120%);
-    transition:all 0.3s ease;
+    transition:transform 0.3s ease;
   }
   .toast.show {
     transform:translateX(0);
   }
   .toast.success {
-    border-left:4px solid var(--border-primary);
+    border-left-color:var(--success);
   }
   .toast.error {
-    border-left:4px solid #dc2626;
+    border-left-color:var(--error);
+  }
+  .toast.warning {
+    border-left-color:var(--warning);
   }
   .toast-icon {
-    width:24px;
-    height:24px;
+    width:22px;
+    height:22px;
     border-radius:50%;
-    background:var(--gray-100);
+    background:var(--primary-50);
     display:flex;
     align-items:center;
     justify-content:center;
-    color:var(--primary-500);
+    flex:none;
+    color:var(--primary-600);
+  }
+  .toast-icon svg {
+    width:13px;
+    height:13px;
+  }
+  .toast.success .toast-icon {
+    background:var(--success-bg);
+    color:var(--success);
   }
   .toast.error .toast-icon {
     background:var(--error-bg);
-    color:#dc2626;
+    color:var(--error);
   }
+  .toast.warning .toast-icon {
+    background:var(--warning-bg);
+    color:var(--warning);
+  }
+  .toast-message {
+    font-size:13.5px;
+    line-height:1.5;
+    color:var(--text-primary);
+  }
+
   .pagination-info {
     display:flex;
     align-items:center;
     color:var(--text-tertiary);
     font-size:14px;
+  }
+
+  /* ===== 任务排期甘特图 ===== */
+  .gantt-toolbar {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
+  }
+  .gantt-legend {
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .gantt-legend-item {
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:12px;
+    color:var(--text-secondary);
+  }
+  .gantt-legend-dot {
+    width:10px;
+    height:10px;
+    border-radius:3px;
+    flex:none;
+  }
+  .gantt-summary {
+    display:flex;
+    gap:20px;
+    flex-wrap:wrap;
+    padding:10px 14px;
+    margin-bottom:12px;
+    border-radius:var(--radius-md);
+    background:var(--gray-50);
+    border:1px solid var(--border-light);
+    font-size:12px;
+    color:var(--text-tertiary);
+  }
+  .gantt-summary b {
+    color:var(--text-primary);
+    font-size:14px;
+    font-weight:600;
+    font-variant-numeric:tabular-nums;
+    margin-left:4px;
+  }
+  .gantt-filter {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .gantt-filter .jg-btn.is-active {
+    color:#fff;
+    border-color:var(--primary-500);
+    background:var(--primary-500);
   }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
@@ -213,6 +779,21 @@
 
     <main class="main-content">
       <div class="content-wrapper">
+
+        <!-- ===== 任务排期甘特图 ===== -->
+        <div class="page-section chart-section">
+          <div class="gantt-toolbar">
+            <div class="gantt-filter">
+              <button class="jg-btn is-active" onclick="ganttSetScope('all')" id="ganttScopeAll">全部任务</button>
+              <button class="jg-btn" onclick="ganttSetScope('active')" id="ganttScopeActive">进行中</button>
+              <button class="jg-btn" onclick="ganttSetScope('overdue')" id="ganttScopeOverdue">已超期</button>
+              <button class="jg-btn" onclick="ganttSetScope('mine')" id="ganttScopeMine">我负责的</button>
+            </div>
+            <div class="gantt-legend" id="ganttLegend"></div>
+          </div>
+          <div class="gantt-summary" id="ganttSummary"></div>
+          <div id="chart-task-gantt" class="chart-container" style="height:420px;"></div>
+        </div>
 
         <div class="search-section">
           <div class="search-bar">
@@ -288,25 +869,25 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th class="checkbox-col" style="width:50px;">序号</th>
-                <th style="width:110px;">任务编号</th>
+                <th class="checkbox-col" style="width:44px;"><input type="checkbox" id="checkAll" onchange="toggleAll(this.checked)"></th>
+                <th style="width:116px;">任务编号</th>
                 <th>任务名称</th>
-                <th>所属基地</th>
-                <th>地块</th>
-                <th>任务类型</th>
-                <th>优先级</th>
-                <th>负责人</th>
-                <th>班组</th>
-                <th>计划时间</th>
-                <th>截止时间</th>
-                <th>状态</th>
-                <th>操作</th>
+                <th style="width:168px;">来源计划</th>
+                <th style="width:150px;">基地 / 地块</th>
+                <th style="width:80px;">类别</th>
+                <th style="width:82px;">执行主体</th>
+                <th style="width:72px;">优先级</th>
+                <th style="width:78px;">负责人</th>
+                <th style="width:64px;">班组</th>
+                <th style="width:96px;">截止时间</th>
+                <th style="width:76px;">状态</th>
+                <th style="width:160px;">操作</th>
               </tr>
             </thead>
             <tbody id="dataTableBody">
             </tbody>
           </table>
-          <div class="pagination" id="paginationContainer">
+          <div id="pagination-container">
           </div>
         </div>
       </div>
@@ -319,48 +900,78 @@
 <div class="modal-overlay" id="createModal">
   <div class="modal">
     <div class="modal-header">
-      <h3>新建任务</h3>
-      <button class="modal-close" onclick="closeModal('createModal')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
-          <path d="M18 6L6 18M6 6l12 12"/>
-        </svg>
-      </button>
+      <div class="tm-hd">
+        <div class="tm-hd-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="3" width="16" height="18" rx="2.5"/>
+            <path d="M12 8v6M9 11h6"/>
+          </svg>
+        </div>
+        <div class="tm-hd-text">
+          <h3>新建任务</h3>
+          <span class="tm-hd-sub">创建后默认进入「待接收」状态，由负责人接单执行</span>
+        </div>
+      </div>
+      <div class="tm-hd-right">
+        <button class="modal-close" onclick="closeModal('createModal')" aria-label="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div class="modal-body">
-      <div class="generate-form">
-        <div class="form-group">
-          <label>任务名称</label>
-          <input type="text" id="createName" placeholder="请输入任务名称">
+      <div class="tm-form">
+        <div class="tm-section">
+          <span class="tm-section-bar"></span>
+          <span class="tm-section-title">基本信息</span>
+          <span class="tm-section-line"></span>
         </div>
-        <div class="form-row">
+        <div class="tm-row">
           <div class="form-group">
-            <label>所属基地</label>
-            <select id="createBase">
-              <option value="">请选择基地</option>
-              <option value="天水麦积区基地">天水麦积区基地</option>
-              <option value="天水秦州基地">天水秦州基地</option>
-              <option value="青岛莱西基地">青岛莱西基地</option>
-              <option value="招远基地">招远基地</option>
-            </select>
+            <label class="required" for="createName">任务名称</label>
+            <input type="text" class="form-control" id="createName" placeholder="例如：A1区春季追肥">
           </div>
           <div class="form-group">
-            <label>地块</label>
-            <select id="createPlot">
-              <option value="">请选择地块</option>
-              <option value="A1区">A1区</option>
-              <option value="A2区">A2区</option>
-              <option value="B1区">B1区</option>
-              <option value="B2区">B2区</option>
-              <option value="C1区">C1区</option>
-              <option value="C2区">C2区</option>
+            <label for="createPlan">来源农事计划</label>
+            <select class="form-control" id="createPlan" onchange="onCreatePlanChange()">
+              <option value="">不关联计划（临时任务）</option>
             </select>
           </div>
         </div>
-        <div class="form-row-3">
+        <p class="tm-tip" id="createPlanTip" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          <span id="createPlanTipText"></span>
+        </p>
+
+        <div class="tm-section">
+          <span class="tm-section-bar"></span>
+          <span class="tm-section-title">作业属性</span>
+          <span class="tm-section-line"></span>
+        </div>
+        <div class="tm-row">
           <div class="form-group">
-            <label>任务类型</label>
-            <select id="createType">
-              <option value="">请选择</option>
+            <label for="createCategory">任务类别</label>
+            <select class="form-control" id="createCategory">
+              <option value="farming">农事</option>
+              <option value="patrol">巡园</option>
+              <option value="drone">飞巡</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="createExecutor">执行主体</label>
+            <select class="form-control" id="createExecutor">
+              <option value="person">个人</option>
+              <option value="team">班组</option>
+              <option value="drone">无人机</option>
+            </select>
+          </div>
+        </div>
+        <div class="tm-row">
+          <div class="form-group">
+            <label class="required" for="createType">任务类型</label>
+            <select class="form-control" id="createType">
+              <option value="">请选择任务类型</option>
               <option value="施肥">施肥</option>
               <option value="施药">施药</option>
               <option value="修剪">修剪</option>
@@ -372,26 +983,70 @@
             </select>
           </div>
           <div class="form-group">
-            <label>优先级</label>
-            <select id="createPriority">
+            <label for="createPriority">优先级</label>
+            <select class="form-control" id="createPriority">
               <option value="medium">普通</option>
               <option value="high">紧急</option>
               <option value="low">低</option>
             </select>
           </div>
+        </div>
+        <div class="tm-row">
           <div class="form-group">
-            <label>班组</label>
-            <select id="createTeam">
+            <label for="createTargetQty">目标量</label>
+            <div class="tm-qty">
+              <input type="number" class="form-control" id="createTargetQty" placeholder="0" min="0">
+              <select class="tm-qty-unit" id="createUnit">
+                <option value="亩">亩</option>
+                <option value="个">个</option>
+                <option value="kg">kg</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="createTeam">班组</label>
+            <select class="form-control" id="createTeam">
               <option value="一班">一班</option>
               <option value="二班">二班</option>
               <option value="三班">三班</option>
             </select>
           </div>
         </div>
-        <div class="form-row">
+
+        <div class="tm-section">
+          <span class="tm-section-bar"></span>
+          <span class="tm-section-title">作业位置</span>
+          <span class="tm-section-line"></span>
+        </div>
+        <div class="tm-row">
           <div class="form-group">
-            <label>负责人</label>
-            <select id="createPerson">
+            <label class="required" for="createBase">所属基地</label>
+            <select class="form-control" id="createBase" onchange="onCreateBaseChange()">
+              <option value="">请选择基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水秦州基地">天水秦州基地</option>
+              <option value="天水甘谷基地">天水甘谷基地</option>
+              <option value="青岛莱西基地">青岛莱西基地</option>
+              <option value="招远基地">招远基地</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="required" for="createPlot">地块</label>
+            <select class="form-control" id="createPlot">
+              <option value="">请选择地块</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="tm-section">
+          <span class="tm-section-bar"></span>
+          <span class="tm-section-title">人员与时间</span>
+          <span class="tm-section-line"></span>
+        </div>
+        <div class="tm-row">
+          <div class="form-group">
+            <label class="required" for="createPerson">负责人</label>
+            <select class="form-control" id="createPerson">
               <option value="">请选择负责人</option>
               <option value="惠加宁">惠加宁</option>
               <option value="黄忠坚">黄忠坚</option>
@@ -417,9 +1072,9 @@
             </select>
           </div>
           <div class="form-group">
-            <label>分配人员</label>
-            <select id="createWorker">
-              <option value="">请选择人员</option>
+            <label for="createWorker">分配人员</label>
+            <select class="form-control" id="createWorker">
+              <option value="">默认同负责人</option>
               <option value="惠加宁">惠加宁</option>
               <option value="黄忠坚">黄忠坚</option>
               <option value="徐水应">徐水应</option>
@@ -444,19 +1099,24 @@
             </select>
           </div>
         </div>
-        <div class="form-row">
+        <div class="tm-row">
           <div class="form-group">
-            <label>计划时间</label>
-            <input type="datetime-local" id="createPlanTime">
+            <label for="createPlanTime">计划开始时间</label>
+            <input type="datetime-local" class="form-control" id="createPlanTime">
           </div>
           <div class="form-group">
-            <label>截止时间</label>
-            <input type="date" id="createDeadline">
+            <label for="createDeadline">截止时间</label>
+            <input type="date" class="form-control" id="createDeadline">
           </div>
         </div>
+
+        <div class="tm-section">
+          <span class="tm-section-bar"></span>
+          <span class="tm-section-title">任务描述</span>
+          <span class="tm-section-line"></span>
+        </div>
         <div class="form-group">
-          <label>任务描述</label>
-          <textarea id="createDesc" placeholder="请输入任务描述（选填）"></textarea>
+          <textarea class="form-control" id="createDesc" rows="3" placeholder="请输入作业要求、技术要点等（选填）"></textarea>
         </div>
       </div>
     </div>
@@ -471,12 +1131,26 @@
 <div class="modal-overlay" id="detailModal">
   <div class="modal">
     <div class="modal-header">
-      <h3>任务详情</h3>
-      <button class="modal-close" onclick="closeModal('detailModal')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
-          <path d="M18 6L6 18M6 6l12 12"/>
-        </svg>
-      </button>
+      <div class="tm-hd">
+        <div class="tm-hd-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 3v5h5M9 13h6M9 17h4"/>
+          </svg>
+        </div>
+        <div class="tm-hd-text">
+          <h3>任务详情</h3>
+          <span class="tm-hd-sub" id="detailHeaderSub">任务全量信息与执行进度</span>
+        </div>
+      </div>
+      <div class="tm-hd-right">
+        <span class="tm-hd-code" id="detailHeaderCode">—</span>
+        <button class="modal-close" onclick="closeModal('detailModal')" aria-label="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div class="modal-body" id="detailContent">
     </div>
@@ -491,49 +1165,79 @@
 <div class="modal-overlay" id="editModal">
   <div class="modal">
     <div class="modal-header">
-      <h3>编辑任务</h3>
-      <button class="modal-close" onclick="closeModal('editModal')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
-          <path d="M18 6L6 18M6 6l12 12"/>
-        </svg>
-      </button>
+      <div class="tm-hd">
+        <div class="tm-hd-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+          </svg>
+        </div>
+        <div class="tm-hd-text">
+          <h3>编辑任务</h3>
+          <span class="tm-hd-sub" id="editHeaderSub">修改任务安排与执行信息</span>
+        </div>
+      </div>
+      <div class="tm-hd-right">
+        <span class="tm-hd-code" id="editHeaderCode">—</span>
+        <button class="modal-close" onclick="closeModal('editModal')" aria-label="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div class="modal-body">
-      <div class="generate-form">
-        <div class="form-group">
-          <label>任务编号</label>
-          <input type="text" id="editCode" disabled>
+      <div class="tm-form">
+        <p class="tm-note" id="editStatusNote">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+          <span id="editStatusNoteText"></span>
+        </p>
+
+        <div class="tm-section">
+          <span class="tm-section-bar"></span>
+          <span class="tm-section-title">基本信息</span>
+          <span class="tm-section-line"></span>
         </div>
-        <div class="form-group">
-          <label>任务名称</label>
-          <input type="text" id="editName">
-        </div>
-        <div class="form-row">
+        <div class="tm-row">
           <div class="form-group">
-            <label>所属基地</label>
-            <select id="editBase">
-              <option value="天水麦积区基地">天水麦积区基地</option>
-              <option value="天水秦州基地">天水秦州基地</option>
-              <option value="青岛莱西基地">青岛莱西基地</option>
-              <option value="招远基地">招远基地</option>
-            </select>
+            <label class="required" for="editName">任务名称</label>
+            <input type="text" class="form-control" id="editName" placeholder="请输入任务名称">
           </div>
           <div class="form-group">
-            <label>地块</label>
-            <select id="editPlot">
-              <option value="A1区">A1区</option>
-              <option value="A2区">A2区</option>
-              <option value="B1区">B1区</option>
-              <option value="B2区">B2区</option>
-              <option value="C1区">C1区</option>
-              <option value="C2区">C2区</option>
+            <label for="editPlan">来源农事计划</label>
+            <select class="form-control" id="editPlan" onchange="onEditPlanChange()">
+              <option value="">不关联计划（临时任务）</option>
             </select>
           </div>
         </div>
-        <div class="form-row-3">
+
+        <div class="tm-section">
+          <span class="tm-section-bar"></span>
+          <span class="tm-section-title">作业属性</span>
+          <span class="tm-section-line"></span>
+        </div>
+        <div class="tm-row">
           <div class="form-group">
-            <label>任务类型</label>
-            <select id="editType">
+            <label for="editCategory">任务类别</label>
+            <select class="form-control" id="editCategory">
+              <option value="farming">农事</option>
+              <option value="patrol">巡园</option>
+              <option value="drone">飞巡</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editExecutor">执行主体</label>
+            <select class="form-control" id="editExecutor">
+              <option value="person">个人</option>
+              <option value="team">班组</option>
+              <option value="drone">无人机</option>
+            </select>
+          </div>
+        </div>
+        <div class="tm-row">
+          <div class="form-group">
+            <label for="editType">任务类型</label>
+            <select class="form-control" id="editType">
               <option value="施肥">施肥</option>
               <option value="施药">施药</option>
               <option value="修剪">修剪</option>
@@ -545,26 +1249,67 @@
             </select>
           </div>
           <div class="form-group">
-            <label>优先级</label>
-            <select id="editPriority">
+            <label for="editPriority">优先级</label>
+            <select class="form-control" id="editPriority">
               <option value="high">紧急</option>
               <option value="medium">普通</option>
               <option value="low">低</option>
             </select>
           </div>
+        </div>
+        <div class="tm-row">
           <div class="form-group">
-            <label>班组</label>
-            <select id="editTeam">
+            <label for="editTargetQty">目标量</label>
+            <div class="tm-qty">
+              <input type="number" class="form-control" id="editTargetQty" placeholder="0" min="0">
+              <select class="tm-qty-unit" id="editUnit">
+                <option value="亩">亩</option>
+                <option value="个">个</option>
+                <option value="kg">kg</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="editTeam">班组</label>
+            <select class="form-control" id="editTeam">
               <option value="一班">一班</option>
               <option value="二班">二班</option>
               <option value="三班">三班</option>
             </select>
           </div>
         </div>
-        <div class="form-row">
+
+        <div class="tm-section">
+          <span class="tm-section-bar"></span>
+          <span class="tm-section-title">作业位置</span>
+          <span class="tm-section-line"></span>
+        </div>
+        <div class="tm-row">
           <div class="form-group">
-            <label>负责人</label>
-            <select id="editPerson">
+            <label class="required" for="editBase">所属基地</label>
+            <select class="form-control" id="editBase" onchange="onEditBaseChange()">
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水秦州基地">天水秦州基地</option>
+              <option value="天水甘谷基地">天水甘谷基地</option>
+              <option value="青岛莱西基地">青岛莱西基地</option>
+              <option value="招远基地">招远基地</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="required" for="editPlot">地块</label>
+            <select class="form-control" id="editPlot"></select>
+          </div>
+        </div>
+
+        <div class="tm-section">
+          <span class="tm-section-bar"></span>
+          <span class="tm-section-title">人员与时间</span>
+          <span class="tm-section-line"></span>
+        </div>
+        <div class="tm-row">
+          <div class="form-group">
+            <label class="required" for="editPerson">负责人</label>
+            <select class="form-control" id="editPerson">
               <option value="">请选择负责人</option>
               <option value="惠加宁">惠加宁</option>
               <option value="黄忠坚">黄忠坚</option>
@@ -590,9 +1335,9 @@
             </select>
           </div>
           <div class="form-group">
-            <label>分配人员</label>
-            <select id="editWorker">
-              <option value="">请选择人员</option>
+            <label for="editWorker">分配人员</label>
+            <select class="form-control" id="editWorker">
+              <option value="">默认同负责人</option>
               <option value="惠加宁">惠加宁</option>
               <option value="黄忠坚">黄忠坚</option>
               <option value="徐水应">徐水应</option>
@@ -617,29 +1362,40 @@
             </select>
           </div>
         </div>
-        <div class="form-row">
+        <div class="tm-row">
           <div class="form-group">
-            <label>计划时间</label>
-            <input type="datetime-local" id="editPlanTime">
+            <label for="editPlanTime">计划开始时间</label>
+            <input type="datetime-local" class="form-control" id="editPlanTime">
           </div>
           <div class="form-group">
-            <label>截止时间</label>
-            <input type="date" id="editDeadline">
+            <label for="editDeadline">截止时间</label>
+            <input type="date" class="form-control" id="editDeadline">
+          </div>
+        </div>
+
+        <div class="tm-section">
+          <span class="tm-section-bar"></span>
+          <span class="tm-section-title">执行状态</span>
+          <span class="tm-section-line"></span>
+        </div>
+        <div class="tm-row">
+          <div class="form-group">
+            <label for="editStatus">当前状态</label>
+            <select class="form-control" id="editStatus" onchange="onEditStatusChange()">
+              <option value="pending">待接收</option>
+              <option value="accepted">已接收</option>
+              <option value="processing">进行中</option>
+              <option value="reviewing">待验收</option>
+              <option value="completed">已完成</option>
+              <option value="rejected">已驳回</option>
+              <option value="overdue">已超期</option>
+              <option value="cancelled">已取消</option>
+            </select>
           </div>
         </div>
         <div class="form-group">
-          <label>状态</label>
-          <select id="editStatus">
-            <option value="pending">待接收</option>
-            <option value="accepted">已接收</option>
-            <option value="processing">进行中</option>
-            <option value="completed">已完成</option>
-            <option value="cancelled">已取消</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>任务描述</label>
-          <textarea id="editDesc"></textarea>
+          <label for="editDesc">任务描述</label>
+          <textarea class="form-control" id="editDesc" rows="3" placeholder="请输入作业要求、技术要点等（选填）"></textarea>
         </div>
       </div>
     </div>
@@ -650,275 +1406,421 @@
   </div>
 </div>
 
-<!-- Toast提示 -->
-<div class="toast" id="toast">
-  <div class="toast-icon">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;">
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-    </svg>
+<!-- 批量分配弹窗 -->
+<div class="modal-overlay" id="batchModal">
+  <div class="modal" style="width:420px;">
+    <div class="modal-header">
+      <h3>批量分配</h3>
+      <button class="modal-close" onclick="closeModal('batchModal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="generate-form">
+        <div class="form-group">
+          <label>分配给</label>
+          <select id="batchPerson">
+            <option value="">请选择人员</option>
+            <option value="惠加宁">惠加宁</option>
+            <option value="黄忠坚">黄忠坚</option>
+            <option value="徐水应">徐水应</option>
+            <option value="朱泉龙">朱泉龙</option>
+            <option value="陈小忠">陈小忠</option>
+            <option value="廖春亮">廖春亮</option>
+            <option value="李建明">李建明</option>
+            <option value="李根">李根</option>
+            <option value="张才孙">张才孙</option>
+            <option value="刘全国">刘全国</option>
+            <option value="毛定卫">毛定卫</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>分配给班组</label>
+          <select id="batchTeam">
+            <option value="">不调整班组</option>
+            <option value="一班">一班</option>
+            <option value="二班">二班</option>
+            <option value="三班">三班</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('batchModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="confirmBatchAssign()">确认分配</button>
+    </div>
   </div>
-  <span id="toastMessage">操作成功</span>
 </div>
 
+<!-- Toast提示 -->
+<div class="toast" id="toast">
+  <div class="toast-icon" id="toastIcon"></div>
+  <span class="toast-message" id="toastMessage">操作成功</span>
+</div>
+
+<script src="js/shared/production-store.js"></script>
 <script>
-/* 合并后的 mock 数据：调度字段（code/base/planTime）+ 分配字段（plot/priority/worker/team/deadline） */
-const mockData = [
-  { id: 1, code: 'RW-202609001', name: '春季施肥作业', base: '天水麦积区基地', plot: 'A1区', type: '施肥', priority: 'high', person: '惠加宁', worker: '惠加宁', team: '一班', planTime: '2026-03-01T08:00', deadline: '2026-03-15', status: 'completed', desc: '对A1区果园进行春季追肥，使用复合肥，每亩用量50kg' },
-  { id: 2, code: 'RW-202609002', name: '春季修剪计划', base: '天水麦积区基地', plot: 'A2区', type: '修剪', priority: 'medium', person: '黄忠坚', worker: '黄忠坚', team: '一班', planTime: '2026-03-10T09:00', deadline: '2026-03-25', status: 'completed', desc: '春季修剪整形，去除病枯枝和过密枝' },
-  { id: 3, code: 'RW-202609003', name: '病虫害防治', base: '天水秦州基地', plot: 'A2区', type: '施药', priority: 'high', person: '徐水应', worker: '徐水应', team: '二班', planTime: '2026-09-01T14:00', deadline: '2026-09-10', status: 'completed', desc: '喷洒杀虫剂防治红蜘蛛和蚜虫' },
-  { id: 4, code: 'RW-202609004', name: '疏花疏果作业', base: '青岛莱西基地', plot: 'C1区', type: '疏果', priority: 'medium', person: '朱泉龙', worker: '陈小忠', team: '二班', planTime: '2026-04-15T08:00', deadline: '2026-05-01', status: 'completed', desc: '疏除过多花果，保证果实品质' },
-  { id: 5, code: 'RW-202609005', name: '夏季追肥计划', base: '天水麦积区基地', plot: 'A1区', type: '施肥', priority: 'high', person: '廖春亮', worker: '廖春亮', team: '一班', planTime: '2026-06-01T08:00', deadline: '2026-06-10', status: 'completed', desc: '夏季追肥，使用复合肥' },
-  { id: 6, code: 'RW-202609006', name: '夏季灌溉调度', base: '天水秦州基地', plot: 'B2区', type: '灌溉', priority: 'low', person: '李建明', worker: '李建明', team: '三班', planTime: '2026-07-15T06:00', deadline: '2026-07-20', status: 'completed', desc: '根据土壤湿度自动灌溉' },
-  { id: 7, code: 'RW-202609007', name: '果实套袋作业', base: '青岛莱西基地', plot: 'C2区', type: '套袋', priority: 'high', person: '李根', worker: '张才孙', team: '二班', planTime: '2026-06-15T08:00', deadline: '2026-06-30', status: 'completed', desc: '对花牛苹果进行套袋作业' },
-  { id: 8, code: 'RW-202609008', name: '夏季修剪整形', base: '招远基地', plot: 'A2区', type: '修剪', priority: 'medium', person: '刘全国', worker: '毛定卫', team: '三班', planTime: '2026-07-15T09:00', deadline: '2026-07-30', status: 'completed', desc: '夏季修剪整形' },
-  { id: 9, code: 'RW-202609009', name: '秋季病虫害防治', base: '天水甘谷基地', plot: 'B2区', type: '施药', priority: 'high', person: '叶三东', worker: '周才贵', team: '二班', planTime: '2026-09-05T14:00', deadline: '2026-09-15', status: 'processing', desc: '病虫害定期监测记录' },
-  { id: 10, code: 'RW-202609010', name: '秋季施肥计划', base: '天水麦积区基地', plot: 'C2区', type: '施肥', priority: 'medium', person: '程名高', worker: '邓小华', team: '二班', planTime: '2026-09-15T08:00', deadline: '2026-09-30', status: 'processing', desc: '施用腐熟有机肥' },
-  { id: 11, code: 'RW-202609011', name: '采收准备计划', base: '天水秦州基地', plot: 'A1区', type: '采收', priority: 'high', person: '周成友', worker: '危红卫', team: '一班', planTime: '2026-10-01T07:00', deadline: '2026-10-10', status: 'pending', desc: '采收前准备工作' },
-  { id: 12, code: 'RW-202609012', name: '冬季修剪计划', base: '青岛莱西基地', plot: 'B1区', type: '修剪', priority: 'medium', person: '方超', worker: '曹红英', team: '一班', planTime: '2026-12-15T09:00', deadline: '2027-01-15', status: 'pending', desc: '冬季修剪，去除病枯枝' },
-  { id: 13, code: 'RW-202609013', name: '清园计划', base: '招远基地', plot: 'A2区', type: '除草', priority: 'low', person: '崔新根', worker: '惠加宁', team: '三班', planTime: '2026-12-05T08:00', deadline: '2026-12-15', status: 'pending', desc: '清理果园杂草和落叶' },
-  { id: 14, code: 'RW-202609014', name: '春季灌溉计划', base: '天水甘谷基地', plot: 'B2区', type: '灌溉', priority: 'medium', person: '黄忠坚', worker: '徐水应', team: '一班', planTime: '2026-03-20T06:00', deadline: '2026-03-25', status: 'completed', desc: '春季干旱期浇水灌溉' },
-  { id: 15, code: 'RW-202609015', name: '秋季病虫害防治', base: '天水麦积区基地', plot: 'A1区', type: '施药', priority: 'high', person: '朱泉龙', worker: '陈小忠', team: '二班', planTime: '2026-09-15T14:00', deadline: '2026-09-20', status: 'processing', desc: '综合防治病虫害' },
-  { id: 16, code: 'RW-202609016', name: '夏季灌溉作业', base: '天水秦州基地', plot: 'C1区', type: '灌溉', priority: 'medium', person: '廖春亮', worker: '李建明', team: '三班', planTime: '2026-07-20T06:00', deadline: '2026-07-25', status: 'completed', desc: '定时灌溉' },
-  { id: 17, code: 'RW-202609017', name: '套袋作业', base: '招远基地', plot: 'C2区', type: '套袋', priority: 'medium', person: '李根', worker: '张才孙', team: '二班', planTime: '2026-06-20T08:00', deadline: '2026-06-30', status: 'completed', desc: '果实套袋' },
-  { id: 18, code: 'RW-202609018', name: '病虫害监测', base: '青岛莱西基地', plot: 'B1区', type: '施药', priority: 'high', person: '刘全国', worker: '毛定卫', team: '二班', planTime: '2026-09-10T09:00', deadline: '2026-09-15', status: 'processing', desc: '病虫害定期监测' },
-  { id: 19, code: 'RW-202609019', name: '秋季病虫害防治', base: '天水甘谷基地', plot: 'B2区', type: '施药', priority: 'high', person: '叶三东', worker: '周才贵', team: '三班', planTime: '2026-09-20T10:00', deadline: '2026-09-30', status: 'processing', desc: '综合防治方案' },
-  { id: 20, code: 'RW-202609020', name: '冬季施肥计划', base: '天水麦积区基地', plot: 'A1区', type: '施肥', priority: 'low', person: '程名高', worker: '邓小华', team: '一班', planTime: '2026-12-10T08:00', deadline: '2026-12-20', status: 'pending', desc: '冬季基肥施用' },
-  { id: 21, code: 'RW-202609021', name: '春季病虫害防治', base: '天水秦州基地', plot: 'A2区', type: '施药', priority: 'medium', person: '周成友', worker: '危红卫', team: '二班', planTime: '2026-03-20T14:00', deadline: '2026-03-25', status: 'completed', desc: '病害预防' },
-  { id: 22, code: 'RW-202609022', name: '夏季施肥计划', base: '招远基地', plot: 'C1区', type: '施肥', priority: 'low', person: '方超', worker: '曹红英', team: '一班', planTime: '2026-06-10T08:00', deadline: '2026-06-15', status: 'completed', desc: '叶面喷肥' },
-  { id: 23, code: 'RW-202609023', name: '秋季灌溉计划', base: '青岛莱西基地', plot: 'B2区', type: '灌溉', priority: 'medium', person: '崔新根', worker: '惠加宁', team: '三班', planTime: '2026-10-15T06:00', deadline: '2026-10-20', status: 'pending', desc: '智能灌溉系统调度' },
-  { id: 24, code: 'RW-202609024', name: '设备检修任务', base: '天水麦积区基地', plot: 'B1区', type: '灌溉', priority: 'low', person: '黄忠坚', worker: '徐水应', team: '一班', planTime: '2026-09-25T14:00', deadline: '2026-09-26', status: 'pending', desc: '检修喷灌设备' },
-  { id: 25, code: 'RW-202609025', name: '果园巡视', base: '青岛莱西基地', plot: 'C1区', type: '除草', priority: 'low', person: '朱泉龙', worker: '陈小忠', team: '一班', planTime: '2026-09-23T08:00', deadline: '2026-09-23', status: 'cancelled', desc: '日常果园巡视检查' }
+/* ==========================================================
+ * 任务管理 —— 生产管理闭环（计划 → 任务 → 记录）
+ * 数据源：ProductionStore
+ * ========================================================== */
+var PS = window.ProductionStore;
+var currentDetailId = null;
+var __batchSelected = [];
+
+var STATUS_CLASS = {
+  pending: 'inactive', accepted: 'blue', processing: 'warning', reviewing: 'blue',
+  completed: 'active', rejected: 'error', overdue: 'error', cancelled: 'inactive'
+};
+var STATUS_TEXT = {
+  pending: '待接收', accepted: '已接收', processing: '进行中', reviewing: '待验收',
+  completed: '已完成', rejected: '已驳回', overdue: '已超期', cancelled: '已取消'
+};
+var NEXT_ACTION = {
+  pending: ['accept', '接单', 'active'],
+  accepted: ['start', '开始', 'active'],
+  processing: ['complete', '提交验收', 'blue'],
+  overdue: ['start', '开始', 'active'],
+  reviewing: ['approve', '验收通过', 'active']
+};
+/* 状态推进主线：详情弹窗的步骤条 */
+var STATUS_STEPS = [
+  { key: 'pending', label: '待接收' },
+  { key: 'accepted', label: '已接收' },
+  { key: 'processing', label: '进行中' },
+  { key: 'reviewing', label: '待验收' },
+  { key: 'completed', label: '已完成' }
 ];
-
-let currentPage = 1;
-const pageSize = 10;
-let filteredData = [...mockData];
-let currentDetailId = null;
-
-document.addEventListener('DOMContentLoaded', function() {
-  renderTable();
-  renderPagination();
-});
+var STEP_INDEX = { pending: 0, accepted: 1, processing: 2, overdue: 2, reviewing: 3, completed: 4 };
+var UNIT_OPTIONS = ['亩', '个', 'kg'];
+var TOAST_ICON = {
+  success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>',
+  warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>'
+};
 
 function getTypeClass(type) {
-  const classes = {
-    '施肥': 'active',
-    '施药': 'error',
-    '修剪': 'warning',
-    '灌溉': 'blue',
-    '疏果': 'purple',
-    '套袋': 'blue',
-    '除草': 'inactive',
-    '采收': 'purple'
+  var classes = {
+    '施肥': 'active', '施药': 'error', '修剪': 'warning', '灌溉': 'blue',
+    '疏果': 'purple', '套袋': 'blue', '除草': 'inactive', '采收': 'purple'
   };
   return classes[type] || 'inactive';
 }
+function getStatusClass(status) { return STATUS_CLASS[status] || 'inactive'; }
+function getStatusText(status) { return STATUS_TEXT[status] || status; }
+function getPriorityClass(priority) { return priority === 'high' ? 'error' : priority === 'medium' ? 'warning' : 'inactive'; }
+function getPriorityText(priority) { return priority === 'high' ? '紧急' : priority === 'medium' ? '普通' : '低'; }
 
-function getStatusClass(status) {
-  const classes = {
-    'pending': 'inactive',
-    'accepted': 'blue',
-    'processing': 'warning',
-    'completed': 'active',
-    'cancelled': 'error'
-  };
-  return classes[status] || 'inactive';
+function planLabel(planId) {
+  if (!planId) return '<span style="color:var(--text-tertiary);">临时任务</span>';
+  var plan = PS.get('plans', planId);
+  return '<span style="font-family:var(--font-mono,monospace);font-size:12px;">' + planId + '</span><br>' +
+    '<span style="font-size:12px;color:var(--text-tertiary);">' + (plan ? plan.name : '计划已删除') + '</span>';
 }
 
-function getStatusText(status) {
-  const texts = {
-    'pending': '待接收',
-    'accepted': '已接收',
-    'processing': '进行中',
-    'completed': '已完成',
-    'cancelled': '已取消'
-  };
-  return texts[status] || status;
-}
+function allTasks() { PS.recompute(); return PS.tasks(); }
 
-function getPriorityClass(priority) {
-  return priority === 'high' ? 'error' : priority === 'medium' ? 'warning' : 'inactive';
-}
-
-function getPriorityText(priority) {
-  return priority === 'high' ? '紧急' : priority === 'medium' ? '普通' : '低';
-}
-
-function renderTable() {
-  const tbody = document.getElementById('dataTableBody');
-  const start = (currentPage - 1) * pageSize;
-  const end = start + pageSize;
-  const pageData = filteredData.slice(start, end);
-
-  tbody.innerHTML = pageData.map((item, __seq) => `
-    <tr>
-      <td class="checkbox-col">${__seq + 1}</td>
-      <td><strong>${item.code}</strong></td>
-      <td>${item.name}</td>
-      <td>${item.base}</td>
-      <td>${item.plot}</td>
-      <td><span class="status-tag ${getTypeClass(item.type)}">${item.type}</span></td>
-      <td><span class="status-tag ${getPriorityClass(item.priority)}">${getPriorityText(item.priority)}</span></td>
-      <td>${item.person}</td>
-      <td>${item.team}</td>
-      <td>${item.planTime ? item.planTime.replace('T', ' ') : '—'}</td>
-      <td>${item.deadline}</td>
-      <td><span class="status-tag ${getStatusClass(item.status)}">${getStatusText(item.status)}</span></td>
-      <td>
-        <div class="action-btns">
-          <button class="action-btn detail" onclick="viewDetail(${item.id})">详情</button>
-          <button class="action-btn edit" onclick="openEditModal(${item.id})">编辑</button>
-        </div>
-      </td>
-    </tr>
-  `).join('');
-
+function refresh(list) {
+  Pagination.updateData(list || allTasks());
+  updateBatchCount();
   document.getElementById('recordCount').textContent = '';
+  if (typeof renderGantt === 'function') renderGantt();
 }
 
-function renderPagination() {
-  const container = document.getElementById('paginationContainer');
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-
-  if (totalPages <= 1) {
-    container.innerHTML = '<div class="pagination-info">显示 1-' + filteredData.length + ' 条，共 ' + filteredData.length + ' 条</div>';
-    return;
+function renderRow(item, index) {
+  var action = NEXT_ACTION[item.status];
+  var btns = '<button class="action-btn detail" onclick="viewDetail(\'' + item.id + '\')">详情</button>' +
+    '<button class="action-btn edit" onclick="openEditModal(\'' + item.id + '\')">编辑</button>';
+  if (action) {
+    btns += '<button class="action-btn ' + action[2] + '" onclick="taskAction(\'' + item.id + '\',\'' + action[0] + '\')">' + action[1] + '</button>';
   }
-
-  let html = '<div class="pagination-info">显示 ' + ((currentPage - 1) * pageSize + 1) + '-' + Math.min(currentPage * pageSize, filteredData.length) + ' 条，共 ' + filteredData.length + ' 条</div>';
-  html += '<div class="pagination-controls">';
-  html += `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="goToPage(${currentPage - 1})">‹</button>`;
-
-  for (let i = 1; i <= totalPages; i++) {
-    if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-      html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
-    } else if (i === currentPage - 2 || i === currentPage + 2) {
-      html += '<span class="page-ellipsis">...</span>';
-    }
+  if (['completed', 'cancelled'].indexOf(item.status) < 0) {
+    btns += '<button class="action-btn" onclick="openTransfer(\'' + item.id + '\')">转派</button>';
   }
-
-  html += `<button class="page-btn ${currentPage === totalPages ? 'disabled' : ''}" onclick="goToPage(${currentPage + 1})">›</button>`;
-  html += '</div>';
-
-  container.innerHTML = html;
-}
-
-function goToPage(page) {
-  const totalPages = Math.ceil(filteredData.length / pageSize);
-  if (page < 1 || page > totalPages) return;
-  currentPage = page;
-  renderTable();
-  renderPagination();
+  return '<tr>' +
+    '<td class="checkbox-col"><input type="checkbox" data-task-id="' + item.id + '" onchange="toggleBatchSel(\'' + item.id + '\', this.checked)"></td>' +
+    '<td><span style="font-family:var(--font-mono,monospace);font-size:12px;">' + item.id + '</span></td>' +
+    '<td><strong>' + item.name + '</strong></td>' +
+    '<td>' + planLabel(item.planId) + '</td>' +
+    '<td>' + item.base + '<br><span style="font-size:12px;color:var(--text-tertiary);">' + (item.plotId || item.plot || '—') + '</span></td>' +
+    '<td><span class="status-tag ' + getTypeClass(item.type) + '">' + item.type + '</span></td>' +
+    '<td><span class="status-tag inactive">' + (PS.EXECUTOR_TYPES[item.executorType] || '个人') + '</span></td>' +
+    '<td><span class="status-tag ' + getPriorityClass(item.priority) + '">' + getPriorityText(item.priority) + '</span></td>' +
+    '<td>' + item.person + '</td>' +
+    '<td>' + (item.team || '—') + '</td>' +
+    '<td>' + (item.deadline || '—') + '</td>' +
+    '<td><span class="status-tag ' + getStatusClass(item.status) + '">' + getStatusText(item.status) + '</span></td>' +
+    '<td><div class="action-btns">' + btns + '</div></td>' +
+    '</tr>';
 }
 
 function searchData() {
-  const base = document.getElementById('baseSelect').value;
-  const type = document.getElementById('typeSelect').value;
-  const status = document.getElementById('statusSelect').value;
-  const priority = document.getElementById('prioritySelect').value;
-  const team = document.getElementById('teamSelect').value;
-  const keyword = document.getElementById('searchInput').value.toLowerCase();
+  var base = document.getElementById('baseSelect').value;
+  var type = document.getElementById('typeSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var priority = document.getElementById('prioritySelect').value;
+  var team = document.getElementById('teamSelect').value;
+  var keyword = (document.getElementById('searchInput').value || '').toLowerCase();
 
-  filteredData = mockData.filter(item => {
+  var list = allTasks().filter(function (item) {
     if (base && item.base !== base) return false;
     if (type && item.type !== type) return false;
     if (status && item.status !== status) return false;
     if (priority && item.priority !== priority) return false;
     if (team && item.team !== team) return false;
-    if (keyword && !item.name.toLowerCase().includes(keyword) && !item.person.toLowerCase().includes(keyword)) return false;
+    if (keyword && item.name.toLowerCase().indexOf(keyword) < 0 &&
+      String(item.person).toLowerCase().indexOf(keyword) < 0 &&
+      String(item.id).toLowerCase().indexOf(keyword) < 0) return false;
     return true;
   });
-
-  currentPage = 1;
-  renderTable();
-  renderPagination();
-  showToast(`找到 ${filteredData.length} 条记录`);
+  refresh(list);
+  Toast.info('找到 ' + list.length + ' 条记录');
 }
 
+function smartReset() {
+  ['baseSelect', 'typeSelect', 'statusSelect', 'prioritySelect', 'teamSelect', 'searchInput'].forEach(function (id) {
+    document.getElementById(id).value = '';
+  });
+  refresh();
+  Toast.info('筛选条件已重置');
+}
+
+/* ---------- 状态流转 ---------- */
+function taskAction(id, action) {
+  var t = PS.get('tasks', id);
+  if (!t) { Toast.error('任务不存在或已被删除'); return; }
+  if (t.status === 'completed' || t.status === 'cancelled') { Toast.error('任务已结束，不能继续流转'); return; }
+  if (t.planId) {
+    var plan = PS.get('plans', t.planId);
+    if (plan && plan.status === 'cancelled') { Toast.error('来源计划已取消，不能继续操作任务'); return; }
+  }
+  var patch = { id: id };
+  var nextStatus = '';
+  if (action === 'accept') { nextStatus = 'accepted'; }
+  else if (action === 'start') { nextStatus = 'processing'; }
+  else if (action === 'complete') { nextStatus = 'reviewing'; }
+  else if (action === 'approve') { nextStatus = 'completed'; }
+  else { Toast.error('未知的任务操作'); return; }
+  if (!PS.validate.canTransitionTask(t.status, nextStatus)) {
+    Toast.error('任务状态不能从「' + getStatusText(t.status) + '」直接变更为「' + getStatusText(nextStatus) + '」');
+    return;
+  }
+  if (action === 'approve' && !PS.taskStats(id).approved) {
+    Toast.error('尚无已审核的农事记录，无法通过验收');
+    return;
+  }
+  patch.status = nextStatus;
+  PS.upsert('tasks', patch);
+  if (action === 'accept') Toast.success('任务已接单');
+  else if (action === 'start') Toast.success('任务已开始执行');
+  else if (action === 'complete') Toast.info('已提交验收，待农事记录审核通过后自动完成');
+  else Toast.success('验收通过，任务已完成');
+  refresh();
+}
+
+/* ---------- 详情 ---------- */
 function viewDetail(id) {
   currentDetailId = id;
-  const item = mockData.find(d => d.id === id);
+  var item = PS.get('tasks', id);
   if (!item) return;
+  var plan = item.planId ? PS.get('plans', item.planId) : null;
+  var stats = PS.taskStats(id);
+  var records = PS.recordsByTask(id);
+  var unit = item.unit || '亩';
+  var target = parseFloat(item.targetQty) || 0;
+  var rate = target > 0 ? Math.min(100, Math.round(stats.qty / target * 100)) : 0;
 
-  document.getElementById('detailContent').innerHTML = `
-    <div class="detail-grid">
-      <span class="detail-label">任务编号</span>
-      <span class="detail-value">${item.code}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">任务名称</span>
-      <span class="detail-value">${item.name}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">所属基地</span>
-      <span class="detail-value">${item.base}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">地块</span>
-      <span class="detail-value">${item.plot}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">任务类型</span>
-      <span class="detail-value"><span class="status-tag ${getTypeClass(item.type)}">${item.type}</span></span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">优先级</span>
-      <span class="detail-value"><span class="status-tag ${getPriorityClass(item.priority)}">${getPriorityText(item.priority)}</span></span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">负责人</span>
-      <span class="detail-value">${item.person}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">分配人员</span>
-      <span class="detail-value">${item.worker || '—'}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">班组</span>
-      <span class="detail-value">${item.team}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">计划时间</span>
-      <span class="detail-value">${item.planTime ? item.planTime.replace('T', ' ') : '—'}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">截止时间</span>
-      <span class="detail-value">${item.deadline}</span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">状态</span>
-      <span class="detail-value"><span class="status-tag ${getStatusClass(item.status)}">${getStatusText(item.status)}</span></span>
-    </div>
-    <div class="detail-grid">
-      <span class="detail-label">任务描述</span>
-      <span class="detail-value">${item.desc || '—'}</span>
-    </div>
-  `;
+  document.getElementById('detailHeaderCode').textContent = item.id;
+  document.getElementById('detailHeaderSub').textContent =
+    item.base + ' · ' + (item.plotId || item.plot || '—') + ' · ' + getStatusText(item.status);
+
+  /* 概览卡 */
+  var overview =
+    '<div class="tm-overview">' +
+      '<div class="tm-ov-main">' +
+        '<div class="tm-ov-name">' + escapeHtml(item.name) + '</div>' +
+        '<div class="tm-ov-sub">' + escapeHtml(plan ? plan.id + ' · ' + plan.name : '临时任务（未关联农事计划）') + '</div>' +
+        '<div class="tm-ov-tags">' +
+          '<span class="status-tag ' + getTypeClass(item.type) + '">' + escapeHtml(item.type) + '</span>' +
+          '<span class="status-tag blue">' + escapeHtml(PS.TYPES[item.taskCategory] || '农事') + '</span>' +
+          '<span class="tm-pri ' + (item.priority || 'low') + '">' + getPriorityText(item.priority) + '</span>' +
+          '<span class="status-tag ' + getStatusClass(item.status) + '">' + getStatusText(item.status) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="tm-ov-side">' +
+        '<div class="tm-ov-kpi"><span>已审核完成量</span><b>' + stats.qty + unit + '</b></div>' +
+        '<div class="tm-bar"><i style="width:' + rate + '%"></i></div>' +
+        '<div class="tm-ov-kpi"><span>目标量 ' + target + unit + '</span><span>' + rate + '%</span></div>' +
+        (item.deadline ? '<div class="tm-ov-note' + (item.status === 'overdue' ? ' warn' : '') + '">截止 ' + escapeHtml(item.deadline) +
+          (item.status === 'overdue' ? ' · 已超期 ' + (item.overdueDays || 1) + ' 天' : '') + '</div>' : '') +
+      '</div>' +
+    '</div>';
+
+  /* 状态步骤条 */
+  var stepIdx = STEP_INDEX[item.status];
+  var steps = '<div class="tm-steps">' + STATUS_STEPS.map(function (s, i) {
+    var cls = stepIdx === undefined ? '' : (i < stepIdx ? 'done' : (i === stepIdx ? 'now' : ''));
+    var mark = cls === 'done'
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><polyline points="20 6 9 17 4 12"/></svg>'
+      : String(i + 1);
+    return '<div class="tm-step ' + cls + '"><span class="tm-step-dot">' + mark + '</span><span class="tm-step-label">' + s.label + '</span></div>';
+  }).join('') + '</div>';
+
+  /* 信息网格 */
+  var field = function (label, value) {
+    return '<div class="tm-field"><label>' + label + '</label>' +
+      '<div' + (value ? '' : ' class="empty"') + '>' + (value || '暂无') + '</div></div>';
+  };
+  var fields =
+    '<div class="tm-fields">' +
+      '<div class="tm-row">' +
+        field('来源计划', escapeHtml(plan ? plan.name : '临时任务')) +
+        field('基地 / 地块', escapeHtml(item.base) + ' / ' + escapeHtml(item.plotId || item.plot || '—')) +
+      '</div>' +
+      '<div class="tm-row">' +
+        field('任务类别', escapeHtml(PS.TYPES[item.taskCategory] || '农事')) +
+        field('执行主体', escapeHtml(PS.EXECUTOR_TYPES[item.executorType] || '个人')) +
+      '</div>' +
+      '<div class="tm-row">' +
+        field('负责人', escapeHtml(item.person || '—')) +
+        field('分配人员', escapeHtml(item.worker || '—')) +
+      '</div>' +
+      '<div class="tm-row">' +
+        field('班组', escapeHtml(item.team || '—')) +
+        field('目标量', target ? target + unit : '') +
+      '</div>' +
+      '<div class="tm-row">' +
+        field('计划开始时间', item.planTime ? escapeHtml(item.planTime.replace('T', ' ')) : '') +
+        field('截止时间', escapeHtml(item.deadline || '')) +
+      '</div>' +
+    '</div>';
+
+  /* 农事记录清单 */
+  var recordHtml = records.length
+    ? '<div class="tm-records">' + records.map(function (r) {
+        var st = r.status === 'approved' ? 'active' : (r.status === 'rejected' ? 'error' : 'warning');
+        return '<div class="tm-record">' +
+          '<span class="tm-record-id">' + escapeHtml(r.id) + '</span>' +
+          '<span class="tm-record-body">' + escapeHtml(r.typeName || r.type || '农事作业') +
+            '<span style="color:var(--text-tertiary);font-size:12px;margin-left:8px;">' + escapeHtml(r.date || '') + '</span></span>' +
+          '<span class="status-tag ' + st + '">' + escapeHtml(PS.STATUS_TEXT[r.status] || r.status) + '</span>' +
+          '<span class="tm-record-qty">' + (r.qty || 0) + escapeHtml(r.unit || unit) + '</span>' +
+        '</div>';
+      }).join('') + '</div>'
+    : '<div class="tm-empty">暂无关联的农事记录</div>';
+
+  var desc = item.desc
+    ? '<div class="tm-desc">' + escapeHtml(item.desc) + '</div>'
+    : '<div class="tm-empty">未填写任务描述</div>';
+
+  document.getElementById('detailContent').innerHTML =
+    '<div class="tm-stack">' +
+      overview +
+      steps +
+      '<div>' +
+        '<div class="tm-section"><span class="tm-section-bar"></span><span class="tm-section-title">任务信息</span><span class="tm-section-line"></span></div>' +
+        fields +
+      '</div>' +
+      '<div>' +
+        '<div class="tm-section"><span class="tm-section-bar"></span><span class="tm-section-title">农事记录（' + records.length + '）</span><span class="tm-section-line"></span></div>' +
+        recordHtml +
+      '</div>' +
+      '<div>' +
+        '<div class="tm-section"><span class="tm-section-bar"></span><span class="tm-section-title">任务描述</span><span class="tm-section-line"></span></div>' +
+        desc +
+      '</div>' +
+    '</div>';
 
   openModal('detailModal');
 }
 
+/* ---------- 新建 ---------- */
+function escapeHtml(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function fillPlanOptions(selectId, selected) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">不关联计划（临时任务）</option>' + PS.plans().map(function (p) {
+    return '<option value="' + p.id + '">' + p.id + ' ' + escapeHtml(p.name) + '</option>';
+  }).join('');
+  sel.value = selected || '';
+}
+
+/* 地块下拉：使用 ProductionStore 的地块主数据（D-001 …） */
+function fillPlotOptions(selectId, selected) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  var opts = PS.PLOTS.map(function (p) {
+    return '<option value="' + p + '">' + escapeHtml(PS.plotLabel(p)) + '</option>';
+  }).join('');
+  sel.innerHTML = '<option value="">请选择地块</option>' + opts;
+  sel.value = selected && PS.PLOTS.indexOf(selected) >= 0 ? selected : '';
+}
+
+function fillUnitOptions(selectId, selected) {
+  var sel = document.getElementById(selectId);
+  if (!sel) return;
+  sel.innerHTML = UNIT_OPTIONS.map(function (u) {
+    return '<option value="' + u + '">' + u + '</option>';
+  }).join('');
+  sel.value = UNIT_OPTIONS.indexOf(selected) >= 0 ? selected : '亩';
+}
+
+/* 关联计划后回填基地/地块/单位/时间，并给出提示 */
+function onCreatePlanChange() {
+  var planId = document.getElementById('createPlan').value;
+  var tip = document.getElementById('createPlanTip');
+  var tipText = document.getElementById('createPlanTipText');
+  var plan = planId ? PS.get('plans', planId) : null;
+  if (!plan) {
+    tip.style.display = 'none';
+    return;
+  }
+  var plots = String(plan.plotRange || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  if (plan.base) document.getElementById('createBase').value = plan.base;
+  fillPlotOptions('createPlot', plots[0] || '');
+  fillUnitOptions('createUnit', plan.unit);
+  if (plan.startDate) document.getElementById('createPlanTime').value = plan.startDate + 'T08:00';
+  if (plan.endDate) document.getElementById('createDeadline').value = plan.endDate;
+  tipText.textContent = '已回填计划信息：' + plan.name + ' · 地块 ' + (plots.join('、') || '未配置') +
+    ' · 计划量 ' + (plan.plannedQty || 0) + (plan.unit || '亩') + ' · ' + plan.startDate + ' 至 ' + plan.endDate;
+  tip.style.display = 'flex';
+}
+
+function onCreateBaseChange() {
+  fillPlotOptions('createPlot', '');
+}
+
 function openCreateModal() {
-  document.getElementById('createName').value = '';
-  document.getElementById('createBase').value = '';
-  document.getElementById('createPlot').value = '';
-  document.getElementById('createType').value = '';
+  ['createName', 'createPlan', 'createBase', 'createPlot', 'createType', 'createPerson',
+    'createWorker', 'createPlanTime', 'createDeadline', 'createDesc', 'createTargetQty'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  fillPlanOptions('createPlan', '');
+  fillPlotOptions('createPlot', '');
+  fillUnitOptions('createUnit', '亩');
   document.getElementById('createPriority').value = 'medium';
   document.getElementById('createTeam').value = '一班';
-  document.getElementById('createPerson').value = '';
-  document.getElementById('createWorker').value = '';
-  document.getElementById('createPlanTime').value = '';
-  document.getElementById('createDeadline').value = '';
-  document.getElementById('createDesc').value = '';
+  document.getElementById('createCategory').value = 'farming';
+  document.getElementById('createExecutor').value = 'person';
+  document.getElementById('createPlanTip').style.display = 'none';
   openModal('createModal');
 }
 
 function confirmCreate() {
-  const name = document.getElementById('createName').value;
-  const base = document.getElementById('createBase').value;
-  const plot = document.getElementById('createPlot').value;
-  const type = document.getElementById('createType').value;
-  const person = document.getElementById('createPerson').value;
+  var name = document.getElementById('createName').value.trim();
+  var base = document.getElementById('createBase').value;
+  var plot = document.getElementById('createPlot').value;
+  var type = document.getElementById('createType').value;
+  var person = document.getElementById('createPerson').value;
 
   if (!name) { showToast('请输入任务名称', 'error'); return; }
   if (!base) { showToast('请选择所属基地', 'error'); return; }
@@ -926,129 +1828,422 @@ function confirmCreate() {
   if (!type) { showToast('请选择任务类型', 'error'); return; }
   if (!person) { showToast('请选择负责人', 'error'); return; }
 
-  const newTask = {
-    id: 'T' + Date.now(),
-    code: 'TASK' + String(Math.floor(Math.random() * 9000) + 1000),
+  var planId = document.getElementById('createPlan').value;
+  var plan = planId ? PS.get('plans', planId) : null;
+  var task = {
+    id: PS.nextId('tasks'),
+    planId: planId,
     name: name,
     base: base,
     plot: plot,
+    plotId: plot,
     type: type,
+    taskCategory: document.getElementById('createCategory').value,
+    executorType: document.getElementById('createExecutor').value,
+    priority: document.getElementById('createPriority').value,
     person: person,
+    worker: document.getElementById('createWorker').value || person,
+    team: document.getElementById('createTeam').value,
+    planTime: document.getElementById('createPlanTime').value,
+    deadline: document.getElementById('createDeadline').value,
     status: 'pending',
-    statusText: '未开始',
-    createdAt: new Date().toISOString()
+    desc: document.getElementById('createDesc').value.trim(),
+    targetQty: parseFloat(document.getElementById('createTargetQty').value) || 0,
+    unit: plan ? plan.unit : document.getElementById('createUnit').value,
+    createdBy: '后台录入',
+    createdAt: PS.stampNow()
   };
-  mockData.unshift(newTask);
-  filteredData = mockData.slice();
-  Pagination.updateData(mockData);
+  delete task.typeCode;
+  var invalid = PS.validate.task(task);
+  if (invalid) { showToast(invalid, 'error'); return; }
+  PS.upsert('tasks', task);
   closeModal('createModal');
-  showToast('任务创建成功：' + name);
+  refresh();
+  showToast('任务创建成功：' + task.id);
+}
+
+/* ---------- 编辑 ---------- */
+/* 状态流转提示：仅允许流转到合法后继状态 */
+var STATUS_NEXT = {
+  pending: ['accepted', 'reviewing', 'cancelled'],
+  accepted: ['processing', 'reviewing', 'cancelled'],
+  processing: ['reviewing', 'cancelled'],
+  overdue: ['processing', 'reviewing', 'cancelled'],
+  rejected: ['accepted', 'reviewing', 'cancelled'],
+  reviewing: ['completed', 'rejected'],
+  completed: [],
+  cancelled: []
+};
+
+function updateEditStatusNote() {
+  var note = document.getElementById('editStatusNote');
+  var text = document.getElementById('editStatusNoteText');
+  var sel = document.getElementById('editStatus');
+  var item = PS.get('tasks', currentDetailId);
+  if (!item) return;
+  var from = item.status;
+  var allowed = STATUS_NEXT[from] || [];
+  var opts = Array.prototype.slice.call(sel.options);
+  opts.forEach(function (o) {
+    var ok = o.value === from || allowed.indexOf(o.value) >= 0;
+    o.disabled = !ok;
+    o.style.opacity = ok ? '' : '0.45';
+  });
+  if (sel.value !== from && allowed.indexOf(sel.value) < 0) sel.value = from;
+  if (!allowed.length) {
+    note.className = 'tm-note danger';
+    text.textContent = '任务当前为「' + getStatusText(from) + '」，已结束，不可再变更状态。';
+  } else {
+    note.className = 'tm-note';
+    text.textContent = '当前状态「' + getStatusText(from) + '」，可流转至：' +
+      (allowed.map(function (s) { return getStatusText(s); }).join(' / ') || '无');
+  }
+}
+
+function onEditStatusChange() {
+  updateEditStatusNote();
+}
+
+function onEditPlanChange() {
+  var planId = document.getElementById('editPlan').value;
+  var plan = planId ? PS.get('plans', planId) : null;
+  if (!plan) return;
+  var plots = String(plan.plotRange || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  if (plan.base) document.getElementById('editBase').value = plan.base;
+  fillPlotOptions('editPlot', plots[0] || '');
+  fillUnitOptions('editUnit', plan.unit);
+  if (plan.startDate) document.getElementById('editPlanTime').value = plan.startDate + 'T08:00';
+  if (plan.endDate) document.getElementById('editDeadline').value = plan.endDate;
+}
+
+function onEditBaseChange() {
+  fillPlotOptions('editPlot', '');
 }
 
 function openEditModal(id) {
   currentDetailId = id || currentDetailId;
-  const item = mockData.find(d => d.id === currentDetailId);
+  var item = PS.get('tasks', currentDetailId);
   if (!item) return;
 
-  document.getElementById('editCode').value = item.code;
+  document.getElementById('editHeaderCode').textContent = item.id;
+  document.getElementById('editHeaderSub').textContent =
+    item.base + ' · ' + (item.plotId || item.plot || '—') + ' · ' + getStatusText(item.status);
+
   document.getElementById('editName').value = item.name;
+  fillPlanOptions('editPlan', item.planId || '');
+  document.getElementById('editCategory').value = item.taskCategory || 'farming';
+  document.getElementById('editExecutor').value = item.executorType || 'person';
+  document.getElementById('editTargetQty').value = item.targetQty || '';
+  fillUnitOptions('editUnit', item.unit || '亩');
   document.getElementById('editBase').value = item.base;
-  document.getElementById('editPlot').value = item.plot;
+  fillPlotOptions('editPlot', item.plotId || item.plot || '');
   document.getElementById('editType').value = item.type;
   document.getElementById('editPriority').value = item.priority;
-  document.getElementById('editTeam').value = item.team;
+  document.getElementById('editTeam').value = item.team || '一班';
   document.getElementById('editPerson').value = item.person;
   document.getElementById('editWorker').value = item.worker || '';
   document.getElementById('editPlanTime').value = item.planTime || '';
-  document.getElementById('editDeadline').value = item.deadline;
+  document.getElementById('editDeadline').value = item.deadline || '';
   document.getElementById('editStatus').value = item.status;
   document.getElementById('editDesc').value = item.desc || '';
+  updateEditStatusNote();
 
   closeModal('detailModal');
   openModal('editModal');
 }
 
 function confirmEdit() {
-  const id = currentDetailId;
-  const item = mockData.find(d => d.id === id);
-  if (item) {
-    item.name = document.getElementById('editName').value;
-    item.base = document.getElementById('editBase').value;
-    item.plot = document.getElementById('editPlot').value;
-    item.type = document.getElementById('editType').value;
-    item.priority = document.getElementById('editPriority').value;
-    item.person = document.getElementById('editPerson').value;
-    item.deadline = document.getElementById('editDeadline').value;
-    item.status = document.getElementById('editStatus').value;
-    item.desc = document.getElementById('editDesc').value;
-    filteredData = mockData.slice();
-    Pagination.updateData(mockData);
+  var item = PS.get('tasks', currentDetailId);
+  if (!item) { showToast('任务不存在或已被删除', 'error'); return; }
+  var planId = document.getElementById('editPlan').value;
+  var plan = planId ? PS.get('plans', planId) : null;
+  var patch = {
+    id: item.id,
+    planId: planId,
+    name: document.getElementById('editName').value.trim(),
+    taskCategory: document.getElementById('editCategory').value,
+    executorType: document.getElementById('editExecutor').value,
+    targetQty: parseFloat(document.getElementById('editTargetQty').value) || 0,
+    base: document.getElementById('editBase').value,
+    plot: document.getElementById('editPlot').value,
+    plotId: document.getElementById('editPlot').value,
+    type: document.getElementById('editType').value,
+    priority: document.getElementById('editPriority').value,
+    team: document.getElementById('editTeam').value,
+    person: document.getElementById('editPerson').value,
+    worker: document.getElementById('editWorker').value || document.getElementById('editPerson').value,
+    planTime: document.getElementById('editPlanTime').value,
+    deadline: document.getElementById('editDeadline').value,
+    status: document.getElementById('editStatus').value,
+    desc: document.getElementById('editDesc').value.trim(),
+    unit: plan ? plan.unit : document.getElementById('editUnit').value
+  };
+  var invalid = PS.validate.task(Object.assign({}, item, patch));
+  if (invalid) { showToast(invalid, 'error'); return; }
+  if (!PS.validate.canTransitionTask(item.status, patch.status)) {
+    showToast('任务状态不能从「' + getStatusText(item.status) + '」直接变更为「' + getStatusText(patch.status) + '」', 'error');
+    return;
   }
+  PS.upsert('tasks', patch);
   closeModal('editModal');
-  showToast('任务已更新');
+  refresh();
+  showToast('任务已更新：' + item.id);
 }
 
-function exportTasks() {
-  // 真实导出 CSV
-  var csv = '编号,任务名,基地,地块,类型,负责人,截止时间,状态\n' + filteredData.map(function(t){
-    return [t.code, t.name, t.base, t.plot, t.type, t.person, t.deadline, t.statusText].join(',');
-  }).join('\n');
-  var blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `任务分配_${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
-  showToast('已导出 ' + filteredData.length + ' 条任务');
+/* ---------- 转派 / 批量分配 ---------- */
+function openTransfer(id) {
+  currentDetailId = id;
+  fillBatchPersons();
+  document.getElementById('batchPerson').value = '';
+  document.getElementById('batchTeam').value = '';
+  openModal('batchModal');
 }
 
-// 批量分配：勾选多行 + 指派人（PC-B-055）
-var __batchSelected = [];
+function fillBatchPersons() {
+  var sel = document.getElementById('batchPerson');
+  if (sel.options.length > 1) return;
+  var people = {};
+  PS.tasks().forEach(function (t) { if (t.person) people[t.person] = 1; });
+  Object.keys(people).forEach(function (p) {
+    var o = document.createElement('option');
+    o.value = p; o.textContent = p;
+    sel.appendChild(o);
+  });
+}
+
 function batchAssign() {
   if (!__batchSelected.length) { showToast('请先勾选要分配的任务', 'warning'); return; }
-  var assignTo = prompt('批量分配给（输入人员姓名）：');
-  if (!assignTo) return;
-  var updated = 0;
-  __batchSelected.forEach(function(id){
-    var item = mockData.find(d => d.id === id);
-    if (item) { item.person = assignTo; item.statusText = '已分配'; item.status = 'pending'; updated++; }
-  });
-  Pagination.updateData(mockData);
-  __batchSelected = [];
-  updateBatchCount();
-  showToast('已批量分配 ' + updated + ' 个任务给 ' + assignTo);
+  currentDetailId = null;
+  fillBatchPersons();
+  document.getElementById('batchPerson').value = '';
+  document.getElementById('batchTeam').value = '';
+  openModal('batchModal');
 }
+
+function confirmBatchAssign() {
+  var person = document.getElementById('batchPerson').value;
+  var team = document.getElementById('batchTeam').value;
+  if (!person && !team) { showToast('请选择人员或班组', 'warning'); return; }
+
+  var ids = (currentDetailId ? [currentDetailId] : __batchSelected.slice()).filter(function (id) {
+    return !!PS.get('tasks', id);
+  });
+  if (!ids.length) { showToast('所选任务不存在或已被删除', 'error'); return; }
+  var skipped = 0;
+  ids.forEach(function (id) {
+    var task = PS.get('tasks', id);
+    if (!task || task.status === 'completed' || task.status === 'cancelled') { skipped++; return; }
+    var patch = { id: id };
+    if (person) patch.person = person;
+    if (team) patch.team = team;
+    PS.upsert('tasks', patch);
+  });
+  var done = ids.length - skipped;
+  if (!done) { showToast('所选任务均已结束，无法再分配', 'warning'); return; }
+  __batchSelected = [];
+  currentDetailId = null;
+  closeModal('batchModal');
+  refresh();
+  showToast('已分配 ' + done + ' 个任务' + (person ? '给 ' + person : '到 ' + team) + (skipped ? '，跳过 ' + skipped + ' 个已结束任务' : ''));
+}
+
+function toggleAll(checked) {
+  __batchSelected = [];
+  document.querySelectorAll('#dataTableBody input[type="checkbox"]').forEach(function (box) {
+    box.checked = checked;
+    if (checked) {
+      var id = box.getAttribute('data-task-id');
+      if (id) __batchSelected.push(id);
+    }
+  });
+  updateBatchCount();
+}
+
 function updateBatchCount() {
   document.getElementById('batchCount').textContent = __batchSelected.length;
   document.getElementById('btnBatch').disabled = __batchSelected.length === 0;
 }
-// 暴露给行内复选框（renderRow 内 onchange 调用）
-window.toggleBatchSel = function(id, checked) {
+
+window.toggleBatchSel = function (id, checked) {
   if (checked) { if (__batchSelected.indexOf(id) < 0) __batchSelected.push(id); }
-  else { __batchSelected = __batchSelected.filter(function(x){ return x !== id; }); }
+  else { __batchSelected = __batchSelected.filter(function (x) { return x !== id; }); }
   updateBatchCount();
 };
 
-function openModal(id) {
-  document.getElementById(id).classList.add('active');
+/* ---------- 导出 ---------- */
+function exportTasks() {
+  var rows = [['任务编号', '任务名称', '来源计划', '基地', '地块', '类型', '类别', '执行主体', '优先级', '负责人', '班组', '截止时间', '状态']];
+  allTasks().forEach(function (t) {
+    var plan = t.planId ? PS.get('plans', t.planId) : null;
+    rows.push([t.id, t.name, plan ? plan.name : '临时任务', t.base, t.plotId || t.plot, t.type,
+      PS.TYPES[t.taskCategory] || '农事', PS.EXECUTOR_TYPES[t.executorType] || '个人',
+      getPriorityText(t.priority), t.person, t.team, t.deadline, getStatusText(t.status)]);
+  });
+  var csv = rows.map(function (r) {
+    return r.map(function (c) { return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"'; }).join(',');
+  }).join('\r\n');
+  var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '任务管理_' + PS.today() + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  showToast('已导出 ' + (rows.length - 1) + ' 条任务');
 }
 
-function closeModal(id) {
-  document.getElementById(id).classList.remove('active');
-}
+/* ---------- 弹窗 / Toast ---------- */
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
-function showToast(message, type = 'success') {
-  const toast = document.getElementById('toast');
+function showToast(message, type) {
+  var toast = document.getElementById('toast');
+  var kind = type || 'success';
   document.getElementById('toastMessage').textContent = message;
-  toast.className = `toast ${type}`;
+  document.getElementById('toastIcon').innerHTML = TOAST_ICON[kind] || TOAST_ICON.info;
+  toast.className = 'toast ' + kind;
   toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 3000);
+  setTimeout(function () { toast.classList.remove('show'); }, 3000);
 }
+
+/* ---------- 任务排期甘特图 ---------- */
+var ganttScope = 'all';   // all | active | overdue | mine
+
+function ganttCurrentUser() {
+  try {
+    var u = JSON.parse(sessionStorage.getItem('snzg_user') || 'null');
+    if (u && (u.realName || u.username)) return u.realName || u.username;
+  } catch (e) {}
+  return '';
+}
+
+function ganttSetScope(scope) {
+  ganttScope = scope;
+  [['ganttScopeAll', 'all'], ['ganttScopeActive', 'active'], ['ganttScopeOverdue', 'overdue'], ['ganttScopeMine', 'mine']]
+    .forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (el) el.classList.toggle('is-active', pair[1] === scope);
+    });
+  renderGantt();
+}
+
+/** 按当前筛选条件取任务 */
+function ganttFilteredTasks() {
+  var base = document.getElementById('baseSelect').value;
+  var type = document.getElementById('typeSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var priority = document.getElementById('prioritySelect').value;
+  var team = document.getElementById('teamSelect').value;
+  var keyword = (document.getElementById('searchInput').value || '').toLowerCase();
+  return allTasks().filter(function (item) {
+    if (base && item.base !== base) return false;
+    if (type && item.type !== type) return false;
+    if (status && item.status !== status) return false;
+    if (priority && item.priority !== priority) return false;
+    if (team && item.team !== team) return false;
+    if (keyword && item.name.toLowerCase().indexOf(keyword) < 0 &&
+      String(item.person).toLowerCase().indexOf(keyword) < 0 &&
+      String(item.id).toLowerCase().indexOf(keyword) < 0) return false;
+    return true;
+  });
+}
+
+function ganttScopeTasks() {
+  var list = ganttFilteredTasks();
+  if (ganttScope === 'active') {
+    // 进行中含「已超期」：任务尚未结束，只是逾期未完成
+    list = list.filter(function (t) { return ['accepted', 'processing', 'reviewing', 'overdue'].indexOf(t.status) >= 0; });
+  } else if (ganttScope === 'overdue') {
+    list = list.filter(function (t) { return t.status === 'overdue'; });
+  } else if (ganttScope === 'mine') {
+    var me = ganttCurrentUser();
+    list = me ? list.filter(function (t) { return t.person === me || t.worker === me; }) : [];
+  }
+  return list;
+}
+
+function renderGantt() {
+  var legendEl = document.getElementById('ganttLegend');
+  var summaryEl = document.getElementById('ganttSummary');
+  if (!summaryEl) return;
+
+  var list = ganttScopeTasks();
+  var me = ganttCurrentUser();
+
+  // 图例：任务类型色板
+  var types = [];
+  var seen = {};
+  list.forEach(function (t) {
+    var code = PS.typeCode(t.type);
+    if (seen[code]) return;
+    seen[code] = 1;
+    types.push({ code: code, name: PS.TYPE_NAMES[code] || t.type, color: PS.typeColor(code) });
+  });
+  if (legendEl) {
+    legendEl.innerHTML = types.length ? types.map(function (t) {
+      return '<span class="gantt-legend-item"><i class="gantt-legend-dot" style="background:' + t.color + ';"></i>' + t.name + '</span>';
+    }).join('') + '<span class="gantt-legend-item"><i class="gantt-legend-dot" style="background:rgba(255,107,53,0.9);width:14px;height:2px;border-radius:1px;"></i>今天</span>'
+      : '<span class="gantt-legend-item">当前条件下暂无任务</span>';
+  }
+
+  // 概览
+  var count = function (s) { return list.filter(function (t) { return t.status === s; }).length; };
+  summaryEl.innerHTML =
+    '<span>任务总数<b>' + list.length + '</b></span>' +
+    '<span>进行中<b style="color:var(--info);">' + (count('accepted') + count('processing') + count('reviewing') + count('overdue')) + '</b></span>' +
+    '<span>已完成<b style="color:var(--success);">' + count('completed') + '</b></span>' +
+    '<span>已超期<b style="color:var(--error);">' + count('overdue') + '</b></span>' +
+    '<span>待接收<b style="color:var(--warning);">' + count('pending') + '</b></span>';
+
+  if (!window.Chart) return;
+  var container = document.getElementById('chart-task-gantt');
+  if (!container) return;
+
+  var tasks = list.map(function (t) {
+    var code = PS.typeCode(t.type);
+    return {
+      id: t.id,
+      name: t.name,
+      type: code,
+      typeName: PS.TYPE_NAMES[code] || t.type,
+      start: String(t.planTime || '').slice(0, 10),
+      end: t.deadline,
+      base: t.base,
+      plot: t.plotId || t.plot,
+      owner: t.person,
+      team: t.team,
+      status: t.status,
+      statusText: STATUS_TEXT[t.status] || t.status
+    };
+  }).filter(function (t) { return t.start && t.end; });
+
+  Chart.loadECharts().then(function () {
+    Chart.gantt('#chart-task-gantt', {
+      tasks: tasks,
+      types: types,
+      today: PS.today()
+    });
+  });
+}
+
+/* ---------- 初始化 ---------- */
+document.addEventListener('DOMContentLoaded', function () {
+  Pagination.init({
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    pageSize: 10,
+    renderRow: renderRow,
+    data: allTasks()
+  });
+  updateBatchCount();
+  renderGantt();
+  window.addEventListener('productionStoreChange', function () { refresh(); });
+});
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/search-helper.js"></script>
 <script src="js/typography.js"></script>
+<script src="js/components/chart.js"></script>
 </body>
 </html>

@@ -479,10 +479,10 @@
                 </svg>
               </span>
             </div>
-            <div class="stat-value" id="kpiHarvest">126.8<span style="font-size:12px;color:#6b7280;">吨</span></div>
+            <div class="stat-value" id="kpiHarvest">--<span style="font-size:12px;color:#6b7280;">吨</span></div>
             <div class="stat-footer">
-              <span class="stat-trend up">12.5%</span>
-              <span class="stat-sub">较上月</span>
+              <span class="stat-trend" id="kpiHarvestTrend">--</span>
+              <span class="stat-sub" id="kpiHarvestSub">较上月</span>
             </div>
           </div>
           <div class="stat-card cyan">
@@ -895,6 +895,7 @@
           </div>
 
     </div>
+<script src="js/shared/harvest-store.js"></script>
 <script>
 document.getElementById('currentDate').textContent = new Date().toLocaleDateString('zh-CN', {
   year: 'numeric',
@@ -975,10 +976,51 @@ const HOME_KPI = {
   kpiTask:    { base: 12,    unit: '项', digits: 0 },
   kpiDevice:  { base: 96.7,  unit: '%',  digits: 1 },
   kpiAlert:   { base: 5,     unit: '条', digits: 0 },
-  kpiHarvest: { base: 126.8, unit: '吨', digits: 1 },
   kpiAdopt:   { base: 8,     unit: '棵', digits: 0 },
   kpiTrace:   { base: 23,    unit: '个', digits: 0 }
 };
+
+/** 本月采收量：读取采收管理共享数据源（已完成采收记录，单位吨） */
+function refreshHarvestKPI() {
+  const el = document.getElementById('kpiHarvest');
+  if (!el || !window.HarvestStore) return;
+  try {
+    const now = new Date();
+    const key = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const curKey = key(now);
+    const prevKey = key(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+
+    const sums = {};
+    HarvestStore.records().forEach(function (r) {
+      if (r.status !== 'completed') return;
+      const k = String(r.endTime || r.startTime || '').slice(0, 7);
+      sums[k] = (sums[k] || 0) + Number(r.qty || 0);
+    });
+
+    const curKg = sums[curKey] || 0;
+    const prevKg = sums[prevKey] || 0;
+    el.innerHTML = (curKg / 1000).toFixed(1) + '<span style="font-size:12px;color:#6b7280;">吨</span>';
+
+    const trend = document.getElementById('kpiHarvestTrend');
+    const sub = document.getElementById('kpiHarvestSub');
+    if (!trend || !sub) return;
+    if (!curKg) {
+      trend.className = 'stat-trend';
+      trend.textContent = '—';
+      sub.textContent = '本月暂无采收';
+    } else if (prevKg > 0) {
+      const g = (curKg - prevKg) / prevKg * 100;
+      trend.className = 'stat-trend ' + (g >= 0 ? 'up' : 'down');
+      trend.textContent = (g >= 0 ? '↑ ' : '↓ ') + Math.abs(g).toFixed(1) + '%';
+      sub.textContent = '较上月';
+    } else {
+      trend.className = 'stat-trend up';
+      trend.textContent = '—';
+      sub.textContent = '上月无采收';
+    }
+  } catch (e) {}
+}
+
 function refreshHomeKPI() {
   Object.keys(HOME_KPI).forEach(function(id) {
     const cfg = HOME_KPI[id];
@@ -990,6 +1032,7 @@ function refreshHomeKPI() {
     const txt = cfg.digits ? val.toFixed(cfg.digits) : String(Math.round(val));
     el.innerHTML = txt + '<span style="font-size:12px;color:#6b7280;">' + cfg.unit + '</span>';
   });
+  refreshHarvestKPI();
   updateLastUpdate();
 }
 setInterval(refreshHomeKPI, 30000);   // 30 秒自动刷新 KPI
@@ -1005,6 +1048,7 @@ setInterval(updateLiveClocks, 1000);  // 每秒刷新摄像头时间戳
   } catch (e) {}
   updateLiveClocks();
   updateLastUpdate();
+  refreshHomeKPI();
 })();
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>

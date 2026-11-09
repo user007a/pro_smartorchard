@@ -150,6 +150,30 @@
   .empty-state {
     padding:40px 0;text-align:center;color:var(--text-tertiary);font-size:13px;
   }
+  /* ===== 巡园路线配置 ===== */
+  .route-points { display:flex;flex-direction:column;gap:10px; }
+  .route-point {
+    padding:10px 12px;border:1px solid var(--border-light);border-radius:8px;
+    background:var(--gray-50);
+  }
+  .route-point-head {
+    display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;
+  }
+  .route-point-idx { font-size:12px;font-weight:600;color:var(--text-secondary); }
+  .route-point-grid {
+    display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;
+  }
+  .route-point-grid .pf { display:flex;flex-direction:column;gap:4px; }
+  .route-point-grid .pf label { font-size:11px;color:var(--text-tertiary); }
+  .route-point-grid .pf input,
+  .route-point-grid .pf select {
+    width:100%;padding:7px 9px;border:1px solid var(--border-default);border-radius:6px;
+    font-size:13px;font-family:inherit;background:var(--bg-card);
+  }
+  .route-point-grid .pf input:focus,
+  .route-point-grid .pf select:focus {
+    border-color:var(--primary-500);outline:none;box-shadow:0 0 0 3px rgba(24,144,255,0.12);
+  }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -186,111 +210,151 @@
         <div class="page-header">
           <div>
             <div class="page-title">巡园管理</div>
-            <div class="page-subtitle">后台巡园计划与移动端现场异常上报统一受理</div>
+            <div class="page-subtitle">巡园计划 → 现场打卡 → 异常上报 → 处置任务，与农事任务统一闭环</div>
           </div>
           <div class="page-actions">
-            <button class="jg-btn" onclick="refreshAbnormalList()">刷新</button>
+            <button class="jg-btn jg-btn-primary" onclick="Modal.show('modal-add-patrol')">新建巡园计划</button>
+            <button class="jg-btn" onclick="Modal.show('modal-export')">导出</button>
           </div>
         </div>
 
-        <!-- ===== T1：巡园计划 / 异常上报 分区 Tab ===== -->
+        <!-- ===== 四页签：巡园计划 / 打卡记录 / 异常上报 / 路线配置 ===== -->
         <div class="view-tabs">
           <button class="view-tab active" id="tabPlan" onclick="switchPatrolTab('plan')">巡园计划</button>
+          <button class="view-tab" id="tabCheckin" onclick="switchPatrolTab('checkin')">打卡记录</button>
           <button class="view-tab" id="tabAbnormal" onclick="switchPatrolTab('abnormal')">
             异常上报<span id="abnormalBadge" style="display:none;margin-left:6px;padding:0 6px;border-radius:999px;background:var(--warning);color:#fff;font-size:11px;">0</span>
           </button>
+          <button class="view-tab" id="tabRoute" onclick="switchPatrolTab('route')">路线配置</button>
         </div>
 
-        <!-- 统计卡片区 -->
-        <!-- 统计卡条已按统一规范移除 (原class=patrol-stats) -->
-
-        <!-- ===== 分区一：巡园计划（原后台数据） ===== -->
+        <!-- ===== 分区一：巡园计划 ===== -->
         <div id="viewPlan">
-        <!-- 搜索栏区 -->
-        <div class="page-section search-section">
-          <div class="search-bar">
-            <select class="search-select" id="baseSelect">
-              <option value="">选择基地</option>
-              <option value="ytqx">天水麦积区基地</option>
-              <option value="whrc">天水秦州基地</option>
-              <option value="qdlx">青岛莱西基地</option>
-              <option value="zy">招远基地</option>
-              <option value="pl">天水甘谷基地</option>
-            </select>
-            <select class="search-select" id="patrolTypeSelect">
-              <option value="">巡查类型</option>
-              <option value="daily">日常巡园</option>
-              <option value="special">专项检查</option>
-              <option value="pest">病虫害巡查</option>
-              <option value="weather">气象巡查</option>
-              <option value="growth">生长巡查</option>
-            </select>
-            <select class="search-select" id="statusSelect">
-              <option value="">全部状态</option>
-              <option value="normal">无异常</option>
-              <option value="warning">发现病虫害</option>
-              <option value="danger">设备异常</option>
-              <option value="other">其他异常</option>
-            </select>
-            <input type="date" class="search-date" id="dateStart">
-            <span class="date-separator">至</span>
-            <input type="date" class="search-date" id="dateEnd">
-            <input type="text" class="search-input" placeholder="搜索巡园人员..." id="searchInput">
-            
-          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="handleSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
+          <div class="page-section search-section">
+            <div class="search-bar">
+              <select class="search-select" id="baseSelect">
+                <option value="">选择基地</option>
+                <option value="天水麦积区基地">天水麦积区基地</option>
+                <option value="天水秦州基地">天水秦州基地</option>
+                <option value="青岛莱西基地">青岛莱西基地</option>
+                <option value="招远基地">招远基地</option>
+                <option value="天水甘谷基地">天水甘谷基地</option>
+              </select>
+              <select class="search-select" id="statusSelect">
+                <option value="">全部状态</option>
+                <option value="pending">待执行</option>
+                <option value="executing">执行中</option>
+                <option value="completed">已完成</option>
+              </select>
+              <select class="search-select" id="freqSelect">
+                <option value="">全部频次</option>
+                <option value="每日">每日</option>
+                <option value="每周">每周</option>
+                <option value="每月">每月</option>
+              </select>
+              <input type="text" class="search-input" placeholder="搜索计划名称/负责人..." id="searchInput">
+              <div class="search-actions">
+                <button class="jg-btn jg-btn-primary" onclick="handleSearch()">搜索</button>
+                <button class="jg-btn" onclick="smartReset()">重置</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="page-section data-section">
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:52px;">序号</th>
+                    <th style="width:124px;">计划编号</th>
+                    <th>计划名称</th>
+                    <th style="width:130px;">所属基地</th>
+                    <th style="width:160px;">巡园路线</th>
+                    <th style="width:70px;">频次</th>
+                    <th style="width:80px;">负责人</th>
+                    <th style="width:180px;">计划周期</th>
+                    <th style="width:76px;">状态</th>
+                    <th style="width:170px;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="dataTableBody"></tbody>
+              </table>
+            </div>
+            <div id="pagination-container"></div>
           </div>
         </div>
 
-        <!-- 操作按钮区 -->
-        <div class="page-section action-bar">
-          <div class="action-buttons">
-            <button class="jg-btn jg-btn-primary" onclick="Modal.show('modal-add-patrol')">
-              <span>+</span>新建巡查
-            </button>
-            <button class="jg-btn" onclick="Modal.show('modal-export')">
-              <span>↓</span>导出巡查
-            </button>
+        <!-- ===== 分区二：打卡记录 ===== -->
+        <div id="viewCheckin" style="display:none;">
+          <div class="page-section search-section">
+            <div class="search-bar">
+              <select class="search-select" id="ckBaseSelect">
+                <option value="">选择基地</option>
+                <option value="天水麦积区基地">天水麦积区基地</option>
+                <option value="天水秦州基地">天水秦州基地</option>
+                <option value="青岛莱西基地">青岛莱西基地</option>
+                <option value="招远基地">招远基地</option>
+                <option value="天水甘谷基地">天水甘谷基地</option>
+              </select>
+              <select class="search-select" id="ckIssueSelect">
+                <option value="">全部结果</option>
+                <option value="normal">无异常</option>
+                <option value="warning">发现病虫害</option>
+                <option value="danger">设备异常</option>
+              </select>
+              <input type="text" class="search-input" placeholder="搜索打卡人/地块..." id="ckSearchInput">
+              <div class="search-actions">
+                <button class="jg-btn jg-btn-primary" onclick="searchCheckin()">搜索</button>
+                <button class="jg-btn" onclick="resetCheckin()">重置</button>
+              </div>
+            </div>
+          </div>
+          <div class="page-section data-section">
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:52px;">序号</th>
+                    <th style="width:124px;">打卡编号</th>
+                    <th style="width:150px;">关联巡园计划</th>
+                    <th style="width:130px;">所属基地</th>
+                    <th style="width:180px;">巡查地块</th>
+                    <th style="width:80px;">巡查人</th>
+                    <th style="width:150px;">打卡时间</th>
+                    <th style="width:90px;">完成点位</th>
+                    <th style="width:110px;">发现问题</th>
+                    <th style="width:100px;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="checkinBody"></tbody>
+              </table>
+            </div>
+            <div id="checkin-pagination-container"></div>
           </div>
         </div>
 
-        <!-- 数据列表区 -->
-        <div class="page-section data-section">
-          <div class="data-table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="checkbox-col" style="width:60px;">序号</th>
-                  <th>巡查编号</th>
-                  <th>所属基地</th>
-                  <th>巡查类型</th>
-                  <th>巡查地块</th>
-                  <th>巡查人员</th>
-                  <th>巡查时间</th>
-                  <th>发现问题</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody id="dataTableBody"></tbody>
-            </table>
-          </div>
-          <div id="pagination-container"></div>
-        </div>
-        </div>
-
-        <!-- ===== 分区二：移动端异常上报（T1 新增） ===== -->
+        <!-- ===== 分区三：异常上报 ===== -->
         <div id="viewAbnormal" style="display:none;">
           <div class="page-section search-section">
             <div class="search-bar">
               <select class="search-select" id="abnormalTypeSelect">
                 <option value="">全部异常类型</option>
                 <option value="病虫害">病虫害</option>
+                <option value="疑似病害">疑似病害</option>
                 <option value="设备故障">设备故障</option>
+                <option value="树势异常">树势异常</option>
                 <option value="其他">其他</option>
               </select>
               <select class="search-select" id="abnormalStatusSelect">
                 <option value="">全部状态</option>
-                <option value="待处理">待处理</option>
-                <option value="已处理">已处理</option>
+                <option value="waitHandle">待处理</option>
+                <option value="handling">处理中</option>
+                <option value="closed">已关闭</option>
+              </select>
+              <select class="search-select" id="abnormalSourceSelect">
+                <option value="">全部来源</option>
+                <option value="patrol">巡园上报</option>
+                <option value="drone">无人机巡检</option>
               </select>
               <input type="text" class="search-input" placeholder="搜索上报人或异常说明..." id="abnormalSearchInput">
               <div class="search-actions">
@@ -305,21 +369,55 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th class="checkbox-col" style="width:60px;">序号</th>
+                    <th style="width:52px;">序号</th>
+                    <th style="width:124px;">异常编号</th>
                     <th style="width:140px;">上报时间</th>
+                    <th style="width:92px;">来源</th>
                     <th style="width:100px;">异常类型</th>
                     <th>异常说明</th>
-                    <th style="width:180px;">定位</th>
+                    <th style="width:90px;">地块</th>
                     <th style="width:90px;">上报人</th>
-                    <th style="width:80px;">照片</th>
-                    <th style="width:100px;">状态</th>
-                    <th style="width:140px;">操作</th>
+                    <th style="width:90px;">状态</th>
+                    <th style="width:210px;">操作</th>
                   </tr>
                 </thead>
                 <tbody id="abnormalBody"></tbody>
               </table>
             </div>
-            <div id="abnormalEmpty" class="empty-state" style="display:none;">暂无移动端异常上报</div>
+            <div id="abnormal-pagination-container"></div>
+            <div id="abnormalEmpty" class="empty-state" style="display:none;">暂无异常上报</div>
+          </div>
+        </div>
+
+        <!-- ===== 分区四：路线配置 ===== -->
+        <div id="viewRoute" style="display:none;">
+          <div class="page-section action-bar">
+            <button class="jg-btn jg-btn-primary" onclick="openRouteEdit()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+                <path d="M12 5v14"/><path d="M5 12h14"/>
+              </svg>
+              新增路线
+            </button>
+          </div>
+          <div class="page-section data-section">
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:52px;">序号</th>
+                    <th style="width:110px;">路线编号</th>
+                    <th>路线名称</th>
+                    <th style="width:180px;">覆盖区域</th>
+                    <th style="width:80px;">点位数</th>
+                    <th style="width:90px;">必巡点</th>
+                    <th style="width:80px;">状态</th>
+                    <th>备注</th>
+                    <th style="width:180px;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="routeBody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -379,7 +477,7 @@
   <div id="modal-add-patrol" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 class="modal-title">新建巡查记录</h3>
+        <h3 class="modal-title">新建巡园计划</h3>
         <button class="modal-close">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 4L12 12M12 4L4 12"/>
@@ -389,60 +487,36 @@
       <div class="modal-body">
         <form id="form-add-patrol" class="modal-form">
           <div class="form-group">
+            <label>计划名称</label>
+            <input type="text" class="form-control" id="pp-name" placeholder="如：麦积区秋季日常巡园">
+          </div>
+          <div class="form-group">
             <label>所属基地</label>
-            <select class="form-control">
+            <select class="form-control" id="pp-base">
               <option value="">请选择基地</option>
-              <option value="ytqx">天水麦积区基地</option>
-              <option value="whrc">天水秦州基地</option>
-              <option value="qdlx">青岛莱西基地</option>
-              <option value="zy">招远基地</option>
-              <option value="pl">天水甘谷基地</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水秦州基地">天水秦州基地</option>
+              <option value="青岛莱西基地">青岛莱西基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水甘谷基地">天水甘谷基地</option>
             </select>
           </div>
           <div class="form-group">
-            <label>巡查类型</label>
-            <select class="form-control">
-              <option value="">请选择类型</option>
-              <option value="daily">日常巡园</option>
-              <option value="special">专项检查</option>
-              <option value="pest">病虫害巡查</option>
-              <option value="weather">气象巡查</option>
-              <option value="growth">生长巡查</option>
+            <label>巡园路线</label>
+            <select class="form-control" id="pp-route"></select>
+          </div>
+          <div class="form-group">
+            <label>巡园频次</label>
+            <select class="form-control" id="pp-freq">
+              <option value="每日">每日</option>
+              <option value="每周">每周</option>
+              <option value="每月">每月</option>
             </select>
           </div>
           <div class="form-group">
-            <label>巡查地块</label>
-            <select class="form-control" id="add-plot">
-              <option value="">请选择地块</option>
-              <option value="D-001">D-001 · 东区1号地</option>
-              <option value="D-002">D-002 · 东区2号地</option>
-              <option value="D-003">D-003 · 西区1号地</option>
-              <option value="D-004">D-004 · 北区1号地</option>
-              <option value="D-005">D-005 · 南区1号地</option>
-              <option value="D-006">D-006 · 中区1号地</option>
-              <option value="D-007">D-007 · 南区2号地</option>
-              <option value="D-008">D-008 · 西区2号地</option>
-              <option value="D-009">D-009 · 北区2号地</option>
-              <option value="D-010">D-010 · 东区3号地</option>
-              <option value="D-011">D-011 · 南区3号地</option>
-              <option value="D-012">D-012 · 西区3号地</option>
-              <option value="D-013">D-013 · 北区3号地</option>
-              <option value="D-014">D-014 · 中区2号地</option>
-              <option value="D-015">D-015 · 东区4号地</option>
-              <option value="D-016">D-016 · 南区4号地</option>
-              <option value="D-017">D-017 · 西区4号地</option>
-              <option value="D-018">D-018 · 北区4号地</option>
-              <option value="D-019">D-019 · 中区3号地</option>
-              <option value="D-020">D-020 · 东区5号地</option>
-              <option value="D-021">D-021 · 南区5号地</option>
-              <option value="D-022">D-022 · 西区5号地</option>
-              <option value="D-023">D-023 · 北区5号地</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>巡查人员</label>
-            <select class="form-control" id="add-inspector">
-              <option value="">请选择巡查人员</option>
+            <label>负责人</label>
+            <select class="form-control" id="pp-inspector">
+              <option value="">请选择负责人</option>
               <option value="惠加宁">惠加宁</option>
               <option value="黄忠坚">黄忠坚</option>
               <option value="徐水应">徐水应</option>
@@ -453,41 +527,43 @@
               <option value="李根">李根</option>
               <option value="张才孙">张才孙</option>
               <option value="刘全国">刘全国</option>
-              <option value="毛定卫">毛定卫</option>
-              <option value="叶三东">叶三东</option>
-              <option value="周才贵">周才贵</option>
-              <option value="程名高">程名高</option>
-              <option value="邓小华">邓小华</option>
-              <option value="周成友">周成友</option>
-              <option value="危红卫">危红卫</option>
-              <option value="方超">方超</option>
-              <option value="曹红英">曹红英</option>
-              <option value="崔新根">崔新根</option>
-              <option value="超级用户">超级用户</option>
             </select>
           </div>
           <div class="form-group">
-            <label>巡查时间</label>
-            <input type="datetime-local" class="form-control">
+            <label>计划周期</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="date" class="form-control" id="pp-start" style="flex:1;">
+              <span>至</span>
+              <input type="date" class="form-control" id="pp-end" style="flex:1;">
+            </div>
           </div>
           <div class="form-group">
-            <label>发现问题</label>
-            <select class="form-control">
-              <option value="normal">无异常</option>
-              <option value="warning">发现病虫害</option>
-              <option value="danger">设备异常</option>
-              <option value="other">其他异常</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>问题描述</label>
-            <textarea class="form-control" rows="3" placeholder="请输入问题描述"></textarea>
+            <label>备注</label>
+            <textarea class="form-control" rows="2" id="pp-remark" placeholder="巡园重点与要求"></textarea>
           </div>
         </form>
       </div>
       <div class="modal-footer">
         <button class="jg-btn" onclick="Modal.hide('modal-add-patrol')">取消</button>
         <button class="jg-btn jg-btn-primary" onclick="submitAddPatrol()">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 打卡详情 -->
+  <div id="modal-checkin" class="modal-overlay">
+    <div class="modal-box" style="max-width:520px;">
+      <div class="modal-header">
+        <h3 class="modal-title">打卡详情</h3>
+        <button class="modal-close" onclick="Modal.hide('modal-checkin')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4L12 12M12 4L4 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" id="checkin-detail-body"></div>
+      <div class="modal-footer">
+        <button class="jg-btn" onclick="Modal.hide('modal-checkin')">关闭</button>
       </div>
     </div>
   </div>
@@ -685,368 +761,711 @@
     </div>
   </div>
 
+  <!-- 巡园路线编辑 -->
+  <div id="modal-route" class="modal-overlay">
+    <div class="modal-box" style="max-width:760px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="routeModalTitle">巡园路线</h3>
+        <button class="modal-close" onclick="Modal.hide('modal-route')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4L12 12M12 4L4 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-route" class="modal-form">
+          <div class="form-group">
+            <label>路线编号</label>
+            <input type="text" class="form-control" id="route-id" readonly placeholder="自动生成">
+          </div>
+          <div class="form-group">
+            <label>路线名称</label>
+            <input type="text" class="form-control" id="route-name" placeholder="如：A区日常巡园路线">
+          </div>
+          <div class="form-group">
+            <label>覆盖基地</label>
+            <select class="form-control" id="route-base">
+              <option value="麦积区基地 A区">麦积区基地 A区</option>
+              <option value="麦积区基地 B区">麦积区基地 B区</option>
+              <option value="麦积区基地 C区">麦积区基地 C区</option>
+              <option value="白水基地 A区">白水基地 A区</option>
+              <option value="宜川基地 A区">宜川基地 A区</option>
+              <option value="天水麦积区基地">天水麦积区基地</option>
+              <option value="天水秦州基地">天水秦州基地</option>
+              <option value="青岛莱西基地">青岛莱西基地</option>
+              <option value="招远基地">招远基地</option>
+              <option value="天水甘谷基地">天水甘谷基地</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>状态</label>
+            <select class="form-control" id="route-enabled">
+              <option value="true">启用</option>
+              <option value="false">停用</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>备注</label>
+            <input type="text" class="form-control" id="route-remark" placeholder="巡园重点与要求">
+          </div>
+          <div class="form-group">
+            <label>巡园点位</label>
+            <div class="route-points" id="route-points"></div>
+            <button type="button" class="jg-btn" style="margin-top:10px;align-self:flex-start;" onclick="addRoutePointRow()">+ 添加点位</button>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="jg-btn" onclick="Modal.hide('modal-route')">取消</button>
+        <button class="jg-btn jg-btn-primary" onclick="submitRouteEdit()">保存</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- 引入交互脚本 -->
 <script src="js/common-functions.js"></script>
+<script src="js/shared/production-store.js"></script>
 <script src="js/shared/mobile-bridge.js"></script>
 <script>
-// 当前页面数据
+/* ==========================================================
+ * 巡园管理 —— 巡园计划 / 打卡记录 / 异常上报 / 路线配置
+ * 数据源：ProductionStore + MobileBridge
+ * ========================================================== */
+var PS = window.ProductionStore;
 var currentPatrolId = '';
+var currentAbnormalId = '';
+var currentCheckinId = '';
+var currentRouteId = '';
 
-// Mock数据 - 23条巡查记录
-const mockData = [
-  { id: 'PAT-001', base: '天水麦积区基地', type: '日常巡园', plots: 'D-001, D-002, D-003', inspector: '惠加宁', time: '2026-09-15 08:30', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-002', base: '天水麦积区基地', type: '日常巡园', plots: 'D-004, D-005', inspector: '黄忠坚', time: '2026-09-15 14:00', issue: 'warning', issueName: '发现病虫害' },
-  { id: 'PAT-003', base: '天水秦州基地', type: '专项检查', plots: 'D-006, D-007', inspector: '徐水应', time: '2026-09-15 09:00', issue: 'danger', issueName: '设备异常' },
-  { id: 'PAT-004', base: '青岛莱西基地', type: '日常巡园', plots: 'D-008, D-009', inspector: '朱泉龙', time: '2026-09-16 08:00', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-005', base: '招远基地', type: '专项检查', plots: 'D-010, D-011', inspector: '陈小忠', time: '2026-09-16 10:30', issue: 'warning', issueName: '发现病虫害' },
-  { id: 'PAT-006', base: '天水甘谷基地', type: '日常巡园', plots: 'D-012, D-013', inspector: '廖春亮', time: '2026-09-16 14:00', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-007', base: '天水麦积区基地', type: '专项检查', plots: 'D-014, D-015', inspector: '李建明', time: '2026-09-17 08:30', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-008', base: '天水秦州基地', type: '日常巡园', plots: 'D-016, D-017', inspector: '李根', time: '2026-09-17 09:00', issue: 'warning', issueName: '发现病虫害' },
-  { id: 'PAT-009', base: '青岛莱西基地', type: '专项检查', plots: 'D-018, D-019', inspector: '张才孙', time: '2026-09-17 14:30', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-010', base: '招远基地', type: '日常巡园', plots: 'D-020, D-021', inspector: '刘全国', time: '2026-09-18 08:00', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-011', base: '天水甘谷基地', type: '专项检查', plots: 'D-022, D-023', inspector: '毛定卫', time: '2026-09-18 10:00', issue: 'danger', issueName: '设备异常' },
-  { id: 'PAT-012', base: '天水麦积区基地', type: '日常巡园', plots: 'D-001, D-002', inspector: '叶三东', time: '2026-09-18 14:00', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-013', base: '天水秦州基地', type: '专项检查', plots: 'D-003, D-004', inspector: '周才贵', time: '2026-09-19 08:30', issue: 'warning', issueName: '发现病虫害' },
-  { id: 'PAT-014', base: '青岛莱西基地', type: '日常巡园', plots: 'D-005, D-006', inspector: '程名高', time: '2026-09-19 09:30', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-015', base: '招远基地', type: '专项检查', plots: 'D-007, D-008', inspector: '邓小华', time: '2026-09-19 14:00', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-016', base: '天水甘谷基地', type: '日常巡园', plots: 'D-009, D-010', inspector: '周成友', time: '2026-09-20 08:00', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-017', base: '天水麦积区基地', type: '专项检查', plots: 'D-011, D-012', inspector: '危红卫', time: '2026-09-20 10:30', issue: 'warning', issueName: '发现病虫害' },
-  { id: 'PAT-018', base: '天水秦州基地', type: '日常巡园', plots: 'D-013, D-014', inspector: '方超', time: '2026-09-20 14:30', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-019', base: '青岛莱西基地', type: '专项检查', plots: 'D-015, D-016', inspector: '曹红英', time: '2026-09-21 08:30', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-020', base: '招远基地', type: '日常巡园', plots: 'D-017, D-018', inspector: '崔新根', time: '2026-09-21 09:00', issue: 'danger', issueName: '设备异常' },
-  { id: 'PAT-021', base: '天水甘谷基地', type: '专项检查', plots: 'D-019, D-020', inspector: '惠加宁', time: '2026-09-21 14:00', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-022', base: '天水麦积区基地', type: '日常巡园', plots: 'D-021, D-022', inspector: '黄忠坚', time: '2026-09-22 08:00', issue: 'normal', issueName: '无异常' },
-  { id: 'PAT-023', base: '天水秦州基地', type: '专项检查', plots: 'D-023, D-001', inspector: '徐水应', time: '2026-09-22 10:00', issue: 'warning', issueName: '发现病虫害' }
-];
+var PLAN_STATUS = {
+  pending: '<span class="status-tag warning">待执行</span>',
+  executing: '<span class="status-tag done">执行中</span>',
+  completed: '<span class="status-tag normal">已完成</span>'
+};
+var ISSUE_TAG = {
+  normal: '<span class="status-tag normal">无异常</span>',
+  warning: '<span class="status-tag warning">发现病虫害</span>',
+  danger: '<span class="status-tag danger">设备异常</span>',
+  other: '<span class="status-tag warning">其他异常</span>'
+};
+var ANOMALY_STATUS = {
+  waitHandle: '<span class="status-tag warning">待处理</span>',
+  handling: '<span class="status-tag done">处理中</span>',
+  closed: '<span class="status-tag normal">已关闭</span>',
+  '待处理': '<span class="status-tag warning">待处理</span>',
+  '处理中': '<span class="status-tag done">处理中</span>',
+  '已处理': '<span class="status-tag normal">已关闭</span>',
+  '已关闭': '<span class="status-tag normal">已关闭</span>'
+};
+var SOURCE_NAME = { patrol: '巡园上报', drone: '无人机巡检' };
 
-// 获取问题标签
-function getIssueTag(issue) {
-  const issueMap = {
-    'normal': '<span class="status-tag normal">无异常</span>',
-    'warning': '<span class="status-tag warning">发现病虫害</span>',
-    'danger': '<span class="status-tag danger">设备异常</span>'
-  };
-  return issueMap[issue] || issueMap['normal'];
+/* ---------------- 页签 ---------------- */
+function switchPatrolTab(tab) {
+  var map = { plan: 'viewPlan', checkin: 'viewCheckin', abnormal: 'viewAbnormal', route: 'viewRoute' };
+  var tabMap = { plan: 'tabPlan', checkin: 'tabCheckin', abnormal: 'tabAbnormal', route: 'tabRoute' };
+  Object.keys(map).forEach(function (k) {
+    var view = document.getElementById(map[k]);
+    var btn = document.getElementById(tabMap[k]);
+    if (view) view.style.display = (k === tab) ? '' : 'none';
+    if (btn) btn.classList.toggle('active', k === tab);
+  });
+  if (tab === 'plan') mountPager('pagination-container', 'dataTableBody', planList(), renderPlanRow);
+  else if (tab === 'checkin') mountPager('checkin-pagination-container', 'checkinBody', checkinList(), renderCheckinRow);
+  else if (tab === 'abnormal') renderAbnormalTable();
+  else if (tab === 'route') renderRoutes();
 }
 
-// 渲染表格行
-function renderRow(item, index) {
-  return `<tr>
-    <td class="checkbox-col">${index + 1}</td>
-    <td><strong>${item.id}</strong></td>
-    <td>${item.base}</td>
-    <td>${item.type}</td>
-    <td>${item.plots}</td>
-    <td>${item.inspector}</td>
-    <td>${item.time}</td>
-    <td>${getIssueTag(item.issue)}</td>
-    <td>
-      <div class="action-btns">
-        <button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>
-        <button class="action-btn edit" onclick="showEdit('${item.id}')">编辑</button>
-        <button class="action-btn delete" onclick="showDeleteConfirm('${item.id}')">删除</button>
-      </div>
-    </td>
-  </tr>`;
+function mountPager(containerId, tbodyId, data, rowFn) {
+  Pagination.init({
+    containerId: containerId,
+    tbodyId: tbodyId,
+    pageSize: 10,
+    renderRow: rowFn,
+    data: data
+  });
 }
 
-// 搜索功能
-function handleSearch() {
-  var keyword = document.getElementById('searchInput').value.trim();
-  var base = document.getElementById('baseSelect').value;
-  var patrolType = document.getElementById('patrolTypeSelect').value;
-
-  var filteredData = mockData.filter(item => {
-    if (keyword && !item.id.includes(keyword)) return false;
-    if (base && !item.base.includes(base)) return false;
-    if (patrolType && item.type !== patrolType) return false;
+/* ---------------- 巡园计划 ---------------- */
+function planList() {
+  var base = (document.getElementById('baseSelect') || {}).value || '';
+  var status = (document.getElementById('statusSelect') || {}).value || '';
+  var freq = (document.getElementById('freqSelect') || {}).value || '';
+  var kw = ((document.getElementById('searchInput') || {}).value || '').trim();
+  return PS.patrolPlans().filter(function (p) {
+    if (base && p.base !== base) return false;
+    if (status && p.status !== status) return false;
+    if (freq && p.freq !== freq) return false;
+    if (kw && p.name.indexOf(kw) < 0 && String(p.inspector).indexOf(kw) < 0 && String(p.id).indexOf(kw) < 0) return false;
     return true;
   });
-
-  Pagination.updateData(filteredData);
-  Toast.info('找到 ' + filteredData.length + ' 条记录');
 }
 
-// 刷新数据
-function refreshData() {
-  Toast.success('数据已刷新');
+function renderPlanRow(item, index) {
+  var checkins = PS.checkins().filter(function (c) { return c.patrolPlanId === item.id; }).length;
+  return '<tr>' +
+    '<td>' + (index + 1) + '</td>' +
+    '<td><span style="font-family:var(--font-mono,monospace);font-size:12px;">' + item.id + '</span></td>' +
+    '<td><strong>' + item.name + '</strong></td>' +
+    '<td>' + item.base + '</td>' +
+    '<td>' + (item.routeName || item.routeId || '—') + '</td>' +
+    '<td>' + item.freq + '</td>' +
+    '<td>' + item.inspector + '</td>' +
+    '<td style="font-size:12px;">' + item.startDate + '<br>' + item.endDate + '</td>' +
+    '<td>' + (PLAN_STATUS[item.status] || PLAN_STATUS.pending) + '</td>' +
+    '<td><div class="action-btns">' +
+    '<button class="action-btn approve" onclick="generatePatrolTask(\'' + item.id + '\')">生成巡园任务</button>' +
+    '<button class="action-btn detail" onclick="showPlanDetail(\'' + item.id + '\')">详情</button>' +
+    '</div></td>' +
+    '</tr>';
 }
 
-// 显示详情
-function showDetail(id) {
-  currentPatrolId = id;
-  const rec = mockData.find(function(r){ return r.id === id; }) || {};
-  document.getElementById('detail-id').textContent = id;
-  const insEl = document.getElementById('detail-inspector');
-  if (insEl) insEl.textContent = rec.inspector || '-';
-  Modal.show('modal-detail');
+function showPlanDetail(id) {
+  var p = PS.get('patrolPlans', id);
+  if (!p) return;
+  var list = PS.checkins().filter(function (c) { return c.patrolPlanId === id; });
+  currentCheckinId = '';
+  document.getElementById('checkin-detail-body').innerHTML =
+    rowHtml('计划编号', p.id) + rowHtml('计划名称', p.name) + rowHtml('基地', p.base) +
+    rowHtml('巡园路线', p.routeName || p.routeId) + rowHtml('频次', p.freq) +
+    rowHtml('负责人', p.inspector) + rowHtml('计划周期', p.startDate + ' 至 ' + p.endDate) +
+    rowHtml('已产生打卡', list.length + ' 次');
+  Modal.show('modal-checkin');
 }
 
-// 显示编辑
-function showEdit(id) {
-  currentPatrolId = id;
-  const rec = mockData.find(function(r){ return r.id === id; }) || {};
-  const sel = document.getElementById('edit-person');
-  if (sel && rec.inspector) {
-    const opts = sel.options;
-    for (let i = 0; i < opts.length; i++) {
-      if (opts[i].value === rec.inspector) { opts[i].selected = true; break; }
-    }
-  }
-  Modal.show('modal-edit');
-}
-
-// 显示删除确认
-function showDeleteConfirm(id) {
-  currentPatrolId = id;
+function generatePatrolTask(id) {
+  var p = PS.get('patrolPlans', id);
+  if (!p) { Toast.error('巡园计划不存在或已被删除'); return; }
+  var exist = PS.tasks().filter(function (t) {
+    return t.patrolPlanId === p.id && t.status !== 'cancelled';
+  })[0];
+  if (exist) { Toast.warning('该巡园计划已生成任务：' + exist.id); return; }
   ConfirmDialog.show({
-    title: '删除巡查记录',
-    message: '确定要删除巡查记录 "' + id + '" 吗？此操作不可撤销。',
-    onConfirm: function() {
-      Toast.success('巡查记录 "' + currentPatrolId + '" 已删除');
+    title: '生成巡园任务',
+    message: '将为「' + p.name + '」生成一条巡园任务并派发给 ' + p.inspector + '，是否继续？',
+    onConfirm: function () {
+      PS.upsert('tasks', {
+        id: PS.nextId('tasks'),
+        planId: '',
+        patrolPlanId: p.id,
+        name: p.name,
+        base: p.base,
+        plot: '巡园路线 ' + (p.routeName || p.routeId),
+        plotId: 'D-001',
+        type: '巡园', typeCode: 'patrol',
+        taskCategory: 'patrol',
+        executorType: 'person',
+        priority: 'medium',
+        person: p.inspector, worker: p.inspector, team: '一班',
+        planTime: (p.startDate || PS.today()) + 'T08:00',
+        deadline: p.endDate || PS.today(),
+        status: 'pending',
+        desc: '由巡园计划 ' + p.id + ' 生成',
+        createdBy: '巡园计划', createdAt: PS.stampNow()
+      });
+      Toast.success('巡园任务已生成，可在「任务管理」查看');
     }
   });
 }
 
-// 提交新建巡查
-function submitAddPatrol() {
-  Toast.success('巡查记录创建成功');
-  Modal.hide('modal-add-patrol');
+/* ---------------- 打卡记录 ---------------- */
+function checkinList() {
+  PS.importMobile();
+  var base = (document.getElementById('ckBaseSelect') || {}).value || '';
+  var issue = (document.getElementById('ckIssueSelect') || {}).value || '';
+  var kw = ((document.getElementById('ckSearchInput') || {}).value || '').trim();
+  return PS.checkins().filter(function (c) {
+    if (base && c.base !== base) return false;
+    if (issue && c.issue !== issue) return false;
+    if (kw && String(c.inspector).indexOf(kw) < 0 && String(c.plots).indexOf(kw) < 0 && String(c.id).indexOf(kw) < 0) return false;
+    return true;
+  });
 }
 
-// 提交编辑巡查
-function submitEditPatrol() {
-  Toast.success('巡查记录 "' + currentPatrolId + '" 已更新');
-  Modal.hide('modal-edit');
+function renderCheckinRow(item, index) {
+  var plots = String(item.plots || '').split(',').map(function (p) { return p.trim(); }).filter(Boolean);
+  return '<tr>' +
+    '<td>' + (index + 1) + '</td>' +
+    '<td><span style="font-family:var(--font-mono,monospace);font-size:12px;">' + item.id + '</span>' +
+    (item.source === 'mobile' ? '<span style="display:inline-block;margin-left:6px;padding:1px 6px;font-size:11px;border-radius:8px;background:var(--info-bg,#e6f4ff);color:var(--primary-600,#0958d9);">移动端</span>' : '') + '</td>' +
+    '<td style="font-size:12px;">' + (item.patrolPlanId || '—') + '</td>' +
+    '<td>' + item.base + '</td>' +
+    '<td>' + (plots.length > 2 ? plots[0] + ' 等 ' + plots.length + ' 个地块' : plots.join('、')) + '</td>' +
+    '<td>' + item.inspector + '</td>' +
+    '<td>' + item.time + '</td>' +
+    '<td>' + item.pointsDone + ' / ' + item.pointsTotal + '</td>' +
+    '<td>' + (ISSUE_TAG[item.issue] || item.issueName || '—') + '</td>' +
+    '<td><div class="action-btns"><button class="action-btn detail" onclick="showCheckin(\'' + item.id + '\')">查看</button></div></td>' +
+    '</tr>';
 }
 
-// 导出巡查
-function exportPatrol(format) {
-  Toast.success('巡查记录已导出为' + (format === 'excel' ? 'Excel' : 'PDF') + '格式');
-  Modal.hide('modal-export');
+function rowHtml(label, value) {
+  return '<div style="display:grid;grid-template-columns:110px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--border-light);">' +
+    '<span style="color:var(--text-tertiary);">' + label + '</span><span>' + (value || '—') + '</span></div>';
 }
 
-// 初始化分页
-document.addEventListener('DOMContentLoaded', function() {
-  Pagination.init({
-    currentPage: 1,
-    pageSize: 10,
-    data: mockData,
-    containerId: 'pagination-container',
-    tbodyId: 'dataTableBody',
-    renderRow: renderRow
+function showCheckin(id) {
+  var c = PS.get('checkins', id);
+  if (!c) return;
+  currentCheckinId = id;
+  document.getElementById('checkin-detail-body').innerHTML =
+    rowHtml('打卡编号', c.id) + rowHtml('关联计划', c.patrolPlanId) + rowHtml('基地', c.base) +
+    rowHtml('巡查地块', String(c.plots).split(',').map(function (p) { return PS.plotLabel(p.trim()); }).join('、')) +
+    rowHtml('巡查人', c.inspector) + rowHtml('打卡时间', c.time) +
+    rowHtml('完成点位', c.pointsDone + ' / ' + c.pointsTotal) +
+    rowHtml('巡查结果', (ISSUE_TAG[c.issue] || c.issueName || '—').replace(/<[^>]+>/g, ''));
+  Modal.show('modal-checkin');
+}
+
+function searchCheckin() {
+  var list = checkinList();
+  mountPager('checkin-pagination-container', 'checkinBody', list, renderCheckinRow);
+  Toast.info('找到 ' + list.length + ' 条打卡记录');
+}
+
+function resetCheckin() {
+  document.getElementById('ckBaseSelect').value = '';
+  document.getElementById('ckIssueSelect').value = '';
+  document.getElementById('ckSearchInput').value = '';
+  searchCheckin();
+}
+
+/* ---------------- 异常上报 ---------------- */
+function abnormalList() {
+  PS.importMobile();
+  var type = (document.getElementById('abnormalTypeSelect') || {}).value || '';
+  var status = (document.getElementById('abnormalStatusSelect') || {}).value || '';
+  var source = (document.getElementById('abnormalSourceSelect') || {}).value || '';
+  var kw = ((document.getElementById('abnormalSearchInput') || {}).value || '').trim();
+  return PS.anomalies().filter(function (a) {
+    if (type && a.type !== type) return false;
+    if (status && a.status !== status) return false;
+    if (source && a.source !== source) return false;
+    if (kw && String(a.operator).indexOf(kw) < 0 && String(a.remark).indexOf(kw) < 0 && String(a.id).indexOf(kw) < 0) return false;
+    return true;
+  });
+}
+
+function renderAbnormalRow(item, index) {
+  var statusKey = item.status;
+  var canHandle = ['waitHandle', 'handling', '待处理', '处理中'].indexOf(statusKey) >= 0;
+  var btns = '';
+  if (canHandle) btns += '<button class="action-btn approve" onclick="openAbnormalModal(\'' + item.id + '\')">处理</button>';
+  btns += '<button class="action-btn" onclick="generateTaskFromAnomaly(\'' + item.id + '\')">生成任务</button>';
+  btns += '<button class="action-btn edit" onclick="generatePlanFromAnomaly(\'' + item.id + '\')">生成计划</button>';
+  return '<tr>' +
+    '<td>' + (index + 1) + '</td>' +
+    '<td><span style="font-family:var(--font-mono,monospace);font-size:12px;">' + item.id + '</span></td>' +
+    '<td>' + (item.reportTime || '—') + '</td>' +
+    '<td>' + (SOURCE_NAME[item.source] || '巡园上报') + '</td>' +
+    '<td>' + item.type + '</td>' +
+    '<td>' + (item.remark || '—') + '</td>' +
+    '<td>' + (item.plot || '—') + '</td>' +
+    '<td>' + (item.operator || '—') + '</td>' +
+    '<td>' + (ANOMALY_STATUS[statusKey] || ANOMALY_STATUS.waitHandle) + '</td>' +
+    '<td><div class="action-btns">' + btns + '</div></td>' +
+    '</tr>';
+}
+
+function renderAbnormalTable() {
+  var list = abnormalList();
+  var empty = document.getElementById('abnormalEmpty');
+  if (empty) empty.style.display = list.length ? 'none' : 'block';
+  mountPager('abnormal-pagination-container', 'abnormalBody', list, renderAbnormalRow);
+  var badge = document.getElementById('abnormalBadge');
+  var pending = PS.anomalies().filter(function (a) { return ['waitHandle', 'handling', '待处理', '处理中'].indexOf(a.status) >= 0; }).length;
+  if (badge) {
+    badge.style.display = pending ? 'inline-block' : 'none';
+    badge.textContent = pending;
+  }
+  return list.length;
+}
+
+function resetAbnormalFilter() {
+  ['abnormalTypeSelect', 'abnormalStatusSelect', 'abnormalSourceSelect', 'abnormalSearchInput'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
   });
   renderAbnormalTable();
-});
+}
 
-/* ============================================================
- * T1 巡园异常上报接入
- * 数据源：MobileBridge.abnormalReports()
- *   写入方 = 移动端巡园页异常上报
- *   字段：{ kind:'abnormal', id, type, remark, photo, lat, lng,
- *          reportTime, operator, status:'待处理', source:'mobile' }
- * 处理后回写同一 localStorage 记录，移动端列表即刻可见
- * ============================================================ */
+function refreshAbnormalList() { renderAbnormalTable(); Toast.success('数据已刷新'); }
 
-/* 异常类型 → 标签样式类 */
-var ABNORMAL_TYPE_CLASS = {
-  '病虫害': 'pest',
-  '设备故障': 'device',
-  '其他': 'other'
-};
+function openAbnormalModal(id) {
+  currentAbnormalId = id;
+  var a = PS.get('anomalies', id);
+  if (!a) return;
+  document.getElementById('ahTime').textContent = a.reportTime || '—';
+  document.getElementById('ahType').textContent = a.type || '—';
+  document.getElementById('ahOperator').textContent = a.operator || '—';
+  document.getElementById('ahRemark').textContent = a.remark || '—';
+  document.getElementById('ahResult').value = '认领处理';
+  document.getElementById('ahRemarkInput').value = '';
+  Modal.show('abnormalHandleModal');
+}
 
-var currentAbnormalId = null;
+function closeAbnormalModal() { Modal.hide('abnormalHandleModal'); }
 
-/* HTML 转义，所有用户数据渲染前必须走这里 */
-function esc(s) {
+function submitAbnormalHandle() {
+  var a = PS.get('anomalies', currentAbnormalId);
+  if (!a) { Toast.error('异常记录不存在或已被删除'); return; }
+  if (a.status === 'closed') { Toast.error('该异常已关闭，不能重复处理'); return; }
+  var result = document.getElementById('ahResult').value;
+  var remark = document.getElementById('ahRemarkInput').value.trim();
+  if (!remark) { Toast.error('请填写处理意见'); return; }
+  PS.upsert('anomalies', {
+    id: a.id,
+    status: result === '标记误报' ? 'closed' : (result === '认领处理' ? 'handling' : 'handling'),
+    handleResult: result,
+    handleRemark: remark,
+    handleTime: PS.stampNow()
+  });
+  closeAbnormalModal();
+  renderAbnormalTable();
+  Toast.success('处理结果已保存');
+}
+
+function generateTaskFromAnomaly(id) {
+  var a = PS.get('anomalies', id);
+  if (!a) { Toast.error('异常记录不存在或已被删除'); return; }
+  if (a.taskId && PS.get('tasks', a.taskId)) { Toast.warning('该异常已生成处置任务：' + a.taskId); return; }
+  ConfirmDialog.show({
+    title: '生成处置任务',
+    message: '将针对「' + a.type + '（' + a.plot + '）」生成处置任务并派发，是否继续？',
+    onConfirm: function () {
+      var isPest = /病虫害|病害/.test(a.type);
+      var anomalyPlot = String(a.plot || 'D-001').split(' · ')[0].trim();
+      if (PS.PLOTS.indexOf(anomalyPlot) < 0) anomalyPlot = 'D-001';
+      var task = {
+        id: PS.nextId('tasks'),
+        planId: '',
+        anomalyId: a.id,
+        name: '异常处置 · ' + a.type + ' · ' + a.plot,
+        base: lastBaseOf(a) || '天水麦积区基地',
+        plot: (PS.plotLabel(anomalyPlot).split(' · ')[1] || anomalyPlot),
+        plotId: anomalyPlot,
+        type: isPest ? '施药' : '其他',
+        typeCode: isPest ? 'pesticide' : 'other',
+        taskCategory: a.source === 'drone' ? 'drone' : 'farming',
+        executorType: 'person',
+        priority: a.severity === 'high' ? 'high' : 'medium',
+        person: '黄忠坚', worker: '黄忠坚', team: '一班',
+        planTime: PS.today() + 'T09:00',
+        deadline: PS.today(),
+        status: 'pending',
+        desc: '来源异常 ' + a.id + '：' + a.remark,
+        createdBy: '异常处置', createdAt: PS.stampNow()
+      };
+      var invalid = PS.validate.task(task);
+      if (invalid) { Toast.error(invalid); return; }
+      PS.upsert('tasks', task);
+      PS.upsert('anomalies', { id: a.id, status: 'handling', taskId: task.id, handleResult: '已生成处置任务', handleTime: PS.stampNow() });
+      renderAbnormalTable();
+      Toast.success('已生成任务 ' + task.id + '，可在「任务管理」查看');
+    }
+  });
+}
+
+function generatePlanFromAnomaly(id) {
+  var a = PS.get('anomalies', id);
+  if (!a) { Toast.error('异常记录不存在或已被删除'); return; }
+  if (a.planId && PS.get('plans', a.planId)) { Toast.warning('该异常已生成处置计划：' + a.planId); return; }
+  var isPest = /病虫害|病害/.test(a.type);
+  PS.upsert('plans', {
+    id: PS.nextId('plans'),
+    name: a.type + '处置计划 · ' + (a.plot || ''),
+    base: lastBaseOf(a) || '天水麦积区基地',
+    type: isPest ? 'pesticide' : 'other',
+    typeName: isPest ? '喷药' : '其他',
+    startDate: PS.today(),
+    endDate: PS.today(),
+    manager: '黄忠坚',
+    status: 'draft',
+    plannedQty: 0, actualQty: 0, unit: '亩',
+    plotRange: a.plot || 'D-001',
+    standardId: isPest ? 'STD-014' : '',
+    standardName: isPest ? '果园病虫害防治作业标准' : '',
+    desc: '由异常 ' + a.id + ' 生成的计划草稿：' + (a.remark || ''),
+    createdAt: PS.stampNow()
+  });
+  Toast.success('已生成计划草稿，可在「农事计划」补充后下发');
+}
+
+function lastBaseOf(a) {
+  var ck = PS.checkins().filter(function (c) { return c.id === a.checkinId; })[0];
+  return ck ? ck.base : (a.base || '');
+}
+
+/* ---------------- 路线配置 ---------------- */
+function escHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
 }
 
-/* 读取移动端异常上报，读取失败回退空数组 */
-function readAbnormalList() {
-  try {
-    if (typeof MobileBridge === 'undefined') return [];
-    var list = MobileBridge.abnormalReports();
-    return Array.isArray(list) ? list : [];
-  } catch (e) {
-    return [];
-  }
-}
+function pad3(n) { return n < 10 ? '00' + n : (n < 100 ? '0' + n : '' + n); }
 
-/* 分区 Tab 切换：巡园计划 / 异常上报 */
-function switchPatrolTab(name) {
-  var isPlan = name === 'plan';
-  document.getElementById('viewPlan').style.display = isPlan ? '' : 'none';
-  document.getElementById('viewAbnormal').style.display = isPlan ? 'none' : '';
-  document.getElementById('tabPlan').classList.toggle('active', isPlan);
-  document.getElementById('tabAbnormal').classList.toggle('active', !isPlan);
-  if (!isPlan) renderAbnormalTable();
-}
-
-/* 定位格式化 */
-function formatAbnormalGps(item) {
-  if (typeof item.lat !== 'number' || typeof item.lng !== 'number') return '无定位';
-  return '北纬' + item.lat.toFixed(4) + '°<br>东经' + item.lng.toFixed(4) + '°';
-}
-
-/* 按当前筛选条件过滤 */
-function filteredAbnormalList() {
-  var type = document.getElementById('abnormalTypeSelect').value;
-  var status = document.getElementById('abnormalStatusSelect').value;
-  var kw = document.getElementById('abnormalSearchInput').value.trim().toLowerCase();
-
-  return readAbnormalList().filter(function (item) {
-    if (type && item.type !== type) return false;
-    if (status && (item.status || '待处理') !== status) return false;
-    if (kw) {
-      var hay = ((item.operator || '') + ' ' + (item.remark || '')).toLowerCase();
-      if (hay.indexOf(kw) === -1) return false;
-    }
-    return true;
+function nextRouteId(list) {
+  var max = 0;
+  list.forEach(function (r) {
+    var m = String(r.routeId || '').match(/(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
   });
+  return 'RT-' + pad3(max + 1);
 }
 
-/* 渲染异常上报表格 + 待处理角标 */
-function renderAbnormalTable() {
-  var all = readAbnormalList();
-  var list = filteredAbnormalList();
-
-  /* 待处理数量角标 */
-  var pending = 0;
-  all.forEach(function (i) { if ((i.status || '待处理') === '待处理') pending++; });
-  var badge = document.getElementById('abnormalBadge');
-  if (pending > 0) {
-    badge.style.display = '';
-    badge.textContent = pending;
-  } else {
-    badge.style.display = 'none';
-  }
-
-  var body = document.getElementById('abnormalBody');
-  var emptyHint = document.getElementById('abnormalEmpty');
-
-  if (!list.length) {
-    body.innerHTML = '';
-    emptyHint.style.display = 'block';
+function renderRoutes() {
+  var routes = PS.routeList();
+  var tbody = document.getElementById('routeBody');
+  if (!tbody) return;
+  if (!routes.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">暂无巡园路线，请点击「新增路线」</td></tr>';
     return;
   }
-  emptyHint.style.display = 'none';
-
-  body.innerHTML = list.map(function (item, i) {
-    var status = item.status || '待处理';
-    var isDone = status === '已处理';
-    /* 处理结果回显 */
-    var extra = '';
-    if (isDone && (item.handleResult || item.handleRemark)) {
-      extra = '<div class="mb-handle-box">处理：' + esc(item.handleResult || '-') +
-        (item.handleRemark ? ' · ' + esc(item.handleRemark) : '') +
-        (item.handleTime ? '<br>处理时间：' + esc(item.handleTime) : '') + '</div>';
-    }
-    /* 照片：有则缩略图，点击看大图；无则文字标记 */
-    var photoCell = item.photo
-      ? '<img class="mb-photo-thumb" src="' + esc(item.photo) + '" alt="异常照片" onclick="openPhotoViewer(this.src)">'
-      : '<span class="mb-photo-none">无照片</span>';
-
+  tbody.innerHTML = routes.map(function (r, i) {
     return '<tr>' +
-      '<td class="checkbox-col">' + (i + 1) + '</td>' +
-      '<td class="text-mono">' + esc(item.reportTime || item.createTime || '-') + '</td>' +
-      '<td><span class="mb-type-tag ' + esc(ABNORMAL_TYPE_CLASS[item.type] || 'other') + '">' + esc(item.type || '其他') + '</span></td>' +
-      '<td><div class="cell-title">' + esc(item.remark || '-') + '</div>' + extra + '</td>' +
-      '<td style="font-size:12px;">' + formatAbnormalGps(item) + '</td>' +
-      '<td>' + esc(item.operator || '现场人员') + '</td>' +
-      '<td>' + photoCell + '</td>' +
-      '<td><span class="mb-status-tag ' + (isDone ? 'done' : 'wait') + '">' + esc(status) + '</span></td>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td><span style="font-family:var(--font-mono,monospace);font-size:12px;">' + escHtml(r.routeId) + '</span></td>' +
+      '<td><strong>' + escHtml(r.routeName) + '</strong></td>' +
+      '<td>' + escHtml(r.base) + '</td>' +
+      '<td>' + (r.pointCount || 0) + '</td>' +
+      '<td>' + (r.requiredCount || 0) + '</td>' +
+      '<td>' + (r.enabled ? '<span class="status-tag normal">启用</span>' : '<span class="status-tag inactive">停用</span>') + '</td>' +
+      '<td style="font-size:12px;color:var(--text-tertiary);">' + (r.remark ? escHtml(r.remark) : '—') + '</td>' +
       '<td><div class="action-btns">' +
-        '<button class="action-btn detail" onclick="openAbnormalModal(\'' + esc(item.id) + '\')">' + (isDone ? '查看' : '处理') + '</button>' +
+        '<button class="action-btn edit" onclick="openRouteEdit(\'' + escHtml(r.routeId) + '\')">编辑</button>' +
+        '<button class="action-btn" onclick="toggleRouteEnabled(\'' + escHtml(r.routeId) + '\')">' + (r.enabled ? '停用' : '启用') + '</button>' +
+        '<button class="action-btn danger" onclick="deleteRoute(\'' + escHtml(r.routeId) + '\')">删除</button>' +
       '</div></td>' +
     '</tr>';
   }).join('');
 }
 
-function resetAbnormalFilter() {
-  document.getElementById('abnormalTypeSelect').value = '';
-  document.getElementById('abnormalStatusSelect').value = '';
-  document.getElementById('abnormalSearchInput').value = '';
-  renderAbnormalTable();
+function routePointRowHtml(p, idx) {
+  p = p || {};
+  var req = p.required !== false;
+  return '' +
+    '<div class="route-point">' +
+      '<div class="route-point-head">' +
+        '<span class="route-point-idx">点位 ' + (idx + 1) + '</span>' +
+        '<button type="button" class="action-btn danger" onclick="removeRoutePointRow(this)">删除</button>' +
+      '</div>' +
+      '<div class="route-point-grid">' +
+        '<div class="pf"><label>点位ID</label><input class="rp-id" type="text" value="' + escHtml(p.id) + '" placeholder="A1"></div>' +
+        '<div class="pf"><label>名称</label><input class="rp-name" type="text" value="' + escHtml(p.name) + '" placeholder="A区1号巡园点"></div>' +
+        '<div class="pf"><label>纬度</label><input class="rp-lat" type="number" step="0.000001" value="' + (p.lat != null ? escHtml(p.lat) : '') + '" placeholder="34.3490"></div>' +
+        '<div class="pf"><label>经度</label><input class="rp-lng" type="number" step="0.000001" value="' + (p.lng != null ? escHtml(p.lng) : '') + '" placeholder="106.1800"></div>' +
+        '<div class="pf"><label>就近半径(米)</label><input class="rp-radius" type="number" min="1" value="' + (p.nearRadius != null ? escHtml(p.nearRadius) : 100) + '"></div>' +
+        '<div class="pf"><label>顺序</label><input class="rp-order" type="number" min="1" value="' + (p.order != null ? escHtml(p.order) : (idx + 1)) + '"></div>' +
+        '<div class="pf"><label>是否必到</label><select class="rp-required">' +
+          '<option value="true"' + (req ? ' selected' : '') + '>必到</option>' +
+          '<option value="false"' + (!req ? ' selected' : '') + '>非必到</option>' +
+        '</select></div>' +
+      '</div>' +
+    '</div>';
 }
 
-function refreshAbnormalList() {
-  renderAbnormalTable();
-  if (typeof Toast !== 'undefined') Toast.success('异常上报数据已刷新');
+function renumberRoutePoints() {
+  var rows = document.querySelectorAll('#route-points .route-point');
+  for (var i = 0; i < rows.length; i++) {
+    var idx = rows[i].querySelector('.route-point-idx');
+    if (idx) idx.textContent = '点位 ' + (i + 1);
+  }
 }
 
-/* 打开处理弹窗 */
-function openAbnormalModal(id) {
-  var list = readAbnormalList();
-  var target = null;
-  for (var i = 0; i < list.length; i++) {
-    if (String(list[i].id) === String(id)) { target = list[i]; break; }
-  }
-  if (!target) {
-    if (typeof Toast !== 'undefined') Toast.error('未找到该异常记录');
-    return;
-  }
-
-  currentAbnormalId = target.id;
-  document.getElementById('ahTime').textContent = target.reportTime || target.createTime || '-';
-  document.getElementById('ahType').textContent = target.type || '其他';
-  document.getElementById('ahOperator').textContent = target.operator || '现场人员';
-  document.getElementById('ahRemark').textContent = target.remark || '-';
-  document.getElementById('ahResult').value = '认领处理';
-  document.getElementById('ahRemarkInput').value = target.handleRemark || '';
-
-  document.getElementById('abnormalHandleModal').classList.add('show');
+function addRoutePointRow() {
+  var box = document.getElementById('route-points');
+  if (!box) return;
+  var count = box.querySelectorAll('.route-point').length;
+  box.insertAdjacentHTML('beforeend', routePointRowHtml(null, count));
+  renumberRoutePoints();
 }
 
-function closeAbnormalModal() {
-  document.getElementById('abnormalHandleModal').classList.remove('show');
-  currentAbnormalId = null;
+function removeRoutePointRow(btn) {
+  var row = btn && btn.closest ? btn.closest('.route-point') : null;
+  if (row && row.parentNode) row.parentNode.removeChild(row);
+  renumberRoutePoints();
 }
 
-/* 提交处理结果，回写移动端记录 */
-function submitAbnormalHandle() {
-  var result = document.getElementById('ahResult').value;
-  var remark = document.getElementById('ahRemarkInput').value.trim();
+function renderRoutePointRows(points) {
+  var box = document.getElementById('route-points');
+  if (!box) return;
+  box.innerHTML = (points || []).map(function (p, i) { return routePointRowHtml(p, i); }).join('');
+  renumberRoutePoints();
+}
 
-  if (!remark) {
-    if (typeof Toast !== 'undefined') Toast.warning('请填写处理意见');
-    return;
+function collectRoutePoints() {
+  var rows = document.querySelectorAll('#route-points .route-point');
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    out.push({
+      id: row.querySelector('.rp-id').value.trim(),
+      name: row.querySelector('.rp-name').value.trim(),
+      lat: row.querySelector('.rp-lat').value.trim(),
+      lng: row.querySelector('.rp-lng').value.trim(),
+      nearRadius: row.querySelector('.rp-radius').value,
+      order: row.querySelector('.rp-order').value,
+      required: row.querySelector('.rp-required').value === 'true'
+    });
   }
-  if (typeof MobileBridge === 'undefined') {
-    if (typeof Toast !== 'undefined') Toast.error('数据桥接未加载，无法保存处理结果');
-    return;
-  }
+  return out;
+}
 
-  var ok = MobileBridge.updateRecord(MobileBridge.KEYS.patrol, currentAbnormalId, {
-    status: '已处理',
-    handleResult: result,
-    handleRemark: remark,
-    handleTime: MobileBridge.stampNow()
+function openRouteEdit(id) {
+  currentRouteId = id || '';
+  var list = PS.routeList();
+  var item = id ? list.filter(function (r) { return r.routeId === id; })[0] : null;
+  if (id && !item) { Toast.error('该路线不存在或已被删除'); return; }
+  document.getElementById('routeModalTitle').textContent = id ? '编辑巡园路线' : '新增巡园路线';
+  document.getElementById('route-id').value = item ? item.routeId : nextRouteId(list);
+  document.getElementById('route-name').value = item ? (item.routeName || '') : '';
+  document.getElementById('route-base').value = item ? (item.base || '麦积区基地 A区') : '麦积区基地 A区';
+  document.getElementById('route-enabled').value = item ? String(item.enabled !== false) : 'true';
+  document.getElementById('route-remark').value = item ? (item.remark || '') : '';
+  renderRoutePointRows(item && Array.isArray(item.points) && item.points.length ? item.points : [null]);
+  Modal.show('modal-route');
+}
+
+function submitRouteEdit() {
+  var route = {
+    routeId: document.getElementById('route-id').value.trim() || currentRouteId,
+    routeName: document.getElementById('route-name').value.trim(),
+    base: document.getElementById('route-base').value,
+    enabled: document.getElementById('route-enabled').value === 'true',
+    remark: document.getElementById('route-remark').value.trim(),
+    points: collectRoutePoints()
+  };
+  var invalid = PS.validate.route(route);
+  if (invalid) { Toast.error(invalid); return; }
+  var saved = PS.saveRoute(route);
+  if (!saved) { Toast.error(PS.lastError() || '路线保存失败'); return; }
+  Modal.hide('modal-route');
+  fillRouteOptions();
+  renderRoutes();
+  Toast.success(currentRouteId ? '路线已更新' : '路线已新增');
+  currentRouteId = '';
+}
+
+function toggleRouteEnabled(id) {
+  var route = PS.routeList().filter(function (r) { return r.routeId === id; })[0];
+  if (!route) { Toast.error('该路线不存在或已被删除'); return; }
+  route.enabled = !route.enabled;
+  var saved = PS.saveRoute(route);
+  if (!saved) { Toast.error(PS.lastError() || '状态更新失败'); return; }
+  fillRouteOptions();
+  renderRoutes();
+  Toast.success(route.enabled ? '已启用' : '已停用');
+}
+
+function deleteRoute(id) {
+  var route = PS.routeList().filter(function (r) { return r.routeId === id; })[0];
+  if (!route) { Toast.error('该路线不存在或已被删除'); return; }
+  ConfirmDialog.show({
+    title: '删除路线',
+    message: '确认删除「' + route.routeName + '」吗？移动端将不再加载该路线点位。',
+    onConfirm: function () {
+      if (!PS.removeRoute(id)) { Toast.error(PS.lastError() || '删除失败'); return; }
+      fillRouteOptions();
+      renderRoutes();
+      Toast.success('已删除');
+    }
   });
+}
 
-  if (!ok) {
-    if (typeof Toast !== 'undefined') Toast.error('处理结果保存失败，请刷新后重试');
-    return;
-  }
-  closeAbnormalModal();
+/* ---------------- 搜索 / 导出 ---------------- */
+function handleSearch() {
+  var list = planList();
+  mountPager('pagination-container', 'dataTableBody', list, renderPlanRow);
+  Toast.info('找到 ' + list.length + ' 条巡园计划');
+}
+
+function smartReset() {
+  ['baseSelect', 'statusSelect', 'freqSelect', 'searchInput'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  handleSearch();
+}
+
+function downloadCSV(name, rows) {
+  var csv = rows.map(function (r) {
+    return r.map(function (c) { return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"'; }).join(',');
+  }).join('\r\n');
+  var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  var link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = name;
+  document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+}
+
+function exportPatrol(format) {
+  var rows = [['计划编号', '计划名称', '基地', '路线', '频次', '负责人', '开始', '结束', '状态']];
+  PS.patrolPlans().forEach(function (p) {
+    rows.push([p.id, p.name, p.base, p.routeName || p.routeId, p.freq, p.inspector, p.startDate, p.endDate, PS.STATUS_TEXT[p.status] || p.status]);
+  });
+  downloadCSV('巡园计划_' + PS.today() + '.csv', rows);
+  Modal.hide('modal-export');
+  Toast.success('已导出 ' + (rows.length - 1) + ' 条巡园计划');
+}
+
+/* ---------------- 新建巡园计划 ---------------- */
+function fillRouteOptions() {
+  var sel = document.getElementById('pp-route');
+  if (!sel) return;
+  sel.innerHTML = PS.routeList().filter(function (r) { return r.enabled; }).map(function (r) {
+    return '<option value="' + r.routeId + '">' + r.routeName + '（' + r.pointCount + ' 个点位）</option>';
+  }).join('');
+}
+
+function submitAddPatrol() {
+  var name = document.getElementById('pp-name').value.trim();
+  var base = document.getElementById('pp-base').value;
+  var routeId = document.getElementById('pp-route').value;
+  var freq = document.getElementById('pp-freq').value;
+  var inspector = document.getElementById('pp-inspector').value;
+  var start = document.getElementById('pp-start').value;
+  var end = document.getElementById('pp-end').value;
+  if (!name || !base || !inspector) { Toast.error('请填写计划名称、基地与负责人'); return; }
+  if (!start || !end) { Toast.error('请选择计划周期'); return; }
+  var route = PS.routeList().filter(function (r) { return r.routeId === routeId; })[0];
+  if (routeId && !route) { Toast.error('所选巡园路线不存在'); return; }
+  var plan = {
+    id: PS.nextId('patrolPlans'),
+    name: name, base: base, routeId: routeId,
+    routeName: route ? route.routeName : '',
+    freq: freq, inspector: inspector,
+    startDate: start, endDate: end, status: 'pending',
+    remark: document.getElementById('pp-remark').value.trim()
+  };
+  var invalid = PS.validate.patrolPlan(plan);
+  if (invalid) { Toast.error(invalid); return; }
+  PS.upsert('patrolPlans', plan);
+  Modal.hide('modal-add-patrol');
+  document.getElementById('form-add-patrol').reset();
+  mountPager('pagination-container', 'dataTableBody', planList(), renderPlanRow);
+  Toast.success('巡园计划创建成功');
+}
+
+/* ---------------- 初始化 ---------------- */
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof PS.initRoutes === 'function') PS.initRoutes();
+  fillRouteOptions();
+  mountPager('pagination-container', 'dataTableBody', planList(), renderPlanRow);
   renderAbnormalTable();
-  if (typeof Toast !== 'undefined') Toast.success('异常处理结果已保存，移动端可查看');
-}
-
-/* 照片大图预览 */
-function openPhotoViewer(src) {
-  document.getElementById('photoViewerImg').src = src;
-  document.getElementById('photoViewer').classList.add('show');
-}
-
-function closePhotoViewer() {
-  document.getElementById('photoViewer').classList.remove('show');
-  document.getElementById('photoViewerImg').src = '';
-}
+  renderRoutes();
+  window.addEventListener('productionStoreChange', function () {
+    var active = document.querySelector('.view-tab.active');
+    var id = active ? active.id : 'tabPlan';
+    if (id === 'tabPlan') mountPager('pagination-container', 'dataTableBody', planList(), renderPlanRow);
+    if (id === 'tabCheckin') mountPager('checkin-pagination-container', 'checkinBody', checkinList(), renderCheckinRow);
+    if (id === 'tabAbnormal') renderAbnormalTable();
+    if (id === 'tabRoute') renderRoutes();
+    fillRouteOptions();
+  });
+});
 </script>
 
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->

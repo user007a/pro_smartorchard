@@ -19,12 +19,49 @@
   }
   /* 分页栏样式（与农事计划一致） */
   #pagination-container { padding:12px 16px; }
+  .stat-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; margin-bottom:16px; }
+  .stat-card { background:var(--bg-card, #fff); border:1px solid var(--border-color, #e8ece8); border-radius:var(--radius-card, 12px); padding:16px 18px; }
+  .stat-label { font-size:12px; color:var(--text-tertiary); margin-bottom:6px; }
+  .stat-value { font-size:22px; font-weight:600; line-height:1.2; }
+  .stat-value small { font-size:12px; font-weight:400; color:var(--text-tertiary); margin-left:4px; }
+  .stat-sub { margin-top:6px; font-size:12px; color:var(--text-tertiary); }
+  @media (max-width: 1100px) { .stat-grid { grid-template-columns:repeat(2, 1fr); } }
   /* 温湿度记录表 */
   .reading-table { width:100%; border-collapse:collapse; font-size:13px; }
   .reading-table th,
   .reading-table td { padding:8px 10px; border-bottom:1px solid #f0f2f1; text-align:left; }
   .reading-table th { color:var(--text-tertiary); font-weight:600; font-size:12px; background:#f7f9f7; }
   .reading-table td.text-right { text-align:right; }
+  /* 出库确认弹窗 */
+  #modal-outbound .form-textarea { min-height:76px; }
+  #out-quantity { font-variant-numeric: tabular-nums; }
+  .outbound-summary {
+    display:grid;
+    grid-template-columns:minmax(0, 1.3fr) minmax(0, 1fr);
+    gap:8px 16px;
+    padding:14px 16px;
+    border:1px solid var(--primary-50, #e6f4ff);
+    border-radius:10px;
+    background:var(--u-primary-bg-soft, rgba(24,144,255,0.06));
+  }
+  .outbound-summary-label { display:block; font-size:12px; color:var(--u-text-3, #8c8c8c); margin-bottom:4px; }
+  .outbound-summary-value {
+    display:block;
+    font-size:14px;
+    font-weight:600;
+    color:var(--u-text-1, #262626);
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .outbound-label-hint {
+    margin-left:auto;
+    font-size:12px;
+    font-weight:400;
+    color:var(--text-tertiary, #8c8c8c);
+    white-space:nowrap;
+  }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -60,21 +97,20 @@
           <div class="search-bar">
             <select class="search-select" id="baseSelect">
               <option value="">全部基地</option>
-              <option value="天水麦积区基地">天水麦积区基地</option>
-              <option value="招远基地">招远基地</option>
-              <option value="天水秦州基地">天水秦州基地</option>
-              <option value="天水甘谷基地">天水甘谷基地</option>
-              <option value="龙口南山基地">龙口南山基地</option>
             </select>
             <select class="search-select" id="statusSelect">
               <option value="">全部状态</option>
               <option value="normal">在库正常</option>
-              <option value="warning">温度预警</option>
-              <option value="exported">已出库</option>
+              <option value="warning">温控预警</option>
             </select>
             <input type="text" class="search-input" placeholder="搜索库位编号或批次..." id="searchInput">
           <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="handleSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
           </div>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="page-section">
+          <div class="stat-grid" id="statGrid"></div>
         </div>
 
         <!-- 操作按钮区 -->
@@ -261,39 +297,53 @@
 
 <!-- 出库模态框 -->
 <div id="modal-outbound" class="modal-overlay">
-  <div class="modal-box" style="max-width:420px;">
+  <div class="modal-box">
     <div class="modal-header">
       <h3 class="modal-title">出库确认</h3>
-      <button class="modal-close">
+      <button class="modal-close" type="button">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 4L12 12M12 4L4 12"/>
         </svg>
       </button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="form-item">
-          <label>库位编号</label>
-          <input type="text" class="form-input" id="out-id" readonly>
+      <div class="outbound-summary">
+        <div class="outbound-summary-item">
+          <span class="outbound-summary-label">库位 / 批次</span>
+          <span class="outbound-summary-value" id="out-id-text">-</span>
+        </div>
+        <div class="outbound-summary-item">
+          <span class="outbound-summary-label">在库数量</span>
+          <span class="outbound-summary-value" id="out-stock-text">0 kg</span>
         </div>
       </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>出库数量(kg)</label>
-          <input type="number" class="form-input" id="out-quantity">
-        </div>
+      <div class="form-group">
+        <label for="out-quantity">出库数量(kg)<span class="form-required">*</span><span class="outbound-label-hint" id="out-quantity-hint">最多可出库 0 kg</span></label>
+        <input type="number" class="form-input" id="out-quantity" min="0.01" step="0.01" placeholder="请输入出库数量">
       </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>出库时间</label>
-          <input type="datetime-local" class="form-input" id="out-time">
-        </div>
+      <div class="form-group">
+        <label for="out-time">出库时间</label>
+        <input type="datetime-local" class="form-input" id="out-time">
       </div>
-      <div class="form-row">
-        <div class="form-item">
-          <label>备注</label>
-          <textarea class="form-textarea" id="out-remark" placeholder="请输入出库备注"></textarea>
-        </div>
+      <div class="form-group">
+        <label for="out-customer">收货方<span class="form-required">*</span></label>
+        <input type="text" class="form-input" id="out-customer" placeholder="请输入客户 / 收货方名称">
+      </div>
+      <div class="form-group">
+        <label for="out-phone">联系电话</label>
+        <input type="text" class="form-input" id="out-phone" placeholder="请输入联系电话">
+      </div>
+      <div class="form-group">
+        <label for="out-address">收货地址</label>
+        <input type="text" class="form-input" id="out-address" placeholder="请输入收货地址">
+      </div>
+      <div class="form-group">
+        <label for="out-tracking">物流单号</label>
+        <input type="text" class="form-input" id="out-tracking" placeholder="可稍后在采收发货页补充">
+      </div>
+      <div class="form-group">
+        <label for="out-remark">备注</label>
+        <textarea class="form-textarea" id="out-remark" placeholder="请输入出库备注"></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -306,58 +356,62 @@
 <!-- 引入交互脚本 -->
 <script src="js/common-functions.js"></script>
 <script src="js/export-helper.js"></script>
+<script src="js/shared/harvest-store.js"></script>
 <script>
 // 库位适温适湿区间
 const TEMP_MIN = 0, TEMP_MAX = 4;
 const HUMI_MIN = 85, HUMI_MAX = 95;
 
-// Mock数据 - 12个冷库库位
-const storages = [
-  { id: 'A区-001', base: '天水麦积区基地', batch: 'PP-2026-001', variety: '花牛苹果', grade: '一级', quantity: 1250, temp: 2.5, humidity: 88, inTime: '2026-09-01 15:00', expire: '2026-12-20', status: 'normal', remark: '' },
-  { id: 'A区-002', base: '天水麦积区基地', batch: 'PP-2026-002', variety: '花牛苹果', grade: '一级', quantity: 890,  temp: 3.0, humidity: 87, inTime: '2026-09-02 15:30', expire: '2026-12-21', status: 'normal', remark: '' },
-  { id: 'A区-003', base: '天水秦州基地', batch: 'PP-2026-005', variety: '花牛苹果', grade: '一级', quantity: 720,  temp: 3.8, humidity: 89, inTime: '2026-09-04 08:40', expire: '2026-12-23', status: 'normal', remark: '' },
-  { id: 'B区-001', base: '招远基地',     batch: 'PP-2026-007', variety: '花牛苹果', grade: '一级', quantity: 580,  temp: 5.6, humidity: 90, inTime: '2026-09-06 10:00', expire: '2026-12-25', status: 'warning', remark: '温度高于适温上限，已通知设备维护' },
-  { id: 'B区-002', base: '招远基地',     batch: 'PP-2026-008', variety: '花牛苹果', grade: '二级', quantity: 1250, temp: 2.2, humidity: 86, inTime: '2026-09-07 11:30', expire: '2026-12-26', status: 'normal', remark: '' },
-  { id: 'B区-003', base: '天水甘谷基地', batch: 'PP-2026-010', variety: '花牛苹果', grade: '一级', quantity: 890,  temp: 1.8, humidity: 84, inTime: '2026-09-09 15:00', expire: '2026-12-28', status: 'warning', remark: '湿度低于适湿下限，需加湿处理' },
-  { id: 'C区-001', base: '天水甘谷基地', batch: 'PP-2026-012', variety: '花牛苹果', grade: '一级', quantity: 680,  temp: 2.8, humidity: 88, inTime: '2026-09-11 12:00', expire: '2026-12-30', status: 'normal', remark: '' },
-  { id: 'C区-002', base: '龙口南山基地', batch: 'PP-2026-015', variety: '花牛苹果', grade: '一级', quantity: 1180, temp: 3.2, humidity: 91, inTime: '2026-09-14 10:00', expire: '2027-01-02', status: 'normal', remark: '' },
-  { id: 'C区-003', base: '龙口南山基地', batch: 'PP-2026-016', variety: '花牛苹果', grade: '一级', quantity: 760,  temp: 2.6, humidity: 89, inTime: '2026-09-15 11:30', expire: '2027-01-03', status: 'normal', remark: '' },
-  { id: 'D区-001', base: '天水秦州基地', batch: 'PP-2026-017', variety: '花牛苹果', grade: '二级', quantity: 1320, temp: 3.5, humidity: 87, inTime: '2026-09-16 09:00', expire: '2027-01-04', status: 'normal', remark: '高产批次' },
-  { id: 'D区-002', base: '天水麦积区基地', batch: 'PP-2026-019', variety: '花牛苹果', grade: '三级', quantity: 980,  temp: 2.9, humidity: 88, inTime: '2026-09-18 09:30', expire: '2027-01-06', status: 'normal', remark: '' },
-  { id: 'D区-003', base: '招远基地',     batch: 'PP-2026-023', variety: '花牛苹果', grade: '一级', quantity: 1080, temp: 2.4, humidity: 90, inTime: '2026-09-22 10:00', expire: '2027-01-10', status: 'normal', remark: '' }
-];
-
+// 库存由 harvest-store.js 从「已入库处理单 − 已出库发货单」派生，本页只读不另存
 let currentStorageId = '';
 
+function allStorages() { return HarvestStore.storages(); }
+
 function getStatusTag(status) {
-  const statusMap = {
-    'normal':   '<span class="status-tag normal">在库正常</span>',
-    'warning':  '<span class="status-tag warning">温度预警</span>',
-    'exported': '<span class="status-tag exported">已出库</span>'
-  };
-  return statusMap[status] || statusMap['normal'];
+  return '<span class="status-tag ' + HarvestStore.statusTag('storages', status) + '">' + HarvestStore.statusText('storages', status) + '</span>';
 }
 
-const STATUS_NAME = { 'normal': '在库正常', 'warning': '温度预警', 'exported': '已出库' };
-
 function findStorage(id) {
-  return storages.find(s => s.id === id);
+  return allStorages().filter(function (s) { return s.id === id; })[0] || null;
+}
+
+/** 数据写入后统一刷新统计卡与列表 */
+function refresh() {
+  renderStats();
+  handleSearch();
+}
+
+function renderStats() {
+  const list = allStorages();
+  const totalQty = list.reduce((s, x) => s + Number(x.qty || 0), 0);
+  const warning = list.filter(x => x.status === 'warning').length;
+  const capacity = HarvestStore.slots().reduce((s, x) => s + x.capacity, 0);
+  const usage = capacity ? Math.round(totalQty / capacity * 100) : 0;
+  const cards = [
+    { label: '在库批次', value: list.length, unit: '批', sub: '占用 ' + list.length + ' / ' + HarvestStore.slots().length + ' 个库位' },
+    { label: '在库总量', value: totalQty.toLocaleString(), unit: 'kg', sub: '总库容 ' + capacity.toLocaleString() + ' kg' },
+    { label: '库容使用率', value: usage, unit: '%', sub: usage >= 90 ? '库容紧张，建议安排出库' : '库容充足' },
+    { label: '温控预警', value: warning, unit: '个', sub: warning ? '存在超限库位，需处理' : '全部库位温湿度正常' }
+  ];
+  document.getElementById('statGrid').innerHTML = cards.map(c =>
+    '<div class="stat-card"><div class="stat-label">' + c.label + '</div>' +
+    '<div class="stat-value">' + c.value + ' <small>' + c.unit + '</small></div>' +
+    '<div class="stat-sub">' + c.sub + '</div></div>'
+  ).join('');
 }
 
 function renderRow(item, index) {
-  let actions = `<button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>`
-    + `<button class="action-btn edit" onclick="showReadings('${item.id}')">温湿度记录</button>`;
-  if (item.status !== 'exported') {
-    actions += `<button class="action-btn edit" onclick="showOutbound('${item.id}')">出库</button>`;
-  }
+  const actions = `<button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>`
+    + `<button class="action-btn edit" onclick="showReadings('${item.id}')">温湿度记录</button>`
+    + `<button class="action-btn edit" onclick="showOutbound('${item.id}')">出库</button>`;
 
   return `<tr>
     <td>${index + 1}</td>
     <td><strong>${item.id}</strong></td>
-    <td>${item.base}</td>
-    <td>${item.batch}</td>
-    <td class="text-right">${item.quantity.toLocaleString()}</td>
-    <td class="text-right">${item.temp.toFixed(1)}</td>
+    <td>${item.base || '-'}</td>
+    <td title="${item.batchId}">${item.batchNo || item.batchId}</td>
+    <td class="text-right">${Number(item.qty || 0).toLocaleString()}</td>
+    <td class="text-right">${Number(item.temp).toFixed(1)}</td>
     <td class="text-right">${item.humidity}</td>
     <td>${item.inTime}</td>
     <td>${getStatusTag(item.status)}</td>
@@ -365,21 +419,31 @@ function renderRow(item, index) {
   </tr>`;
 }
 
-// 搜索：基地 + 状态 + 关键词
-function handleSearch() {
+function filteredStorages() {
   var base = document.getElementById('baseSelect').value;
   var status = document.getElementById('statusSelect').value;
   var keyword = document.getElementById('searchInput').value.trim().toLowerCase();
-
-  var filteredData = storages.filter(item => {
+  return allStorages().filter(function (item) {
     if (base && item.base !== base) return false;
     if (status && item.status !== status) return false;
-    if (keyword && !item.id.toLowerCase().includes(keyword) && !item.batch.toLowerCase().includes(keyword)) return false;
+    if (keyword) {
+      var hay = [item.id, item.batchId, item.batchNo, item.plot, item.plotName, item.variety].join(' ').toLowerCase();
+      if (hay.indexOf(keyword) === -1) return false;
+    }
     return true;
   });
+}
 
-  Pagination.updateData(filteredData);
-  Toast.info('找到 ' + filteredData.length + ' 条记录');
+// 搜索：基地 + 状态 + 关键词
+function handleSearch() {
+  var data = filteredStorages();
+  Pagination.updateData(data);
+  Toast.info('找到 ' + data.length + ' 条记录');
+}
+
+function silentRefresh() {
+  renderStats();
+  Pagination.updateData(filteredStorages());
 }
 
 // 详情
@@ -388,12 +452,13 @@ function showDetail(id) {
   if (!item) return;
   document.getElementById('detail-id').textContent = item.id;
   document.getElementById('detail-status').innerHTML = getStatusTag(item.status);
-  document.getElementById('detail-base').textContent = item.base;
-  document.getElementById('detail-batch').textContent = item.batch;
-  document.getElementById('detail-variety').textContent = item.variety;
-  document.getElementById('detail-grade').textContent = item.grade;
-  document.getElementById('detail-quantity').textContent = item.quantity.toLocaleString() + ' kg';
-  document.getElementById('detail-env').textContent = item.temp.toFixed(1) + '℃ / ' + item.humidity + '%';
+  document.getElementById('detail-base').textContent = item.base || '-';
+  document.getElementById('detail-batch').textContent = (item.batchNo || '-') + '（' + item.batchId + '）';
+  document.getElementById('detail-variety').textContent = item.variety || '-';
+  document.getElementById('detail-grade').textContent = item.grade || '-';
+  document.getElementById('detail-quantity').textContent =
+    Number(item.qty || 0).toLocaleString() + ' kg / 库容 ' + Number(item.capacity || 0).toLocaleString() + ' kg';
+  document.getElementById('detail-env').textContent = Number(item.temp).toFixed(1) + '℃ / ' + item.humidity + '%';
   document.getElementById('detail-intime').textContent = item.inTime;
   document.getElementById('detail-expire').textContent = item.expire;
   document.getElementById('detail-remark').textContent = item.remark || '-';
@@ -405,10 +470,10 @@ function showReadings(id) {
   const item = findStorage(id);
   if (!item) return;
   currentStorageId = id;
-  document.getElementById('readings-id').textContent = item.id;
+  document.getElementById('readings-id').textContent = item.id + ' · ' + (item.batchNo || item.batchId);
 
   const rows = [];
-  const baseTime = new Date(item.inTime.replace(' ', 'T'));
+  const baseTime = new Date(String(item.inTime).replace(' ', 'T'));
   for (let i = 5; i >= 0; i--) {
     const t = new Date(baseTime.getTime() + i * 30 * 60 * 1000);
     const p = n => String(n).padStart(2, '0');
@@ -428,40 +493,52 @@ function showReadings(id) {
   Modal.show('modal-readings');
 }
 
-// 出库
+// 出库：生成发货单并扣减库存
 function showOutbound(id) {
   const item = findStorage(id);
   if (!item) return;
   currentStorageId = id;
-  document.getElementById('out-id').value = item.id;
-  document.getElementById('out-quantity').value = item.quantity;
+  document.getElementById('out-id-text').textContent = item.id + ' · ' + (item.batchNo || item.batchId);
+  document.getElementById('out-stock-text').textContent = Number(item.qty || 0).toLocaleString() + ' kg';
+  document.getElementById('out-quantity-hint').textContent = '最多可出库 ' + Number(item.qty || 0).toLocaleString() + ' kg';
+  const quantityInput = document.getElementById('out-quantity');
+  quantityInput.value = item.qty;
+  quantityInput.max = item.qty;
+  document.getElementById('out-customer').value = '';
+  document.getElementById('out-phone').value = '';
+  document.getElementById('out-address').value = '';
+  document.getElementById('out-tracking').value = '';
   document.getElementById('out-time').value = toLocalInput(new Date());
   document.getElementById('out-remark').value = '';
   Modal.show('modal-outbound');
 }
 
 function submitOutbound() {
-  const item = findStorage(currentStorageId);
-  if (item) {
-    item.status = 'exported';
-    item.quantity = 0;
-    const remark = document.getElementById('out-remark').value.trim();
-    if (remark) item.remark = remark;
-  }
+  const r = HarvestStore.outboundStorage(currentStorageId, {
+    qty: document.getElementById('out-quantity').value,
+    time: document.getElementById('out-time').value,
+    customer: document.getElementById('out-customer').value,
+    phone: document.getElementById('out-phone').value,
+    address: document.getElementById('out-address').value,
+    tracking: document.getElementById('out-tracking').value,
+    remark: document.getElementById('out-remark').value
+  });
+  if (!r.ok) { Toast.error(r.message); return; }
   Modal.hide('modal-outbound');
-  handleSearch();
-  Toast.success('出库成功');
+  refresh();
+  Toast.success('出库成功，已生成发货单 ' + r.item.id);
 }
 
 // 真实导出（Excel / CSV）
 async function handleExport() {
   const scope = document.querySelector('input[name="exportScope"]:checked').value;
-  const rows = (scope === 'selected' ? Pagination.filteredData : storages);
+  const rows = (scope === 'selected' ? Pagination.filteredData : allStorages());
   const result = await ExportHelper.exportData({
     filename: '储藏记录_' + ExportHelper.stamp(),
     format: document.getElementById('exportFormat').value,
-    headers: ['库位编号', '所属基地', '当前批次', '品种', '等级', '在库数量(kg)', '温度(℃)', '湿度(%)', '入库时间', '保质期至', '状态', '备注'],
-    rows: rows.map(s => [s.id, s.base, s.batch, s.variety, s.grade, s.quantity, s.temp, s.humidity, s.inTime, s.expire, STATUS_NAME[s.status], s.remark || ''])
+    headers: ['库位编号', '所属基地', '当前批次', '处理单号', '地块', '品种', '等级', '在库数量(kg)', '库容(kg)', '温度(℃)', '湿度(%)', '入库时间', '保质期至', '状态', '备注'],
+    rows: rows.map(s => [s.id, s.base || '', s.batchNo || '', s.batchId, s.plot || '', s.variety || '', s.grade || '',
+      s.qty, s.capacity, s.temp, s.humidity, s.inTime, s.expire, HarvestStore.statusText('storages', s.status), s.remark || ''])
   });
   Modal.hide('modal-export');
   Toast.success(result === 'csv-fallback' ? 'Excel 组件加载失败，已导出为 CSV' : '导出成功，文件已下载');
@@ -473,14 +550,20 @@ function toLocalInput(d) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+  const baseSelect = document.getElementById('baseSelect');
+  baseSelect.innerHTML = '<option value="">全部基地</option>' + HarvestStore.bases().map(function (b) {
+    return '<option value="' + b + '">' + b + '</option>';
+  }).join('');
+  renderStats();
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
-    data: storages,
+    data: allStorages(),
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderRow
   });
+  if (HarvestStore.subscribe) HarvestStore.subscribe(silentRefresh);
 });
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>

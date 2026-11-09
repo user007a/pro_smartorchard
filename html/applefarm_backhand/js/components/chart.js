@@ -492,6 +492,204 @@ const Chart = (function() {
     return chart;
   }
 
+  // ============ 甘特图（任务排期） ============
+  // data: { tasks: [{id,name,type,typeName,start,end,base,plot,owner,team,status,statusText}], types: [{code,name,color}], today: 'YYYY-MM-DD' }
+
+  /** 农事类型色板：计划编码与任务中文名共用 */
+  const TYPE_COLORS = {
+    fertilizer: '#1890ff',  // 施肥
+    pesticide: '#ff6b35',   // 喷药
+    irrigation: '#13c2c2',  // 灌溉
+    pruning: '#52c41a',     // 修剪
+    thinning: '#722ed1',    // 疏花疏果
+    bagging: '#faad14',     // 套袋
+    weeding: '#8c8c8c',     // 除草
+    harvest: '#eb2f96',     // 采收
+    other: '#bfbfbf'
+  };
+
+  /** 甘特图左侧任务名列宽：随最长任务名自适应 */
+  function ganttGridLeft(tasks) {
+    var max = 0;
+    (tasks || []).forEach((t) => {
+      var len = String(t.name || '').length;
+      if (len > max) max = len;
+    });
+    return Math.min(260, Math.max(120, max * 13 + 24));
+  }
+
+  async function gantt(container, data, options = {}) {
+    const chart = await initChart(container);
+    if (!chart) return null;
+
+    const tasks = data.tasks || [];
+    const types = data.types || [];
+    const typeColor = {};
+    types.forEach((t) => { typeColor[t.code] = t.color || TYPE_COLORS[t.code] || COLORS[0]; });
+
+    const toTs = (d) => {
+      const v = Date.parse(String(d || '').slice(0, 10) + 'T00:00:00');
+      return isNaN(v) ? null : v;
+    };
+
+    const ids = tasks.map((t) => t.id);
+    const nameMap = {};
+    tasks.forEach((t) => { nameMap[t.id] = t.name; });
+
+    const rangeData = new Array(tasks.length).fill(null);
+    const progressData = new Array(tasks.length).fill(null);
+    let min = null, max = null;
+
+    tasks.forEach((t, i) => {
+      const s = toTs(t.start);
+      const e = toTs(t.end);
+      if (s === null || e === null) return;
+      const end = e < s ? s : e;
+      min = min === null ? s : Math.min(min, s);
+      max = max === null ? end : Math.max(max, end);
+      const color = typeColor[t.type] || COLORS[0];
+      // value 第三位绑定任务 ID，配合 encode {x:[0,1], y:2} 表达「起止区间 + 所在分类」
+      rangeData[i] = {
+        value: [s, end, t.id],
+        task: t,
+        itemStyle: { color: color + '33', borderColor: color + '66', borderWidth: 1, borderRadius: 4 }
+      };
+      let pEnd = null;
+      if (t.status === 'completed') pEnd = end;
+      else if (data.today) {
+        const now = toTs(data.today);
+        if (now !== null && now > s && now < end && ['processing', 'reviewing', 'overdue'].indexOf(t.status) >= 0) pEnd = now;
+      }
+      if (pEnd !== null && pEnd > s) {
+        progressData[i] = {
+          value: [s, pEnd, t.id],
+          task: t,
+          itemStyle: { color: color, borderRadius: 4 }
+        };
+      }
+    });
+
+    // 默认聚焦「今天」附近，避免跨度过大导致条形过窄
+    let zoomStart = 0, zoomEnd = 100;
+    if (min !== null && data.today) {
+      const now = toTs(data.today);
+      if (now !== null && now >= min && now <= max) {
+        const from = Math.max(min, now - 30 * 86400000);
+        const to = Math.min(max, now + 75 * 86400000);
+        const span = max - min || 1;
+        zoomStart = Math.max(0, Math.round((from - min) / span * 100));
+        zoomEnd = Math.min(100, Math.round((to - min) / span * 100));
+        if (zoomEnd - zoomStart < 12) { zoomStart = 0; zoomEnd = 100; }
+      }
+    }
+
+    const defaultOptions = {
+      grid: { left: ganttGridLeft(tasks), right: 28, top: 24, bottom: 64 },
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: 'rgba(255, 255, 255, 0.97)',
+        borderColor: '#e8e8e8',
+        borderWidth: 1,
+        padding: [10, 12],
+        textStyle: { color: C_STRONG, fontSize: FS_TIP, fontFamily: FONT_FAMILY },
+        formatter: function (params) {
+          const t = params.data && params.data.task;
+          if (!t) return '';
+          const color = typeColor[t.type] || COLORS[0];
+          let html = '<div style="font-weight:600;margin-bottom:6px;">' + t.name + '</div>';
+          html += '<div style="color:' + C_TEXT + ';font-size:12px;line-height:1.9;">';
+          html += '<div><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + color + ';margin-right:6px;"></i>' +
+            (t.typeName || t.type) + (t.statusText ? ' · ' + t.statusText : '') + '</div>';
+          html += '<div>基地 / 地块：' + (t.base || '—') + ' / ' + (t.plot || '—') + '</div>';
+          html += '<div>负责人：' + (t.owner || '—') + (t.team ? ' · ' + t.team : '') + '</div>';
+          html += '<div>计划时间：' + (t.start || '—') + ' ~ ' + (t.end || '—') + '</div>';
+          html += '</div>';
+          return html;
+        }
+      },
+      xAxis: {
+        type: 'time',
+        axisLine: { lineStyle: { color: '#e8e8e8' } },
+        axisTick: { show: false },
+        axisLabel: {
+          color: C_AXIS,
+          fontSize: FS_AXIS,
+          fontFamily: FONT_FAMILY,
+          hideOverlap: true,
+          formatter: {
+            year: '{yyyy}',
+            month: '{yyyy}-{MM}',
+            day: '{MM}-{dd}',
+            hour: '{MM}-{dd} {HH}:{mm}',
+            minute: '{HH}:{mm}'
+          }
+        },
+        splitLine: { show: true, lineStyle: { color: '#f5f5f5', type: 'dashed' } }
+      },
+      yAxis: {
+        type: 'category',
+        inverse: true,
+        data: ids,
+        axisLine: { lineStyle: { color: '#e8e8e8' } },
+        axisTick: { show: false },
+        axisLabel: {
+          color: C_TEXT,
+          fontSize: FS_AXIS,
+          fontFamily: FONT_FAMILY,
+          formatter: (id) => {
+            const n = nameMap[id] || id;
+            return n.length > 13 ? n.slice(0, 12) + '…' : n;
+          }
+        },
+        splitLine: { show: false }
+      },
+      dataZoom: [
+        { type: 'inside', xAxisIndex: 0, filterMode: 'none', start: zoomStart, end: zoomEnd },
+        {
+          type: 'slider', xAxisIndex: 0, filterMode: 'none', start: zoomStart, end: zoomEnd,
+          height: 18, bottom: 10, borderColor: '#e8e8e8', borderRadius: 4,
+          fillerColor: 'rgba(24,144,255,0.10)',
+          handleStyle: { color: '#1890ff', borderColor: '#1890ff' },
+          moveHandleSize: 4,
+          dataBackground: { lineStyle: { color: '#d9d9d9' }, areaStyle: { color: '#f0f0f0' } },
+          selectedDataBackground: { lineStyle: { color: '#1890ff' }, areaStyle: { color: '#e6f4ff' } },
+          textStyle: { color: C_AXIS, fontSize: 11, fontFamily: FONT_FAMILY }
+        }
+      ],
+      series: [
+        {
+          name: '计划区间',
+          type: 'bar',
+          data: rangeData,
+          // value = [开始, 结束, 任务ID]：x 取前两维构成区间，y 取任务 ID 绑定分类
+          encode: { x: [0, 1], y: 2, tooltip: [0, 1, 2] },
+          barWidth: 16,
+          barGap: '-100%',
+          z: 2,
+          markLine: data.today ? {
+            silent: true,
+            symbol: 'none',
+            data: [{ xAxis: toTs(data.today) }],
+            lineStyle: { color: '#ff6b35', width: 1.5, type: 'dashed' },
+            label: { formatter: '今天', color: '#ff6b35', fontSize: 11, position: 'insideEndTop' }
+          } : undefined
+        },
+        {
+          name: '已执行',
+          type: 'bar',
+          data: progressData,
+          encode: { x: [0, 1], y: 2, tooltip: [0, 1, 2] },
+          barWidth: 16,
+          barGap: '-100%',
+          z: 3
+        }
+      ]
+    };
+
+    chart.setOption(mergeOptions(defaultOptions, options), true);
+    return chart;
+  }
+
   // 销毁图表
   function dispose(container) {
     let dom;
@@ -586,13 +784,15 @@ const Chart = (function() {
     gauge,
     stackedBar,
     multipleAxes,
+    gantt,
     dispose,
     getInstance,
     update,
     showLoading,
     hideLoading,
     exportImage,
-    COLORS
+    COLORS,
+    TYPE_COLORS
   };
 })();
 

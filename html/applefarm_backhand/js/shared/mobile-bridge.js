@@ -138,6 +138,8 @@
         source: 'mobile',
         remark: r.remark || '',
         gps: r.gps || null,
+        photo: r.photo || '',
+        photos: r.photo ? JSON.stringify([r.photo]) : '',
         hasPhoto: !!r.photo
       };
     });

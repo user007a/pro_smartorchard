@@ -8,34 +8,74 @@
 <link rel="stylesheet" href="css/sidebar-layout.css">
 <link rel="stylesheet" href="css/page-content.css">
 <style>
+  /* 页内 Tab */
+  .seg-tabs {
+    display: inline-flex; gap: 4px; padding: 4px;
+    background: var(--gray-50); border: 1px solid var(--border-light);
+    border-radius: 12px; margin-bottom: var(--space-lg);
+  }
+  .seg-tab {
+    border: none; background: transparent; cursor: pointer;
+    padding: 9px 20px; border-radius: 9px;
+    font-size: 14px; font-weight: 500; color: var(--text-secondary);
+    transition: all 0.2s ease;
+  }
+  .seg-tab:hover { color: var(--text-primary); }
+  .seg-tab.active {
+    background: var(--bg-card); color: var(--primary-600, #1890ff);
+    font-weight: 600; box-shadow: 0 1px 4px rgba(16, 24, 40, 0.1);
+  }
+  .pane { display: none; }
+  .pane.active { display: block; animation: paneIn 0.25s ease; }
+  @keyframes paneIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
   /* 统计卡 */
   .stat-card-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: var(--space-lg);
-    margin-bottom: var(--space-xl);
+    margin-bottom: var(--space-lg);
   }
   .stat-card {
-    background: var(--bg-card);
-    border-radius: var(--radius-lg);
+    position: relative; overflow: hidden;
+    background: linear-gradient(180deg, var(--bg-card) 0%, #fbfdff 100%);
+    border-radius: 14px;
     border: 1px solid var(--border-light);
-    box-shadow: var(--shadow-card);
-    padding: var(--space-xl);
-    transition: box-shadow var(--transition-normal);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+    padding: 18px 20px;
+    transition: box-shadow var(--transition-normal), transform var(--transition-normal);
+    --accent: #1890ff;
+    --accent-bg: #e8f4ff;
   }
-  .stat-card:hover { box-shadow: var(--shadow-md); }
-  .stat-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; }
+  .stat-card::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--accent);
+  }
+  .stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+  .stat-card.tone-green  { --accent: #16a34a; --accent-bg: #e9f7ee; }
+  .stat-card.tone-orange { --accent: #f59e0b; --accent-bg: #fef4e2; }
+  .stat-card.tone-purple { --accent: #7c3aed; --accent-bg: #f1ebfd; }
+  .stat-card.tone-red    { --accent: #dc2626; --accent-bg: #fdecec; }
+  .stat-icon {
+    position: absolute; right: 16px; top: 16px;
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--accent-bg); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stat-icon svg { width: 18px; height: 18px; }
+  .stat-label { font-size: 13px; color: var(--text-tertiary); margin-bottom: 8px; padding-right: 44px; }
   .stat-value {
-    font-size: 30px;
+    font-size: 28px;
     font-weight: 700;
     line-height: 1.2;
     color: var(--text-primary);
     font-variant-numeric: tabular-nums;
   }
   .stat-value .unit { font-size: 13px; font-weight: 500; color: var(--text-tertiary); margin-left: 4px; }
-  .stat-sub { margin-top: 8px; font-size: 12px; color: var(--text-tertiary); }
+  .stat-sub { margin-top: 6px; font-size: 12px; color: var(--text-tertiary); }
   .stat-sub.up { color: var(--success); }
   .stat-sub.down { color: var(--error); }
+  @media (max-width: 1100px) { .stat-card-row { grid-template-columns: repeat(2, 1fr); } }
 
   /* 三图区 */
   .chart-grid-3 {
@@ -145,34 +185,35 @@
 
     <main class="main-content">
       <div class="content-wrapper">
-        <!-- 第一排统计卡 -->
-        <div class="stat-card-row" id="statRow1"></div>
-        <!-- 第二排统计卡 -->
-        <div class="stat-card-row" id="statRow2"></div>
-
-        <!-- 扫码趋势 + 渠道占比 + 追溯码状态 -->
-        <div class="chart-grid-3">
-          <div class="chart-section">
-            <h2 class="section-title">近 7 日扫码趋势（次）</h2>
-            <div id="chart-scan-trend" style="height:300px;"></div>
-          </div>
-          <div class="chart-section">
-            <h2 class="section-title">扫码来源渠道占比</h2>
-            <div id="chart-channel" style="height:300px;"></div>
-          </div>
-          <div class="chart-section">
-            <h2 class="section-title">追溯码状态分布</h2>
-            <div id="chart-code-status" style="height:300px;"></div>
-          </div>
+        <!-- 页内 Tab -->
+        <div class="seg-tabs" id="statTabs">
+          <button class="seg-tab active" data-pane="pane-overview">数据总览</button>
+          <button class="seg-tab" data-pane="pane-coverage">流向与覆盖</button>
+          <button class="seg-tab" data-pane="pane-risk">风控与监管</button>
         </div>
 
-        <!-- 省份 TOP12 + 区块链存证 -->
-        <div class="duo-grid">
-          <div class="data-section" style="padding:24px;">
-            <h2 class="section-title">省份扫码 TOP 12（近 30 日）</h2>
-            <div id="provList"></div>
+        <!-- ===== Tab：数据总览 ===== -->
+        <div class="pane active" id="pane-overview">
+          <div class="stat-card-row" id="statRow1"></div>
+          <div class="stat-card-row" id="statRow2"></div>
+
+          <!-- 扫码趋势 + 渠道占比 + 追溯码状态 -->
+          <div class="chart-grid-3">
+            <div class="chart-section">
+              <h2 class="section-title">近 7 日扫码趋势（次）</h2>
+              <div id="chart-scan-trend" style="height:300px;"></div>
+            </div>
+            <div class="chart-section">
+              <h2 class="section-title">扫码来源渠道占比</h2>
+              <div id="chart-channel" style="height:300px;"></div>
+            </div>
+            <div class="chart-section">
+              <h2 class="section-title">追溯码状态分布</h2>
+              <div id="chart-code-status" style="height:300px;"></div>
+            </div>
           </div>
 
+          <!-- 区块链存证 -->
           <div class="data-section" style="padding:24px;">
             <h2 class="section-title">区块链存证</h2>
             <div class="chain-metrics" id="chainMetrics"></div>
@@ -180,29 +221,115 @@
           </div>
         </div>
 
-        <!-- 认证证书批次覆盖 -->
-        <div class="page-section data-section">
-          <div class="data-table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>证书名称</th>
-                  <th>证书编号</th>
-                  <th>覆盖批次</th>
-                  <th>状态</th>
-                </tr>
-              </thead>
-              <tbody id="certBody"></tbody>
-            </table>
+        <!-- ===== Tab：流向与覆盖 ===== -->
+        <div class="pane" id="pane-coverage">
+          <div class="duo-grid">
+            <div class="data-section" style="padding:24px;">
+              <h2 class="section-title">省份扫码 TOP 12（近 30 日）</h2>
+              <div id="provList"></div>
+            </div>
+
+            <div class="data-section" style="padding:24px;">
+              <h2 class="section-title">认证证书批次覆盖</h2>
+              <div class="data-table-wrapper">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>证书名称</th>
+                      <th>证书编号</th>
+                      <th>覆盖批次</th>
+                      <th>状态</th>
+                    </tr>
+                  </thead>
+                  <tbody id="certBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 批次流向 -->
+          <div class="chart-section">
+            <h2 class="section-title">批次流向：基地 → 采收 → 包装 → 渠道 → 消费者</h2>
+            <div class="flow-track" id="flowTrack"></div>
+            <div class="flow-summary" id="flowSummary"></div>
           </div>
         </div>
 
-        <!-- 批次流向 -->
-        <div class="chart-section">
-          <h2 class="section-title">批次流向：基地 → 采收 → 包装 → 渠道 → 消费者</h2>
-          <div class="flow-track" id="flowTrack"></div>
-          <div class="flow-summary" id="flowSummary"></div>
+        <!-- ===== Tab：风控与监管 ===== -->
+        <div class="pane" id="pane-risk">
+        <div class="data-section" style="padding:24px;">
+          <h2 class="section-title">风控与监管</h2>
+          <div class="stat-card-row" id="riskStatRow"></div>
+
+          <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;margin-top:16px;">
+            <div>
+              <div style="font-weight:600;color:var(--text-primary);margin-bottom:8px;">异常扫码与渠道预警</div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:70px;">级别</th>
+                    <th>溯源码</th>
+                    <th>地区</th>
+                    <th>说明</th>
+                    <th style="width:150px;">时间</th>
+                    <th style="width:80px;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="alertBody"></tbody>
+              </table>
+            </div>
+            <div>
+              <div style="font-weight:600;color:var(--text-primary);margin-bottom:8px;">监管报送</div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>批次</th>
+                    <th style="width:90px;">期间</th>
+                    <th style="width:90px;">状态</th>
+                    <th style="width:80px;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="regBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;">
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="font-weight:600;color:var(--text-primary);">开放 API</div>
+                <button class="action-btn" onclick="openTraceApiKey()">生成 Key</button>
+              </div>
+              <div id="apiList" style="font-size:13px;"></div>
+            </div>
+            <div>
+              <div style="font-weight:600;color:var(--text-primary);margin-bottom:8px;">码段风控</div>
+              <div id="segmentList" style="font-size:13px;"></div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <div style="font-weight:600;color:var(--text-primary);">召回管理</div>
+              <button class="action-btn" onclick="openTraceRecall()">发起召回</button>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:180px;">召回单号</th>
+                  <th style="width:170px;">批次</th>
+                  <th>原因</th>
+                  <th style="width:110px;">范围</th>
+                  <th style="width:90px;">状态</th>
+                  <th style="width:110px;">发起时间</th>
+                  <th style="width:80px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="recallBody"></tbody>
+            </table>
+          </div>
         </div>
+        </div><!-- /pane-risk -->
       </div>
     </main>
   </div>
@@ -213,6 +340,8 @@
 <script src="js/page-actions.js"></script>
 <script src="js/components/chart.js"></script>
 <script src="js/shared/trace-stat-store.js"></script>
+<script src="js/shared/harvest-store.js"></script>
+<script src="js/shared/trace-store.js"></script>
 <script>
 (function(){
   'use strict';
@@ -240,8 +369,20 @@
   // 共识算法未由 TraceStatStore.overview() 暴露，此处按链默认共识显示
   var CHAIN_CONSENSUS = 'Raft';
 
-  function cardHtml(label, value, unit, sub, subCls){
-    return '<div class="stat-card">' +
+  var ICONS = {
+    box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+    qr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM18 18h3v3"/></svg>',
+    scan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>',
+    map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+    shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>',
+    link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+    star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
+  };
+
+  function cardHtml(label, value, unit, sub, subCls, tone, icon){
+    return '<div class="stat-card' + (tone ? ' tone-' + tone : '') + '">' +
+      (icon ? '<div class="stat-icon">' + icon + '</div>' : '') +
       '<div class="stat-label">' + esc(label) + '</div>' +
       '<div class="stat-value">' + value + (unit ? '<span class="unit">' + esc(unit) + '</span>' : '') + '</div>' +
       '<div class="stat-sub ' + (subCls || '') + '">' + sub + '</div>' +
@@ -255,16 +396,16 @@
     var dodTxt = '环比 ' + (dod >= 0 ? '+' : '') + fmt(dod) + '%';
 
     els.row1.innerHTML =
-      cardHtml('累计上链批次', fmt(o.totalBatches), '批', '覆盖 ' + fmt(o.totalIssued) + ' 个追溯码') +
-      cardHtml('激活追溯码',   fmt(o.activated), '个', '激活率 ' + fmt(o.activateRate) + '%') +
-      cardHtml('今日扫码量',   fmt(o.todayScan), '次', esc(dodTxt), dodCls) +
-      cardHtml('扫码覆盖省份', fmt(o.provinceTotal), '个', '全国省区覆盖情况');
+      cardHtml('累计上链批次', fmt(o.totalBatches), '批', '覆盖 ' + fmt(o.totalIssued) + ' 个追溯码', '', '', ICONS.box) +
+      cardHtml('激活追溯码',   fmt(o.activated), '个', '激活率 ' + fmt(o.activateRate) + '%', '', 'green', ICONS.qr) +
+      cardHtml('今日扫码量',   fmt(o.todayScan), '次', esc(dodTxt), dodCls, 'orange', ICONS.scan) +
+      cardHtml('扫码覆盖省份', fmt(o.provinceTotal), '个', '全国省区覆盖情况', '', 'purple', ICONS.map);
 
     els.row2.innerHTML =
-      cardHtml('批次合格率',     fmt(o.passRate), '%', '批次抽检合格占比') +
-      cardHtml('平均查询响应',   fmt(o.avgResponse), 's', '消费者扫码查询平均耗时') +
-      cardHtml('溯源覆盖率',     fmt(o.traceCoverage), '%', '可追溯批次数占比') +
-      cardHtml('消费者满意度',   fmt(o.satisfaction), '/5', '扫码后评价均分');
+      cardHtml('批次合格率',     fmt(o.passRate), '%', '批次抽检合格占比', '', 'green', ICONS.shield) +
+      cardHtml('平均查询响应',   fmt(o.avgResponse), 's', '消费者扫码查询平均耗时', '', '', ICONS.clock) +
+      cardHtml('溯源覆盖率',     fmt(o.traceCoverage), '%', '可追溯批次数占比', '', '', ICONS.link) +
+      cardHtml('消费者满意度',   fmt(o.satisfaction), '/5', '扫码后评价均分', '', 'orange', ICONS.star);
   }
 
   function renderCharts(){
@@ -411,6 +552,158 @@
         '<span class="flow-summary-value">' + fmt(flow.avgDuration) + '<span class="unit">天</span></span></div>';
   }
 
+  function renderRisk(){
+    if (!window.TraceStore) return;
+    var risk = TraceStore.riskSummary();
+
+    var row = document.getElementById('riskStatRow');
+    if (row) {
+      row.innerHTML =
+        cardHtml('未处理异常预警', fmt(risk.openAlerts), '条', '异常扫码自动生成', '', 'orange', ICONS.scan) +
+        cardHtml('风险扫码', fmt(risk.riskScans), '次', '异地 / 高频扫码', '', 'red', ICONS.shield) +
+        cardHtml('有效召回', fmt(risk.activeRecalls), '批', '需渠道协查', '', 'red', ICONS.box) +
+        cardHtml('冻结码段', fmt(risk.frozenSegments), '段', '码段风控', '', 'purple', ICONS.qr);
+    }
+
+    var alertBody = document.getElementById('alertBody');
+    if (alertBody) {
+      var alerts = risk.alerts || [];
+      alertBody.innerHTML = alerts.length ? alerts.map(function(a){
+        var cls = a.level === 'high' ? 'rejected' : 'waiting';
+        return '<tr>' +
+          '<td><span class="status-tag ' + cls + '">' + (a.level === 'high' ? '高' : '中') + '</span></td>' +
+          '<td class="text-mono" style="font-size:12px;">' + esc(a.code) + '</td>' +
+          '<td>' + esc(a.region || '-') + '</td>' +
+          '<td style="font-size:12px;">' + esc(a.message || '-') + '</td>' +
+          '<td class="text-mono" style="font-size:12px;">' + esc(a.at || '-') + '</td>' +
+          '<td><button class="action-btn" onclick="closeRiskAlert(\'' + esc(a.id) + '\')">处理</button></td>' +
+        '</tr>';
+      }).join('') : '<tr><td colspan="6" style="text-align:center;color:#999;padding:16px;">暂无异常预警</td></tr>';
+    }
+
+    var regBody = document.getElementById('regBody');
+    if (regBody) {
+      var reports = TraceStore.regulatoryReports();
+      var batches = TraceStore.batches().slice(-8).reverse();
+      regBody.innerHTML = batches.map(function(b){
+        var rep = null;
+        for (var i = 0; i < reports.length; i++) {
+          if (reports[i].batchNo === b.batchNo) { rep = reports[i]; break; }
+        }
+        return '<tr>' +
+          '<td class="text-mono" style="font-size:12px;">' + esc(b.batchNo) + '</td>' +
+          '<td>' + esc((b.harvestDate || '').slice(0, 7)) + '</td>' +
+          '<td><span class="status-tag ' + (rep ? 'active' : 'inactive') + '">' + (rep ? '已报送' : '未报送') + '</span></td>' +
+          '<td>' + (rep
+            ? '<span style="font-size:12px;color:#999;">' + esc(String(rep.submittedAt || '').slice(0, 10)) + '</span>'
+            : '<button class="action-btn" onclick="submitTraceReport(\'' + esc(b.batchNo) + '\')">报送</button>') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    var apiList = document.getElementById('apiList');
+    if (apiList) {
+      var keys = TraceStore.apiKeys();
+      apiList.innerHTML = keys.length ? keys.map(function(k){
+        return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed var(--border-light);">' +
+          '<span>' + esc(k.name) + ' <span style="font-size:11px;color:#999;font-family:monospace;">' + esc(k.keyMasked) + '</span></span>' +
+          '<span style="font-size:12px;color:#999;">调用 ' + fmt(k.calls) + ' 次 · ' + (k.status === 'active' ? '启用' : '停用') + '</span></div>';
+      }).join('') : '<div style="color:#999;">暂无 API Key</div>';
+    }
+
+    var recallBody = document.getElementById('recallBody');
+    if (recallBody) {
+      var recalls = TraceStore.recalls();
+      recallBody.innerHTML = recalls.length ? recalls.map(function(r){
+        var active = r.status === 'active';
+        return '<tr>' +
+          '<td class="text-mono" style="font-size:12px;">' + esc(r.id) + '</td>' +
+          '<td class="text-mono" style="font-size:12px;">' + esc(r.batchNo) + '</td>' +
+          '<td>' + esc(r.reason || '-') + '</td>' +
+          '<td>' + esc(r.scope || '全部') + '</td>' +
+          '<td><span class="status-tag ' + (active ? 'rejected' : 'active') + '">' + (active ? '召回中' : '已关闭') + '</span></td>' +
+          '<td style="font-size:12px;color:#999;">' + esc(String(r.createdAt || '').slice(0, 10)) + '</td>' +
+          '<td>' + (active
+            ? '<button class="action-btn" onclick="closeTraceRecall(\'' + esc(r.id) + '\')">关闭</button>'
+            : '—') + '</td>' +
+        '</tr>';
+      }).join('') : '<tr><td colspan="7" style="text-align:center;color:#999;padding:16px;">暂无召回记录</td></tr>';
+    }
+
+    var segList = document.getElementById('segmentList');
+    if (segList) {
+      var segs = TraceStore.codeSegments();
+      segList.innerHTML = segs.length ? segs.map(function(s){
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--border-light);">' +
+          '<span class="text-mono" style="font-size:12px;">' + esc(s.id) + ' · ' + esc(s.prefix) +
+            ' <span style="color:#999;">已用 ' + fmt(s.used) + '/' + fmt(s.total) + '</span></span>' +
+          '<span style="display:flex;align-items:center;gap:8px;">' +
+            '<span class="status-tag ' + (s.status === 'frozen' ? 'inactive' : 'active') + '">' +
+              (s.status === 'frozen' ? '已冻结' : '正常') + '</span>' +
+            '<button class="action-btn" onclick="toggleTraceSegment(\'' + esc(s.id) + '\')">' +
+              (s.status === 'frozen' ? '解冻' : '冻结') + '</button></span></div>';
+      }).join('') : '<div style="color:#999;">暂无码段</div>';
+    }
+  }
+
+  window.closeRiskAlert = function(id){
+    var r = TraceStore.closeAlert(id);
+    if (r && r.ok) renderRisk();
+  };
+  window.submitTraceReport = function(batchNo){
+    var r = TraceStore.submitRegulatory(batchNo, '管理员');
+    if (r && r.ok) {
+      renderRisk();
+      if (typeof Toast !== 'undefined' && Toast.success) Toast.success('监管报送已提交');
+    }
+  };
+  window.toggleTraceSegment = function(id){
+    var r = TraceStore.freezeSegment(id);
+    if (r && r.ok) renderRisk();
+  };
+  window.openTraceRecall = function(){
+    var batches = TraceStore.batches();
+    var def = batches.length ? batches[batches.length - 1].batchNo : '';
+    var batchNo = window.prompt('请输入召回批次号', def);
+    if (!batchNo) return;
+    var reason = window.prompt('请输入召回原因');
+    if (!reason) return;
+    var scope = window.prompt('召回范围（如 全部 / 华东渠道）', '全部') || '全部';
+    var r = TraceStore.createRecall({ batchNo: batchNo.trim(), reason: reason.trim(), scope: scope.trim(), operator: '管理员' });
+    if (!r || !r.ok) { alert(r && r.message ? r.message : '召回发起失败'); return; }
+    renderRisk();
+    if (typeof Toast !== 'undefined' && Toast.success) Toast.success('召回已发起：' + r.recall.id);
+  };
+  window.closeTraceRecall = function(id){
+    var r = TraceStore.closeRecall(id);
+    if (r && r.ok) renderRisk();
+  };
+  window.openTraceApiKey = function(){
+    var name = window.prompt('请输入应用名称（如 商超对接平台）');
+    if (!name) return;
+    var r = TraceStore.createApiKey(name.trim());
+    if (!r || !r.ok) { alert(r && r.message ? r.message : '生成失败'); return; }
+    alert('API Key 已生成，仅展示一次，请妥善保管：\n\n' + r.key);
+    renderRisk();
+  };
+
+  // 页内 Tab 切换
+  (function(){
+    var wrap = document.getElementById('statTabs');
+    if (!wrap) return;
+    wrap.addEventListener('click', function(e){
+      var btn = e.target && e.target.closest ? e.target.closest('.seg-tab') : null;
+      if (!btn) return;
+      var tabs = wrap.querySelectorAll('.seg-tab');
+      for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+      btn.classList.add('active');
+      var panes = document.querySelectorAll('.content-wrapper > .pane');
+      for (var j = 0; j < panes.length; j++) panes[j].classList.remove('active');
+      var pane = document.getElementById(btn.getAttribute('data-pane'));
+      if (pane) pane.classList.add('active');
+    });
+  })();
+
   function renderAll(){
     renderStats();
     renderCharts();
@@ -418,6 +711,7 @@
     renderChain();
     renderCerts();
     renderFlow();
+    renderRisk();
   }
 
   TraceStatStore.subscribe(function(){

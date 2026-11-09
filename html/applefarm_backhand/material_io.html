@@ -219,6 +219,27 @@
   .action-btn.export:hover {
     background:#ffd591;
   }
+  .action-btn.approve {
+    background:#f6ffed;
+    color:#389e0d;
+  }
+  .action-btn.approve:hover {
+    background:#d9f7be;
+  }
+  .action-btn.reject {
+    background:#fff1f0;
+    color:#cf1322;
+  }
+  .action-btn.reject:hover {
+    background:#ffccc7;
+  }
+  .action-btn.void {
+    background:#f5f5f5;
+    color:#8c8c8c;
+  }
+  .action-btn.void:hover {
+    background:#e8e8e8;
+  }
 
   /* 导出格式选项 */
   .export-format-group {
@@ -250,6 +271,11 @@
     background:var(--success-bg);
     color:var(--primary-500);
   }
+
+  /* 宽表精简：默认隐藏次要字段列 */
+  .dense-view .col-extra { display:none; }
+  .data-section .data-table { min-width:1960px; }
+  .data-section:not(.dense-view) .data-table { min-width:2240px; }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -286,10 +312,11 @@
         <!-- ===== 搜索栏区 ===== -->
         <div class="page-section search-section">
           <div class="search-bar">
-            <select class="search-select" id="warehouseSelect">
+            <select class="search-select" id="warehouseSelect" data-dict="warehouse">
               <option value="">全部仓库</option>
-              <option value="warehouse1">一号仓库</option>
-              <option value="warehouse2">二号仓库</option>
+              <option value="center">中心仓库</option>
+              <option value="east">东区仓库</option>
+              <option value="west">西区仓库</option>
             </select>
             <select class="search-select" id="typeSelect">
               <option value="">全部类型</option>
@@ -299,7 +326,7 @@
             <input type="date" class="search-input" id="dateFrom" style="min-width:140px;">
             <span style="color:var(--text-tertiary);padding:0 4px;">至</span>
             <input type="date" class="search-input" id="dateTo" style="min-width:140px;">
-            <input type="text" class="search-input" placeholder="搜索单号..." id="searchInput">
+            <input type="text" class="search-input" placeholder="搜索单号 / 供应商 / 批次号 / 农资..." id="searchInput">
             
           <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="search()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
           </div>
@@ -330,10 +357,11 @@
             </svg>
             导出记录
           </button>
+          <button class="jg-btn-outline" id="denseToggleBtn" onclick="toggleDenseView()">显示全部字段</button>
         </div>
 
         <!-- ===== 数据列表区 ===== -->
-        <div class="page-section data-section">
+        <div class="page-section data-section dense-view">
           <div class="data-table-wrapper">
             <table class="data-table">
               <thead>
@@ -343,10 +371,22 @@
                   <th style="width:100px;">仓库</th>
                   <th style="width:80px;">类型</th>
                   <th>农资名称</th>
-                  <th style="width:120px;">数量</th>
+                  <th style="width:120px;">供应商</th>
+                  <th style="width:80px;">数量</th>
+                  <th style="width:60px;">单位</th>
+                  <th style="width:100px;">单价(元)</th>
+                  <th style="width:110px;">金额(元)</th>
+                  <th class="col-extra" style="width:130px;">批次号</th>
+                  <th class="col-extra" style="width:110px;">有效期至</th>
+                  <th class="col-extra" style="width:220px;">关联地块/任务</th>
+                  <th style="width:100px;">审核状态</th>
+                  <th style="width:100px;">审核人</th>
+                  <th class="col-extra" style="width:150px;">来源单号</th>
+                  <th style="width:100px;">付款状态</th>
                   <th style="width:100px;">经手人</th>
                   <th style="width:140px;">日期</th>
-                  <th style="width:140px;">操作</th>
+                  <th class="col-extra" style="width:180px;">备注</th>
+                  <th style="width:300px;">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -382,9 +422,10 @@
           </div>
           <div class="form-item">
             <label>仓库</label>
-            <select id="inboundWarehouse">
-              <option value="warehouse1">一号仓库</option>
-              <option value="warehouse2">二号仓库</option>
+            <select id="inboundWarehouse" data-dict="warehouse">
+              <option value="center">中心仓库</option>
+              <option value="east">东区仓库</option>
+              <option value="west">西区仓库</option>
             </select>
           </div>
         </div>
@@ -396,41 +437,130 @@
             </select>
           </div>
           <div class="form-item">
-            <label>数量</label>
-            <input type="number" id="inboundQty" placeholder="请输入数量" min="1">
+            <label>供应商</label>
+            <select id="inboundSupplier">
+              <option value="">请选择供应商</option>
+            </select>
           </div>
         </div>
         <div class="form-row">
           <div class="form-item">
+            <label>采购单号</label>
+            <input type="text" id="inboundPurchaseCode" placeholder="如 CG-20261028-01">
+          </div>
+          <div class="form-item">
+            <label>批次号</label>
+            <input type="text" id="inboundBatchNo" placeholder="如 B20261028">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>来源单据号</label>
+            <input type="text" id="inboundSourceNo" placeholder="采购单 / 领用单 / 调拨单">
+          </div>
+          <div class="form-item">
+            <label>发票号</label>
+            <input type="text" id="inboundInvoiceNo" placeholder="如 FP-20261109-001">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>税率</label>
+            <select id="inboundTaxRate">
+              <option value="0">0</option>
+              <option value="6">6%</option>
+              <option value="9">9%</option>
+              <option value="13">13%</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>付款状态</label>
+            <select id="inboundPayStatus">
+              <option value="未付款">未付款</option>
+              <option value="部分付款">部分付款</option>
+              <option value="已付款">已付款</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>数量</label>
+            <input type="number" id="inboundQty" placeholder="请输入数量" min="1">
+          </div>
+          <div class="form-item">
+            <label>单位</label>
+            <input type="text" id="inboundUnit" placeholder="随农资自动带出" readonly>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>单价(元)</label>
+            <input type="number" id="inboundPrice" placeholder="请输入单价" min="0" step="0.01">
+          </div>
+          <div class="form-item">
+            <label>金额(元)</label>
+            <input type="text" id="inboundAmount" placeholder="自动计算" readonly>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>生产日期</label>
+            <input type="date" id="inboundProdDate">
+          </div>
+          <div class="form-item">
+            <label>有效期至</label>
+            <input type="date" id="inboundExpireDate">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>质检结果</label>
+            <select id="inboundQc">
+              <option value="合格">合格</option>
+              <option value="不合格">不合格</option>
+              <option value="待检">待检</option>
+            </select>
+          </div>
+          <div class="form-item">
             <label>日期</label>
             <input type="date" id="inboundDate">
           </div>
+        </div>
+        <div class="form-item" style="margin-bottom:16px;">
+          <label>经手人</label>
+          <select id="inboundOperator">
+            <option value="">请选择经手人</option>
+            <option value="惠加宁">惠加宁</option>
+            <option value="黄忠坚">黄忠坚</option>
+            <option value="徐水应">徐水应</option>
+            <option value="朱泉龙">朱泉龙</option>
+            <option value="陈小忠">陈小忠</option>
+            <option value="廖春亮">廖春亮</option>
+            <option value="李建明">李建明</option>
+            <option value="李根">李根</option>
+            <option value="张才孙">张才孙</option>
+            <option value="刘全国">刘全国</option>
+            <option value="毛定卫">毛定卫</option>
+            <option value="叶三东">叶三东</option>
+            <option value="周才贵">周才贵</option>
+            <option value="程名高">程名高</option>
+            <option value="邓小华">邓小华</option>
+            <option value="周成友">周成友</option>
+            <option value="危红卫">危红卫</option>
+            <option value="方超">方超</option>
+            <option value="曹红英">曹红英</option>
+            <option value="崔新根">崔新根</option>
+            <option value="超级用户">超级用户</option>
+          </select>
+        </div>
+        <div class="form-row">
           <div class="form-item">
-            <label>经手人</label>
-            <select id="inboundOperator">
-              <option value="">请选择经手人</option>
-              <option value="惠加宁">惠加宁</option>
-              <option value="黄忠坚">黄忠坚</option>
-              <option value="徐水应">徐水应</option>
-              <option value="朱泉龙">朱泉龙</option>
-              <option value="陈小忠">陈小忠</option>
-              <option value="廖春亮">廖春亮</option>
-              <option value="李建明">李建明</option>
-              <option value="李根">李根</option>
-              <option value="张才孙">张才孙</option>
-              <option value="刘全国">刘全国</option>
-              <option value="毛定卫">毛定卫</option>
-              <option value="叶三东">叶三东</option>
-              <option value="周才贵">周才贵</option>
-              <option value="程名高">程名高</option>
-              <option value="邓小华">邓小华</option>
-              <option value="周成友">周成友</option>
-              <option value="危红卫">危红卫</option>
-              <option value="方超">方超</option>
-              <option value="曹红英">曹红英</option>
-              <option value="崔新根">崔新根</option>
-              <option value="超级用户">超级用户</option>
-            </select>
+            <label>审核人</label>
+            <input type="text" id="inboundReviewer" placeholder="审核后自动回填" readonly>
+          </div>
+          <div class="form-item">
+            <label>审核时间</label>
+            <input type="text" id="inboundReviewTime" placeholder="审核后自动回填" readonly>
           </div>
         </div>
         <div class="form-item">
@@ -466,9 +596,10 @@
           </div>
           <div class="form-item">
             <label>仓库</label>
-            <select id="outboundWarehouse">
-              <option value="warehouse1">一号仓库</option>
-              <option value="warehouse2">二号仓库</option>
+            <select id="outboundWarehouse" data-dict="warehouse">
+              <option value="center">中心仓库</option>
+              <option value="east">东区仓库</option>
+              <option value="west">西区仓库</option>
             </select>
           </div>
         </div>
@@ -486,40 +617,124 @@
         </div>
         <div class="form-row">
           <div class="form-item">
-            <label>日期</label>
-            <input type="date" id="outboundDate">
+            <label>单位</label>
+            <input type="text" id="outboundUnit" placeholder="随农资自动带出" readonly>
           </div>
           <div class="form-item">
-            <label>经手人</label>
-            <select id="outboundOperator">
-              <option value="">请选择经手人</option>
-              <option value="惠加宁">惠加宁</option>
-              <option value="黄忠坚">黄忠坚</option>
-              <option value="徐水应">徐水应</option>
-              <option value="朱泉龙">朱泉龙</option>
-              <option value="陈小忠">陈小忠</option>
-              <option value="廖春亮">廖春亮</option>
-              <option value="李建明">李建明</option>
-              <option value="李根">李根</option>
-              <option value="张才孙">张才孙</option>
-              <option value="刘全国">刘全国</option>
-              <option value="毛定卫">毛定卫</option>
-              <option value="叶三东">叶三东</option>
-              <option value="周才贵">周才贵</option>
-              <option value="程名高">程名高</option>
-              <option value="邓小华">邓小华</option>
-              <option value="周成友">周成友</option>
-              <option value="危红卫">危红卫</option>
-              <option value="方超">方超</option>
-              <option value="曹红英">曹红英</option>
-              <option value="崔新根">崔新根</option>
-              <option value="超级用户">超级用户</option>
+            <label>领用类型</label>
+            <select id="outboundUseType">
+              <option value="plot">地块作业</option>
+              <option value="maintain">设备维护</option>
+              <option value="transfer">外部调拨</option>
+              <option value="other">其他</option>
             </select>
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>关联地块</label>
+            <select id="outboundPlot">
+              <option value="">不关联</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>关联农事任务</label>
+            <input type="text" id="outboundTask" placeholder="如 病虫害防治-T028">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>单价(元)</label>
+            <input type="number" id="outboundPrice" placeholder="请输入单价" min="0" step="0.01">
+          </div>
+          <div class="form-item">
+            <label>金额(元)</label>
+            <input type="text" id="outboundAmount" placeholder="自动计算" readonly>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>批次号</label>
+            <input type="text" id="outboundBatchNo" placeholder="如 B20261028">
+          </div>
+          <div class="form-item">
+            <label>日期</label>
+            <input type="date" id="outboundDate">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>来源单据号</label>
+            <input type="text" id="outboundSourceNo" placeholder="领用单 / 调拨单号">
+          </div>
+          <div class="form-item">
+            <label>发票号</label>
+            <input type="text" id="outboundInvoiceNo" placeholder="如 FP-20261109-001">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>税率</label>
+            <select id="outboundTaxRate">
+              <option value="0">0</option>
+              <option value="6">6%</option>
+              <option value="9">9%</option>
+              <option value="13">13%</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>付款状态</label>
+            <select id="outboundPayStatus">
+              <option value="未付款">未付款</option>
+              <option value="部分付款">部分付款</option>
+              <option value="已付款">已付款</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-item" style="margin-bottom:16px;">
+          <label>经手人</label>
+          <select id="outboundOperator">
+            <option value="">请选择经手人</option>
+            <option value="惠加宁">惠加宁</option>
+            <option value="黄忠坚">黄忠坚</option>
+            <option value="徐水应">徐水应</option>
+            <option value="朱泉龙">朱泉龙</option>
+            <option value="陈小忠">陈小忠</option>
+            <option value="廖春亮">廖春亮</option>
+            <option value="李建明">李建明</option>
+            <option value="李根">李根</option>
+            <option value="张才孙">张才孙</option>
+            <option value="刘全国">刘全国</option>
+            <option value="毛定卫">毛定卫</option>
+            <option value="叶三东">叶三东</option>
+            <option value="周才贵">周才贵</option>
+            <option value="程名高">程名高</option>
+            <option value="邓小华">邓小华</option>
+            <option value="周成友">周成友</option>
+            <option value="危红卫">危红卫</option>
+            <option value="方超">方超</option>
+            <option value="曹红英">曹红英</option>
+            <option value="崔新根">崔新根</option>
+            <option value="超级用户">超级用户</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>审核人</label>
+            <input type="text" id="outboundReviewer" placeholder="审核后自动回填" readonly>
+          </div>
+          <div class="form-item">
+            <label>审核时间</label>
+            <input type="text" id="outboundReviewTime" placeholder="审核后自动回填" readonly>
+          </div>
+        </div>
+        <div class="form-item" style="margin-bottom:16px;">
+          <label>用途（补充说明）</label>
+          <textarea id="outboundPurpose" placeholder="请输入结构化领用信息之外的补充说明"></textarea>
+        </div>
         <div class="form-item">
-          <label>用途</label>
-          <textarea id="outboundPurpose" placeholder="请输入出库用途"></textarea>
+          <label>备注</label>
+          <textarea id="outboundRemark" placeholder="请输入备注"></textarea>
         </div>
       </form>
     </div>
@@ -564,12 +779,84 @@
           <span class="detail-value" id="viewQty">-</span>
         </div>
         <div class="detail-row">
+          <span class="detail-label">供应商</span>
+          <span class="detail-value" id="viewSupplier">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">采购单号</span>
+          <span class="detail-value" id="viewPurchaseCode">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">单价 / 金额</span>
+          <span class="detail-value" id="viewPrice">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">批次号</span>
+          <span class="detail-value" id="viewBatchNo">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">生产日期</span>
+          <span class="detail-value" id="viewProdDate">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">有效期至</span>
+          <span class="detail-value" id="viewExpireDate">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">质检结果</span>
+          <span class="detail-value" id="viewQc">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">领用类型</span>
+          <span class="detail-value" id="viewUseType">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">关联地块</span>
+          <span class="detail-value" id="viewPlot">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">关联农事任务</span>
+          <span class="detail-value" id="viewTask">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">审核状态</span>
+          <span class="detail-value" id="viewAudit">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">审核人</span>
+          <span class="detail-value" id="viewReviewer">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">审核时间</span>
+          <span class="detail-value" id="viewReviewTime">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">来源单据号</span>
+          <span class="detail-value" id="viewSourceNo">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">发票号</span>
+          <span class="detail-value" id="viewInvoiceNo">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">税率</span>
+          <span class="detail-value" id="viewTaxRate">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">付款状态</span>
+          <span class="detail-value" id="viewPayStatus">-</span>
+        </div>
+        <div class="detail-row">
           <span class="detail-label">经手人</span>
           <span class="detail-value" id="viewOperator">-</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">日期</span>
           <span class="detail-value" id="viewDate">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">用途说明</span>
+          <span class="detail-value" id="viewPurpose">-</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">备注</span>
@@ -722,32 +1009,106 @@
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->
 <script src="js/material-store.js"></script>
 <script>
-// 出入库数据
+// ====== 统一字典 ======
+// 仓库
+const WAREHOUSE_NAME = { center: '中心仓库', east: '东区仓库', west: '西区仓库' };
+// 单据审核状态：待审核 / 已审核 / 已驳回 / 已作废
+const AUDIT_STATUS = {
+  pending:  { text: '待审核', cls: 'pending' },
+  approved: { text: '已审核', cls: 'approved' },
+  rejected: { text: '已驳回', cls: 'rejected' },
+  void:     { text: '已作废', cls: 'disabled' }
+};
+// 供应商字典（与农资供应商页保持一致）
+const IO_SUPPLIERS = ['甘肃化肥厂', '青岛农药公司', '天水有机肥厂', '临沂工具厂', '济南农化公司', '青海钾肥厂', '潍坊农药厂', '台州喷雾器厂', '甘肃土壤科技'];
+
+// 出入库数据（金额由 单价×数量 统一计算，保证账实一致）
 const ioData = [
-  {"id":"1","code":"IO-20260920001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"in","typeText":"入库","material":"NPK复合肥","qty":"50","unit":"袋","operator":"惠加宁","date":"2026-09-20 09:30","remark":"常规入库"},
-  {"id":"2","code":"IO-20260919001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"out","typeText":"出库","material":"高效杀虫剂","qty":"30","unit":"瓶","operator":"黄忠坚","date":"2026-09-19 14:20","remark":"果园病虫害防治"},
-  {"id":"3","code":"IO-20260918001","warehouse":"二号仓库","warehouseCode":"warehouse2","type":"in","typeText":"入库","material":"有机肥料","qty":"100","unit":"袋","operator":"徐水应","date":"2026-09-18 10:15","remark":"秋季施肥"},
-  {"id":"4","code":"IO-20260917001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"out","typeText":"出库","material":"杀菌剂","qty":"20","unit":"瓶","operator":"惠加宁","date":"2026-09-17 16:00","remark":"病害防治"},
-  {"id":"5","code":"IO-20260916001","warehouse":"二号仓库","warehouseCode":"warehouse2","type":"in","typeText":"入库","material":"修枝剪","qty":"15","unit":"把","operator":"朱泉龙","date":"2026-09-16 11:30","remark":"采购"},
-  {"id":"6","code":"IO-20260915001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"out","typeText":"出库","material":"磷酸二铵","qty":"50","unit":"袋","operator":"黄忠坚","date":"2026-09-15 08:45","remark":"追肥"},
-  {"id":"7","code":"IO-20260914001","warehouse":"二号仓库","warehouseCode":"warehouse2","type":"in","typeText":"入库","material":"除草剂","qty":"80","unit":"瓶","operator":"陈小忠","date":"2026-09-14 13:20","remark":"采购"},
-  {"id":"8","code":"IO-20260913001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"out","typeText":"出库","material":"授粉器","qty":"10","unit":"个","operator":"廖春亮","date":"2026-09-13 15:10","remark":"授粉作业"},
-  {"id":"9","code":"IO-20260912001","warehouse":"二号仓库","warehouseCode":"warehouse2","type":"in","typeText":"入库","material":"钾肥","qty":"60","unit":"袋","operator":"李建明","date":"2026-09-12 09:00","remark":"采购"},
-  {"id":"10","code":"IO-20260911001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"out","typeText":"出库","material":"杀螨剂","qty":"25","unit":"瓶","operator":"李根","date":"2026-09-11 11:45","remark":"螨虫防治"},
-  {"id":"11","code":"IO-20260910001","warehouse":"二号仓库","warehouseCode":"warehouse2","type":"in","typeText":"入库","material":"嫁接刀","qty":"30","unit":"把","operator":"张才孙","date":"2026-09-10 14:30","remark":"采购"},
-  {"id":"12","code":"IO-20260909001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"out","typeText":"出库","material":"尿素","qty":"100","unit":"袋","operator":"刘全国","date":"2026-09-09 08:30","remark":"追肥"},
-  {"id":"13","code":"IO-20260908001","warehouse":"二号仓库","warehouseCode":"warehouse2","type":"in","typeText":"入库","material":"保鲜剂","qty":"50","unit":"瓶","operator":"毛定卫","date":"2026-09-08 10:20","remark":"采购"},
-  {"id":"14","code":"IO-20260907001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"out","typeText":"出库","material":"喷雾器","qty":"20","unit":"个","operator":"叶三东","date":"2026-09-07 16:15","remark":"喷洒作业"},
-  {"id":"15","code":"IO-20260906001","warehouse":"二号仓库","warehouseCode":"warehouse2","type":"in","typeText":"入库","material":"微量元素肥","qty":"80","unit":"袋","operator":"周才贵","date":"2026-09-06 09:45","remark":"采购"},
-  {"id":"16","code":"IO-20260905001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"out","typeText":"出库","material":"生物农药","qty":"15","unit":"瓶","operator":"程名高","date":"2026-09-05 13:00","remark":"生物防治"},
-  {"id":"17","code":"IO-20260904001","warehouse":"二号仓库","warehouseCode":"warehouse2","type":"in","typeText":"入库","material":"绑枝机","qty":"40","unit":"个","operator":"邓小华","date":"2026-09-04 11:20","remark":"采购"},
-  {"id":"18","code":"IO-20260903001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"out","typeText":"出库","material":"叶面肥","qty":"60","unit":"瓶","operator":"周成友","date":"2026-09-03 08:00","remark":"叶面喷施"},
-  {"id":"19","code":"IO-20260902001","warehouse":"二号仓库","warehouseCode":"warehouse2","type":"in","typeText":"入库","material":"生长调节剂","qty":"30","unit":"瓶","operator":"危红卫","date":"2026-09-02 14:45","remark":"采购"},
-  {"id":"20","code":"IO-20260901001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"out","typeText":"出库","material":"杀虫灯","qty":"8","unit":"盏","operator":"方超","date":"2026-09-01 10:30","remark":"虫害防治"},
-  {"id":"21","code":"IO-20260930001","warehouse":"二号仓库","warehouseCode":"warehouse2","type":"in","typeText":"入库","material":"钙肥","qty":"70","unit":"袋","operator":"曹红英","date":"2026-09-30 09:15","remark":"采购"},
-  {"id":"22","code":"IO-20260929001","warehouse":"一号仓库","warehouseCode":"warehouse1","type":"out","typeText":"出库","material":"土壤改良剂","qty":"40","unit":"袋","operator":"崔新根","date":"2026-09-29 15:00","remark":"土壤改良"},
-  {"id":"23","code":"IO-20260928001","warehouse":"二号仓库","warehouseCode":"warehouse2","type":"in","typeText":"入库","material":"疏花疏果剪","qty":"25","unit":"把","operator":"惠加宁","date":"2026-09-28 11:30","remark":"采购"}
+  {"id":"1","code":"IO-20261103001","warehouse":"中心仓库","warehouseCode":"center","type":"in","typeText":"入库","material":"NPK复合肥","supplier":"甘肃化肥厂","qty":"50","unit":"袋","price":128,"batchNo":"B20261028","prodDate":"2026-10-20","expireDate":"2028-10-19","plot":"","task":"","auditStatus":"approved","operator":"惠加宁","date":"2026-11-03 09:30","remark":"常规入库","purchaseCode":"CG-20261028-01","qc":"合格","useType":"","useTypeText":"","purpose":""},
+  {"id":"2","code":"IO-20261102001","warehouse":"东区仓库","warehouseCode":"east","type":"out","typeText":"出库","material":"高效杀虫剂","supplier":"青岛农药公司","qty":"12","unit":"瓶","price":45,"batchNo":"B20260915","prodDate":"2026-03-15","expireDate":"2027-03-14","plot":"D-003","task":"病虫害防治-T028","auditStatus":"pending","operator":"黄忠坚","date":"2026-11-02 14:20","remark":"果园蚜虫防治","purchaseCode":"","qc":"","useType":"plot","useTypeText":"地块作业","purpose":"蚜虫高发期集中喷施"},
+  {"id":"3","code":"IO-20261101001","warehouse":"西区仓库","warehouseCode":"west","type":"in","typeText":"入库","material":"有机肥料","supplier":"天水有机肥厂","qty":"100","unit":"袋","price":36,"batchNo":"B20261018","prodDate":"2026-10-10","expireDate":"2028-10-09","plot":"","task":"","auditStatus":"pending","operator":"徐水应","date":"2026-11-01 10:15","remark":"秋施基肥","purchaseCode":"CG-20261030-02","qc":"待检","useType":"","useTypeText":"","purpose":""},
+  {"id":"4","code":"IO-20261030001","warehouse":"中心仓库","warehouseCode":"center","type":"out","typeText":"出库","material":"杀菌剂","supplier":"潍坊农药厂","qty":"20","unit":"瓶","price":32,"batchNo":"B20260820","prodDate":"2026-02-20","expireDate":"2027-02-19","plot":"D-007","task":"清园消杀-T031","auditStatus":"approved","operator":"惠加宁","date":"2026-10-30 16:00","remark":"病害防治","purchaseCode":"","qc":"","useType":"plot","useTypeText":"地块作业","purpose":"采收后清园"},
+  {"id":"5","code":"IO-20261029001","warehouse":"东区仓库","warehouseCode":"east","type":"in","typeText":"入库","material":"修枝剪","supplier":"临沂工具厂","qty":"15","unit":"把","price":68,"batchNo":"","prodDate":"","expireDate":"","plot":"","task":"","auditStatus":"approved","operator":"朱泉龙","date":"2026-10-29 11:30","remark":"工具采购","purchaseCode":"CG-20261025-03","qc":"合格","useType":"","useTypeText":"","purpose":""},
+  {"id":"6","code":"IO-20261028001","warehouse":"西区仓库","warehouseCode":"west","type":"out","typeText":"出库","material":"磷酸二铵","supplier":"甘肃化肥厂","qty":"30","unit":"袋","price":156,"batchNo":"B20260910","prodDate":"2026-09-01","expireDate":"2028-08-31","plot":"D-012","task":"追肥作业-T035","auditStatus":"rejected","operator":"黄忠坚","date":"2026-10-28 08:45","remark":"领用数量超计划，已驳回","purchaseCode":"","qc":"","useType":"plot","useTypeText":"地块作业","purpose":"秋梢追肥"},
+  {"id":"7","code":"IO-20261027001","warehouse":"中心仓库","warehouseCode":"center","type":"in","typeText":"入库","material":"除草剂","supplier":"青岛农药公司","qty":"80","unit":"瓶","price":22,"batchNo":"B20260905","prodDate":"2026-04-05","expireDate":"2027-04-04","plot":"","task":"","auditStatus":"approved","operator":"陈小忠","date":"2026-10-27 13:20","remark":"采购入库","purchaseCode":"CG-20261020-04","qc":"合格","useType":"","useTypeText":"","purpose":""},
+  {"id":"8","code":"IO-20261026001","warehouse":"东区仓库","warehouseCode":"east","type":"out","typeText":"出库","material":"授粉器","supplier":"台州喷雾器厂","qty":"10","unit":"个","price":95,"batchNo":"","prodDate":"","expireDate":"","plot":"D-015","task":"人工授粉-T040","auditStatus":"approved","operator":"廖春亮","date":"2026-10-26 15:10","remark":"授粉作业","purchaseCode":"","qc":"","useType":"plot","useTypeText":"地块作业","purpose":"花期人工辅助授粉"},
+  {"id":"9","code":"IO-20261025001","warehouse":"西区仓库","warehouseCode":"west","type":"in","typeText":"入库","material":"钾肥","supplier":"青海钾肥厂","qty":"60","unit":"袋","price":175,"batchNo":"B20260901","prodDate":"2026-08-20","expireDate":"2028-08-19","plot":"","task":"","auditStatus":"approved","operator":"李建明","date":"2026-10-25 09:00","remark":"采购入库","purchaseCode":"CG-20261015-05","qc":"合格","useType":"","useTypeText":"","purpose":""},
+  {"id":"10","code":"IO-20261024001","warehouse":"中心仓库","warehouseCode":"center","type":"out","typeText":"出库","material":"杀螨剂","supplier":"潍坊农药厂","qty":"25","unit":"瓶","price":38,"batchNo":"B20260706","prodDate":"2026-01-06","expireDate":"2027-01-05","plot":"D-002","task":"红蜘蛛防治-T044","auditStatus":"pending","operator":"李根","date":"2026-10-24 11:45","remark":"螨虫防治","purchaseCode":"","qc":"","useType":"plot","useTypeText":"地块作业","purpose":"红蜘蛛点片发生区域施药"},
+  {"id":"11","code":"IO-20261023001","warehouse":"东区仓库","warehouseCode":"east","type":"in","typeText":"入库","material":"嫁接刀","supplier":"临沂工具厂","qty":"30","unit":"把","price":42,"batchNo":"","prodDate":"","expireDate":"","plot":"","task":"","auditStatus":"approved","operator":"张才孙","date":"2026-10-23 14:30","remark":"工具采购","purchaseCode":"CG-20261018-06","qc":"合格","useType":"","useTypeText":"","purpose":""},
+  {"id":"12","code":"IO-20261022001","warehouse":"西区仓库","warehouseCode":"west","type":"out","typeText":"出库","material":"尿素","supplier":"甘肃化肥厂","qty":"100","unit":"袋","price":118,"batchNo":"B20260815","prodDate":"2026-08-01","expireDate":"2028-07-31","plot":"D-005","task":"追肥作业-T048","auditStatus":"void","operator":"刘全国","date":"2026-10-22 08:30","remark":"重复登记，已作废","purchaseCode":"","qc":"","useType":"plot","useTypeText":"地块作业","purpose":"秋施追肥（重复单据）"},
+  {"id":"13","code":"IO-20261021001","warehouse":"中心仓库","warehouseCode":"center","type":"in","typeText":"入库","material":"苹果砧木种子","supplier":"甘肃土壤科技","qty":"20","unit":"袋","price":210,"batchNo":"B20260920","prodDate":"2026-09-20","expireDate":"2027-09-19","plot":"","task":"","auditStatus":"approved","operator":"毛定卫","date":"2026-10-21 10:20","remark":"种子采购","purchaseCode":"CG-20260910-07","qc":"合格","useType":"","useTypeText":"","purpose":""},
+  {"id":"14","code":"IO-20261020001","warehouse":"东区仓库","warehouseCode":"east","type":"out","typeText":"出库","material":"喷雾器","supplier":"台州喷雾器厂","qty":"5","unit":"个","price":120,"batchNo":"","prodDate":"","expireDate":"","plot":"D-018","task":"设备维护-T052","auditStatus":"rejected","operator":"叶三东","date":"2026-10-20 16:15","remark":"设备库存不足，已驳回","purchaseCode":"","qc":"","useType":"maintain","useTypeText":"设备维护","purpose":"替换东区损坏喷雾器"}
 ];
+ioData.forEach(function (r) {
+  r.amount = (Number(r.price) * Number(r.qty)).toFixed(2);
+});
+
+// ====== 新增字段默认值（mock 14 条统一补齐） ======
+const IO_TAX_RATES = [13, 9, 6, 0];
+const IO_PAY_STATUS = ['已付款', '部分付款', '未付款'];
+const IO_REVIEWERS = ['崔新根', '超级用户', '管理员'];
+const REVIEW_DATE = '2026-11-09';
+
+ioData.forEach(function (r, idx) {
+  const day = String(r.date || '').slice(0, 10).replace(/-/g, '');
+  const seq = String(idx + 1).padStart(3, '0');
+  if (!r.sourceNo) {
+    r.sourceNo = r.type === 'in'
+      ? (r.purchaseCode || ('CG-' + day + '-' + seq))
+      : (r.useType === 'transfer' ? 'DC-' : 'LY-') + day + '-' + seq;
+  }
+  if (r.invoiceNo === undefined) {
+    r.invoiceNo = r.type === 'in' ? ('FP-' + day + '-' + seq) : '';
+  }
+  if (r.taxRate === undefined) r.taxRate = IO_TAX_RATES[idx % IO_TAX_RATES.length];
+  if (!r.payStatus) r.payStatus = IO_PAY_STATUS[idx % IO_PAY_STATUS.length];
+  if (r.auditStatus === 'approved') {
+    if (!r.reviewer) r.reviewer = IO_REVIEWERS[idx % IO_REVIEWERS.length];
+    if (!r.reviewTime) r.reviewTime = String(r.date || '').slice(0, 10);
+  } else {
+    if (!r.reviewer) r.reviewer = '';
+    if (!r.reviewTime) r.reviewTime = '';
+  }
+});
+
+// 税率展示：0 显示“0”，其余显示百分比
+function taxRateText(rate) {
+  const n = Number(rate);
+  return n ? n + '%' : '0';
+}
+
+// 付款状态标签样式
+function payStatusClass(payStatus) {
+  if (payStatus === '已付款') return 'normal';
+  if (payStatus === '部分付款') return 'warning';
+  return 'pending';
+}
+
+// 当前登录用户名（sessionStorage.snzg_user），取不到时回退“管理员”
+function currentUserName() {
+  try {
+    const raw = sessionStorage.getItem('snzg_user');
+    if (raw) {
+      const u = JSON.parse(raw);
+      return (u && (u.username || u.realName || u.name)) || '管理员';
+    }
+  } catch (e) { /* 忽略解析异常 */ }
+  return '管理员';
+}
+
+// 关联地块/任务展示
+function relText(item) {
+  const parts = [];
+  if (item.plot) parts.push(item.plot);
+  if (item.task) parts.push(item.task);
+  return parts.length ? parts.join(' / ') : '-';
+}
+
+// CSV 单元格转义
+function csvCell(value) {
+  const s = (value === undefined || value === null) ? '' : String(value);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
 
 // 当前页面、每页条数、总条数、总页数
 let currentPage = 1;
@@ -781,6 +1142,18 @@ function init() {
   renderPagination();
   bindEvents();
   populateMaterialSelect();
+  populateSupplierSelect();
+  populatePlotSelect();
+}
+
+// 宽表精简 / 全部字段切换（默认精简）
+let denseView = true;
+function toggleDenseView() {
+  denseView = !denseView;
+  const section = document.querySelector('.data-section');
+  if (section) section.classList.toggle('dense-view', denseView);
+  const btn = document.getElementById('denseToggleBtn');
+  if (btn) btn.textContent = denseView ? '显示全部字段' : '精简字段';
 }
 
 // 渲染表格
@@ -790,6 +1163,15 @@ function renderTable() {
   const pageData = filteredData.slice(start, end);
   
   tableBody.innerHTML = pageData.map((item, __seq) => {
+    const st = AUDIT_STATUS[item.auditStatus] || AUDIT_STATUS.pending;
+    let auditBtns = '';
+    if (item.auditStatus === 'pending') {
+      auditBtns = `
+        <button class="action-btn approve" onclick="approveRecord('${item.id}')">审核通过</button>
+        <button class="action-btn reject" onclick="rejectRecord('${item.id}')">驳回</button>`;
+    } else if (item.auditStatus === 'approved') {
+      auditBtns = `<button class="action-btn void" onclick="voidRecord('${item.id}')">作废</button>`;
+    }
     return `
       <tr>
         <td>${start + __seq + 1}</td>
@@ -797,13 +1179,26 @@ function renderTable() {
         <td>${item.warehouse}</td>
         <td><span class="status-tag ${item.type === 'in' ? 'normal' : 'out'}">${item.typeText}</span></td>
         <td>${item.material}</td>
-        <td class="text-right">${item.qty}${item.unit}</td>
-        <td>${item.operator}</td>
+        <td>${item.supplier || '-'}</td>
+        <td class="text-right">${item.qty}</td>
+        <td>${item.unit}</td>
+        <td class="text-right">${Number(item.price).toFixed(2)}</td>
+        <td class="text-right">${Number(item.amount).toFixed(2)}</td>
+        <td class="col-extra">${item.batchNo || '-'}</td>
+        <td class="col-extra">${item.expireDate || '-'}</td>
+        <td class="col-extra">${relText(item)}</td>
+        <td><span class="status-tag ${st.cls}">${st.text}</span></td>
+        <td>${item.reviewer || '-'}</td>
+        <td class="col-extra">${item.sourceNo || '-'}${item.invoiceNo ? '<div style="font-size:12px;color:var(--text-tertiary);">发票 ' + item.invoiceNo + '</div>' : ''}</td>
+        <td><span class="status-tag ${payStatusClass(item.payStatus)}">${item.payStatus || '-'}</span></td>
+        <td>${item.operator || '-'}</td>
         <td>${item.date}</td>
+        <td class="col-extra">${item.remark || '-'}</td>
         <td>
           <div class="action-btns">
-            <button class="action-btn export" onclick="exportMaterial('${item.id}')">导出</button>
             <button class="action-btn detail" onclick="viewDetail('${item.id}')">详情</button>
+            ${auditBtns}
+            <button class="action-btn export" onclick="exportMaterial('${item.id}')">导出</button>
             <button class="action-btn download" onclick="downloadRecord('${item.id}')">下载</button>
           </div>
         </td>
@@ -878,7 +1273,8 @@ function search() {
     let match = true;
     
     if (keyword) {
-      match = match && item.code.toLowerCase().includes(keyword);
+      const haystack = [item.code, item.supplier, item.batchNo, item.material].join(' ').toLowerCase();
+      match = match && haystack.indexOf(keyword) > -1;
     }
     if (warehouse) {
       match = match && item.warehouseCode === warehouse;
@@ -924,6 +1320,20 @@ function bindEvents() {
   inboundBtn.addEventListener('click', openInboundModal);
   outboundBtn.addEventListener('click', openOutboundModal);
   exportBtn.addEventListener('click', openExportModal);
+
+  // 金额自动 = 单价 × 数量
+  bindAmountCalc('inboundQty', 'inboundPrice', 'inboundAmount');
+  bindAmountCalc('outboundQty', 'outboundPrice', 'outboundAmount');
+
+  // 选择农资后自动带出单位
+  document.getElementById('inboundMaterial').addEventListener('change', function() {
+    const m = MaterialStore.get(this.value);
+    document.getElementById('inboundUnit').value = m ? m.unit : '';
+  });
+  document.getElementById('outboundMaterial').addEventListener('change', function() {
+    const m = MaterialStore.get(this.value);
+    document.getElementById('outboundUnit').value = m ? m.unit : '';
+  });
   
   // 点击遮罩层关闭弹窗
   inboundModal.addEventListener('click', function(e) {
@@ -966,14 +1376,66 @@ function populateMaterialSelect() {
   });
 }
 
+// 填充供应商下拉（与供应商页同名）
+function populateSupplierSelect() {
+  const select = document.getElementById('inboundSupplier');
+  IO_SUPPLIERS.forEach(function(name) {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    select.appendChild(option);
+  });
+}
+
+// 填充关联地块 D-001 ~ D-020
+function populatePlotSelect() {
+  const select = document.getElementById('outboundPlot');
+  for (let i = 1; i <= 20; i++) {
+    const code = 'D-' + String(i).padStart(3, '0');
+    const option = document.createElement('option');
+    option.value = code;
+    option.textContent = code;
+    select.appendChild(option);
+  }
+}
+
+// 金额自动计算：金额 = 单价 × 数量
+function bindAmountCalc(qtyId, priceId, amountId) {
+  const qtyInput = document.getElementById(qtyId);
+  const priceInput = document.getElementById(priceId);
+  const amountInput = document.getElementById(amountId);
+  const calc = function() {
+    const qty = parseFloat(qtyInput.value) || 0;
+    const price = parseFloat(priceInput.value) || 0;
+    amountInput.value = (qty > 0 && price > 0) ? (qty * price).toFixed(2) : '';
+  };
+  qtyInput.addEventListener('input', calc);
+  priceInput.addEventListener('input', calc);
+}
+
 // 打开入库弹窗
 function openInboundModal() {
   document.getElementById('inboundCode').value = 'IO-' + Date.now().toString(36).toUpperCase();
-  document.getElementById('inboundWarehouse').value = 'warehouse1';
+  document.getElementById('inboundWarehouse').value = 'center';
   document.getElementById('inboundMaterial').value = '';
+  document.getElementById('inboundSupplier').value = '';
+  document.getElementById('inboundPurchaseCode').value = '';
+  document.getElementById('inboundBatchNo').value = '';
   document.getElementById('inboundQty').value = '';
+  document.getElementById('inboundUnit').value = '';
+  document.getElementById('inboundPrice').value = '';
+  document.getElementById('inboundAmount').value = '';
+  document.getElementById('inboundProdDate').value = '';
+  document.getElementById('inboundExpireDate').value = '';
+  document.getElementById('inboundQc').value = '合格';
   document.getElementById('inboundDate').value = new Date().toISOString().split('T')[0];
   document.getElementById('inboundOperator').value = '';
+  document.getElementById('inboundSourceNo').value = '';
+  document.getElementById('inboundInvoiceNo').value = '';
+  document.getElementById('inboundTaxRate').value = '0';
+  document.getElementById('inboundPayStatus').value = '未付款';
+  document.getElementById('inboundReviewer').value = '';
+  document.getElementById('inboundReviewTime').value = '';
   document.getElementById('inboundRemark').value = '';
   inboundModal.classList.add('show');
 }
@@ -1003,6 +1465,7 @@ function saveInbound() {
   const qty = document.getElementById('inboundQty').value;
   const warehouseSel = document.getElementById('inboundWarehouse');
   const date = document.getElementById('inboundDate').value;
+  const price = parseFloat(document.getElementById('inboundPrice').value) || 0;
 
   if (!material) {
     alert('请选择农资');
@@ -1024,20 +1487,40 @@ function saveInbound() {
   ioData.unshift({
     id: String(Date.now()),
     code: genIoCode(date),
-    warehouse: warehouseSel.options[warehouseSel.selectedIndex].text,
+    warehouse: WAREHOUSE_NAME[warehouseSel.value] || warehouseSel.options[warehouseSel.selectedIndex].text,
     warehouseCode: warehouseSel.value,
     type: 'in',
     typeText: '入库',
     material: material,
+    supplier: document.getElementById('inboundSupplier').value || '-',
     qty: String(qty),
-    unit: m ? m.unit : '',
+    unit: m ? m.unit : document.getElementById('inboundUnit').value,
+    price: price,
+    amount: (price * Number(qty)).toFixed(2),
+    batchNo: document.getElementById('inboundBatchNo').value,
+    prodDate: document.getElementById('inboundProdDate').value,
+    expireDate: document.getElementById('inboundExpireDate').value,
+    plot: '',
+    task: '',
+    auditStatus: 'pending',
     operator: document.getElementById('inboundOperator').value,
     date: (date || new Date().toISOString().split('T')[0]) + ' ' + nowTime(),
-    remark: document.getElementById('inboundRemark').value || '入库登记'
+    remark: document.getElementById('inboundRemark').value || '入库登记',
+    purchaseCode: document.getElementById('inboundPurchaseCode').value,
+    qc: document.getElementById('inboundQc').value,
+    sourceNo: document.getElementById('inboundSourceNo').value || document.getElementById('inboundPurchaseCode').value || '',
+    invoiceNo: document.getElementById('inboundInvoiceNo').value || '',
+    taxRate: Number(document.getElementById('inboundTaxRate').value) || 0,
+    payStatus: document.getElementById('inboundPayStatus').value || '未付款',
+    reviewer: '',
+    reviewTime: '',
+    useType: '',
+    useTypeText: '',
+    purpose: ''
   });
   ioData.sort((a, b) => b.date.localeCompare(a.date));
 
-  alert('入库登记成功，库存已增加');
+  alert('入库登记成功，库存已增加，单据待审核');
   closeInboundModal();
   search();
 }
@@ -1045,12 +1528,26 @@ function saveInbound() {
 // 打开出库弹窗
 function openOutboundModal() {
   document.getElementById('outboundCode').value = 'IO-' + Date.now().toString(36).toUpperCase();
-  document.getElementById('outboundWarehouse').value = 'warehouse1';
+  document.getElementById('outboundWarehouse').value = 'center';
   document.getElementById('outboundMaterial').value = '';
   document.getElementById('outboundQty').value = '';
+  document.getElementById('outboundUnit').value = '';
+  document.getElementById('outboundUseType').value = 'plot';
+  document.getElementById('outboundPlot').value = '';
+  document.getElementById('outboundTask').value = '';
+  document.getElementById('outboundPrice').value = '';
+  document.getElementById('outboundAmount').value = '';
+  document.getElementById('outboundBatchNo').value = '';
   document.getElementById('outboundDate').value = new Date().toISOString().split('T')[0];
   document.getElementById('outboundOperator').value = '';
+  document.getElementById('outboundSourceNo').value = '';
+  document.getElementById('outboundInvoiceNo').value = '';
+  document.getElementById('outboundTaxRate').value = '0';
+  document.getElementById('outboundPayStatus').value = '未付款';
+  document.getElementById('outboundReviewer').value = '';
+  document.getElementById('outboundReviewTime').value = '';
   document.getElementById('outboundPurpose').value = '';
+  document.getElementById('outboundRemark').value = '';
   outboundModal.classList.add('show');
 }
 
@@ -1065,6 +1562,8 @@ function saveOutbound() {
   const qty = document.getElementById('outboundQty').value;
   const warehouseSel = document.getElementById('outboundWarehouse');
   const date = document.getElementById('outboundDate').value;
+  const price = parseFloat(document.getElementById('outboundPrice').value) || 0;
+  const useTypeSel = document.getElementById('outboundUseType');
 
   if (!material) {
     alert('请选择农资');
@@ -1086,35 +1585,107 @@ function saveOutbound() {
   ioData.unshift({
     id: String(Date.now()),
     code: genIoCode(date),
-    warehouse: warehouseSel.options[warehouseSel.selectedIndex].text,
+    warehouse: WAREHOUSE_NAME[warehouseSel.value] || warehouseSel.options[warehouseSel.selectedIndex].text,
     warehouseCode: warehouseSel.value,
     type: 'out',
     typeText: '出库',
     material: material,
+    supplier: '',
     qty: String(qty),
-    unit: m ? m.unit : '',
+    unit: m ? m.unit : document.getElementById('outboundUnit').value,
+    price: price,
+    amount: (price * Number(qty)).toFixed(2),
+    batchNo: document.getElementById('outboundBatchNo').value,
+    prodDate: '',
+    expireDate: '',
+    plot: document.getElementById('outboundPlot').value,
+    task: document.getElementById('outboundTask').value,
+    auditStatus: 'pending',
     operator: document.getElementById('outboundOperator').value,
     date: (date || new Date().toISOString().split('T')[0]) + ' ' + nowTime(),
-    remark: document.getElementById('outboundPurpose').value || '出库登记'
+    remark: document.getElementById('outboundRemark').value || '出库登记',
+    purchaseCode: '',
+    qc: '',
+    sourceNo: document.getElementById('outboundSourceNo').value || '',
+    invoiceNo: document.getElementById('outboundInvoiceNo').value || '',
+    taxRate: Number(document.getElementById('outboundTaxRate').value) || 0,
+    payStatus: document.getElementById('outboundPayStatus').value || '未付款',
+    reviewer: '',
+    reviewTime: '',
+    useType: useTypeSel.value,
+    useTypeText: useTypeSel.options[useTypeSel.selectedIndex].text,
+    purpose: document.getElementById('outboundPurpose').value
   });
   ioData.sort((a, b) => b.date.localeCompare(a.date));
 
-  alert('出库登记成功，库存已扣减');
+  alert('出库登记成功，库存已扣减，单据待审核');
   closeOutboundModal();
   search();
+}
+
+// 审核通过
+function approveRecord(id) {
+  const item = ioData.find(i => i.id === id);
+  if (!item || item.auditStatus !== 'pending') return;
+  item.auditStatus = 'approved';
+  item.reviewer = currentUserName();
+  item.reviewTime = REVIEW_DATE;
+  renderTable();
+  if (typeof Toast !== 'undefined') Toast.success('单据 ' + item.code + ' 审核通过');
+  else alert('单据 ' + item.code + ' 审核通过');
+}
+
+// 驳回
+function rejectRecord(id) {
+  const item = ioData.find(i => i.id === id);
+  if (!item || item.auditStatus !== 'pending') return;
+  item.auditStatus = 'rejected';
+  renderTable();
+  if (typeof Toast !== 'undefined') Toast.warning('单据 ' + item.code + ' 已驳回');
+  else alert('单据 ' + item.code + ' 已驳回');
+}
+
+// 作废（仅已审核单据）
+function voidRecord(id) {
+  const item = ioData.find(i => i.id === id);
+  if (!item || item.auditStatus !== 'approved') return;
+  if (!confirm('确认作废单据 ' + item.code + ' 吗？作废后不可恢复。')) return;
+  item.auditStatus = 'void';
+  renderTable();
+  if (typeof Toast !== 'undefined') Toast.success('单据 ' + item.code + ' 已作废');
+  else alert('单据 ' + item.code + ' 已作废');
 }
 
 // 查看详情
 function viewDetail(id) {
   const item = ioData.find(i => i.id === id);
   if (item) {
+    const st = AUDIT_STATUS[item.auditStatus] || AUDIT_STATUS.pending;
     document.getElementById('viewCode').textContent = item.code;
     document.getElementById('viewWarehouse').textContent = item.warehouse;
     document.getElementById('viewType').textContent = item.typeText;
     document.getElementById('viewMaterial').textContent = item.material;
     document.getElementById('viewQty').textContent = item.qty + item.unit;
-    document.getElementById('viewOperator').textContent = item.operator;
+    document.getElementById('viewSupplier').textContent = item.supplier || '-';
+    document.getElementById('viewPurchaseCode').textContent = item.purchaseCode || '-';
+    document.getElementById('viewPrice').textContent = Number(item.price).toFixed(2) + ' 元 × ' + item.qty + item.unit + ' = ' + Number(item.amount).toFixed(2) + ' 元';
+    document.getElementById('viewBatchNo').textContent = item.batchNo || '-';
+    document.getElementById('viewProdDate').textContent = item.prodDate || '-';
+    document.getElementById('viewExpireDate').textContent = item.expireDate || '-';
+    document.getElementById('viewQc').textContent = item.qc || '-';
+    document.getElementById('viewUseType').textContent = item.useTypeText || '-';
+    document.getElementById('viewPlot').textContent = item.plot || '-';
+    document.getElementById('viewTask').textContent = item.task || '-';
+    document.getElementById('viewAudit').textContent = st.text;
+    document.getElementById('viewReviewer').textContent = item.reviewer || '-';
+    document.getElementById('viewReviewTime').textContent = item.reviewTime || '-';
+    document.getElementById('viewSourceNo').textContent = item.sourceNo || '-';
+    document.getElementById('viewInvoiceNo').textContent = item.invoiceNo || '-';
+    document.getElementById('viewTaxRate').textContent = taxRateText(item.taxRate);
+    document.getElementById('viewPayStatus').textContent = item.payStatus || '-';
+    document.getElementById('viewOperator').textContent = item.operator || '-';
     document.getElementById('viewDate').textContent = item.date;
+    document.getElementById('viewPurpose').textContent = item.purpose || '-';
     document.getElementById('viewRemark').textContent = item.remark || '-';
     viewModal.classList.add('show');
   }
@@ -1163,17 +1734,22 @@ function closeExportModal() {
 
 // 执行导出
 function doExport() {
-  const format = document.getElementById('exportFormat').value;
-  // 真实导出：将出入库记录序列化后触发 CSV 下载
-  const records = (window.ioRecords || []).map(function(r){
-    return [r.date, r.code, r.name, r.io, r.qty, r.unit, r.operator, r.remark].join(',');
+  // 表头与页面列表表头保持一致
+  const header = ['序号', '单号', '仓库', '类型', '农资名称', '供应商', '数量', '单位', '单价(元)', '金额(元)', '批次号', '有效期至', '关联地块/任务', '审核状态', '经手人', '日期', '备注'];
+  const records = filteredData.map(function(item, i) {
+    const st = AUDIT_STATUS[item.auditStatus] || AUDIT_STATUS.pending;
+    return [
+      i + 1, item.code, item.warehouse, item.typeText, item.material,
+      item.supplier || '', item.qty, item.unit, Number(item.price).toFixed(2),
+      Number(item.amount).toFixed(2), item.batchNo || '', item.expireDate || '',
+      relText(item), st.text, item.operator || '', item.date, item.remark || ''
+    ].map(csvCell).join(',');
   });
-  const header = '日期,编号,名称,类型,数量,单位,经办人,备注\n';
-  const csv = header + records.join('\n');
+  const csv = header.join(',') + '\n' + records.join('\n');
   const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `出入库记录_${new Date().toISOString().slice(0, 10)}.${format === 'excel' ? 'csv' : 'csv'}`;
+  a.download = `出入库记录_${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -1227,5 +1803,6 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="js/common-functions.js"></script>
   <script src="js/search-helper.js"></script>
   <script src="js/typography.js"></script>
+<script src="js/material-dict.js"></script>
 </body>
 </html>

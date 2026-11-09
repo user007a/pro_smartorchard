@@ -123,6 +123,37 @@
 
         <!-- ===== Tab 2：C 端溯源展示（T15） ===== -->
         <div class="tab-content" id="tab-cstage">
+          <!-- 展示与短链配置 -->
+          <div class="data-section" style="margin-bottom:16px;">
+            <div style="padding:16px 20px;">
+              <div style="font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:12px;">展示与短链配置</div>
+              <div style="display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:center;margin-bottom:12px;">
+                <label style="font-size:13px;color:var(--text-secondary);">短链域名</label>
+                <input type="text" id="cfgShortLink" class="search-input" style="width:320px;" placeholder="https://t.snzg.cn">
+              </div>
+              <div style="display:grid;grid-template-columns:120px 1fr;gap:12px;align-items:center;margin-bottom:12px;">
+                <label style="font-size:13px;color:var(--text-secondary);">基地视频地址</label>
+                <input type="text" id="cfgVideoUrl" class="search-input" style="width:480px;" placeholder="https://.../orchard.mp4（MP4 / HLS）">
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:20px;font-size:13px;color:var(--text-primary);margin-bottom:12px;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="cfgVr"> 展示基地 VR 实景</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="cfgVideo"> 展示基地视频</label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="cfgEnv"> 展示气象与土壤墒情</label>
+                <label style="display:flex;align-items:center;gap:6px;color:var(--text-tertiary);"><input type="checkbox" checked disabled> 展示检测报告（强制）</label>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                <span style="font-size:12px;color:var(--text-tertiary);">检测报告与农残检测为溯源合规必选项，不可关闭；短链用于二维码指向 H5 溯源页。</span>
+                <button class="jg-btn jg-btn-primary" onclick="saveDisplayConfig()">保存展示配置</button>
+              </div>
+              <div style="margin-top:14px;background:#f6faf6;border:1px dashed #cfe3d4;border-radius:8px;padding:12px 14px;font-size:13px;color:#5b6b5b;line-height:1.9;">
+                <div style="font-weight:600;color:#1f2e1f;margin-bottom:2px;">检测报告管控（只读）</div>
+                <div>• 每批次必须上传检测报告，且检测结论为“合格”</div>
+                <div>• 报告有效期必须覆盖采收日期；过期、撤销、缺失报告一律禁止生成追溯码</div>
+                <div>• 检测机构、报告编号、附件为必填项；CMA / CNAS 为选填，不作强制要求</div>
+              </div>
+            </div>
+          </div>
+
           <div class="data-section">
             <table class="data-table">
               <thead>
@@ -199,7 +230,7 @@
             <label class="module-tag"><input type="checkbox" value="修剪疏果">修剪疏果</label>
             <label class="module-tag"><input type="checkbox" value="套袋保护">套袋保护</label>
             <label class="module-tag"><input type="checkbox" value="施肥喷药" checked>施肥喷药</label>
-            <label class="module-tag"><input type="checkbox" value="农残检测" checked>农残检测</label>
+            <label class="module-tag"><input type="checkbox" value="农残检测" checked disabled>农残检测（强制）</label>
             <label class="module-tag"><input type="checkbox" value="采摘入库" checked>采摘入库</label>
             <label class="module-tag"><input type="checkbox" value="冷链配送" checked>冷链配送</label>
             <label class="module-tag"><input type="checkbox" value="企业认证">企业认证</label>
@@ -234,6 +265,7 @@
   <span id="toastMessage">操作成功</span>
 </div>
 
+<script src="js/shared/trace-store.js"></script>
 <script>
 // 企业主体（与企业管理 - 企业信息一致）
 const COMPANY_NAME = '天水花牛苹果（集团）有限责任公司';
@@ -415,6 +447,9 @@ function syncModuleTags(modules) {
   document.querySelectorAll('.module-tag input').forEach(cb => {
     cb.checked = modules.includes(cb.value);
   });
+  // 农残检测为强制模块，任何模板都必须展示
+  const forced = document.querySelector('.module-tag input[value="农残检测"]');
+  if (forced) forced.checked = true;
   refreshModuleTagStyle();
 }
 
@@ -465,6 +500,7 @@ function saveEdit() {
 
   const modules = Array.from(document.querySelectorAll('.module-tag input'))
     .filter(cb => cb.checked).map(cb => cb.value);
+  if (modules.indexOf('农残检测') < 0) modules.push('农残检测');
   if (!modules.length) { showToast('请至少选择一个展示模块', 'error'); return; }
 
   const batch = document.getElementById('editBatch').value;
@@ -510,6 +546,35 @@ function showToast(message, type = 'success') {
   setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
+/* ---------- 展示与短链配置（TraceStore 单一数据源） ---------- */
+function renderDisplayConfig() {
+  if (!window.TraceStore) return;
+  var cfg = TraceStore.config();
+  document.getElementById('cfgShortLink').value = cfg.shortLinkBase || '';
+  document.getElementById('cfgVideoUrl').value = cfg.baseVideoUrl || '';
+  document.getElementById('cfgVr').checked = cfg.showVr !== false;
+  document.getElementById('cfgVideo').checked = cfg.showVideo !== false;
+  document.getElementById('cfgEnv').checked = cfg.showEnvironment !== false;
+}
+
+function saveDisplayConfig() {
+  if (!window.TraceStore) { showToast('溯源数据服务未加载', 'error'); return; }
+  var base = document.getElementById('cfgShortLink').value.trim().replace(/\/+$/, '');
+  if (base && !/^https?:\/\//i.test(base)) {
+    showToast('短链域名需以 http:// 或 https:// 开头', 'error');
+    return;
+  }
+  TraceStore.saveConfig({
+    shortLinkBase: base || 'https://t.snzg.cn',
+    baseVideoUrl: document.getElementById('cfgVideoUrl').value.trim(),
+    showVr: document.getElementById('cfgVr').checked,
+    showVideo: document.getElementById('cfgVideo').checked,
+    showEnvironment: document.getElementById('cfgEnv').checked,
+    showInspection: true
+  });
+  showToast('展示配置已保存');
+}
+
 // 页面初始化
 document.addEventListener('DOMContentLoaded', function() {
   initConfigTabs();
@@ -522,10 +587,13 @@ document.addEventListener('DOMContentLoaded', function() {
     productSelect.appendChild(opt);
   });
 
-  // 绑定批次下拉
+  // 绑定批次下拉（与批次管理同源）
   const batchSelect = document.getElementById('editBatch');
+  const batchList = window.TraceStore ? TraceStore.batches().map(b => b.batchNo) : BATCH_SOURCE;
   batchSelect.innerHTML = '<option value="">暂不绑定</option>' +
-    BATCH_SOURCE.map(b => `<option value="${b}">${b}</option>`).join('');
+    batchList.map(b => `<option value="${b}">${b}</option>`).join('');
+
+  renderDisplayConfig();
 
   // 模块标签点击态
   document.querySelectorAll('.module-tag input').forEach(cb => {
@@ -598,7 +666,12 @@ function readCStages() {
 
 function getCStages() {
   var list = readCStages();
-  if (list) return list;
+  if (list) {
+    // 农残检测为 C 端合规必需环节，始终强制启用
+    var testing = findCStage(list, 'testing');
+    if (testing) testing.enabled = true;
+    return list;
+  }
   list = DEFAULT_CSTAGES.map(function (s, i) {
     return { key: s.key, title: s.title, icon: s.icon, img: s.img, desc: s.desc, enabled: true, order: i + 1 };
   });
@@ -627,11 +700,11 @@ function renderCStages() {
       '<td><div class="stage-name-cell">' + escCStage(s.title) + '</div>' +
           '<div class="stage-key">' + escCStage(s.key) + '</div></td>' +
       '<td class="stage-desc-cell">' + escCStage(s.desc) + '</td>' +
-      '<td><span class="status-tag ' + (s.enabled ? 'active' : 'inactive') + '">' +
-          (s.enabled ? '启用中' : '已停用') + '</span></td>' +
+      '<td><span class="status-tag active">' + (s.key === 'testing' ? '必需启用' : '启用中') + '</span></td>' +
       '<td><div class="action-btns">' +
-        '<button class="action-btn detail" onclick="toggleCStage(\'' + escCStage(s.key) + '\')">' +
-          (s.enabled ? '停用' : '启用') + '</button>' +
+        '<button class="action-btn detail" ' + (s.key === 'testing' ? 'disabled title="农残检测为必需环节"' : '') +
+          ' onclick="toggleCStage(\'' + escCStage(s.key) + '\')">' +
+          (s.key === 'testing' ? '不可停用' : '停用') + '</button>' +
         '<button class="action-btn edit" onclick="editCStage(\'' + escCStage(s.key) + '\')">编辑</button>' +
       '</div>' +
       '<div class="order-btns" style="margin-top:6px;">' +
@@ -652,6 +725,10 @@ function findCStage(list, key) {
 }
 
 function toggleCStage(key) {
+  if (key === 'testing') {
+    showToast('农残检测为溯源合规必需环节，不可停用', 'error');
+    return;
+  }
   var list = getCStages();
   var target = findCStage(list, key);
   if (!target) { showToast('未找到该环节', 'error'); return; }

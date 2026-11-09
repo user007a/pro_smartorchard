@@ -14,6 +14,10 @@
   #pagination-container { padding:12px 16px; }
   .data-table { width:100%; border-collapse:collapse; }
   .data-table th { white-space:nowrap; }
+  .std-process { font-size:12px; color:var(--text-secondary); }
+  .std-metric { font-size:12px; color:var(--text-secondary); line-height:1.5; }
+  .ref-count { color:var(--primary-500); font-weight:600; }
+  .ref-zero { color:var(--text-tertiary); }
 </style>
 <style id="standalone-fix">
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -83,15 +87,18 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="width:60px;">序号</th>
-                  <th>标准编号</th>
+                  <th style="width:56px;">序号</th>
+                  <th style="width:150px;">标准编号</th>
                   <th>标准名称</th>
-                  <th>标准级别</th>
-                  <th>农事类型</th>
-                  <th>适用品种</th>
-                  <th>生效日期</th>
-                  <th>状态</th>
-                  <th>操作</th>
+                  <th style="width:92px;">级别</th>
+                  <th style="width:100px;">农事类型</th>
+                  <th style="width:88px;">适用品种</th>
+                  <th style="width:150px;">关键工序</th>
+                  <th style="width:180px;">用量 / 验收指标</th>
+                  <th style="width:104px;">生效日期</th>
+                  <th style="width:70px;">状态</th>
+                  <th style="width:74px;">被引用</th>
+                  <th style="width:150px;">操作</th>
                 </tr>
               </thead>
               <tbody id="dataTableBody"></tbody>
@@ -121,17 +128,17 @@
         <div class="form-row">
           <div class="form-item">
             <label>标准编号</label>
-            <input type="text" class="form-input" placeholder="请输入标准编号">
+            <input type="text" class="form-input" id="std-code" placeholder="请输入标准编号">
           </div>
           <div class="form-item">
             <label>标准名称</label>
-            <input type="text" class="form-input" placeholder="请输入标准名称">
+            <input type="text" class="form-input" id="std-name" placeholder="请输入标准名称">
           </div>
         </div>
         <div class="form-row">
           <div class="form-item">
             <label>标准级别</label>
-            <select class="form-select">
+            <select class="form-select" id="std-level">
               <option value="">请选择级别</option>
               <option value="国家标准">国家标准</option>
               <option value="地方标准">地方标准</option>
@@ -140,7 +147,7 @@
           </div>
           <div class="form-item">
             <label>农事类型</label>
-            <select class="form-select">
+            <select class="form-select" id="std-type">
               <option value="">请选择类型</option>
               <option value="施肥">施肥</option>
               <option value="修剪">修剪</option>
@@ -148,6 +155,7 @@
               <option value="套袋">套袋</option>
               <option value="病虫害防治">病虫害防治</option>
               <option value="灌溉">灌溉</option>
+              <option value="除草">除草</option>
               <option value="采收">采收</option>
             </select>
           </div>
@@ -155,7 +163,7 @@
         <div class="form-row">
           <div class="form-item">
             <label>适用品种</label>
-            <select class="form-select">
+            <select class="form-select" id="std-variety">
               <option value="">请选择品种</option>
               <option value="花牛苹果">花牛苹果</option>
               <option value="红富士">红富士</option>
@@ -169,13 +177,27 @@
           </div>
           <div class="form-item">
             <label>生效日期</label>
-            <input type="date" class="form-input">
+            <input type="date" class="form-input" id="std-date">
           </div>
         </div>
         <div class="form-row">
           <div class="form-item">
+            <label>关键工序</label>
+            <input type="text" class="form-input" id="std-process" placeholder="如：疏花 → 定果 → 复查">
+          </div>
+          <div class="form-item">
+            <label>用量 / 验收指标</label>
+            <input type="text" class="form-input" id="std-dosage" placeholder="如：每 20cm 留 1 果">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>验收指标</label>
+            <input type="text" class="form-input" id="std-accept" placeholder="如：留果量 1.2 万个/亩">
+          </div>
+          <div class="form-item">
             <label>状态</label>
-            <select class="form-select">
+            <select class="form-select" id="std-status">
               <option value="现行">现行</option>
               <option value="试行">试行</option>
               <option value="废止">废止</option>
@@ -206,9 +228,8 @@
       <div class="form-row">
         <div class="form-item">
           <label>选择导出格式</label>
-          <select class="form-select">
-            <option value="excel">Excel (.xlsx)</option>
-            <option value="pdf">PDF (.pdf)</option>
+          <select class="form-select" id="exportFormat">
+            <option value="csv">CSV (.csv)</option>
           </select>
         </div>
       </div>
@@ -232,36 +253,7 @@
       </button>
     </div>
     <div class="modal-body">
-      <div class="detail-grid">
-        <div class="detail-item">
-          <span class="detail-label">标准编号</span>
-          <span class="detail-value">GB/T 17420-2024</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">标准名称</span>
-          <span class="detail-value">苹果园施肥技术规范</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">标准级别</span>
-          <span class="detail-value">国家标准</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">农事类型</span>
-          <span class="detail-value">施肥</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">适用品种</span>
-          <span class="detail-value">通用</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">生效日期</span>
-          <span class="detail-value">2026-03-01</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">状态</span>
-          <span class="detail-value"><span class="status-tag done">现行</span></span>
-        </div>
-      </div>
+      <div class="detail-grid" id="standardDetailBody"></div>
     </div>
     <div class="modal-footer">
       <button class="jg-btn jg-btn-primary" onclick="Modal.hide('modal-detail')">关闭</button>
@@ -285,31 +277,32 @@
         <div class="form-row">
           <div class="form-item">
             <label>标准编号</label>
-            <input type="text" class="form-input" value="GB/T 17420-2024">
+            <input type="text" class="form-input" id="edit-std-code">
           </div>
           <div class="form-item">
             <label>标准名称</label>
-            <input type="text" class="form-input" value="苹果园施肥技术规范">
+            <input type="text" class="form-input" id="edit-std-name">
           </div>
         </div>
         <div class="form-row">
           <div class="form-item">
             <label>标准级别</label>
-            <select class="form-select">
-              <option value="国家标准" selected>国家标准</option>
+            <select class="form-select" id="edit-std-level">
+              <option value="国家标准">国家标准</option>
               <option value="地方标准">地方标准</option>
               <option value="企业标准">企业标准</option>
             </select>
           </div>
           <div class="form-item">
             <label>农事类型</label>
-            <select class="form-select">
-              <option value="施肥" selected>施肥</option>
+            <select class="form-select" id="edit-std-type">
+              <option value="施肥">施肥</option>
               <option value="修剪">修剪</option>
               <option value="疏花疏果">疏花疏果</option>
               <option value="套袋">套袋</option>
               <option value="病虫害防治">病虫害防治</option>
               <option value="灌溉">灌溉</option>
+              <option value="除草">除草</option>
               <option value="采收">采收</option>
             </select>
           </div>
@@ -317,7 +310,7 @@
         <div class="form-row">
           <div class="form-item">
             <label>适用品种</label>
-            <select class="form-select">
+            <select class="form-select" id="edit-std-variety">
               <option value="花牛苹果">花牛苹果</option>
               <option value="红富士">红富士</option>
               <option value="金帅">金帅</option>
@@ -325,19 +318,33 @@
               <option value="嘎啦">嘎啦</option>
               <option value="红星">红星</option>
               <option value="国光">国光</option>
-              <option value="通用" selected>通用</option>
+              <option value="通用">通用</option>
             </select>
           </div>
           <div class="form-item">
             <label>生效日期</label>
-            <input type="date" class="form-input" value="2026-03-01">
+            <input type="date" class="form-input" id="edit-std-date">
           </div>
         </div>
         <div class="form-row">
           <div class="form-item">
+            <label>关键工序</label>
+            <input type="text" class="form-input" id="edit-std-process">
+          </div>
+          <div class="form-item">
+            <label>用量 / 验收指标</label>
+            <input type="text" class="form-input" id="edit-std-dosage">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-item">
+            <label>验收指标</label>
+            <input type="text" class="form-input" id="edit-std-accept">
+          </div>
+          <div class="form-item">
             <label>状态</label>
-            <select class="form-select">
-              <option value="现行" selected>现行</option>
+            <select class="form-select" id="edit-std-status">
+              <option value="现行">现行</option>
               <option value="试行">试行</option>
               <option value="废止">废止</option>
             </select>
@@ -353,33 +360,26 @@
 </div>
 
 <!-- 引入交互脚本 -->
+<script src="js/shared/production-store.js"></script>
 <script src="js/common-functions.js"></script>
 <script>
-// Mock数据 - 18条农事标准
-const mockData = [
-  { id: 1, code: 'GB/T 17420-2024', name: '苹果园施肥技术规范', level: '国家标准', type: '施肥', variety: '通用', date: '2026-03-01', status: '现行' },
-  { id: 2, code: 'GB/T 8321-2023', name: '农药合理使用准则', level: '国家标准', type: '病虫害防治', variety: '通用', date: '2023-06-01', status: '现行' },
-  { id: 3, code: 'GB/T 10651-2024', name: '鲜苹果采收技术规范', level: '国家标准', type: '采收', variety: '通用', date: '2026-09-01', status: '现行' },
-  { id: 4, code: 'NY/T 441-2023', name: '苹果生产技术规程', level: '地方标准', type: '施肥', variety: '红富士', date: '2023-01-15', status: '现行' },
-  { id: 5, code: 'NY/T 1086-2023', name: '苹果病虫害综合防治技术', level: '地方标准', type: '病虫害防治', variety: '通用', date: '2023-04-01', status: '现行' },
-  { id: 6, code: 'NY/T 1505-2024', name: '水果套袋技术规程', level: '地方标准', type: '套袋', variety: '花牛苹果', date: '2026-05-01', status: '现行' },
-  { id: 7, code: 'DB62/T 1234-2023', name: '花牛苹果修剪技术规范', level: '地方标准', type: '修剪', variety: '花牛苹果', date: '2023-12-01', status: '现行' },
-  { id: 8, code: 'DB62/T 1235-2023', name: '苹果园灌溉管理规范', level: '地方标准', type: '灌溉', variety: '通用', date: '2023-07-01', status: '现行' },
-  { id: 9, code: 'DB62/T 1236-2024', name: '苹果疏花疏果操作规程', level: '地方标准', type: '疏花疏果', variety: '花牛苹果', date: '2026-04-01', status: '试行' },
-  { id: 10, code: 'Q/HN 001-2024', name: '花牛苹果采收作业标准', level: '企业标准', type: '采收', variety: '花牛苹果', date: '2026-09-15', status: '现行' },
-  { id: 11, code: 'Q/HN 002-2024', name: '果园春季施肥作业标准', level: '企业标准', type: '施肥', variety: '花牛苹果', date: '2026-03-01', status: '现行' },
-  { id: 12, code: 'Q/HN 003-2023', name: '苹果树冬季修剪规范', level: '企业标准', type: '修剪', variety: '红富士', date: '2023-12-15', status: '现行' },
-  { id: 13, code: 'Q/HN 004-2024', name: '苹果套袋技术操作标准', level: '企业标准', type: '套袋', variety: '红富士', date: '2026-06-01', status: '现行' },
-  { id: 14, code: 'Q/HN 005-2023', name: '果园病虫害防治作业标准', level: '企业标准', type: '病虫害防治', variety: '通用', date: '2023-05-01', status: '现行' },
-  { id: 15, code: 'Q/HN 006-2024', name: '苹果园灌溉作业标准', level: '企业标准', type: '灌溉', variety: '通用', date: '2026-06-01', status: '试行' },
-  { id: 16, code: 'Q/HN 007-2023', name: '苹果分级包装标准', level: '企业标准', type: '采收', variety: '花牛苹果', date: '2023-10-01', status: '现行' },
-  { id: 17, code: 'Q/HN 008-2022', name: '果园土壤改良作业规范', level: '企业标准', type: '施肥', variety: '通用', date: '2022-09-01', status: '废止' },
-  { id: 18, code: 'Q/HN 009-2024', name: '苹果疏花疏果作业标准', level: '企业标准', type: '疏花疏果', variety: '红富士', date: '2026-04-15', status: '现行' }
-];
+// 农事标准 - 共享数据层驱动
+var PS = window.ProductionStore;
 
-// 获取状态标签
-function getStatusTag(status) {
-  const map = {
+var currentList = [];
+
+// 被引用次数：按当前计划实时统计
+function refCountOf(std) {
+  return PS.plans().filter(function (p) { return p.standardId === std.id; }).length;
+}
+
+function levelTag(level) {
+  var cls = level === '国家标准' ? 'done' : (level === '地方标准' ? 'warning' : 'normal');
+  return '<span class="status-tag ' + cls + '">' + (level || '—') + '</span>';
+}
+
+function stdStatusTag(status) {
+  var map = {
     '现行': '<span class="status-tag done">现行</span>',
     '试行': '<span class="status-tag warning">试行</span>',
     '废止': '<span class="status-tag normal">废止</span>'
@@ -387,95 +387,204 @@ function getStatusTag(status) {
   return map[status] || map['现行'];
 }
 
-// 渲染表格行
 function renderRow(item, index) {
-  return `<tr>
-    <td>${index + 1}</td>
-    <td>${item.code}</td>
-    <td><strong>${item.name}</strong></td>
-    <td>${item.level}</td>
-    <td>${item.type}</td>
-    <td>${item.variety}</td>
-    <td>${item.date}</td>
-    <td>${getStatusTag(item.status)}</td>
-    <td>
-      <div class="action-btns">
-        <button class="action-btn detail" onclick="Modal.show('modal-detail')">查看</button>
-        <button class="action-btn edit" onclick="Modal.show('modal-edit')">编辑</button>
-        <button class="action-btn delete" onclick="handleDeleteStandard()">删除</button>
-      </div>
-    </td>
-  </tr>`;
+  var refs = refCountOf(item);
+  return '<tr>' +
+    '<td>' + (index + 1) + '</td>' +
+    '<td>' + (item.code || '—') + '</td>' +
+    '<td><strong>' + (item.name || '') + '</strong></td>' +
+    '<td>' + levelTag(item.level) + '</td>' +
+    '<td>' + (item.type || '—') + '</td>' +
+    '<td>' + (item.variety || '—') + '</td>' +
+    '<td class="std-process">' + (item.process || '—') + '</td>' +
+    '<td class="std-metric">' + (item.dosage || '—') + ' / ' + (item.accept || '—') + '</td>' +
+    '<td>' + (item.date || '—') + '</td>' +
+    '<td>' + stdStatusTag(item.status) + '</td>' +
+    '<td>' + (refs ? '<span class="ref-count">' + refs + ' 个计划</span>' : '<span class="ref-zero">未引用</span>') + '</td>' +
+    '<td>' +
+      '<div class="action-btns">' +
+        '<button class="action-btn detail" onclick="showDetail(\'' + item.id + '\')">查看</button>' +
+        '<button class="action-btn edit" onclick="showEdit(\'' + item.id + '\')">编辑</button>' +
+        '<button class="action-btn delete" onclick="handleDeleteStandard(\'' + item.id + '\')">删除</button>' +
+      '</div>' +
+    '</td>' +
+  '</tr>';
 }
 
-// 搜索功能
-function handleSearch() {
-  const keyword = document.getElementById('searchInput').value;
-  const level = document.getElementById('levelSelect').value;
-  const type = document.getElementById('typeSelect').value;
-  const status = document.getElementById('statusSelect').value;
-
-  var filteredData = mockData.filter(item => {
+function applyFilter() {
+  var keyword = (document.getElementById('searchInput').value || '').trim();
+  var level = document.getElementById('levelSelect').value;
+  var type = document.getElementById('typeSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var list = currentList.filter(function (item) {
     if (level && item.level !== level) return false;
     if (type && item.type !== type) return false;
     if (status && item.status !== status) return false;
-    if (keyword && !item.name.includes(keyword) && !item.code.includes(keyword)) return false;
+    if (keyword && (item.name || '').indexOf(keyword) < 0 && (item.code || '').indexOf(keyword) < 0) return false;
     return true;
   });
-
-  Pagination.updateData(filteredData);
-  Toast.info('找到 ' + filteredData.length + ' 条记录');
+  Pagination.updateData(list);
+  return list;
 }
 
-// 重置搜索
+function refresh() {
+  currentList = PS.standards().slice().sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
+  applyFilter();
+}
+
+function handleSearch() {
+  var list = applyFilter();
+  Toast.info('找到 ' + list.length + ' 条标准');
+}
+
 function smartReset() {
   document.getElementById('searchInput').value = '';
   document.getElementById('levelSelect').value = '';
   document.getElementById('typeSelect').value = '';
   document.getElementById('statusSelect').value = '';
-  Pagination.updateData(mockData);
+  applyFilter();
   Toast.info('已重置搜索条件');
 }
 
-// 新增标准
+function detailItem(label, value) {
+  return '<div class="detail-item"><span class="detail-label">' + label +
+    '</span><span class="detail-value">' + (value || '—') + '</span></div>';
+}
+
+function showDetail(id) {
+  var s = PS.get('standards', id);
+  if (!s) { Toast.error('标准不存在'); return; }
+  document.getElementById('standardDetailBody').innerHTML =
+    detailItem('标准编号', s.code) +
+    detailItem('标准名称', s.name) +
+    detailItem('标准级别', s.level) +
+    detailItem('农事类型', s.type) +
+    detailItem('适用品种', s.variety) +
+    detailItem('生效日期', s.date) +
+    detailItem('关键工序', s.process) +
+    detailItem('用量', s.dosage) +
+    detailItem('验收指标', s.accept) +
+    detailItem('被引用', refCountOf(s) + ' 个计划') +
+    detailItem('状态', stdStatusTag(s.status));
+  Modal.show('modal-detail');
+}
+
+function showEdit(id) {
+  var s = PS.get('standards', id);
+  if (!s) { Toast.error('标准不存在'); return; }
+  document.getElementById('edit-std-code').value = s.code || '';
+  document.getElementById('edit-std-name').value = s.name || '';
+  document.getElementById('edit-std-level').value = s.level || '国家标准';
+  document.getElementById('edit-std-type').value = s.type || '施肥';
+  document.getElementById('edit-std-variety').value = s.variety || '通用';
+  document.getElementById('edit-std-date').value = s.date || '';
+  document.getElementById('edit-std-process').value = s.process || '';
+  document.getElementById('edit-std-dosage').value = s.dosage || '';
+  document.getElementById('edit-std-accept').value = s.accept || '';
+  document.getElementById('edit-std-status').value = s.status || '现行';
+  document.getElementById('modal-edit').setAttribute('data-id', id);
+  Modal.show('modal-edit');
+}
+
 function handleAddStandard() {
+  var code = document.getElementById('std-code').value.trim();
+  var name = document.getElementById('std-name').value.trim();
+  var level = document.getElementById('std-level').value;
+  var type = document.getElementById('std-type').value;
+  var std = {
+    id: PS.nextId('standards'),
+    code: code,
+    name: name,
+    level: level,
+    type: type,
+    variety: document.getElementById('std-variety').value || '通用',
+    date: document.getElementById('std-date').value || PS.today(),
+    status: document.getElementById('std-status').value,
+    process: document.getElementById('std-process').value.trim() || '按标准作业流程执行',
+    dosage: document.getElementById('std-dosage').value.trim() || '—',
+    accept: document.getElementById('std-accept').value.trim() || '—',
+    refCount: 0
+  };
+  var invalid = PS.validate.standard(std);
+  if (invalid) { Toast.error(invalid); return; }
+  PS.upsert('standards', std);
   Modal.hide('modal-add-standard');
   Toast.success('标准创建成功');
+  refresh();
 }
 
-// 导出标准
-function handleExport() {
-  Modal.hide('modal-export');
-  Toast.success('导出成功，文件已下载');
-}
-
-// 编辑标准
 function handleEditStandard() {
+  var id = document.getElementById('modal-edit').getAttribute('data-id');
+  var old = PS.get('standards', id);
+  if (!old) { Toast.error('标准不存在'); return; }
+  var code = document.getElementById('edit-std-code').value.trim();
+  var name = document.getElementById('edit-std-name').value.trim();
+  var patch = {
+    code: code,
+    name: name,
+    level: document.getElementById('edit-std-level').value,
+    type: document.getElementById('edit-std-type').value,
+    variety: document.getElementById('edit-std-variety').value,
+    date: document.getElementById('edit-std-date').value,
+    process: document.getElementById('edit-std-process').value.trim() || old.process,
+    dosage: document.getElementById('edit-std-dosage').value.trim() || old.dosage,
+    accept: document.getElementById('edit-std-accept').value.trim() || old.accept,
+    status: document.getElementById('edit-std-status').value
+  };
+  var invalid = PS.validate.standard(Object.assign({}, old, patch));
+  if (invalid) { Toast.error(invalid); return; }
+  PS.upsert('standards', Object.assign({ id: old.id }, patch));
   Modal.hide('modal-edit');
   Toast.success('标准更新成功');
+  refresh();
 }
 
-// 删除标准
-function handleDeleteStandard() {
+function handleDeleteStandard(id) {
+  var s = PS.get('standards', id);
+  if (!s) { Toast.error('标准不存在'); return; }
+  var refs = refCountOf(s);
+  if (refs > 0) { Toast.error('该标准已被 ' + refs + ' 个计划引用，无法删除'); return; }
   ConfirmDialog.show({
     title: '确认删除',
-    message: '确定要删除这个标准吗？此操作不可撤销。',
-    onConfirm: function() {
+    message: '确定要删除标准「' + s.name + '」吗？此操作不可撤销。',
+    onConfirm: function () {
+      PS.remove('standards', id);
       Toast.success('删除成功');
+      refresh();
     }
   });
 }
 
-// 初始化分页
-document.addEventListener('DOMContentLoaded', function() {
+function handleExport() {
+  var rows = [['标准编号', '标准名称', '级别', '农事类型', '适用品种', '关键工序', '用量', '验收指标', '生效日期', '状态', '被引用']];
+  currentList.forEach(function (s) {
+    rows.push([s.code, s.name, s.level, s.type, s.variety, s.process, s.dosage, s.accept, s.date, s.status, refCountOf(s)]);
+  });
+  var csv = rows.map(function (r) {
+    return r.map(function (c) { return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"'; }).join(',');
+  }).join('\n');
+  var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '农事标准_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  Modal.hide('modal-export');
+  Toast.success('导出成功，共 ' + currentList.length + ' 条标准');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  currentList = PS.standards().slice().sort(function (a, b) { return String(a.id).localeCompare(String(b.id)); });
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
-    data: mockData,
+    data: currentList,
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderRow
   });
+  PS.subscribe(function () { refresh(); });
 });
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
