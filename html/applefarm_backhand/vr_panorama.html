@@ -10,39 +10,90 @@
 <style>
   .modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; opacity:0; visibility:hidden; transition:all 0.3s ease; }
   .modal-overlay.active { opacity:1; visibility:visible; }
-  .modal { background:var(--bg-card); border-radius:16px; width:560px; max-width:90vw; max-height:90vh; overflow:hidden; transform:scale(0.9); transition:all 0.3s ease; }
+  .modal { background:var(--bg-card); border-radius:16px; width:560px; max-width:90vw; max-height:90vh; overflow:hidden; transform:scale(0.9); transition:all 0.3s ease; display:flex; flex-direction:column; }
+  #editModal .modal { width:720px; }
   .modal-overlay.active .modal { transform:scale(1); }
-  .modal-header { padding:20px 24px; border-bottom:1px solid var(--border-default); display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg, #1890ff 0%, #1a8a3a 100%); color:var(--text-inverse); }
+  .modal-header { padding:20px 24px; border-bottom:1px solid var(--border-default); display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg, #1890ff 0%, #1a8a3a 100%); color:var(--text-inverse); flex:0 0 auto; }
   .modal-header h3 { font-size:18px; font-weight:600; margin:0; }
   .modal-close { width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.2); border:none; color:var(--text-inverse); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; }
   .modal-close:hover { background:rgba(255,255,255,0.3); }
-  .modal-body { padding:24px; max-height:60vh; overflow-y:auto; }
-  .modal-footer { padding:16px 24px; border-top:1px solid var(--border-default); display:flex; justify-content:flex-end; gap:12px; }
+  .modal-body { padding:24px; overflow-y:auto; flex:1 1 auto; }
+  .modal-footer { padding:16px 24px; border-top:1px solid var(--border-default); display:flex; justify-content:flex-end; gap:12px; flex:0 0 auto; }
+
+  /* 搜索栏补位说明 */
+  .search-hint { margin-top:10px; font-size:12px; color:var(--text-tertiary); }
+
+  /* 列表工具栏 */
+  .scene-toolbar { display:flex; align-items:center; justify-content:space-between; margin:20px 0 12px; }
+  .scene-count { font-size:13px; color:var(--text-tertiary); }
+  .scene-count b { color:var(--text-primary); font-weight:600; font-variant-numeric:tabular-nums; }
+
+  /* 卡片网格 */
+  .scene-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:16px; }
+  .scene-card { background:var(--bg-card); border:1px solid var(--border-default); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; transition:all 0.2s ease; }
+  .scene-card:hover { transform:translateY(-2px); box-shadow:0 6px 18px rgba(0,0,0,0.08); border-color:#d9e6f7; }
+  .scene-thumb { position:relative; height:150px; background:var(--gray-100); overflow:hidden; }
+  .scene-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .scene-status { position:absolute; top:10px; left:10px; }
+  .scene-pano { position:absolute; right:10px; bottom:10px; display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.94); color:#262626; font-size:11px; font-weight:500; padding:3px 9px; border-radius:999px; box-shadow:0 1px 4px rgba(0,0,0,0.14); }
+  .scene-body { padding:12px 14px 14px; flex:1 1 auto; }
+  .scene-code { font-size:11px; letter-spacing:0.4px; color:var(--text-tertiary); font-variant-numeric:tabular-nums; }
+  .scene-title { font-size:14px; font-weight:600; color:var(--text-primary); margin:3px 0 8px; line-height:1.45; }
+  .scene-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .scene-tag { font-size:11px; color:#595959; background:#f5f5f5; border:1px solid #f0f0f0; border-radius:4px; padding:2px 7px; }
+  .scene-meta { display:grid; gap:5px; margin:0; font-size:12px; }
+  .scene-meta div { display:flex; gap:8px; min-width:0; }
+  .scene-meta dt { flex:0 0 60px; color:var(--text-tertiary); }
+  .scene-meta dd { margin:0; flex:1 1 auto; min-width:0; color:var(--text-secondary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .scene-actions { display:flex; gap:6px; padding:10px 14px; border-top:1px solid var(--border-default); background:#fafbfc; }
+
+  /* 预览弹窗 */
   .preview-image { width:100%; height:280px; background:linear-gradient(135deg, #2d5a3d 0%, #1a2e1a 100%); border-radius:12px; display:flex; align-items:center; justify-content:center; margin-bottom:16px; position:relative; overflow:hidden; }
-  .preview-image svg { width:64px; height:64px; color:rgba(255,255,255,0.5); }
+  .preview-image img { width:100%; height:100%; object-fit:cover; border-radius:12px; }
   .preview-badges { position:absolute; top:12px; left:12px; display:flex; gap:8px; }
-  .preview-badge { background:rgba(255,255,255,0.9); padding:4px 10px; border-radius:12px; font-size:12px; color:var(--primary-500); font-weight:500; }
-  .preview-info { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-  .info-item { display:flex; flex-direction:column; gap:4px; }
+  .preview-info { display:grid; grid-template-columns:1fr 1fr; gap:14px 20px; }
+  .info-item { display:flex; flex-direction:column; gap:4px; min-width:0; }
   .info-label { font-size:12px; color:var(--text-tertiary); }
-  .info-value { font-size:14px; font-weight:500; color:var(--text-primary); }
-  .edit-form { display:grid; gap:16px; }
-  .form-group { display:flex; flex-direction:column; gap:6px; }
-  .form-group label { font-size:14px; font-weight:500; color:var(--text-primary); }
-  .form-group input, .form-group select, .form-group textarea { padding:10px 14px; border:1px solid var(--border-default); border-radius:8px; font-size:14px; transition:all 0.2s; }
+  .info-value { font-size:14px; font-weight:500; color:var(--text-primary); word-break:break-all; }
+
+  /* 表单 */
+  .edit-form { display:grid; grid-template-columns:1fr 1fr; gap:16px 20px; }
+  .form-group { display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .form-group.full { grid-column:1 / -1; }
+  .form-group label { font-size:13px; font-weight:500; color:var(--text-primary); }
+  .form-group label .req { color:var(--error); margin-left:2px; }
+  .form-group input, .form-group select, .form-group textarea { padding:9px 12px; border:1px solid var(--border-default); border-radius:8px; font-size:14px; color:var(--text-primary); background:var(--bg-card); transition:all 0.2s; font-family:inherit; }
   .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline:none; border-color:var(--border-primary); box-shadow:0 0 0 3px rgba(24,144,255,0.1); }
-  .scene-card { cursor:pointer; transition:all 0.2s ease; border-radius:10px; overflow:hidden; background:var(--bg-card); border:1px solid var(--border-default); }
-  .scene-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.1); }
-  .scene-card.selected { border-color:var(--border-primary); }
-  .scene-thumb { height:120px; display:flex; align-items:center; justify-content:center; position:relative; }
-  .scene-badge { position:absolute; top:8px; right:8px; background:rgba(255,255,255,0.95); padding:3px 8px; border-radius:10px; font-size:11px; font-weight:500; color:var(--primary-500); }
-  .scene-info { padding:12px; }
-  .scene-title { font-weight:600; color:var(--text-primary); margin-bottom:4px; font-size:13px; }
-  .scene-meta { font-size:11px; color:var(--text-tertiary); }
+  .form-group textarea { resize:vertical; min-height:72px; }
+  .field-hint { font-size:12px; color:var(--text-tertiary); }
+
+  /* 上传区 */
+  .vr-upload { border:1px dashed #c8d6e5; border-radius:10px; background:#fafcff; padding:18px; display:flex; align-items:center; gap:14px; cursor:pointer; transition:all 0.2s; }
+  .vr-upload:hover, .vr-upload.dragover { border-color:var(--primary-500); background:#f0f7ff; }
+  .vr-upload-icon { width:40px; height:40px; flex:0 0 auto; border-radius:10px; background:#e8f2ff; color:var(--primary-500); display:flex; align-items:center; justify-content:center; }
+  .vr-upload-icon svg { width:20px; height:20px; }
+  .vr-upload-main { font-size:14px; font-weight:500; color:var(--text-primary); }
+  .vr-upload-sub { font-size:12px; color:var(--text-tertiary); margin-top:3px; }
+  .vr-upload-file { display:none; align-items:center; gap:12px; width:100%; }
+  .vr-upload-file.show { display:flex; }
+  .vr-upload-thumb { width:56px; height:40px; border-radius:6px; object-fit:cover; background:var(--gray-100); flex:0 0 auto; }
+  .vr-upload-name { font-size:13px; color:var(--text-primary); font-weight:500; word-break:break-all; }
+  .vr-upload-size { font-size:12px; color:var(--text-tertiary); }
+  .vr-upload-clear { margin-left:auto; font-size:12px; color:var(--error); cursor:pointer; background:none; border:none; }
+
+  /* 确认弹窗 */
+  #confirmModal .modal { width:420px; }
+  .confirm-body { padding:24px; display:flex; gap:14px; align-items:flex-start; }
+  .confirm-icon { width:40px; height:40px; flex:0 0 auto; border-radius:50%; background:var(--error-bg); color:var(--error); display:flex; align-items:center; justify-content:center; }
+  .confirm-text { font-size:14px; color:var(--text-primary); line-height:1.6; }
+  .confirm-text span { display:block; margin-top:4px; font-size:12px; color:var(--text-tertiary); }
+
   .toast { position:fixed; top:20px; right:20px; padding:14px 20px; background:var(--bg-card); border-radius:10px; box-shadow:0 4px 20px rgba(0,0,0,0.15); display:flex; align-items:center; gap:12px; z-index:2000; transform:translateX(120%); transition:all 0.3s ease; }
   .toast.show { transform:translateX(0); }
   .toast.success { border-left:4px solid var(--border-primary); }
+  .toast.error { border-left:4px solid var(--error); }
   .toast-icon { width:24px; height:24px; border-radius:50%; background:var(--gray-100); display:flex; align-items:center; justify-content:center; color:var(--primary-500); }
+  .toast.error .toast-icon { color:var(--error); }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -66,21 +117,47 @@
             上传全景
           </button>
         </div>
+
         <div class="search-section">
           <div class="search-bar">
-            <select class="search-select" id="groupSelect" style="width:160px;">
-              <option value="">全部场景组</option>
-              <option value="apple">苹果园</option>
-              <option value="grape">葡萄园</option>
-              <option value="cherry">樱桃园</option>
+            <select class="search-select" id="baseSelect" onchange="searchData()">
+              <option value="">全部基地</option>
             </select>
-            <input type="text" class="search-input" placeholder="搜索场景名称..." id="sceneNameInput" style="width:200px;">
-            
-          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="searchData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
+            <select class="search-select" id="statusSelect" onchange="searchData()">
+              <option value="">全部状态</option>
+              <option value="published">已发布</option>
+              <option value="processing">处理中</option>
+              <option value="draft">草稿</option>
+              <option value="offline">已下架</option>
+            </select>
+            <select class="search-select" id="typeSelect" onchange="searchData()">
+              <option value="">全部场景类型</option>
+              <option value="entrance">园区入口</option>
+              <option value="plot">地块</option>
+              <option value="workshop">车间</option>
+              <option value="storage">仓储</option>
+              <option value="viewpoint">观景台</option>
+            </select>
+            <input type="text" class="search-input" id="keywordInput" placeholder="搜索场景名称 / 场景编号" onkeydown="if(event.key==='Enter')searchData()">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="searchData()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button>
+              <button class="jg-btn" onclick="smartReset()">重置</button>
+            </div>
           </div>
+          <div class="search-hint" id="activeFilterHint"></div>
         </div>
 
-        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-top:20px;" id="sceneGrid"></div>
+        <div class="scene-toolbar">
+          <span class="scene-count">共 <b id="resultCount">0</b> 个场景</span>
+        </div>
+
+        <div class="scene-grid" id="sceneGrid"></div>
+
+        <div class="empty-state" id="emptyState" style="display:none;">
+          <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"/></svg>
+          <div class="empty-title">没有匹配的全景场景</div>
+          <div class="empty-desc">请调整基地、状态或场景类型筛选条件后重试</div>
+        </div>
       </div>
     </main>
   </div>
@@ -101,40 +178,102 @@
   </div>
 </div>
 
-<!-- 编辑弹窗 -->
+<!-- 上传 / 编辑弹窗 -->
 <div class="modal-overlay" id="editModal">
   <div class="modal">
     <div class="modal-header">
-      <h3 id="editModalTitle">编辑场景</h3>
+      <h3 id="editModalTitle">上传全景</h3>
       <button class="modal-close" onclick="closeModal('editModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     </div>
     <div class="modal-body">
       <div class="edit-form">
+        <div class="form-group full">
+          <label>全景文件<span class="req">*</span></label>
+          <div class="vr-upload" id="uploadArea" onclick="document.getElementById('editFile').click()">
+            <div class="vr-upload-icon" id="uploadIcon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <div id="uploadEmpty">
+              <div class="vr-upload-main">拖拽全景图到此处，或点击选择文件</div>
+              <div class="vr-upload-sub">2:1 等距柱状投影，支持 JPG / PNG，建议 12000×6000 以内，单张 ≤ 20MB</div>
+            </div>
+            <div class="vr-upload-file" id="uploadFile">
+              <img class="vr-upload-thumb" id="uploadThumb" alt="全景缩略图">
+              <div>
+                <div class="vr-upload-name" id="uploadName"></div>
+                <div class="vr-upload-size" id="uploadSize"></div>
+              </div>
+              <button type="button" class="vr-upload-clear" onclick="clearFile(event)">重新选择</button>
+            </div>
+          </div>
+          <input type="file" id="editFile" accept="image/jpeg,image/png" style="display:none;" onchange="handleFileChange(this)">
+        </div>
+
         <div class="form-group">
-          <label>场景名称</label>
-          <input type="text" id="editName" placeholder="请输入场景名称">
+          <label>场景名称<span class="req">*</span></label>
+          <input type="text" id="editName" placeholder="选择基地与地块后自动生成，可修改">
         </div>
         <div class="form-group">
-          <label>场景分组</label>
-          <select id="editGroup">
-            <option value="apple">苹果园</option>
-            <option value="grape">葡萄园</option>
-            <option value="cherry">樱桃园</option>
+          <label>所属基地<span class="req">*</span></label>
+          <select id="editBase" onchange="onBaseChange()"></select>
+        </div>
+        <div class="form-group">
+          <label>关联地块 / 点位</label>
+          <select id="editPlot" onchange="onPlotChange()"></select>
+        </div>
+        <div class="form-group">
+          <label>场景类型<span class="req">*</span></label>
+          <select id="editType" onchange="autoName()">
+            <option value="entrance">园区入口</option>
+            <option value="plot">地块</option>
+            <option value="workshop">车间</option>
+            <option value="storage">仓储</option>
+            <option value="viewpoint">观景台</option>
           </select>
         </div>
         <div class="form-group">
-          <label>场景描述</label>
-          <textarea id="editDesc" placeholder="请输入场景描述"></textarea>
+          <label>发布状态<span class="req">*</span></label>
+          <select id="editStatus">
+            <option value="draft">草稿</option>
+            <option value="published">已发布</option>
+            <option value="processing">处理中</option>
+            <option value="offline">已下架</option>
+          </select>
         </div>
         <div class="form-group">
           <label>拍摄日期</label>
           <input type="date" id="editDate">
+        </div>
+        <div class="form-group full">
+          <label>场景描述</label>
+          <textarea id="editDesc" placeholder="简要说明该场景的方位、可见内容与使用场景"></textarea>
         </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="jg-btn" onclick="closeModal('editModal')">取消</button>
       <button class="jg-btn jg-btn-primary" onclick="saveEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 删除确认 -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>删除确认</h3>
+      <button class="modal-close" onclick="closeModal('confirmModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="confirm-body">
+      <div class="confirm-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg></div>
+      <div class="confirm-text">
+        <span id="confirmText" style="display:inline;font-size:14px;color:var(--text-primary);"></span>
+        <span>删除后该全景场景将从移动端下架，且不可恢复。</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('confirmModal')">取消</button>
+      <button class="jg-btn jg-btn-danger" onclick="doDelete()">确认删除</button>
     </div>
   </div>
 </div>
@@ -146,7 +285,6 @@
 </div>
 
 <script>
-// Mock数据 - 12条记录（3列 × 4行，复用「基地实景监控」的本地果园实景图，各场景不重复）
 const IMG = '../applefarm_h5/images/';
 const ORCHARD_IMGS = [
   IMG + 'apple_orchard_banner.jpg',
@@ -162,82 +300,240 @@ const ORCHARD_IMGS = [
   IMG + 'trace_bagging.jpg',
   IMG + 'apple_redfuji_box.jpg'
 ];
+
+/* 基地主数据：与企业基地管理 22 个基地保持一致 */
+const BASE_LIST = [
+  '天水麦积区基地', '天水秦州基地', '青岛莱西基地', '龙口南山基地',
+  '天水甘谷基地', '招远金岭基地', '天水梨乡基地', '海阳万米海滩基地',
+  '牟平养马岛基地', '福山张格庄基地', '芝罘岛基地', '开发区八角基地',
+  '高新区科技基地', '昆嵛山生态基地', '长岛海洋基地', '日照岚山基地',
+  '潍坊诸城基地', '临沂沂水基地', '泰安肥城基地', '济宁曲阜基地',
+  '滨州阳信基地', '德州乐陵基地'
+];
+
+/* 地块主数据：与企业管理 - 地块管理 mockPlotData 一致 */
+const PLOT_MASTER = [
+  { code: 'D-001', name: '东区1号地', enterprise: '天水麦积区基地' },
+  { code: 'D-002', name: '东区2号地', enterprise: '天水麦积区基地' },
+  { code: 'D-003', name: '西区1号地', enterprise: '天水麦积区基地' },
+  { code: 'D-004', name: '北区1号地', enterprise: '天水秦州区基地' },
+  { code: 'D-005', name: '南区1号地', enterprise: '天水甘谷县基地' },
+  { code: 'D-006', name: '中区1号地', enterprise: '天水秦安县基地' },
+  { code: 'D-007', name: '南区2号地', enterprise: '天水清水县基地' },
+  { code: 'D-008', name: '西区2号地', enterprise: '天水武山县基地' },
+  { code: 'D-009', name: '北区2号地', enterprise: '天水张家川县基地' },
+  { code: 'D-010', name: '东区3号地', enterprise: '天水麦积区基地' },
+  { code: 'D-011', name: '南区3号地', enterprise: '天水秦州区基地' },
+  { code: 'D-012', name: '西区3号地', enterprise: '天水甘谷县基地' },
+  { code: 'D-013', name: '北区3号地', enterprise: '天水清水县基地' },
+  { code: 'D-014', name: '中区2号地', enterprise: '天水武山县基地' },
+  { code: 'D-015', name: '东区4号地', enterprise: '天水张家川县基地' },
+  { code: 'D-016', name: '南区4号地', enterprise: '天水麦积区基地' },
+  { code: 'D-017', name: '西区4号地', enterprise: '天水秦州区基地' },
+  { code: 'D-018', name: '北区4号地', enterprise: '天水甘谷县基地' },
+  { code: 'D-019', name: '中区3号地', enterprise: '天水秦安县基地' },
+  { code: 'D-020', name: '东区5号地', enterprise: '天水清水县基地' },
+  { code: 'D-021', name: '南区5号地', enterprise: '天水武山县基地' },
+  { code: 'D-022', name: '西区5号地', enterprise: '天水张家川县基地' },
+  { code: 'D-023', name: '北区5号地', enterprise: '天水麦积区基地' }
+];
+
+const STATUS_MAP = {
+  published:  { text: '已发布', cls: 'success' },
+  processing: { text: '处理中', cls: 'info' },
+  draft:      { text: '草稿',   cls: 'pending' },
+  offline:    { text: '已下架', cls: 'disabled' }
+};
+
+const TYPE_MAP = {
+  entrance:  '园区入口',
+  plot:      '地块',
+  workshop:  '车间',
+  storage:   '仓储',
+  viewpoint: '观景台'
+};
+
 const mockData = [
-  { id: 1, name: '苹果园全景-入口', group: 'apple', groupName: '苹果园', image: ORCHARD_IMGS[0], date: '2026-09-15', desc: '果园主入口处全景展示', views: 2456 },
-  { id: 2, name: '苹果园全景-观景台', group: 'apple', groupName: '苹果园', image: ORCHARD_IMGS[1], date: '2026-09-16', desc: '山顶观景台俯瞰全景', views: 1892 },
-  { id: 3, name: '苹果园全景-采摘区', group: 'apple', groupName: '苹果园', image: ORCHARD_IMGS[2], date: '2026-09-17', desc: '游客采摘体验区', views: 3201 },
-  { id: 4, name: '葡萄园全景-入口', group: 'grape', groupName: '葡萄园', image: ORCHARD_IMGS[3], date: '2026-09-18', desc: '葡萄园入口处', views: 1567 },
-  { id: 5, name: '葡萄园全景-藤架区', group: 'grape', groupName: '葡萄园', image: ORCHARD_IMGS[4], date: '2026-09-19', desc: '葡萄藤架下乘凉区', views: 2134 },
-  { id: 6, name: '樱桃园全景-入口', group: 'cherry', groupName: '樱桃园', image: ORCHARD_IMGS[5], date: '2026-09-20', desc: '樱桃园入口展示', views: 1823 },
-  { id: 7, name: '樱桃园全景-采摘区', group: 'cherry', groupName: '樱桃园', image: ORCHARD_IMGS[6], date: '2026-09-21', desc: '樱桃采摘体验区', views: 2567 },
-  { id: 8, name: '樱桃园全景-观景台', group: 'cherry', groupName: '樱桃园', image: ORCHARD_IMGS[7], date: '2026-09-22', desc: '樱桃园山顶观景台', views: 1678 },
-  { id: 9, name: '苹果园全景-仓储区', group: 'apple', groupName: '苹果园', image: ORCHARD_IMGS[8], date: '2026-09-23', desc: '果实分级与冷链仓储区', views: 1425 },
-  { id: 10, name: '苹果园全景-育苗区', group: 'apple', groupName: '苹果园', image: ORCHARD_IMGS[9], date: '2026-09-24', desc: '矮化砧木育苗示范区', views: 1173 },
-  { id: 11, name: '苹果园全景-灌溉区', group: 'apple', groupName: '苹果园', image: ORCHARD_IMGS[10], date: '2026-09-25', desc: '水肥一体化滴灌作业区', views: 1382 },
-  { id: 12, name: '苹果园全景-包装车间', group: 'apple', groupName: '苹果园', image: ORCHARD_IMGS[11], date: '2026-09-26', desc: '果品分选包装生产线', views: 1614 }
+  { id: 1,  code: 'VR-001', name: '天水麦积区基地 · 园区主入口', base: '天水麦积区基地', plotCode: '', plotName: '', type: 'entrance', status: 'published', image: ORCHARD_IMGS[0], date: '2026-09-15', resolution: '12000×6000', desc: '果园主入口处全景展示，含游客服务中心与分拣区方位指引', views: 2456 },
+  { id: 2,  code: 'VR-002', name: '天水麦积区基地 · 东区1号地', base: '天水麦积区基地', plotCode: 'D-001', plotName: '东区1号地', type: 'plot', status: 'published', image: ORCHARD_IMGS[1], date: '2026-09-16', resolution: '12000×6000', desc: '花牛苹果成龄园全貌，可查看树势与滴灌管路', views: 1892 },
+  { id: 3,  code: 'VR-003', name: '天水麦积区基地 · 分选包装车间', base: '天水麦积区基地', plotCode: '', plotName: '', type: 'workshop', status: 'published', image: ORCHARD_IMGS[2], date: '2026-09-17', resolution: '10000×5000', desc: '果品分选包装生产线全景，含分级设备与装箱工位', views: 3201 },
+  { id: 4,  code: 'VR-004', name: '天水麦积区基地 · 冷链仓储中心', base: '天水麦积区基地', plotCode: '', plotName: '', type: 'storage', status: 'processing', image: ORCHARD_IMGS[3], date: '2026-09-18', resolution: '10000×5000', desc: '冷库货架与温控设备全景，拼接处理中', views: 0 },
+  { id: 5,  code: 'VR-005', name: '天水麦积区基地 · 东区观景台', base: '天水麦积区基地', plotCode: 'D-002', plotName: '东区2号地', type: 'viewpoint', status: 'published', image: ORCHARD_IMGS[4], date: '2026-09-19', resolution: '14000×7000', desc: '观景台俯瞰东区连片果园，可见梯田与防风林带', views: 2134 },
+  { id: 6,  code: 'VR-006', name: '天水秦州基地 · 园区主入口', base: '天水秦州基地', plotCode: '', plotName: '', type: 'entrance', status: 'published', image: ORCHARD_IMGS[5], date: '2026-09-20', resolution: '12000×6000', desc: '秦州基地入口道路与门禁系统全景', views: 1823 },
+  { id: 7,  code: 'VR-007', name: '天水秦州基地 · 北区1号地', base: '天水秦州基地', plotCode: 'D-004', plotName: '北区1号地', type: 'plot', status: 'draft', image: ORCHARD_IMGS[6], date: '2026-09-21', resolution: '12000×6000', desc: '花牛苹果老园全景，待补充点位标注', views: 0 },
+  { id: 8,  code: 'VR-008', name: '天水甘谷基地 · 南区1号地', base: '天水甘谷基地', plotCode: 'D-005', plotName: '南区1号地', type: 'plot', status: 'published', image: ORCHARD_IMGS[7], date: '2026-09-22', resolution: '12000×6000', desc: '甘谷基地南区果园全景，可对照病虫害巡检记录', views: 1678 },
+  { id: 9,  code: 'VR-009', name: '天水甘谷基地 · 果园观景台', base: '天水甘谷基地', plotCode: 'D-012', plotName: '西区3号地', type: 'viewpoint', status: 'offline', image: ORCHARD_IMGS[8], date: '2026-09-23', resolution: '14000×7000', desc: '因观景台改造暂时下架，改造完成后重新发布', views: 1425 },
+  { id: 10, code: 'VR-010', name: '青岛莱西基地 · 园区主入口', base: '青岛莱西基地', plotCode: '', plotName: '', type: 'entrance', status: 'published', image: ORCHARD_IMGS[9], date: '2026-09-24', resolution: '12000×6000', desc: '莱西基地主入口与展示牌全景', views: 1173 },
+  { id: 11, code: 'VR-011', name: '青岛莱西基地 · 冷链仓储中心', base: '青岛莱西基地', plotCode: '', plotName: '', type: 'storage', status: 'processing', image: ORCHARD_IMGS[10], date: '2026-09-25', resolution: '10000×5000', desc: '气调库与分拣区全景，正在转码为移动端切片', views: 0 },
+  { id: 12, code: 'VR-012', name: '天水麦积区基地 · 东区2号地', base: '天水麦积区基地', plotCode: 'D-002', plotName: '东区2号地', type: 'plot', status: 'draft', image: ORCHARD_IMGS[11], date: '2026-09-26', resolution: '12000×6000', desc: '东区2号地树势记录全景，尚未发布', views: 0 }
 ];
 
 let filteredData = [...mockData];
 let currentEditId = null;
+let pendingFile = null;
+let pendingDeleteId = null;
+
+/* 基地名归一化：忽略「基地」与末尾行政区后缀，用于匹配地块归属 */
+function normBase(name) {
+  return String(name || '').replace(/基地$/, '').replace(/[区县市]$/, '');
+}
+
+function getPlotsByBase(baseName) {
+  if (!baseName) return [];
+  const key = normBase(baseName);
+  return PLOT_MASTER.filter(p => normBase(p.enterprise) === key);
+}
 
 document.addEventListener('DOMContentLoaded', function() {
+  fillBaseOptions();
   renderScenes();
+  bindUploadArea();
+
+  const nameInput = document.getElementById('editName');
+  nameInput.addEventListener('input', function() {
+    nameInput.dataset.touched = '1';
+  });
 });
+
+/* 上传区拖拽 */
+function bindUploadArea() {
+  const area = document.getElementById('uploadArea');
+  if (!area) return;
+
+  ['dragenter', 'dragover'].forEach(function(evt) {
+    area.addEventListener(evt, function(e) {
+      e.preventDefault();
+      area.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function(evt) {
+    area.addEventListener(evt, function(e) {
+      e.preventDefault();
+      area.classList.remove('dragover');
+    });
+  });
+  area.addEventListener('drop', function(e) {
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file) return;
+    const input = document.getElementById('editFile');
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    handleFileChange(input);
+  });
+}
+
+function fillBaseOptions() {
+  const baseSelect = document.getElementById('baseSelect');
+  baseSelect.innerHTML = '<option value="">全部基地</option>'
+    + BASE_LIST.map(name => `<option value="${name}">${name}</option>`).join('');
+
+  const editBase = document.getElementById('editBase');
+  editBase.innerHTML = BASE_LIST.map(name => `<option value="${name}">${name}</option>`).join('');
+}
 
 function renderScenes() {
   const grid = document.getElementById('sceneGrid');
-  grid.innerHTML = filteredData.map(item => `
-    <div class="scene-card" onclick="previewScene(${item.id})">
-      <div class="scene-thumb" style="background:var(--gray-100);">
-        <img src="${item.image}" alt="${item.name}" style="width:100%; height:100%; object-fit:cover; border-radius:8px;" onerror="this.style.display='none';">
-        <div class="scene-badge">${item.groupName}</div>
-      </div>
-      <div class="scene-info">
-        <div class="scene-title">${item.name}</div>
-        <div class="scene-meta">${item.date} · ${item.views.toLocaleString()}次浏览</div>
-      </div>
-    </div>
-  `).join('');
-}
+  const empty = document.getElementById('emptyState');
 
-function shadeColor(color, percent) {
-  const num = parseInt(color.replace('#', ''), 16);
-  const amt = Math.round(2.55 * percent);
-  const R = (num >> 16) + amt;
-  const G = (num >> 8 & 0x00FF) + amt;
-  const B = (num & 0x0000FF) + amt;
-  return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 + (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 + (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+  document.getElementById('resultCount').textContent = filteredData.length;
+
+  if (!filteredData.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = filteredData.map(item => {
+    const st = STATUS_MAP[item.status] || STATUS_MAP.draft;
+    const typeName = TYPE_MAP[item.type] || '其他';
+    const plotText = item.plotCode ? `${item.plotCode} · ${item.plotName}` : '无关联地块';
+    return `
+      <article class="scene-card">
+        <div class="scene-thumb">
+          <img src="${item.image}" alt="${item.name}" onerror="this.style.display='none';">
+          <span class="scene-status status-tag ${st.cls}">${st.text}</span>
+          <span class="scene-pano">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"/></svg>
+            360° 全景
+          </span>
+        </div>
+        <div class="scene-body">
+          <div class="scene-code">${item.code}</div>
+          <div class="scene-title">${item.name}</div>
+          <div class="scene-tags">
+            <span class="scene-tag">${typeName}</span>
+            <span class="scene-tag">${plotText}</span>
+          </div>
+          <dl class="scene-meta">
+            <div><dt>所属基地</dt><dd>${item.base}</dd></div>
+            <div><dt>拍摄信息</dt><dd>${item.date || '—'} · ${item.resolution || '—'}</dd></div>
+            <div><dt>浏览次数</dt><dd>${item.views ? item.views.toLocaleString() + ' 次' : '—'}</dd></div>
+          </dl>
+        </div>
+        <div class="scene-actions">
+          <button class="action-btn detail" onclick="previewScene(${item.id})">预览</button>
+          <button class="action-btn edit" onclick="editScene(${item.id})">编辑</button>
+          <button class="action-btn" onclick="togglePublish(${item.id})">${item.status === 'published' ? '下架' : '发布'}</button>
+          <button class="action-btn delete" onclick="confirmDelete(${item.id})">删除</button>
+        </div>
+      </article>
+    `;
+  }).join('');
 }
 
 function searchData() {
-  const group = document.getElementById('groupSelect').value;
-  const name = document.getElementById('sceneNameInput').value.toLowerCase();
-  
+  const base = document.getElementById('baseSelect').value;
+  const status = document.getElementById('statusSelect').value;
+  const type = document.getElementById('typeSelect').value;
+  const keyword = document.getElementById('keywordInput').value.trim().toLowerCase();
+
   filteredData = mockData.filter(item => {
-    if (group && item.group !== group) return false;
-    if (name && !item.name.toLowerCase().includes(name)) return false;
+    if (base && item.base !== base) return false;
+    if (status && item.status !== status) return false;
+    if (type && item.type !== type) return false;
+    if (keyword) {
+      const hay = (item.name + ' ' + item.code + ' ' + (item.plotCode || '') + ' ' + (item.plotName || '')).toLowerCase();
+      if (!hay.includes(keyword)) return false;
+    }
     return true;
   });
-  
+
+  updateFilterHint({ base, status, type, keyword });
   renderScenes();
-  showToast(`找到 ${filteredData.length} 个场景`);
+}
+
+function updateFilterHint(filters) {
+  const parts = [];
+  if (filters.base) parts.push(`基地：${filters.base}`);
+  if (filters.status) parts.push(`状态：${STATUS_MAP[filters.status].text}`);
+  if (filters.type) parts.push(`类型：${TYPE_MAP[filters.type]}`);
+  if (filters.keyword) parts.push(`关键词：${filters.keyword}`);
+  document.getElementById('activeFilterHint').textContent =
+    parts.length ? '当前筛选 · ' + parts.join('　|　') : '';
 }
 
 function previewScene(id) {
   const item = mockData.find(d => d.id === id);
   if (!item) return;
+  const st = STATUS_MAP[item.status] || STATUS_MAP.draft;
 
   document.getElementById('previewContent').innerHTML = `
-    <div class="preview-image" style="background:var(--gray-100);">
-      <img src="${item.image}" alt="${item.name}" style="width:100%; height:100%; object-fit:cover; border-radius:12px;">
-      <div class="preview-badges"><span class="preview-badge">${item.groupName}</span></div>
+    <div class="preview-image">
+      <img src="${item.image}" alt="${item.name}" onerror="this.style.display='none';">
+      <div class="preview-badges"><span class="status-tag ${st.cls}">${st.text}</span></div>
     </div>
     <div class="preview-info">
+      <div class="info-item"><span class="info-label">场景编号</span><span class="info-value">${item.code}</span></div>
       <div class="info-item"><span class="info-label">场景名称</span><span class="info-value">${item.name}</span></div>
-      <div class="info-item"><span class="info-label">场景分组</span><span class="info-value">${item.groupName}</span></div>
-      <div class="info-item"><span class="info-label">拍摄日期</span><span class="info-value">${item.date}</span></div>
-      <div class="info-item"><span class="info-label">浏览次数</span><span class="info-value">${item.views.toLocaleString()} 次</span></div>
-      <div class="info-item" style="grid-column:span 2;"><span class="info-label">场景描述</span><span class="info-value">${item.desc}</span></div>
+      <div class="info-item"><span class="info-label">所属基地</span><span class="info-value">${item.base}</span></div>
+      <div class="info-item"><span class="info-label">场景类型</span><span class="info-value">${TYPE_MAP[item.type] || '其他'}</span></div>
+      <div class="info-item"><span class="info-label">关联地块 / 点位</span><span class="info-value">${item.plotCode ? item.plotCode + ' · ' + item.plotName : '无关联地块'}</span></div>
+      <div class="info-item"><span class="info-label">拍摄日期</span><span class="info-value">${item.date || '—'}</span></div>
+      <div class="info-item"><span class="info-label">全景分辨率</span><span class="info-value">${item.resolution || '—'}</span></div>
+      <div class="info-item"><span class="info-label">浏览次数</span><span class="info-value">${item.views ? item.views.toLocaleString() + ' 次' : '—'}</span></div>
+      <div class="info-item" style="grid-column:1 / -1;"><span class="info-label">场景描述</span><span class="info-value" style="font-weight:400;">${item.desc || '—'}</span></div>
     </div>
   `;
   currentEditId = id;
@@ -247,13 +543,24 @@ function previewScene(id) {
 function editScene(id) {
   const item = mockData.find(d => d.id === id);
   if (!item) return;
-  
-  document.getElementById('editModalTitle').textContent = '编辑场景';
+
+  document.getElementById('editModalTitle').textContent = '编辑全景';
   document.getElementById('editName').value = item.name;
-  document.getElementById('editGroup').value = item.group;
-  document.getElementById('editDesc').value = item.desc;
-  document.getElementById('editDate').value = item.date;
-  
+  document.getElementById('editBase').value = item.base;
+  fillPlotOptions(item.base, item.plotCode);
+  document.getElementById('editType').value = item.type;
+  document.getElementById('editStatus').value = item.status;
+  document.getElementById('editDate').value = item.date || '';
+  document.getElementById('editDesc').value = item.desc || '';
+
+  pendingFile = null;
+  showFilePlaceholder();
+  document.getElementById('uploadFile').classList.add('show');
+  document.getElementById('uploadEmpty').style.display = 'none';
+  document.getElementById('uploadThumb').src = item.image;
+  document.getElementById('uploadName').textContent = item.name + ' · 已上传全景图';
+  document.getElementById('uploadSize').textContent = `分辨率 ${item.resolution || '—'}，重新选择可替换`;
+
   currentEditId = id;
   openModal('editModal');
 }
@@ -264,24 +571,182 @@ function editFromPreview() {
 }
 
 function openAddModal() {
-  document.getElementById('editModalTitle').textContent = '新增场景';
+  document.getElementById('editModalTitle').textContent = '上传全景';
   document.getElementById('editName').value = '';
-  document.getElementById('editGroup').value = 'apple';
-  document.getElementById('editDesc').value = '';
+  document.getElementById('editName').dataset.touched = '';
+  document.getElementById('editBase').value = BASE_LIST[0];
+  fillPlotOptions(BASE_LIST[0], '');
+  document.getElementById('editType').value = 'entrance';
+  document.getElementById('editStatus').value = 'draft';
   document.getElementById('editDate').value = '';
+  document.getElementById('editDesc').value = '';
+  document.getElementById('editFile').value = '';
+
   currentEditId = null;
+  pendingFile = null;
+  showFilePlaceholder();
+  autoName();
+
   openModal('editModal');
+}
+
+function showFilePlaceholder() {
+  document.getElementById('uploadEmpty').style.display = 'block';
+  document.getElementById('uploadFile').classList.remove('show');
+}
+
+function fillPlotOptions(baseName, selectedCode) {
+  const select = document.getElementById('editPlot');
+  const plots = getPlotsByBase(baseName);
+  if (!plots.length) {
+    select.innerHTML = '<option value="">该基地暂无关联地块</option>';
+    select.disabled = true;
+    return;
+  }
+  select.disabled = false;
+  select.innerHTML = '<option value="">无关联地块 / 点位</option>'
+    + plots.map(p => `<option value="${p.code}">${p.code} · ${p.name}</option>`).join('');
+  select.value = selectedCode || '';
+}
+
+function onBaseChange() {
+  const base = document.getElementById('editBase').value;
+  fillPlotOptions(base, '');
+  autoName();
+}
+
+function onPlotChange() {
+  autoName();
+}
+
+/* 新增时按「基地 · 地块/点位」自动带出场景名称，避免出现无法定位的命名 */
+function autoName() {
+  if (currentEditId) return;
+  const nameInput = document.getElementById('editName');
+  if (nameInput.dataset.touched === '1') return;
+
+  const base = document.getElementById('editBase').value;
+  const plotCode = document.getElementById('editPlot').value;
+  const typeName = TYPE_MAP[document.getElementById('editType').value];
+  const plot = PLOT_MASTER.find(p => p.code === plotCode);
+  nameInput.value = plot ? `${base} · ${plot.name}` : `${base} · ${typeName}`;
+}
+
+function handleFileChange(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (!/^image\/(jpeg|png)$/.test(file.type)) {
+    showToast('仅支持 JPG / PNG 格式的全景图', 'error');
+    input.value = '';
+    return;
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    showToast('文件超过 20MB，请压缩后再上传', 'error');
+    input.value = '';
+    return;
+  }
+
+  pendingFile = { name: file.name, size: file.size, url: URL.createObjectURL(file), resolution: '' };
+
+  const img = new Image();
+  img.onload = function() {
+    pendingFile.resolution = `${img.naturalWidth}×${img.naturalHeight}`;
+    document.getElementById('uploadSize').textContent =
+      `${(file.size / 1024 / 1024).toFixed(1)} MB · ${pendingFile.resolution}`;
+  };
+  img.src = pendingFile.url;
+
+  document.getElementById('uploadEmpty').style.display = 'none';
+  document.getElementById('uploadFile').classList.add('show');
+  document.getElementById('uploadThumb').src = pendingFile.url;
+  document.getElementById('uploadName').textContent = file.name;
+  document.getElementById('uploadSize').textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function clearFile(e) {
+  e.stopPropagation();
+  document.getElementById('editFile').value = '';
+  pendingFile = null;
+  showFilePlaceholder();
 }
 
 function saveEdit() {
   const name = document.getElementById('editName').value.trim();
+  const base = document.getElementById('editBase').value;
+  const plotCode = document.getElementById('editPlot').value;
+  const type = document.getElementById('editType').value;
+  const status = document.getElementById('editStatus').value;
+  const date = document.getElementById('editDate').value;
+  const desc = document.getElementById('editDesc').value.trim();
+
   if (!name) {
     showToast('请输入场景名称', 'error');
     return;
   }
-  
+  if (!currentEditId && !pendingFile) {
+    showToast('请选择全景文件', 'error');
+    return;
+  }
+
+  const plot = PLOT_MASTER.find(p => p.code === plotCode);
+  const payload = {
+    name,
+    base,
+    plotCode: plot ? plot.code : '',
+    plotName: plot ? plot.name : '',
+    type,
+    status,
+    date,
+    desc
+  };
+
+  if (pendingFile) {
+    payload.image = pendingFile.url;
+    payload.resolution = pendingFile.resolution || '12000×6000';
+  }
+
+  if (currentEditId) {
+    const item = mockData.find(d => d.id === currentEditId);
+    Object.assign(item, payload);
+    showToast('场景已保存');
+  } else {
+    const nextId = mockData.reduce((max, d) => Math.max(max, d.id), 0) + 1;
+    const nextCode = 'VR-' + String(nextId).padStart(3, '0');
+    mockData.unshift({
+      id: nextId,
+      code: nextCode,
+      views: 0,
+      ...payload
+    });
+    showToast('全景已上传，当前为' + (STATUS_MAP[status] || STATUS_MAP.draft).text + '状态');
+  }
+
   closeModal('editModal');
-  showToast(currentEditId ? '场景已保存' : '场景已创建');
+  searchData();
+}
+
+function togglePublish(id) {
+  const item = mockData.find(d => d.id === id);
+  if (!item) return;
+  item.status = item.status === 'published' ? 'offline' : 'published';
+  showToast(item.status === 'published' ? '场景已发布' : '场景已下架');
+  searchData();
+}
+
+function confirmDelete(id) {
+  const item = mockData.find(d => d.id === id);
+  if (!item) return;
+  pendingDeleteId = id;
+  document.getElementById('confirmText').textContent = `确认删除「${item.name}」？`;
+  openModal('confirmModal');
+}
+
+function doDelete() {
+  const index = mockData.findIndex(d => d.id === pendingDeleteId);
+  if (index > -1) mockData.splice(index, 1);
+  closeModal('confirmModal');
+  showToast('场景已删除');
+  searchData();
 }
 
 function openModal(id) { document.getElementById(id).classList.add('active'); }
@@ -298,7 +763,7 @@ function showToast(message, type = 'success') {
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
-  <script src="js/search-helper.js"></script>
-  <script src="js/typography.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
 </body>
 </html>

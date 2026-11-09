@@ -304,7 +304,8 @@ const Modal = (function() {
           if (field.placeholder) formHtml += `<div class="form-hint">${field.placeholder}</div>`;
           break;
         default:
-          formHtml += `<input type="${field.type || 'text'}" class="form-input" name="${field.name}" value="${value}" placeholder="${placeholder}" ${required} />`;
+          const extraAttrs = `${field.step ? `step="${field.step}"` : ''}${field.min !== undefined ? ` min="${field.min}"` : ''}${field.max !== undefined ? ` max="${field.max}"` : ''}`;
+          formHtml += `<input type="${field.type || 'text'}" class="form-input" name="${field.name}" value="${value}" placeholder="${placeholder}" ${extraAttrs} ${required} />`;
       }
 
       if (field.hint) {

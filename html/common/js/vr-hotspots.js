@@ -3,12 +3,18 @@
         {
             id: "scene_main",
             name: "园区主入口",
+            baseId: "ENT001",
+            baseName: "天水麦积区基地",
+            plotCode: "D-001",
+            plotName: "东区1号地",
+            sceneType: "entrance",
+            status: "published",
             image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
             preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
             yaw: 180,
             pitch: 0,
             hfov: 100,
-            hotSpots: [
+            hotspots: [
                 {
                     id: "hotspot_plot_a1",
                     type: "plot",
@@ -54,8 +60,8 @@
                     type: "scene",
                     pitch: 0,
                     yaw: 180,
-                    title: "B区全景",
-                    content: "<div style='padding:8px;text-align:center;'><h4 style='margin:0 0 8px 0;color:#2b6e3c;font-size:14px;'>B区全景</h4><p style='margin:0;font-size:12px;color:#64748b;'>点击跳转查看B区全景</p><div style='margin-top:8px;padding:6px 12px;background:#2b6e3c;color:#fff;border-radius:12px;font-size:12px;'>进入 B区 →</div></div>",
+                    title: "东区2号地",
+                    content: "<div style='padding:8px;text-align:center;'><h4 style='margin:0 0 8px 0;color:#2b6e3c;font-size:14px;'>东区2号地</h4><p style='margin:0;font-size:12px;color:#64748b;'>点击跳转查看东区2号地全景</p><div style='margin-top:8px;padding:6px 12px;background:#2b6e3c;color:#fff;border-radius:12px;font-size:12px;'>进入东区2号地 →</div></div>",
                     targetId: "scene_b",
                     status: "normal"
                 }
@@ -63,7 +69,13 @@
         },
         {
             id: "scene_b",
-            name: "B区全景",
+            name: "东区2号地",
+            baseId: "ENT001",
+            baseName: "天水麦积区基地",
+            plotCode: "D-002",
+            plotName: "东区2号地",
+            sceneType: "plot",
+            status: "published",
             image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
             preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
             yaw: 0,
@@ -114,7 +126,13 @@
         },
         {
             id: "scene_c",
-            name: "C区全景",
+            name: "东区3号地",
+            baseId: "ENT001",
+            baseName: "天水麦积区基地",
+            plotCode: "D-010",
+            plotName: "东区3号地",
+            sceneType: "plot",
+            status: "published",
             image: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
             preview: "../applefarm_dataanlye/images/Aerial_view_of_a_lush_green_ap_2026-05-20T10-52-24.png",
             yaw: 0,

@@ -93,6 +93,7 @@
         }
         .scene-tab {
             flex: 1;
+            white-space: nowrap;
             padding: 10px 12px;
             background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(10px);
@@ -342,11 +343,7 @@
         </div>
     </div>
     
-    <div class="scene-tabs">
-        <div class="scene-tab active" data-scene="scene_main">主入口</div>
-        <div class="scene-tab" data-scene="scene_b">B区</div>
-        <div class="scene-tab" data-scene="scene_c">C区</div>
-    </div>
+    <div class="scene-tabs" id="sceneTabs"></div>
     
     <div class="legend-bar">
         <div class="legend-item"><span class="legend-dot plot"></span> 地块</div>
@@ -642,14 +639,31 @@
             return d;
         }
         
-        document.querySelectorAll('.scene-tab').forEach(function(tab) {
-            tab.addEventListener('click', function() {
-                switchScene(this.dataset.scene);
+        /** 场景切换标签：由 vr-hotspots.js 的场景配置生成，只展示非下架场景 */
+        function getAvailableScenes() {
+            return (vrHotspotsData.scenes || []).filter(function (scene) {
+                return scene.status !== 'offline';
             });
+        }
+
+        function renderSceneTabs() {
+            var wrap = document.getElementById('sceneTabs');
+            if (!wrap) return;
+            var scenes = getAvailableScenes();
+            wrap.innerHTML = scenes.map(function (scene) {
+                return '<div class="scene-tab" data-scene="' + scene.id + '">' + scene.name + '</div>';
+            }).join('');
+        }
+
+        document.getElementById('sceneTabs').addEventListener('click', function (e) {
+            var tab = e.target.closest('.scene-tab');
+            if (tab) switchScene(tab.dataset.scene);
         });
-        
-        window.addEventListener('load', function() {
-            initViewer('scene_main');
+
+        window.addEventListener('load', function () {
+            renderSceneTabs();
+            var scenes = getAvailableScenes();
+            initViewer(scenes.length ? scenes[0].id : null);
         });
     </script>
 </body>

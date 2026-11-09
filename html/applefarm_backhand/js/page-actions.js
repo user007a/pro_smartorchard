@@ -29,6 +29,16 @@ function buildUserOptionsMulti(selectedValues) {
   return opts;
 }
 
+// 基地状态 4 态（筹建中 / 已建成 / 运营中 / 已停用）
+const BASE_STATUS_OPTIONS = [
+  { value: 'planning', label: '筹建中' },
+  { value: 'built', label: '已建成' },
+  { value: 'active', label: '运营中' },
+  { value: 'disabled', label: '已停用' }
+];
+// 基地图片上传上限：4 张
+const BASE_IMAGE_MAX = 4;
+
 const PageActions = (function() {
   // 模拟数据
   const mockData = {
@@ -45,38 +55,43 @@ const PageActions = (function() {
       { id: 7, name: '樱桃园全景-采摘区', group: '樱桃园', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop' },
       { id: 8, name: '樱桃园全景-观景台', group: '樱桃园', image: 'https://images.unsplash.com/photo-1515907007725-a1e3d70c6e73?w=400&h=300&fit=crop' }
     ],
+    // 基地状态 4 态：planning 筹建中 / built 已建成 / active 运营中 / disabled 已停用
     enterprises: [
-      { id: 'ENT001', code: 'JD-001', name: '麦积区花牛镇基地', address: '甘肃省天水市麦积区花牛镇', area: 2800, manager: '惠加宁', phone: '133-0791-2585', status: 'active',
+      { id: 'ENT001', code: 'JD-001', name: '天水麦积区基地', address: '甘肃省天水市麦积区', area: 2800, manager: '惠加宁', phone: '133-0791-2585', status: 'active',
         baseImages: [
           'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop',
           'https://images.unsplash.com/photo-1570913149827-d2ac84ab3f9a?w=400&h=300&fit=crop'
-        ],
-        vrScene: { url: 'https://images.unsplash.com/photo-1584306670957-acf935f5033c?w=400&h=300&fit=crop', name: '苹果园全景-采摘区' } },
-      { id: 'ENT002', code: 'JD-002', name: '秦州区皂郊镇基地', address: '甘肃省天水市秦州区皂郊镇', area: 1600, manager: '黄忠坚', phone: '139-7941-2180', status: 'active',
+        ] },
+      { id: 'ENT002', code: 'JD-002', name: '天水秦州基地', address: '甘肃省天水市秦州区', area: 1600, manager: '黄忠坚', phone: '139-7941-2180', status: 'active',
         baseImages: [
           'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?w=400&h=300&fit=crop'
-        ],
-        vrScene: { url: 'https://images.unsplash.com/photo-1560493676-04071c5f467b?w=400&h=300&fit=crop', name: '葡萄园全景-藤架区' } },
-      { id: 'ENT003', code: 'JD-003', name: '甘谷县磐安镇基地', address: '甘肃省天水市甘谷县磐安镇', area: 2100, manager: '徐水应', phone: '138-7941-8637', status: 'active' },
-      { id: 'ENT004', code: 'JD-004', name: '秦安县叶堡镇基地', address: '甘肃省天水市秦安县叶堡镇', area: 1800, manager: '朱泉龙', phone: '182-9645-2648', status: 'inactive' },
-      { id: 'ENT005', code: 'JD-005', name: '清水县永清镇基地', address: '甘肃省天水市清水县永清镇', area: 3200, manager: '陈小忠', phone: '187-7941-7899', status: 'active' },
-      { id: 'ENT006', code: 'JD-006', name: '武山县洛门镇基地', address: '甘肃省天水市武山县洛门镇', area: 1500, manager: '廖春亮', phone: '137-6767-9075', status: 'disabled' },
-      { id: 'ENT007', code: 'JD-007', name: '张家川县龙山镇基地', address: '甘肃省天水市张家川回族自治县龙山镇', area: 2400, manager: '李建明', phone: '139-7043-2567', status: 'active' },
-      { id: 'ENT008', code: 'JD-008', name: '秦州区太京镇基地', address: '甘肃省天水市秦州区太京镇', area: 1200, manager: '李根', phone: '130-3058-7809', status: 'inactive' },
-      { id: 'ENT009', code: 'JD-009', name: '麦积区马跑泉镇基地', address: '甘肃省天水市麦积区马跑泉镇', area: 1900, manager: '张才孙', phone: '150-7942-7679', status: 'active' },
-      { id: 'ENT010', code: 'JD-010', name: '甘谷县六峰镇基地', address: '甘肃省天水市甘谷县六峰镇', area: 800, manager: '刘全国', phone: '138-7040-9283', status: 'active' },
-      { id: 'ENT011', code: 'JD-011', name: '秦安县兴国镇基地', address: '甘肃省天水市秦安县兴国镇', area: 650, manager: '毛定卫', phone: '159-7958-0151', status: 'disabled' },
-      { id: 'ENT012', code: 'JD-012', name: '清水县红堡镇基地', address: '甘肃省天水市清水县红堡镇', area: 3500, manager: '叶三东', phone: '133-0794-6219', status: 'active' },
-      { id: 'ENT013', code: 'JD-013', name: '武山县城关镇基地', address: '甘肃省天水市武山县城关镇', area: 1100, manager: '周才贵', phone: '133-0704-3277', status: 'inactive' },
-      { id: 'ENT014', code: 'JD-014', name: '张家川县恭门镇基地', address: '甘肃省天水市张家川回族自治县恭门镇', area: 4200, manager: '程名高', phone: '138-7941-1631', status: 'active' },
-      { id: 'ENT015', code: 'JD-015', name: '秦州区牡丹镇基地', address: '甘肃省天水市秦州区牡丹镇', area: 900, manager: '邓小华', phone: '151-7945-0918', status: 'active' },
-      { id: 'ENT016', code: 'JD-016', name: '麦积区中滩镇基地', address: '甘肃省天水市麦积区中滩镇', area: 2600, manager: '周成友', phone: '134-0794-5529', status: 'active' },
-      { id: 'ENT017', code: 'JD-017', name: '甘谷县大像山镇基地', address: '甘肃省天水市甘谷县大像山镇', area: 1700, manager: '危红卫', phone: '138-7045-6916', status: 'inactive' },
-      { id: 'ENT018', code: 'JD-018', name: '秦安县莲花镇基地', address: '甘肃省天水市秦安县莲花镇', area: 3100, manager: '方超', phone: '134-3794-2227', status: 'active' },
-      { id: 'ENT019', code: 'JD-019', name: '清水县白沙镇基地', address: '甘肃省天水市清水县白沙镇', area: 2300, manager: '曹红英', phone: '151-7948-0005', status: 'active' },
-      { id: 'ENT020', code: 'JD-020', name: '武山县滩歌镇基地', address: '甘肃省天水市武山县滩歌镇', area: 1400, manager: '崔新根', phone: '139-7040-2086', status: 'disabled' },
-      { id: 'ENT021', code: 'JD-021', name: '秦州区关子镇基地', address: '甘肃省天水市秦州区关子镇', area: 1850, manager: '惠加宁', phone: '133-0791-2585', status: 'active' },
-      { id: 'ENT022', code: 'JD-022', name: '麦积区元龙镇基地', address: '甘肃省天水市麦积区元龙镇', area: 2000, manager: '黄忠坚', phone: '139-7941-2180', status: 'active' }
+        ] },
+      { id: 'ENT003', code: 'JD-003', name: '青岛莱西基地', address: '山东省青岛市莱西市', area: 2100, manager: '徐水应', phone: '138-7941-8637', status: 'active',
+        baseImages: [
+          'https://images.unsplash.com/photo-1584306670957-acf935f5033c?w=400&h=300&fit=crop'
+        ] },
+      { id: 'ENT004', code: 'JD-004', name: '龙口南山基地', address: '山东省烟台市龙口市', area: 1800, manager: '朱泉龙', phone: '182-9645-2648', status: 'built',
+        baseImages: [
+          'https://images.unsplash.com/photo-1560493676-04071c5f467b?w=400&h=300&fit=crop'
+        ] },
+      { id: 'ENT005', code: 'JD-005', name: '天水甘谷基地', address: '甘肃省天水市甘谷县', area: 3200, manager: '陈小忠', phone: '187-7941-7899', status: 'planning' },
+      { id: 'ENT006', code: 'JD-006', name: '招远金岭基地', address: '山东省烟台市招远市', area: 1500, manager: '廖春亮', phone: '137-6767-9075', status: 'disabled' },
+      { id: 'ENT007', code: 'JD-007', name: '天水梨乡基地', address: '甘肃省天水市秦安县', area: 2400, manager: '李建明', phone: '139-7043-2567', status: 'active' },
+      { id: 'ENT008', code: 'JD-008', name: '海阳万米海滩基地', address: '山东省烟台市海阳市', area: 1200, manager: '李根', phone: '130-3058-7809', status: 'built' },
+      { id: 'ENT009', code: 'JD-009', name: '牟平养马岛基地', address: '山东省烟台市牟平区', area: 1900, manager: '张才孙', phone: '150-7942-7679', status: 'active' },
+      { id: 'ENT010', code: 'JD-010', name: '福山张格庄基地', address: '山东省烟台市福山区', area: 800, manager: '刘全国', phone: '138-7040-9283', status: 'active' },
+      { id: 'ENT011', code: 'JD-011', name: '芝罘岛基地', address: '山东省烟台市芝罘区', area: 650, manager: '毛定卫', phone: '159-7958-0151', status: 'disabled' },
+      { id: 'ENT012', code: 'JD-012', name: '开发区八角基地', address: '山东省烟台市经济技术开发区', area: 3500, manager: '叶三东', phone: '133-0794-6219', status: 'active' },
+      { id: 'ENT013', code: 'JD-013', name: '高新区科技基地', address: '山东省烟台市高新技术产业开发区', area: 1100, manager: '周才贵', phone: '133-0704-3277', status: 'planning' },
+      { id: 'ENT014', code: 'JD-014', name: '昆嵛山生态基地', address: '山东省烟台市昆嵛山国家级自然保护区', area: 4200, manager: '程名高', phone: '138-7941-1631', status: 'planning' },
+      { id: 'ENT015', code: 'JD-015', name: '长岛海洋基地', address: '山东省烟台市长岛县', area: 900, manager: '邓小华', phone: '151-7945-0918', status: 'built' },
+      { id: 'ENT016', code: 'JD-016', name: '日照岚山基地', address: '山东省日照市岚山区', area: 2600, manager: '周成友', phone: '134-0794-5529', status: 'active' },
+      { id: 'ENT017', code: 'JD-017', name: '潍坊诸城基地', address: '山东省潍坊市诸城市', area: 1700, manager: '危红卫', phone: '138-7045-6916', status: 'built' },
+      { id: 'ENT018', code: 'JD-018', name: '临沂沂水基地', address: '山东省临沂市沂水县', area: 3100, manager: '方超', phone: '134-3794-2227', status: 'active' },
+      { id: 'ENT019', code: 'JD-019', name: '泰安肥城基地', address: '山东省泰安市肥城市', area: 2300, manager: '曹红英', phone: '151-7948-0005', status: 'active' },
+      { id: 'ENT020', code: 'JD-020', name: '济宁曲阜基地', address: '山东省济宁市曲阜市', area: 1400, manager: '崔新根', phone: '139-7040-2086', status: 'disabled' },
+      { id: 'ENT021', code: 'JD-021', name: '滨州阳信基地', address: '山东省滨州市阳信县', area: 1850, manager: '惠加宁', phone: '133-0791-2585', status: 'active' },
+      { id: 'ENT022', code: 'JD-022', name: '德州乐陵基地', address: '山东省德州市乐陵市', area: 2000, manager: '黄忠坚', phone: '139-7941-2180', status: 'active' }
     ],
     plots: [
       { id: 'PLOT001', code: 'D-001', name: '东区1号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 85, year: 2018, status: 'normal', manager: '惠加宁',
@@ -193,9 +208,10 @@ const PageActions = (function() {
         success: '验证通过'
       },
       enterprise: {
-        active: '正常运营',
-        inactive: '已停用',
-        maintain: '维护中'
+        planning: '筹建中',
+        built: '已建成',
+        active: '运营中',
+        disabled: '已停用'
       },
       plot: {
         normal: '正常',
@@ -230,28 +246,34 @@ const PageActions = (function() {
 
 
 
-  // ========== 新建/编辑表单中：基地图片多图上传 custom 字段 ==========
-  function buildBaseImagesUploader(images) {
-    const list = Array.isArray(images) ? images : [];
-    const previews = list.map((url, i) => `
+  // ========== 新建/编辑表单中：图片多图上传 custom 字段 ==========
+  // options: { max 上限张数（默认 9）, label 字段名, hint 辅助说明 }
+  function buildBaseImagesUploader(images, options) {
+    const opt = options || {};
+    const max = opt.max || 9;
+    const label = opt.label || '基地图片';
+    const list = (Array.isArray(images) ? images : []).slice(0, max);
+    const previews = list.map((url) => `
       <div class="ent-upload-item" data-url="${url.replace(/"/g, '&quot;')}" data-source="preset">
-        <img src="${url}" alt="基地图片" />
-        <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">×</button>
-        <span class="ent-upload-source">${url.startsWith('data:') ? '本地上传' : '已上传'}</span>
+        <img src="${url}" alt="${label}" />
+        <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+        </button>
       </div>
     `).join('');
 
     return `
-      <div class="ent-upload" data-field="baseImages">
+      <div class="ent-upload" data-field="baseImages" data-max="${max}">
         <div class="ent-upload-toolbar">
-          <label class="jg-btn jg-btn">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:14px;height:14px;margin-right:4px;">
-              <path d="M8 2V14M2 8H14"/>
+          <label class="ent-upload-btn">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3v10M3 8h10"/>
             </svg>
-            上传图片
+            添加图片
             <input type="file" accept="image/*" multiple class="ent-upload-input" />
           </label>
-          <span class="ent-upload-hint">支持 JPG/PNG，最多 9 张，单张不超过 5MB</span>
+          <span class="ent-upload-count">已上传 <b class="ent-upload-num">${list.length}</b> / ${max} 张</span>
+          <span class="ent-upload-hint">${opt.hint || '支持 JPG / PNG，单张不超过 5MB'}</span>
         </div>
         <div class="ent-upload-list">${previews}</div>
       </div>
@@ -269,47 +291,88 @@ const PageActions = (function() {
     return urls;
   }
 
-  // 弹窗打开后为 enterprise 表单中的 custom 字段绑定交互事件
-  function bindEnterpriseFormInteractions(modal) {
-    // 1. 基地图片：上传
-    const uploadWrap = modal.querySelector('.ent-upload[data-field="baseImages"]');
-    if (uploadWrap) {
-      const list = uploadWrap.querySelector('.ent-upload-list');
-      const fileInput = uploadWrap.querySelector('.ent-upload-input');
+  // 刷新上传控件的计数与剩余空位占位卡
+  function updateUploadState(wrap) {
+    const max = parseInt(wrap.dataset.max, 10) || 4;
+    const count = wrap.querySelectorAll('.ent-upload-item').length;
+    const num = wrap.querySelector('.ent-upload-num');
+    if (num) num.textContent = count;
+    const btn = wrap.querySelector('.ent-upload-btn');
+    if (btn) btn.classList.toggle('is-disabled', count >= max);
+    const fileInput = wrap.querySelector('.ent-upload-input');
+    if (fileInput) fileInput.disabled = count >= max;
 
-      fileInput.addEventListener('change', (e) => {
-        const files = Array.from(e.target.files || []);
-        if (!files.length) return;
-        const existing = list.querySelectorAll('.ent-upload-item').length;
-        const max = 9;
-        const remain = Math.max(0, max - existing);
-        files.slice(0, remain).forEach(file => {
-          if (file.size > 5 * 1024 * 1024) {
-            window.Toast && window.Toast.show(`${file.name} 超过 5MB，已跳过`, 'warning');
-            return;
-          }
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            addBaseImageItem(list, ev.target.result, 'local');
-          };
-          reader.readAsDataURL(file);
-        });
-        e.target.value = '';
-      });
-
-      list.addEventListener('click', (e) => {
-        const removeBtn = e.target.closest('.ent-upload-remove');
-        if (!removeBtn) return;
-        const item = removeBtn.closest('.ent-upload-item');
-        if (item) item.remove();
-      });
+    const list = wrap.querySelector('.ent-upload-list');
+    if (!list) return;
+    // 移除旧的空位占位卡
+    list.querySelectorAll('.ent-upload-slot').forEach(el => el.remove());
+    // 按剩余额度补足占位卡
+    for (let i = count; i < max; i++) {
+      const slot = document.createElement('button');
+      slot.type = 'button';
+      slot.className = 'ent-upload-slot';
+      slot.setAttribute('aria-label', '添加图片');
+      slot.innerHTML = `
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 4v12M4 10h12"/>
+        </svg>
+        <span>${i + 1}</span>
+      `;
+      list.appendChild(slot);
     }
   }
 
+  // 弹窗打开后为表单中的图片上传 custom 字段绑定交互事件
+  function bindEnterpriseFormInteractions(modal) {
+    const uploadWrap = modal.querySelector('.ent-upload[data-field="baseImages"]');
+    if (!uploadWrap) return;
+    const list = uploadWrap.querySelector('.ent-upload-list');
+    const fileInput = uploadWrap.querySelector('.ent-upload-input');
+    const max = parseInt(uploadWrap.dataset.max, 10) || 4;
+
+    updateUploadState(uploadWrap);
+
+    fileInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+      const existing = list.querySelectorAll('.ent-upload-item').length;
+      const remain = Math.max(0, max - existing);
+      if (files.length > remain) {
+        window.Toast && window.Toast.show(`最多上传 ${max} 张图片，超出部分已忽略`, 'warning');
+      }
+      files.slice(0, remain).forEach(file => {
+        if (file.size > 5 * 1024 * 1024) {
+          window.Toast && window.Toast.show(`${file.name} 超过 5MB，已跳过`, 'warning');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          addBaseImageItem(list, ev.target.result, 'local');
+        };
+        reader.readAsDataURL(file);
+      });
+      e.target.value = '';
+    });
+
+    list.addEventListener('click', (e) => {
+      const removeBtn = e.target.closest('.ent-upload-remove');
+      if (removeBtn) {
+        const item = removeBtn.closest('.ent-upload-item');
+        if (item) item.remove();
+        updateUploadState(uploadWrap);
+        return;
+      }
+      const slot = e.target.closest('.ent-upload-slot');
+      if (slot) fileInput.click();
+    });
+  }
+
   function addBaseImageItem(list, url, source, name) {
+    const wrap = list.closest('.ent-upload');
+    const max = wrap ? (parseInt(wrap.dataset.max, 10) || 4) : 4;
     const existingCount = list.querySelectorAll('.ent-upload-item').length;
-    if (existingCount >= 9) {
-      window.Toast && window.Toast.show('最多上传 9 张图片', 'warning');
+    if (existingCount >= max) {
+      window.Toast && window.Toast.show(`最多上传 ${max} 张图片`, 'warning');
       return;
     }
     // 重复检测
@@ -324,16 +387,20 @@ const PageActions = (function() {
     item.dataset.source = source;
     item.innerHTML = `
       <img src="${url}" alt="${name || '基地图片'}" />
-      <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">×</button>
-      <span class="ent-upload-source">${source === 'vr' ? 'VR库' : (url.startsWith('data:') ? '本地上传' : 'VR库')}</span>
+      <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">
+        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+      </button>
     `;
     list.appendChild(item);
+    if (wrap) updateUploadState(wrap);
   }
 
   // 获取状态样式类
   function getStatusClass(status) {
     const classMap = {
-      active: 'status-tag enabled',
+      planning: 'status-tag base-planning',
+      built: 'status-tag base-built',
+      active: 'status-tag base-active',
       normal: 'status-tag enabled',
       enabled: 'status-tag enabled',
       success: 'status-tag enabled',
@@ -439,7 +506,7 @@ const PageActions = (function() {
           { label: '基地编号', name: 'code' },
           { label: '基地名称', name: 'name' },
           { label: '地址', name: 'address' },
-          { label: '面积', name: 'area', render: v => v + ' 亩' },
+          { label: '面积（亩）', name: 'area', render: v => v + ' 亩' },
           { label: '负责人', name: 'manager' },
           { label: '联系电话', name: 'phone' },
           { label: '状态', name: 'status', render: v => `<span class="${getStatusClass(v)}">${getStatusText(v, 'enterprise')}</span>` },
@@ -492,17 +559,13 @@ const PageActions = (function() {
         fields = [
           { name: 'code', label: '基地编号', type: 'text', required: true },
           { name: 'name', label: '基地名称', type: 'text', required: true },
-          { name: 'address', label: '地址', type: 'text', required: true },
-          { name: 'area', label: '面积(亩)', type: 'number', required: true },
-          { name: 'manager', label: '负责人', type: 'select', required: true, options: buildUserOptions(data && data.manager) },
-          { name: 'phone', label: '联系电话', type: 'tel', required: true },
-          { name: 'status', label: '状态', type: 'select', options: [
-            { value: 'active', label: '运营中' },
-            { value: 'inactive', label: '建设中' },
-            { value: 'disabled', label: '已停用' }
-          ]},
+          { name: 'address', label: '地址', type: 'text' },
+          { name: 'area', label: '面积（亩）', type: 'number' },
+          { name: 'manager', label: '负责人', type: 'select', options: buildUserOptions(data && data.manager) },
+          { name: 'phone', label: '联系电话', type: 'tel' },
+          { name: 'status', label: '状态', type: 'select', options: BASE_STATUS_OPTIONS },
           { name: 'baseImages', label: '基地图片', type: 'custom',
-            html: buildBaseImagesUploader(data && data.baseImages),
+            html: buildBaseImagesUploader(data && data.baseImages, { max: BASE_IMAGE_MAX, label: '基地图片' }),
             collect: collectBaseImages },
         ];
         break;
@@ -608,17 +671,13 @@ const PageActions = (function() {
         fields = [
           { name: 'code', label: '基地编号', type: 'text', required: true },
           { name: 'name', label: '基地名称', type: 'text', required: true },
-          { name: 'address', label: '地址', type: 'text', required: true },
-          { name: 'area', label: '面积(亩)', type: 'number', required: true },
-          { name: 'manager', label: '负责人', type: 'select', required: true, options: buildUserOptions() },
-          { name: 'phone', label: '联系电话', type: 'tel', required: true },
-          { name: 'status', label: '状态', type: 'select', options: [
-            { value: 'active', label: '运营中' },
-            { value: 'inactive', label: '建设中' },
-            { value: 'disabled', label: '已停用' }
-          ]},
+          { name: 'address', label: '地址', type: 'text' },
+          { name: 'area', label: '面积（亩）', type: 'number' },
+          { name: 'manager', label: '负责人', type: 'select', options: buildUserOptions() },
+          { name: 'phone', label: '联系电话', type: 'tel' },
+          { name: 'status', label: '状态', type: 'select', options: BASE_STATUS_OPTIONS },
           { name: 'baseImages', label: '基地图片', type: 'custom',
-            html: buildBaseImagesUploader([]),
+            html: buildBaseImagesUploader([], { max: BASE_IMAGE_MAX, label: '基地图片' }),
             collect: collectBaseImages },
         ];
         break;
