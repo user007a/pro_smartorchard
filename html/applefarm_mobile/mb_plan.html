@@ -335,6 +335,7 @@
     </div>
   </div>
 
+  <script src="../applefarm_backhand/js/shared/production-store.js"></script>
   <script>
     const planData = {
       1: {
@@ -445,6 +446,77 @@
     function closePlanModal() {
       document.getElementById('planModal').classList.remove('show');
     }
+  </script>
+  <script>
+    /* 农事计划：与后台生产管理同源（P1-08）
+       计划列表与详情均由 ProductionStore 实时生成，替换页面静态示例数据。 */
+    (function () {
+      if (!window.ProductionStore) return;
+      try {
+        var plans = ProductionStore.plans();
+        var tasks = ProductionStore.tasks();
+        var STATUS_CLS = { completed: 'completed', executing: 'doing', delayed: 'doing', pending: 'pending', cancelled: 'pending' };
+        var STATUS_TXT = { completed: '已完成', executing: '进行中', delayed: '已延期', pending: '待执行', cancelled: '已取消' };
+
+        function fmt(d) {
+          if (!d) return '';
+          var m = String(d).slice(0, 10).split('-');
+          return m.length === 3 ? (m[0] + '年' + parseInt(m[1], 10) + '月' + parseInt(m[2], 10) + '日') : d;
+        }
+        function range(a, b) {
+          if (!a && !b) return '';
+          return fmt(a) + ' - ' + fmt(b);
+        }
+        function tasksOf(id) {
+          return tasks.filter(function (t) { return t.planId === id; });
+        }
+
+        // 重建详情数据源
+        Object.keys(planData).forEach(function (k) { delete planData[k]; });
+        plans.forEach(function (p) {
+          planData[p.id] = {
+            title: p.name,
+            date: range(p.startDate, p.endDate),
+            status: STATUS_CLS[p.status] || 'pending',
+            area: p.plotRange || p.base || '全园',
+            tasks: tasksOf(p.id).map(function (t) {
+              return {
+                name: t.name,
+                time: range(String(t.planTime || '').slice(0, 10), t.deadline),
+                completed: t.status === 'completed'
+              };
+            })
+          };
+        });
+
+        var groups = [
+          { title: '进行中的计划', statuses: ['executing', 'delayed'] },
+          { title: '待执行计划', statuses: ['pending'] },
+          { title: '已完成计划', statuses: ['completed'] }
+        ];
+        var content = document.querySelector('.content');
+        if (!content) return;
+        var html = '';
+        groups.forEach(function (g) {
+          var rows = plans.filter(function (p) { return g.statuses.indexOf(p.status) >= 0; }).slice(0, 4);
+          if (!rows.length) return;
+          html += '<div class="card"><div class="card-title">' + g.title + '（' + rows.length + '）</div>' +
+            rows.map(function (p) {
+              var tagList = tasksOf(p.id).slice(0, 4).map(function (t) {
+                return '<span class="task-tag">' + t.name + '</span>';
+              }).join('');
+              return '<div class="plan-item" onclick="openPlanDetail(\'' + p.id + '\')">' +
+                '<div class="plan-header"><div class="plan-name">' + p.name + '</div>' +
+                '<span class="plan-status ' + (STATUS_CLS[p.status] || 'pending') + '">' +
+                (STATUS_TXT[p.status] || p.status) + '</span></div>' +
+                '<div class="plan-date">' + range(p.startDate, p.endDate) + ' · ' + (p.base || '') + '</div>' +
+                '<div class="plan-tasks">' + (tagList || '<span class="task-tag">暂无任务</span>') + '</div>' +
+                '</div>';
+            }).join('') + '</div>';
+        });
+        content.innerHTML = html || '<div class="card"><div class="card-title">暂无农事计划</div></div>';
+      } catch (e) { console.warn('[mb_plan] 计划数据绑定失败', e); }
+    })();
   </script>
 </body>
 </html>

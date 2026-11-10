@@ -6,8 +6,9 @@
  *
  * 数据存储：
  *   - localStorage key: applefarm_alert_state_v1
- *   - v2 结构：{ version: 2, alerts: [...], rules: [...], config: { silence, sla } }
- *   - v1 结构（裸数组）：读取时自动迁移，迁移前备份旧 key，迁移失败回退
+ *   - v3 结构：{ version: 3, alerts: [...], rules: [...], config: { silence, sla, targets } }
+ *   - v2 / v1 结构：读取时自动迁移，迁移前带时间戳备份旧 key，迁移失败回退
+ *   - 地块主数据：smartorchard_plot_master（与 enterprise_plot.html 共用，只读）
  *
  * 暴露 API：
  *   AlertStore.all()                          → 全部预警数组
@@ -27,6 +28,10 @@
  *   AlertStore.rules()/saveRule()/removeRule()/toggleRule()
  *   AlertStore.config()/saveConfig()
  *   AlertStore.stats()/statsBySource(source)
+ *   AlertStore.windowAlerts(hours)/statsWindow(hours)  → 近 N 小时样本
+ *   AlertStore.topToday(n)/dailyTrend(days)           → 今日 TopN / 连续趋势
+ *   AlertStore.sourceMeta()/categoryMeta()/slaMinutes()
+ *   AlertStore.resolvePlot(alert)/aggregateByPlot()   → 地块主数据解析与聚合
  *   AlertStore.subscribe(fn)                  → 订阅变更，返回 unsubscribe
  */
 
@@ -35,7 +40,9 @@
 
   var STORAGE_KEY = 'applefarm_alert_state_v1';
   var BACKUP_KEY = 'applefarm_alert_state_v1_backup_v1';
-  var VERSION = 2;
+  var VERSION = 3;
+  var PLOT_MASTER_KEY = 'smartorchard_plot_master';
+  var TARGETS_KEY = 'snzg_alert_targets';
 
   // ================================================================
   // 字典
@@ -76,26 +83,26 @@
 
   // 来源字典（来源视角 Tab 的唯一依据）
   var SOURCES = [
-    { key:'device',    text:'设备预警',   desc:'设备离线 / 故障 / 数据异常 / 维护提醒' },
-    { key:'manual',    text:'人工上报',   desc:'巡园现场拍照上报的异常与隐患' },
-    { key:'model',     text:'模型预警',   desc:'气象 / 环境 / 病虫害 / 产量模型推演结果' },
-    { key:'inventory', text:'库存预警',   desc:'农资低于安全线 / 临期 / 过期' },
-    { key:'system',    text:'系统预警',   desc:'农事任务逾期 / 生长物候等系统级提醒' },
-    { key:'cert',      text:'资质到期预警', desc:'企业资质与批次凭证即将到期 / 已过期（联动 CertStore）' }
+    { key:'device',    text:'设备预警',   color:'#38D6FF', desc:'设备离线 / 故障 / 数据异常 / 维护提醒' },
+    { key:'manual',    text:'人工上报',   color:'#8E7CFF', desc:'巡园现场拍照上报的异常与隐患' },
+    { key:'model',     text:'模型预警',   color:'#31C9E8', desc:'气象 / 环境 / 病虫害 / 产量模型推演结果' },
+    { key:'inventory', text:'库存预警',   color:'#F58A3D', desc:'农资低于安全线 / 临期 / 过期' },
+    { key:'system',    text:'系统预警',   color:'#C0D4EA', desc:'农事任务逾期 / 生长物候等系统级提醒' },
+    { key:'cert',      text:'资质到期预警', color:'#52D3A0', desc:'企业资质与批次凭证即将到期 / 已过期（联动 CertStore）' }
   ];
 
   // 业务分类字典
   var CATEGORIES = [
-    { key:'device',      text:'设备',     source:'device' },
-    { key:'pest',        text:'病虫害',   source:'model' },
-    { key:'weather',     text:'气象',     source:'model' },
-    { key:'soil',        text:'土壤',     source:'model' },
-    { key:'growth',      text:'生长',     source:'system' },
-    { key:'environment', text:'环境',     source:'model' },
-    { key:'yield',       text:'产量',     source:'model' },
-    { key:'inventory',   text:'库存',     source:'inventory' },
-    { key:'quality',     text:'质量',     source:'system' },
-    { key:'manual',      text:'人工上报', source:'manual' }
+    { key:'device',      text:'设备',     color:'#38D6FF', source:'device' },
+    { key:'pest',        text:'病虫害',   color:'#F2B33D', source:'model' },
+    { key:'weather',     text:'气象',     color:'#31C9E8', source:'model' },
+    { key:'soil',        text:'土壤',     color:'#3E8EF0', source:'model' },
+    { key:'growth',      text:'生长',     color:'#2BD46E', source:'system' },
+    { key:'environment', text:'环境',     color:'#8E7CFF', source:'model' },
+    { key:'yield',       text:'产量',     color:'#E5564B', source:'model' },
+    { key:'inventory',   text:'库存',     color:'#F58A3D', source:'inventory' },
+    { key:'quality',     text:'质量',     color:'#C0D4EA', source:'system' },
+    { key:'manual',      text:'人工上报', color:'#FF8FB1', source:'manual' }
   ];
   var CATEGORY_MAP = {};
   CATEGORIES.forEach(function(c){ CATEGORY_MAP[c.key] = c; });
@@ -111,6 +118,22 @@
   var SCOPE_TEXT = { all:'全部预警', notice:'仅通知', reminder:'仅提醒' };
   var SILENCE_KEY = 'snzg_alert_silence';
   var SLA_KEY = 'snzg_alert_sla_config';
+
+  // 看板达标阈值（分钟 / 百分比），可在预警设置页调整
+  var DEFAULT_TARGETS = { avgRespond:30, avgHandle:120, avgClose:1440, overdueRate:10 };
+
+  // 基地别名：预警种子 / 人工上报中的简称 → 地块主数据 enterprise 字段
+  var BASE_ALIAS = {
+    '天水秦州基地': '天水秦州区基地',
+    '天水甘谷基地': '天水甘谷县基地',
+    '秦州基地':     '天水秦州区基地',
+    '甘谷基地':     '天水甘谷县基地',
+    '麦积基地':     '天水麦积区基地',
+    '麦积区基地':   '天水麦积区基地',
+    '清水基地':     '天水清水县基地'
+  };
+  // 不在天水地块主数据内的外部基地：不伪造品种 / 负责人，统一标记
+  var EXTERNAL_BASES = ['青岛莱西基地', '龙口南山基地', '招远基地'];
 
   function normalizeLevel(level, levelText){
     if (LEVEL_MAP[level]) {
@@ -177,6 +200,195 @@
     if (m[2] === '小时' || m[2] === 'h') return n * 60;
     if (m[2] === '天') return n * 24 * 60;
     return n;
+  }
+
+  // ================================================================
+  // 时间戳补齐（种子 / 迁移共用，确定性偏移避免刷新跳变）
+  // ================================================================
+
+  function hashOffset(seed, mod, min){
+    var sum = 0, s = String(seed || '');
+    for (var i = 0; i < s.length; i++) sum += s.charCodeAt(i);
+    return min + (sum % mod);
+  }
+
+  /** 为一条预警补齐 respondDue / handleDue / acceptedAt / closedAt */
+  function hydrateTimes(item){
+    if (!item || !parseStamp(item.time)) return item;
+    var lv = normalizeLevel(item.level, item.levelText).level;
+    item.level = lv;
+    item.levelText = levelTextOf(lv);
+    var sla = DEFAULT_SLA[lv] || DEFAULT_SLA.notice;
+    if (!item.respondDue) {
+      var rm = slaMinutes(sla.respond);
+      item.respondDue = rm ? addMinutes(item.time, rm) : '';
+    }
+    if (!item.handleDue) {
+      var hm = slaMinutes(sla.handle);
+      item.handleDue = hm ? addMinutes(item.time, hm) : '';
+    }
+    var st = item.status === 'completed' ? 'closed' : item.status;
+    if ((st === 'processing' || st === 'closed' || st === 'transferred') && !item.acceptedAt) {
+      item.acceptedAt = addMinutes(item.time, hashOffset(item.id + 'a', 23, 5));
+    }
+    if (st === 'closed' && !item.closedAt) {
+      var acc = item.acceptedAt || addMinutes(item.time, hashOffset(item.id + 'a', 23, 5));
+      var close = addMinutes(acc, hashOffset(item.id + 'c', 240, 60));
+      var closeMs = parseStamp(close);
+      var nowMs = Date.now();
+      if (closeMs !== null && closeMs > nowMs && parseStamp(item.time) <= nowMs) {
+        // 当日闭环不能晚于当前时间，压缩到 time 之后 30~90 分钟
+        close = addMinutes(item.time, hashOffset(item.id + 'd', 60, 30));
+        if (parseStamp(close) > nowMs) close = nowStamp();
+      }
+      item.closedAt = close;
+    }
+    return item;
+  }
+
+  // ================================================================
+  // 地块主数据解析（只读 smartorchard_plot_master）
+  // ================================================================
+
+  function normalizeBase(name){
+    var b = String(name || '').trim();
+    if (!b) return '';
+    return BASE_ALIAS[b] || b;
+  }
+
+  function extractBase(location){
+    var m = String(location || '').match(/^(.+?基地)/);
+    return m ? normalizeBase(m[1]) : '';
+  }
+
+  function extractSlot(alert){
+    alert = alert || {};
+    if (alert.plotSlot) return String(alert.plotSlot).toUpperCase();
+    var src = String(alert.plot || '') + ' ' + String(alert.location || '');
+    var m = src.match(/地块\s*([A-D]\d+)/i);
+    return m ? m[1].toUpperCase() : '';
+  }
+
+  function readPlotMaster(){
+    try {
+      var raw = global.localStorage && global.localStorage.getItem(PLOT_MASTER_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch(e){ return []; }
+  }
+
+  // 槽位顺序：A1-A4 / B1-B4 / C1-C3 / D1 对应驾驶舱 12 块示意地图
+  var SLOT_ORDER = ['A1','A2','A3','A4','B1','B2','B3','B4','C1','C2','C3','D1'];
+
+  /** 槽位序号：取数字部分（A1/B1/C1/D1 均视为该基地第 1 块地） */
+  function slotIndexOf(slot){
+    var m = String(slot || '').match(/^[A-D]\s*(\d+)$/i);
+    if (!m) return -1;
+    var n = parseInt(m[1], 10);
+    return n > 0 ? n - 1 : -1;
+  }
+
+  var plotAliasCache = { sig:'', master:[], table:{} };
+
+  /**
+   * 演示别名表：按基地分组，把槽位序号映射到该基地下真实地块编码。
+   * 例：天水麦积区基地|A1 → D-001；超出该基地地块数量的槽位视为未匹配。
+   */
+  function buildPlotAlias(){
+    var master = readPlotMaster();
+    var sig = master.map(function(p){ return (p.code || '') + '|' + (p.enterprise || ''); }).join(',');
+    if (plotAliasCache.sig === sig && plotAliasCache.table) {
+      return { master: plotAliasCache.master, table: plotAliasCache.table };
+    }
+    var byBase = {};
+    master.forEach(function(p){
+      var b = normalizeBase(p.enterprise);
+      if (!b) return;
+      (byBase[b] || (byBase[b] = [])).push(p);
+    });
+    var table = {};
+    Object.keys(byBase).forEach(function(b){
+      var list = byBase[b].slice().sort(function(x, y){
+        return String(x.code || '').localeCompare(String(y.code || ''));
+      });
+      byBase[b] = list;
+      list.forEach(function(p, i){ table[b + '|' + i] = p.code; });
+    });
+    plotAliasCache = { sig: sig, master: master, table: table };
+    return { master: master, table: table };
+  }
+
+  /** 解析一条预警对应的标准地块 */
+  function resolvePlot(alert){
+    alert = alert || {};
+    var alias = buildPlotAlias();
+    var master = alias.master;
+    var code = String(alert.plotCode || '');
+    var slot = extractSlot(alert);
+    var base = normalizeBase(alert.base || extractBase(alert.location));
+
+    var hit = null;
+    if (code) hit = master.filter(function(p){ return p.code === code; })[0] || null;
+    if (hit) {
+      return { matched:true, plotCode:hit.code, plot:hit, base:normalizeBase(hit.enterprise), slot:slot };
+    }
+    if (EXTERNAL_BASES.indexOf(base) >= 0) return { matched:false, base:base, slot:slot, reason:'external' };
+    if (!master.length) return { matched:false, base:base, slot:slot, reason:'no-master' };
+    if (!base) return { matched:false, base:base, slot:slot, reason:'no-base' };
+    var idx = slotIndexOf(slot);
+    if (idx < 0) return { matched:false, base:base, slot:slot, reason:'no-slot' };
+    var target = alias.table[base + '|' + idx];
+    if (!target) return { matched:false, base:base, slot:slot, reason:'no-alias' };
+    hit = master.filter(function(p){ return p.code === target; })[0] || null;
+    if (!hit) return { matched:false, base:base, slot:slot, reason:'no-alias' };
+    return { matched:true, plotCode:hit.code, plot:hit, base:base, slot:slot };
+  }
+
+  /** 驾驶舱 12 块示意地图的槽位绑定（按主数据编码顺序取前 12 块） */
+  function plotSlots(){
+    var master = readPlotMaster().slice().sort(function(x, y){
+      return String(x.code || '').localeCompare(String(y.code || ''));
+    });
+    return SLOT_ORDER.map(function(slot, i){
+      var p = master[i] || null;
+      return { slot: slot, plotCode: p ? p.code : '', plot: p };
+    });
+  }
+
+  /** 按标准地块聚合预警，未匹配记录单独成桶 */
+  function aggregateByPlot(alerts){
+    var list = Array.isArray(alerts) ? alerts : [];
+    var byCode = {}, unmatchedMap = {}, matchedCount = 0;
+    list.forEach(function(a){
+      var r = resolvePlot(a);
+      if (r.matched) {
+        matchedCount++;
+        var o = byCode[r.plotCode] || (byCode[r.plotCode] = {
+          plotCode: r.plotCode, plot: r.plot, base: r.base, n: 0,
+          urgent: 0, important: 0, reminder: 0, notice: 0, titles: []
+        });
+        o.n++;
+        if (o[a.level] !== undefined) o[a.level]++;
+        if (o.titles.length < 3) o.titles.push({ level: a.level, title: a.title });
+      } else {
+        var key = (r.base || '未知基地') + '|' + (r.slot || '未指明地块');
+        var u = unmatchedMap[key] || (unmatchedMap[key] = {
+          base: r.base || '未知基地', slot: r.slot || '', reason: r.reason, n: 0, titles: []
+        });
+        u.n++;
+        if (u.titles.length < 3) u.titles.push(a.title);
+      }
+    });
+    var unmatched = Object.keys(unmatchedMap).map(function(k){ return unmatchedMap[k]; });
+    unmatched.sort(function(x, y){ return y.n - x.n; });
+    return {
+      total: list.length,
+      matchedCount: matchedCount,
+      unmatchedCount: list.length - matchedCount,
+      byCode: byCode,
+      unmatched: unmatched
+    };
   }
 
   // ================================================================
@@ -253,6 +465,9 @@
       });
       out.sort(function(a,b){ return String(b.time || '').localeCompare(String(a.time || '')); });
     })();
+
+    // 补齐受理 / 闭环 / SLA 截止时间，保证首屏处置时长与超时率有真实样本
+    out.forEach(function(item){ hydrateTimes(item); });
 
     return out;
   })();
@@ -337,7 +552,15 @@
   function backupRaw(){
     try {
       var raw = readRaw();
-      if (raw) global.localStorage.setItem(BACKUP_KEY, raw);
+      if (!raw) return;
+      var key = BACKUP_KEY;
+      // 已有备份时追加时间戳，避免历史备份被覆盖
+      if (global.localStorage.getItem(key)) {
+        var d = new Date();
+        var ts = d.getFullYear() + pad2(d.getMonth()+1) + pad2(d.getDate()) + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds());
+        key = BACKUP_KEY + '_' + ts;
+      }
+      global.localStorage.setItem(key, raw);
     } catch(e){ /* 备份失败不阻断主流程 */ }
   }
 
@@ -376,10 +599,13 @@
       var m = loc.match(/^(.+?基地)/);
       out.base = m ? m[1] : (loc.split(' - ')[0] || '');
     }
+    out.base = normalizeBase(out.base);
     if (!out.plot) {
       var pm = String(out.location || '').match(/地块([A-Z]?\d+)/);
       out.plot = pm ? pm[0] : '';
     }
+    if (!out.plotSlot) out.plotSlot = extractSlot(out);
+    if (out.plotCode === undefined) out.plotCode = '';
     if (!out.assignee) out.assignee = '';
     if (!out.operator) out.operator = '';
     if (!out.escalated) out.escalated = false;
@@ -388,6 +614,8 @@
     if (!out.targetId) out.targetId = out.device || out.plot || out.id;
     if (out.ruleId === undefined) out.ruleId = null;
     if (out.dedupeKey === undefined) out.dedupeKey = null;
+    // 补齐 SLA 截止与受理 / 闭环时间（确定性偏移，不随刷新跳变）
+    hydrateTimes(out);
     return out;
   }
 
@@ -413,7 +641,7 @@
   }
 
   function readConfig(){
-    var cfg = { silence: deepClone(DEFAULT_SILENCE), sla: deepClone(DEFAULT_SLA) };
+    var cfg = { silence: deepClone(DEFAULT_SILENCE), sla: deepClone(DEFAULT_SLA), targets: deepClone(DEFAULT_TARGETS) };
     try {
       var rawS = global.localStorage && global.localStorage.getItem(SILENCE_KEY);
       if (rawS) {
@@ -434,10 +662,20 @@
         });
       }
     } catch(e){ /* 使用默认 SLA 配置 */ }
+    try {
+      var rawT = global.localStorage && global.localStorage.getItem(TARGETS_KEY);
+      if (rawT) {
+        var t = JSON.parse(rawT);
+        Object.keys(cfg.targets).forEach(function(k){
+          var v = Number(t && t[k]);
+          if (isFinite(v) && v > 0) cfg.targets[k] = v;
+        });
+      }
+    } catch(e){ /* 使用默认看板阈值 */ }
     return cfg;
   }
 
-  /** 从 localStorage 读取并迁移为 v2 结构 */
+  /** 从 localStorage 读取并迁移为 v3 结构（兼容 v2 / v1） */
   function loadFromStorage(){
     var raw = readRaw();
     if (!raw) return null;
@@ -449,14 +687,32 @@
     }
     if (!parsed) return null;
 
-    // v2 结构
-    if (parsed && !Array.isArray(parsed) && parsed.version === VERSION && Array.isArray(parsed.alerts)) {
+    // v3 / v2 对象结构
+    if (!Array.isArray(parsed) && Array.isArray(parsed.alerts)) {
+      var isCurrent = parsed.version === VERSION;
+      if (!isCurrent) {
+        // 旧版本结构升级：先备份（仅对 v2 及以下执行一次）
+        backupRaw();
+        try { console.info('[AlertStore] 数据从 v' + (parsed.version || 1) + ' 升级到 v' + VERSION); } catch(e){}
+      }
+      var storedCfg = parsed.config && parsed.config.silence && parsed.config.sla
+        ? { silence: parsed.config.silence, sla: parsed.config.sla, targets: parsed.config.targets || null }
+        : null;
+      var cfg = readConfig();
+      if (storedCfg) {
+        cfg.silence = storedCfg.silence;
+        cfg.sla = storedCfg.sla;
+        if (storedCfg.targets) {
+          Object.keys(cfg.targets).forEach(function(k){
+            var v = Number(storedCfg.targets[k]);
+            if (isFinite(v) && v > 0) cfg.targets[k] = v;
+          });
+        }
+      }
       return {
         alerts: parsed.alerts.map(migrateAlert),
         rules: migrateRules(parsed.rules),
-        config: parsed.config && parsed.config.silence && parsed.config.sla
-          ? { silence: parsed.config.silence, sla: parsed.config.sla }
-          : readConfig()
+        config: cfg
       };
     }
     // v1 结构：裸数组
@@ -597,6 +853,68 @@
   }
 
   // ================================================================
+  // 统计（支持任意样本数组，供全量与时间窗复用）
+  // ================================================================
+
+  var LEVEL_ORDER = { urgent:0, important:1, reminder:2, notice:3 };
+  function sortByLevel(arr){
+    return (arr || []).slice().sort(function(a, b){
+      var la = LEVEL_ORDER[a.level] !== undefined ? LEVEL_ORDER[a.level] : 9;
+      var lb = LEVEL_ORDER[b.level] !== undefined ? LEVEL_ORDER[b.level] : 9;
+      if (la !== lb) return la - lb;
+      return String(b.time || '').localeCompare(String(a.time || ''));
+    });
+  }
+
+  function computeStats(arr){
+    arr = Array.isArray(arr) ? arr : [];
+    var s = {
+      total: arr.length,
+      pending: 0, processing: 0, closed: 0, ignored: 0, transferred: 0, voided: 0,
+      urgent: 0, important: 0, reminder: 0, notice: 0,
+      device: 0, farming: 0, devicePending: 0, farmingPending: 0,
+      bySource: {}, byCategory: {}, byStatus: {}
+    };
+    SOURCES.forEach(function(src){ s.bySource[src.key] = { total:0, pending:0, processing:0, closed:0, ignored:0, transferred:0, voided:0 }; });
+    CATEGORIES.forEach(function(cat){ s.byCategory[cat.key] = { total:0, pending:0, processing:0, closed:0 }; });
+    Object.keys(STATUS_TEXT).forEach(function(k){ s.byStatus[k] = 0; });
+
+    arr.forEach(function(x){
+      if (s[x.status] !== undefined) s[x.status]++;
+      if (s.byStatus[x.status] !== undefined) s.byStatus[x.status]++;
+      if (s[x.level] !== undefined) s[x.level]++;
+      if (x.type === 'device') s.device++;
+      if (x.type === 'farming') s.farming++;
+      if (x.type === 'device' && x.status === 'pending') s.devicePending++;
+      if (x.type === 'farming' && x.status === 'pending') s.farmingPending++;
+      var src = s.bySource[x.source];
+      if (src) { src.total++; if (src[x.status] !== undefined) src[x.status]++; }
+      var cat = s.byCategory[x.category];
+      if (cat) { cat.total++; if (x.status === 'pending') cat.pending++; if (x.status === 'processing') cat.processing++; if (x.status === 'closed') cat.closed++; }
+    });
+
+    // completed 保持为 closed 的别名，兼容既有读取方（da_dashboard 等）
+    s.completed = s.closed;
+    s.closedRate = s.total ? Math.round(s.closed / s.total * 100) : 0;
+    s.open = s.pending + s.processing + s.transferred;
+    s.rate = s.closedRate;
+    s.todayTotal = s.pending + s.processing;
+    s.overdue = 0;
+    var now = Date.now();
+    arr.forEach(function(x){
+      if (x.status === 'pending' || x.status === 'processing') {
+        if (x.respondDue) {
+          var t = parseStamp(x.respondDue);
+          if (t !== null && t < now) s.overdue++;
+        }
+      }
+    });
+    // 时间窗样本量（页面副标题使用）
+    s.sampleSize = arr.length;
+    return s;
+  }
+
+  // ================================================================
   // 公开 API
   // ================================================================
 
@@ -613,6 +931,7 @@
     SCOPE_TEXT: SCOPE_TEXT,
     STORAGE_KEY: STORAGE_KEY,
     VERSION: VERSION,
+    DEFAULT_TARGETS: DEFAULT_TARGETS,
 
     // ---------- 读取 ----------
     all: function(){
@@ -647,50 +966,113 @@
 
     // ---------- 统计 ----------
     stats: function(){
-      var arr = ensureLoaded().alerts;
-      var s = {
-        total: arr.length,
-        pending: 0, processing: 0, closed: 0, ignored: 0, transferred: 0, voided: 0,
-        urgent: 0, important: 0, reminder: 0, notice: 0,
-        device: 0, farming: 0, devicePending: 0, farmingPending: 0,
-        bySource: {}, byCategory: {}, byStatus: {}
-      };
-      SOURCES.forEach(function(src){ s.bySource[src.key] = { total:0, pending:0, processing:0, closed:0, ignored:0, transferred:0, voided:0 }; });
-      CATEGORIES.forEach(function(cat){ s.byCategory[cat.key] = { total:0, pending:0, processing:0, closed:0 }; });
-      Object.keys(STATUS_TEXT).forEach(function(k){ s.byStatus[k] = 0; });
-
-      arr.forEach(function(x){
-        if (s[x.status] !== undefined) s[x.status]++;
-        if (s.byStatus[x.status] !== undefined) s.byStatus[x.status]++;
-        if (s[x.level] !== undefined) s[x.level]++;
-        if (x.type === 'device') s.device++;
-        if (x.type === 'farming') s.farming++;
-        if (x.type === 'device' && x.status === 'pending') s.devicePending++;
-        if (x.type === 'farming' && x.status === 'pending') s.farmingPending++;
-        var src = s.bySource[x.source];
-        if (src) { src.total++; if (src[x.status] !== undefined) src[x.status]++; }
-        var cat = s.byCategory[x.category];
-        if (cat) { cat.total++; if (x.status === 'pending') cat.pending++; if (x.status === 'processing') cat.processing++; if (x.status === 'closed') cat.closed++; }
-      });
-
-      // completed 保持为 closed 的别名，兼容既有读取方（da_dashboard 等）
-      s.completed = s.closed;
-      s.closedRate = s.total ? Math.round(s.closed / s.total * 100) : 0;
-      s.open = s.pending + s.processing + s.transferred;
-      s.rate = s.total ? Math.round(s.closed / s.total * 100) : 0;
-      s.todayTotal = s.pending + s.processing;
-      s.overdue = 0;
-      var now = Date.now();
-      arr.forEach(function(x){
-        if (x.status === 'pending' || x.status === 'processing') {
-          if (x.respondDue) {
-            var t = parseStamp(x.respondDue);
-            if (t !== null && t < now) s.overdue++;
-          }
-        }
-      });
-      return s;
+      return computeStats(ensureLoaded().alerts);
     },
+
+    /** 近 N 小时创建的预警（以 time 为准） */
+    windowAlerts: function(hours){
+      var h = Number(hours);
+      if (!isFinite(h) || h <= 0) return this.all();
+      var since = Date.now() - h * 3600 * 1000;
+      return ensureLoaded().alerts.filter(function(x){
+        var t = parseStamp(x.time);
+        return t !== null && t >= since;
+      }).map(deepClone);
+    },
+
+    /** 近 N 小时统计（结构同 stats） */
+    statsWindow: function(hours){
+      return computeStats(this.windowAlerts(hours));
+    },
+
+    /** 今日 TopN：默认只含待处理 / 处理中 / 已转工单 */
+    topToday: function(n, statuses){
+      n = n || 10;
+      var allowed = statuses || ['pending','processing','transferred'];
+      var today = todayStr();
+      var arr = ensureLoaded().alerts.filter(function(x){
+        return String(x.time || '').slice(0,10) === today && allowed.indexOf(x.status) >= 0;
+      });
+      return sortByLevel(arr).slice(0, n).map(deepClone);
+    },
+
+    /** 连续 N 天趋势（无数据补 0，日期连续） */
+    dailyTrend: function(days){
+      days = days || 7;
+      var buckets = {};
+      var now = new Date();
+      for (var i = days - 1; i >= 0; i--) {
+        var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        var key = d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
+        buckets[key] = { date: key, urgent:0, important:0, reminder:0, notice:0, total:0 };
+      }
+      ensureLoaded().alerts.forEach(function(x){
+        var d = String(x.time || '').slice(0,10);
+        if (!buckets[d]) return;
+        if (buckets[d][x.level] !== undefined) buckets[d][x.level]++;
+        buckets[d].total++;
+      });
+      return Object.keys(buckets).sort().map(function(k){ return buckets[k]; });
+    },
+
+    /** 字典（含颜色），驾驶舱 / 后台 / 移动端共用 */
+    sourceMeta: function(){ return deepClone(SOURCES); },
+    categoryMeta: function(){ return deepClone(CATEGORIES); },
+
+    /** SLA 时限：kind = respond | handle，返回分钟数；无时限返回 null */
+    slaMinutes: function(level, kind){
+      var cfg = ensureLoaded().config;
+      var sla = (cfg.sla && cfg.sla[level]) || DEFAULT_SLA[level] || DEFAULT_SLA.notice;
+      var m = slaMinutes(kind === 'handle' ? sla.handle : sla.respond);
+      return m > 0 ? m : null;
+    },
+
+    /**
+     * 处置时效指标（全部由真实时间戳实算）
+     * avgResp = acceptedAt - time；avgHandle = closedAt - acceptedAt；avgClose = closedAt - time
+     */
+    slaMetrics: function(alerts){
+      var list = Array.isArray(alerts) ? alerts : ensureLoaded().alerts;
+      var now = Date.now();
+      var overdue = 0, transferred = 0;
+      var respSum = 0, respN = 0, handleSum = 0, handleN = 0, closeSum = 0, closeN = 0;
+      list.forEach(function(x){
+        var isOpen = x.status === 'pending' || x.status === 'processing' || x.status === 'transferred';
+        if (x.status === 'transferred') transferred++;
+        var due = parseStamp(x.respondDue);
+        if (isOpen && due !== null && due < now) overdue++;
+        var t0 = parseStamp(x.time);
+        var tAcc = parseStamp(x.acceptedAt);
+        var tCls = parseStamp(x.closedAt);
+        if (t0 !== null && tAcc !== null && tAcc >= t0) { respSum += tAcc - t0; respN++; }
+        if (tAcc !== null && tCls !== null && tCls >= tAcc) { handleSum += tCls - tAcc; handleN++; }
+        if (t0 !== null && tCls !== null && tCls >= t0) { closeSum += tCls - t0; closeN++; }
+      });
+      var total = list.length;
+      var over = total ? Math.round(overdue / total * 100) : 0;
+      var esc = total ? Math.round(transferred / total * 100) : 0;
+      var onTime = Math.max(0, 100 - over - esc);
+      return {
+        total: total,
+        onTime: onTime,
+        over: over,
+        esc: esc,
+        avgResp: respN ? Math.round(respSum / respN / 60000) : null,
+        avgHandle: handleN ? Math.round(handleSum / handleN / 60000) : null,
+        avgClose: closeN ? Math.round(closeSum / closeN / 60000) : null,
+        avg: closeN ? Math.round(closeSum / closeN / 60000) : null,
+        sampleResp: respN,
+        sampleHandle: handleN,
+        sampleClose: closeN
+      };
+    },
+
+    /** 地块主数据（只读）与解析 / 聚合 */
+    plotMaster: function(){ return deepClone(readPlotMaster()); },
+    plotSlots: function(){ return deepClone(plotSlots()); },
+    resolvePlot: resolvePlot,
+    aggregateByPlot: aggregateByPlot,
+    normalizeBase: normalizeBase,
 
     /** 按来源统计（预警总览来源 Tab 使用） */
     statsBySource: function(source){
@@ -821,6 +1203,8 @@
         location: location,
         base: base,
         plot: plot,
+        plotSlot: input.plotSlot || extractSlot({ plot: plot, location: location }),
+        plotCode: input.plotCode || '',
         device: device,
         deviceId: input.deviceId || '',
         targetType: input.targetType || '',
@@ -1004,6 +1388,8 @@
           level: it.level,
           base: it.base,
           plot: it.plot,
+          plotSlot: it.plotSlot,
+          plotCode: it.plotCode,
           device: it.device,
           deviceId: it.deviceId,
           targetType: it.targetType,
@@ -1100,6 +1486,17 @@
           if (patch.sla[k]) state.config.sla[k] = Object.assign({}, state.config.sla[k], patch.sla[k]);
         });
         try { global.localStorage.setItem(SLA_KEY, JSON.stringify(state.config.sla)); } catch(e){}
+      }
+      if (patch && patch.targets) {
+        var bad = null;
+        Object.keys(state.config.targets).forEach(function(k){
+          if (patch.targets[k] === undefined || patch.targets[k] === null || patch.targets[k] === '') return;
+          var v = Number(patch.targets[k]);
+          if (!isFinite(v) || v <= 0) { bad = k; return; }
+          state.config.targets[k] = v;
+        });
+        if (bad) return { ok:false, message:'看板阈值必须为正数：' + bad };
+        try { global.localStorage.setItem(TARGETS_KEY, JSON.stringify(state.config.targets)); } catch(e){}
       }
       broadcast('config');
       return { ok:true, message:'配置已保存' };

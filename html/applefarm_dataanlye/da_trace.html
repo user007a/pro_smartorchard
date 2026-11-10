@@ -430,8 +430,10 @@ body{display:block;background:
   </div>
 </div>
 
-<script src="../applefarm_backhand/js/shared/trace-stat-store.js"></script>
+<script src="../applefarm_backhand/js/shared/harvest-store.js"></script>
+<script src="../applefarm_backhand/js/shared/trace-store.js"></script>
 <script src="../applefarm_backhand/js/shared/cert-store.js"></script>
+<script src="../applefarm_backhand/js/shared/trace-stat-store.js"></script>
 <script>
 /* ---------- 缩放适配（单屏不滚动） ---------- */
 (function(){
@@ -537,6 +539,7 @@ LIVE_NODES.forEach(function(e){
   var reduceMotion=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   function jitter(){
     LIVE_NODES.forEach(function(e){
+      if(!isFinite(e.__base)) return;
       var v=e.__base*(1+(Math.random()*2-1)*e.__amp);
       e.textContent=(e.__dec?v.toFixed(e.__dec):fmtNum(Math.round(v)))+e.__suf;
     });
@@ -559,6 +562,13 @@ LIVE_NODES.forEach(function(e){
   function setLive(id,val,dec,amp){
     var e=$(id);
     if(!e) return;
+    if(val==null||val===''||isNaN(Number(val))){
+      e.textContent='—';
+      e.__base=NaN;e.__dec=0;e.__suf='';
+      e.setAttribute('data-live','');
+      if(LIVE_NODES.indexOf(e)<0) LIVE_NODES.push(e);
+      return;
+    }
     var raw=dec>0?Number(val).toFixed(dec):fmtNum(Math.round(val));
     e.textContent=raw;
     bindLive(e,dec>0?String(Number(val).toFixed(dec)):String(Math.round(val)),dec,amp!=null?amp:0);
@@ -605,12 +615,12 @@ LIVE_NODES.forEach(function(e){
       svg.appendChild(txt('text',{x:426,y:y+19.5,class:'bid'},fmtNum(b.height||0)+' 批次'));
     }
     setLive('chainHeight',o.chainHeight||0,0,(o.chainHeight||0)*0.0005);
-    var rate=Number(o.chainSuccessRate)||0;
-    setLive('chainRate',rate,rate%1?2:0,0);
+    var rate=(o.chainSuccessRate==null)?null:Number(o.chainSuccessRate)||0;
+    setLive('chainRate',rate,rate!=null&&rate%1?2:0,0);
     var bar=$('chainBar');
     if(bar){
-      bar.querySelector('i').style.width=Math.min(100,rate)+'%';
-      bar.setAttribute('aria-label','上链成功率 '+rate+'%');
+      bar.querySelector('i').style.width=(rate==null?0:Math.min(100,rate))+'%';
+      bar.setAttribute('aria-label','上链成功率 '+(rate==null?'暂无数据':rate+'%'));
     }
   }
 
@@ -672,6 +682,7 @@ LIVE_NODES.forEach(function(e){
       days.appendChild(s);
     });
     setLive('trendToday',vals[vals.length-1],0,vals[vals.length-1]*0.0005);
+    if(o.dod==null){setText('trendDod','—');return;}
     var dod=Number(o.dod)||0;
     setText('trendDod',(dod>0?'+':'')+dod.toFixed(1)+'%');
   }
@@ -720,6 +731,7 @@ LIVE_NODES.forEach(function(e){
   function renderMap(list,o){
     var svg=$('mapSvg');
     if(!svg)return;
+    setText('mapProvTotal',o.provinceTotal==null?'—':o.provinceTotal);
     clear(svg);
     var val={},max=0;
     (list||[]).forEach(function(x){
@@ -738,7 +750,11 @@ LIVE_NODES.forEach(function(e){
       }
       svg.appendChild(grp);
     });
-    if(!list||!list.length)return;
+    if(!list||!list.length){
+      var ph=$('top5List');
+      if(ph){clear(ph);var li0=document.createElement('li');li0.textContent='暂无扫码地域数据';ph.appendChild(li0);}
+      return;
+    }
     var top=list.slice().sort(function(a,b){return (Number(b.value)||0)-(Number(a.value)||0);}).slice(0,5);
     var ul=$('top5List');
     clear(ul);
@@ -751,7 +767,6 @@ LIVE_NODES.forEach(function(e){
       li.querySelector('b').textContent=fmtNum(Number(x.value)||0);
       ul.appendChild(li);
     });
-    setText('mapProvTotal',o.provinceTotal);
   }
 
   /* ---------- 认证与质量证书 ---------- */
@@ -769,7 +784,7 @@ LIVE_NODES.forEach(function(e){
     clear(box);
     var valid=0;
     list.forEach(function(x,i){
-      var ok=(x.valid||'有效')==='有效';
+      var ok=x.level?x.level==='normal':(x.valid||'有效')==='有效';
       if(ok)valid++;
       var row=document.createElement('div');
       row.className='cert'+(ok?'':' w');
@@ -864,7 +879,7 @@ LIVE_NODES.forEach(function(e){
     setLive('flowTotal',o.totalBatches||0,0,(o.totalBatches||0)*0.0005);
     setLive('flowWeek',flow.thisWeek||0,0,(flow.thisWeek||0)*0.002);
     setLive('flowChannel',flow.channelCount||0,0,0);
-    setLive('flowDur',flow.avgDuration||0,1,0);
+    setLive('flowDur',flow.avgDuration==null?null:flow.avgDuration,1,0);
   }
 
   /* ---------- 扫码来源渠道占比 ---------- */

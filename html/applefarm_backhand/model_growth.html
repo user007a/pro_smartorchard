@@ -80,6 +80,7 @@
     <button class="mp-tab active" data-tab="monitor" onclick="mpSwitchTab('monitor')"><i data-uicon="chartBar"></i>生长监测</button>
     <button class="mp-tab" data-tab="gantt" onclick="mpSwitchTab('gantt')"><i data-uicon="calendar"></i>生育期甘特</button>
     <button class="mp-tab" data-tab="advice" onclick="mpSwitchTab('advice')"><i data-uicon="alert"></i>建议与报警</button>
+    <button class="mp-tab" data-tab="metrics" onclick="mpSwitchTab('metrics')"><i data-uicon="chartBar"></i>生长指标</button>
   </div>
 
   <div class="mp-panel active" data-panel="monitor">
@@ -116,6 +117,44 @@
       <h2 class="section-title">异常报警 <span id="alertCountBadge" style="background:var(--error);color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;font-weight:500;margin-left:4px;">5</span></h2>
       <div class="alert-list" id="alertList"></div>
     </div>
+  </div>
+  </div>
+
+  <div class="mp-panel" data-panel="metrics">
+  <!-- 关键生长指标 + 看板参数（左右） -->
+  <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:16px; margin-bottom:16px;">
+    <div class="chart-section">
+      <h2 class="section-title">关键生长指标 <span style="font-size:12px;color:var(--text-tertiary);font-weight:400;">园区均值 · 近 7 日</span></h2>
+      <table class="data-table">
+        <thead>
+          <tr><th>指标</th><th>当前值</th><th>环比</th><th>评价</th><th style="width:74px;text-align:right;">操作</th></tr>
+        </thead>
+        <tbody id="keyMetricBody"></tbody>
+      </table>
+    </div>
+    <div class="chart-section">
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>生长看板参数</span>
+        <button class="stage-btn" onclick="editGrowthParams()">编辑</button>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>参数</th><th style="text-align:right;">当前值</th></tr>
+        </thead>
+        <tbody id="growthParamBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 地块生长曲线采样 -->
+  <div class="chart-section">
+    <h2 class="section-title">地块生长曲线采样 <span style="font-size:12px;color:var(--text-tertiary);font-weight:400;">近 12 周 · 录入即同步至大屏与移动端</span></h2>
+    <table class="data-table">
+      <thead>
+        <tr><th>地块</th><th>品种</th><th>果实横径(mm)</th><th>株高(cm)</th><th>果实硬度(kg/cm²)</th><th>最近采样</th><th style="width:96px;text-align:right;">操作</th></tr>
+      </thead>
+      <tbody id="curveSampleBody"></tbody>
+    </table>
   </div>
   </div>
 </div>
@@ -172,6 +211,8 @@ document.addEventListener('DOMContentLoaded', function() {
   ModelStore.hydrateKpi('.patrol-stats', 'growth');
   renderGrowthAdvice(M);
   renderGrowthAlerts(M);
+  renderGrowthPanels();
+  ModelStore.subscribe(renderGrowthPanels);
 
   // 1. 积温曲线
   Chart.line('#chart-temp', M.charts.tempTrend);
@@ -223,6 +264,184 @@ function adoptAdvice(taskType, plotRange) {
     }, 700);
   } catch (e) { Toast.show('采纳失败：' + e.message, 'error'); }
 }
+
+/* ==================== 生长指标页签（数据来自 ModelStore） ==================== */
+
+function todayMMDD() {
+  const d = new Date();
+  return ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+
+function renderGrowthPanels() {
+  const M = ModelStore.get('growth');
+  renderKeyMetricTable(M);
+  renderGrowthParams(M);
+  renderCurveSampleTable(M);
+}
+
+function renderKeyMetricTable(M) {
+  const tbody = document.getElementById('keyMetricBody');
+  if (!tbody) return;
+  tbody.innerHTML = M.keyMetrics.map(function (k, i) {
+    const trend = k.trend === 'down' ? ' <span style="color:var(--error);">↓</span>' : ' <span style="color:var(--success);">↑</span>';
+    return '<tr>' +
+      '<td>' + k.name + '</td>' +
+      '<td><b>' + k.value + '</b> <span style="color:var(--text-tertiary);font-size:12px;">' + k.unit + '</span></td>' +
+      '<td>' + k.delta + trend + '</td>' +
+      '<td>' + k.grade + '</td>' +
+      '<td style="text-align:right;"><button class="stage-btn" onclick="editKeyMetric(' + i + ')">编辑</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function editKeyMetric(index) {
+  const M = ModelStore.get('growth');
+  const k = M.keyMetrics[index];
+  if (!k) return;
+  Modal.form({
+    title: '编辑生长指标 · ' + k.name,
+    width: '420px',
+    values: { value: k.value, delta: k.delta, grade: k.grade },
+    fields: [
+      { name: 'value', label: '当前值（' + k.unit + '）', type: 'number', step: '0.1', required: true },
+      { name: 'delta', label: '环比', type: 'text', placeholder: '如 +6.4% 或 -0.3' },
+      { name: 'grade', label: '评价', type: 'text', placeholder: '良好 / 达标 / 正常' }
+    ],
+    onSubmit: function (data) {
+      const val = parseFloat(data.value);
+      if (isNaN(val)) { Toast.show('当前值需为数字', 'error'); return false; }
+      const prev = parseFloat(k.value);
+      const trend = val >= prev ? 'up' : 'down';
+      const list = M.keyMetrics.map(function (x) { return Object.assign({}, x); });
+      list[index] = Object.assign({}, list[index], {
+        value: val,
+        delta: data.delta || list[index].delta,
+        grade: data.grade || list[index].grade,
+        trend: trend
+      });
+      ModelStore.patch('growth', { keyMetrics: list });
+      Toast.show('生长指标已更新', 'success');
+    }
+  });
+}
+
+function renderGrowthParams(M) {
+  const tbody = document.getElementById('growthParamBody');
+  if (!tbody) return;
+  const rows = [
+    ['长势指数', M.dashboard.vigorIndex + ' / 100'],
+    ['成熟度预测吻合率', M.dashboard.maturityHitRate + ' %'],
+    ['生育期积温累计', M.gdd.cumulative + ' ' + M.gdd.unit],
+    ['近 12 周周均积温', '+' + M.gdd.weeklyAvg + ' ' + M.gdd.unit],
+    ['较常年同期', M.gdd.compareNormal],
+    ['最近采样日期', M.dashboard.lastSampledAt || '-']
+  ];
+  tbody.innerHTML = rows.map(function (r) {
+    return '<tr><td>' + r[0] + '</td><td style="text-align:right;"><b>' + r[1] + '</b></td></tr>';
+  }).join('');
+}
+
+function editGrowthParams() {
+  const M = ModelStore.get('growth');
+  Modal.form({
+    title: '编辑生长看板参数',
+    width: '480px',
+    values: {
+      vigorIndex: M.dashboard.vigorIndex,
+      maturityHitRate: M.dashboard.maturityHitRate,
+      cumulative: M.gdd.cumulative,
+      weeklyAvg: M.gdd.weeklyAvg,
+      compareNormal: M.gdd.compareNormal
+    },
+    fields: [
+      { name: 'vigorIndex', label: '长势指数（0-100）', type: 'number', min: 0, max: 100, required: true },
+      { name: 'maturityHitRate', label: '成熟度预测吻合率（%）', type: 'number', min: 0, max: 100, required: true },
+      { name: 'cumulative', label: '生育期积温累计（℃·d）', type: 'number', min: 0, required: true },
+      { name: 'weeklyAvg', label: '近 12 周周均积温（℃·d）', type: 'number', min: 0, required: true },
+      { name: 'compareNormal', label: '较常年同期', type: 'text', placeholder: '如 +4%' }
+    ],
+    onSubmit: function (data) {
+      const nums = ['vigorIndex', 'maturityHitRate', 'cumulative', 'weeklyAvg'];
+      for (let i = 0; i < nums.length; i++) {
+        if (isNaN(parseFloat(data[nums[i]]))) { Toast.show('数值字段需为数字', 'error'); return false; }
+      }
+      const dashboard = Object.assign({}, M.dashboard, {
+        vigorIndex: parseFloat(data.vigorIndex),
+        maturityHitRate: parseFloat(data.maturityHitRate)
+      });
+      const gdd = Object.assign({}, M.gdd, {
+        cumulative: parseFloat(data.cumulative),
+        weeklyAvg: parseFloat(data.weeklyAvg),
+        compareNormal: data.compareNormal || M.gdd.compareNormal
+      });
+      ModelStore.patch('growth', { dashboard: dashboard, gdd: gdd });
+      Toast.show('生长看板参数已更新', 'success');
+    }
+  });
+}
+
+function renderCurveSampleTable(M) {
+  const tbody = document.getElementById('curveSampleBody');
+  if (!tbody) return;
+  const gc = M.growthCurves;
+  tbody.innerHTML = gc.series.map(function (s, i) {
+    const cells = gc.metrics.map(function (m) {
+      const arr = (s.values && s.values[m.key]) || [];
+      const last = arr.length ? arr[arr.length - 1] : '-';
+      return '<td><b>' + last + '</b></td>';
+    }).join('');
+    return '<tr>' +
+      '<td>' + s.plot + '</td>' +
+      '<td>' + s.variety + '</td>' +
+      cells +
+      '<td>' + (M.dashboard.lastSampledAt || '-') + '</td>' +
+      '<td style="text-align:right;"><button class="stage-btn" onclick="samplePlotCurve(' + i + ')">录入本周</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function samplePlotCurve(index) {
+  const M = ModelStore.get('growth');
+  const gc = M.growthCurves;
+  const s = gc.series[index];
+  if (!s) return;
+  const fields = gc.metrics.map(function (m) {
+    const arr = (s.values && s.values[m.key]) || [];
+    return {
+      name: m.key,
+      label: m.name + '（' + m.unit + '）',
+      type: 'number',
+      step: '0.1',
+      min: 0,
+      required: true,
+      placeholder: arr.length ? '上周 ' + arr[arr.length - 1] : ''
+    };
+  });
+  Modal.form({
+    title: '录入本周生长采样 · ' + s.plot,
+    width: '440px',
+    fields: fields,
+    onSubmit: function (data) {
+      const values = {};
+      for (let i = 0; i < gc.metrics.length; i++) {
+        const key = gc.metrics[i].key;
+        const v = parseFloat(data[key]);
+        if (isNaN(v) || v <= 0) { Toast.show('请填写有效的采样数值', 'error'); return false; }
+        values[key] = v;
+      }
+      const next = JSON.parse(JSON.stringify(gc));
+      gc.metrics.forEach(function (m) {
+        const arr = (next.series[index].values[m.key] || []).concat([values[m.key]]);
+        while (arr.length > gc.weeks.length) arr.shift();
+        next.series[index].values[m.key] = arr;
+      });
+      const dashboard = Object.assign({}, M.dashboard, { lastSampledAt: todayMMDD() });
+      ModelStore.patch('growth', { growthCurves: next, dashboard: dashboard });
+      Toast.show('本周采样已录入，大屏与移动端已同步', 'success');
+    }
+  });
+}
+
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>

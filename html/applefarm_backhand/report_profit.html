@@ -414,6 +414,7 @@
 </div>
 
 <!-- 引入交互脚本 -->
+<script src="js/shared/biz-store.js"></script>
 <script src="js/components/chart.js"></script>
 
 <script>
@@ -601,11 +602,12 @@ function renderBaseSummary() {
 
   const groups = {};
   plotProfitData.forEach(function (p) {
-    if (!groups[p.base]) groups[p.base] = { base: p.base, area: 0, yield: 0, revenue: 0, cost: 0 };
-    groups[p.base].area += p.area;
-    groups[p.base].yield += p.yield;
-    groups[p.base].revenue += p.revenue;
-    groups[p.base].cost += p.cost;
+    const base = BASE_NAME_BY_PLOT[p.code] || p.base;
+    if (!groups[base]) groups[base] = { base: base, area: 0, yield: 0, revenue: 0, cost: 0 };
+    groups[base].area += p.area;
+    groups[base].yield += p.yield;
+    groups[base].revenue += p.revenue;
+    groups[base].cost += p.cost;
   });
 
   const rows = Object.keys(groups).map(function (k) {
@@ -685,11 +687,55 @@ function colorizePlotGrossRate() {
   });
 }
 
+// 地块 → 基地主数据映射（与「企业管理 · 地块管理」的 PLOT 主数据一致）
+// 用于把利润报表的基地口径对齐到基地主数据，并回写经营分析驾驶舱
+const BASE_NAME_BY_PLOT = {
+  'D-007': '天水清水县基地',
+  'D-009': '天水张家川县基地',
+  'D-011': '天水秦州基地',
+  'D-014': '天水武山县基地',
+  'D-017': '天水秦州基地',
+  'D-020': '天水清水县基地',
+  'D-021': '天水武山县基地'
+};
+
+// 将利润报表口径回写经营分析共享源：年度营收 / 成本 / 净利润 / 基地利润
+function syncBizStore() {
+  if (!window.BizStore) return;
+  const groups = {};
+  plotProfitData.forEach(function (p) {
+    const base = BASE_NAME_BY_PLOT[p.code] || p.base;
+    if (!groups[base]) groups[base] = { base: base, revenue: 0, cost: 0 };
+    groups[base].revenue += p.revenue;
+    groups[base].cost += p.cost;
+  });
+
+  const rows = Object.keys(groups).map(function (k) {
+    const g = groups[k];
+    const profit = g.revenue - g.cost;
+    return {
+      base: g.base,
+      revenue: Math.round(g.revenue / 100) / 100,   // 元 → 万元（保留 2 位）
+      cost: Math.round(g.cost / 100) / 100,
+      profit: Math.round(profit / 100) / 100,
+      rate: pct(profit, g.revenue)
+    };
+  }).sort(function (a, b) { return b.profit - a.profit; });
+
+  BizStore.setFinanceSummary({
+    totalRevenue: rows.reduce(function (s, r) { return s + r.revenue; }, 0),
+    totalCost: rows.reduce(function (s, r) { return s + r.cost; }, 0),
+    netProfit: rows.reduce(function (s, r) { return s + r.profit; }, 0)
+  });
+  BizStore.setBaseProfit(rows);
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   // 顶部汇总 + 各基地利润汇总
   renderProfitStats();
   renderBaseSummary();
   colorizePlotGrossRate();
+  syncBizStore();
 
   // 地块效益趋势数据（按地块编号，与排行表一致）
   const profitTrendData = {

@@ -508,7 +508,7 @@
           <div class="mb-list-content">
             <div class="mb-list-title">我的消息</div>
           </div>
-          <span class="menu-badge">3</span>
+          <span class="menu-badge" id="msgBadge">3</span>
           <div class="mb-list-arrow">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 18l6-6-6-6"/>
@@ -741,6 +741,7 @@
     </div>
   </div>
 
+  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
   <script>
     function navigateTo(page) { window.location.href = page; }
 
@@ -768,30 +769,64 @@
 
     function closeDetail() { document.getElementById('detailModal').classList.remove('show'); }
 
+    /* 消息读取：优先 MobileOpsStore（后台消息推送与公告），无该层时回退直读 mb_messages */
+    var OPS_MSG_CAT = {
+      ai: { cls: 'system', tag: 'AI 分析' },
+      alert: { cls: 'warning', tag: '预警通知' },
+      farming: { cls: 'feedback', tag: '农事通知' },
+      device: { cls: 'feedback', tag: '设备通知' },
+      notice: { cls: 'system', tag: '系统通知' }
+    };
+    function readOpsMessages() {
+      var list = [];
+      if (window.MobileOpsStore && typeof MobileOpsStore.list === 'function') {
+        try { list = MobileOpsStore.list('messages') || []; } catch (e) { list = []; }
+      } else {
+        try {
+          var raw = localStorage.getItem('mb_messages');
+          var v = raw ? JSON.parse(raw) : [];
+          list = Array.isArray(v) ? v : [];
+        } catch (e) { list = []; }
+      }
+      return list.filter(function (m) {
+        if (!m || m.enabled === false) return false;
+        var target = m.target || 'mobile';
+        return target === 'mobile' || target === 'all';
+      }).map(function (m) {
+        var meta = OPS_MSG_CAT[m.category] || OPS_MSG_CAT.notice;
+        var t = String(m.time || '');
+        return {
+          cls: meta.cls,
+          tag: meta.tag,
+          title: String(m.title || ''),
+          content: String(m.content || ''),
+          time: t ? t.replace('T', ' ').slice(0, 16) : ''
+        };
+      }).filter(function (m) { return !!m.title; })
+        .sort(function (a, b) { return b.time.localeCompare(a.time); });
+    }
+
+    /* 未读徽标数量与后台消息条数保持一致 */
+    (function syncMsgBadge() {
+      var badge = document.getElementById('msgBadge');
+      if (!badge) return;
+      var n = readOpsMessages().length;
+      badge.textContent = n;
+      badge.style.display = n ? '' : 'none';
+    })();
+
     function openMessages() {
-      var content = '<div class="msg-list">' +
-        '<div class="msg-item">' +
+      /* P1-07：消息来自后台「消息推送与公告」（mb_messages），仅展示 enabled !== false 的条目 */
+      var content = '<div class="msg-list">' + (readOpsMessages().map(function (m) {
+        return '<div class="msg-item">' +
           '<div class="msg-header">' +
-            '<span class="msg-type warning">预警通知</span>' +
-            '<span class="msg-time">10分钟前</span>' +
+            '<span class="msg-type ' + m.cls + '">' + m.tag + '</span>' +
+            '<span class="msg-time">' + m.time + '</span>' +
           '</div>' +
-          '<div class="msg-content">地块A2区灌溉任务已逾期，请及时处理</div>' +
-        '</div>' +
-        '<div class="msg-item">' +
-          '<div class="msg-header">' +
-            '<span class="msg-type feedback">审核反馈</span>' +
-            '<span class="msg-time">1小时前</span>' +
-          '</div>' +
-          '<div class="msg-content">您提交的9月19日农事记录已通过审核</div>' +
-        '</div>' +
-        '<div class="msg-item">' +
-          '<div class="msg-header">' +
-            '<span class="msg-type system">系统通知</span>' +
-            '<span class="msg-time">3小时前</span>' +
-          '</div>' +
-          '<div class="msg-content">明日将有降雨，请做好果园排水准备</div>' +
-        '</div>' +
-      '</div>';
+          '<div class="msg-content">' + m.title + '</div>' +
+          (m.content ? '<div class="msg-content" style="margin-top:6px;font-size:13px;color:var(--text-tertiary);">' + m.content + '</div>' : '') +
+        '</div>';
+      }).join('') || '<div style="color:var(--text-tertiary);padding:24px 0;text-align:center;">暂无消息</div>') + '</div>';
       openDetail('我的消息', content);
     }
 

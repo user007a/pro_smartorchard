@@ -109,12 +109,65 @@
     return 'normal';
   }
 
+  /* 正式品类字典：只允许这三类，禁止用其它品类顶替（P0-05） */
+  var TYPE_META = [
+    { key: 'fertilizer', name: '化肥' },
+    { key: 'pesticide', name: '农药' },
+    { key: 'tool', name: '工具' }
+  ];
+
   var MaterialStore = {
+    TYPE_META: TYPE_META,
     all: function () { return load(); },
     get: function (identifier) { return find(identifier); },
     stockOf: function (identifier) { var m = find(identifier); return m ? m.stock : null; },
     safetyOf: function (identifier) { var m = find(identifier); return m ? m.safety : null; },
     statusOf: function (identifier) { var m = find(identifier); return m ? statusOfStock(m.stock, m.safety) : null; },
+
+    /**
+     * 品类汇总（P0-05 / P1-05）
+     * - 库存与安全库存按品类求和
+     * - 覆盖天数 = 品类可用库存 / Σ dailyUse，无日均消耗时为 null
+     * - 未在档案中定义的品类不返回，前端显示“未配置”
+     */
+    categoryStats: function () {
+      var list = load();
+      return TYPE_META.map(function (t) {
+        var rows = list.filter(function (x) { return x.type === t.key; });
+        var stock = 0, safety = 0, daily = 0, okCount = 0;
+        rows.forEach(function (x) {
+          stock += Number(x.stock) || 0;
+          safety += Number(x.safety) || 0;
+          daily += Number(x.dailyUse) || 0;
+          if ((Number(x.stock) || 0) >= (Number(x.safety) || 0)) okCount++;
+        });
+        return {
+          key: t.key,
+          name: t.name,
+          configured: rows.length > 0,
+          skuCount: rows.length,
+          okCount: okCount,
+          stock: stock,
+          safety: safety,
+          dailyUse: Math.round(daily * 10) / 10,
+          safe: rows.length > 0 && stock >= safety,
+          rate: safety > 0 ? Math.round(stock / safety * 1000) / 10 : null,
+          days: daily > 0 ? Math.round(stock / daily * 10) / 10 : null
+        };
+      });
+    },
+
+    /** 农资保障率 = 库存达标的品类数 / 已配置品类数 */
+    guaranteeRate: function () {
+      var cats = this.categoryStats().filter(function (c) { return c.configured; });
+      var safe = cats.filter(function (c) { return c.safe; }).length;
+      return {
+        rate: cats.length ? Math.round(safe / cats.length * 1000) / 10 : 0,
+        safeCount: safe,
+        totalCount: cats.length,
+        categories: cats
+      };
+    },
 
     /** 增减库存；库存不足时返回 ok:false 且不改动数据 */
     applyDelta: function (identifier, delta) {

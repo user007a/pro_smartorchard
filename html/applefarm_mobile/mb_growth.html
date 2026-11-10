@@ -69,18 +69,18 @@
             <span>🌱</span>
             <span>当前生长阶段</span>
           </div>
-          <div class="overview-badge">成熟期</div>
+          <div class="overview-badge" id="mbStageBadge">—</div>
         </div>
         <div class="stage-info">
-          <div class="stage-name">果实着色成熟期</div>
-          <div class="stage-desc">花牛苹果已进入采收窗口，请按计划安排采收入库</div>
+          <div class="stage-name" id="mbStageName">—</div>
+          <div class="stage-desc" id="mbStageDesc">数据加载中</div>
         </div>
         <div class="progress-bar">
-          <div class="progress-fill" style="width: 95%;"></div>
+          <div class="progress-fill" id="mbStageFill" style="width: 0%;"></div>
         </div>
         <div class="progress-info">
-          <span>萌芽期 3月15日</span>
-          <span>采收窗口 10月15日-10月底</span>
+          <span id="mbStageStart">—</span>
+          <span id="mbHarvestWindow">—</span>
         </div>
       </div>
 
@@ -116,39 +116,7 @@
           <span>📍</span>
           <span>各地块生长进度</span>
         </div>
-        <div class="plot-item">
-          <div class="plot-color green"></div>
-          <div class="plot-info">
-            <div class="plot-name">A区 - 花牛苹果</div>
-            <div class="plot-stage">成熟期 · 已进入采收窗口</div>
-          </div>
-          <div class="plot-progress">
-            <div class="plot-percent">95%</div>
-            <div class="plot-days">采收进行中</div>
-          </div>
-        </div>
-        <div class="plot-item">
-          <div class="plot-color orange"></div>
-          <div class="plot-info">
-            <div class="plot-name">B区 - 花牛苹果（早熟）</div>
-            <div class="plot-stage">成熟期 · 已基本完成采收</div>
-          </div>
-          <div class="plot-progress">
-            <div class="plot-percent">100%</div>
-            <div class="plot-days">采收收尾</div>
-          </div>
-        </div>
-        <div class="plot-item">
-          <div class="plot-color blue"></div>
-          <div class="plot-info">
-            <div class="plot-name">C区 - 金帅</div>
-            <div class="plot-stage">成熟期 · 待采收</div>
-          </div>
-          <div class="plot-progress">
-            <div class="plot-percent">90%</div>
-            <div class="plot-days">即将采收</div>
-          </div>
-        </div>
+        <div id="mbPlotList"></div>
       </div>
 
       <div class="suggestion-card">
@@ -156,14 +124,7 @@
           <span class="suggestion-icon">💡</span>
           <span>模型推荐农事</span>
         </div>
-        <div class="suggestion-item">
-          <div class="suggestion-text">成熟期建议按成熟度分批采收，优先采阳面、外围果</div>
-          <div class="suggestion-btn" onclick="navigateTo('mb_record_task.html')">记农事</div>
-        </div>
-        <div class="suggestion-item">
-          <div class="suggestion-text">采后及时分级预冷，控制入库温度0-2℃</div>
-          <div class="suggestion-btn" onclick="navigateTo('mb_record_task.html')">记农事</div>
-        </div>
+        <div id="mbAdviceList"></div>
       </div>
     </div>
     
@@ -195,6 +156,60 @@
   <script src="../applefarm_backhand/js/shared/model-bind.js"></script>
   <script>
     function navigateTo(page) { window.location.href = page; }
+
+    /* 生长阶段、地块进度、模型建议统一取 ModelStore（与后台、大屏同源） */
+    (function () {
+      if (!window.ModelStore) return;
+      function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+      try {
+        var S = ModelStore.phenologySnapshot();
+        var G = ModelStore.get('growth');
+        if (S) {
+          set('mbStageBadge', S.currentStage);
+          set('mbStageName', S.currentStage + ' · 已完成 ' + S.progress + '%');
+          set('mbStageDesc', '当前物候期 ' + S.currentStage + '（' + S.stageStart + ' ~ ' + S.stageEnd + '），' +
+            (S.harvestWindow.isOpen ? '采收窗口已开启，请按计划安排采收入库' : '距采收窗口还有 ' + S.harvestWindow.daysLeft + ' 天'));
+          set('mbStageStart', '物候期起点 ' + S.stageStart);
+          set('mbHarvestWindow', '采收窗口 ' + S.harvestWindow.start + '-' + S.harvestWindow.end);
+          var fill = document.getElementById('mbStageFill');
+          if (fill) fill.style.width = S.progress + '%';
+        }
+
+        var gc = G.growthCurves;
+        var box = document.getElementById('mbPlotList');
+        if (box && gc) {
+          var colors = ['green', 'orange', 'blue', 'green'];
+          box.innerHTML = gc.series.map(function (s, i) {
+            var arr = (s.values && s.values.diameter) || [];
+            var latest = arr.length ? arr[arr.length - 1] : '-';
+            var pct = S ? S.progress : 0;
+            return '<div class="plot-item">' +
+              '<div class="plot-color ' + colors[i % colors.length] + '"></div>' +
+              '<div class="plot-info">' +
+                '<div class="plot-name">' + s.plot + ' - ' + s.variety + '</div>' +
+                '<div class="plot-stage">' + (S ? S.currentStage : '—') + ' · 果实横径 ' + latest + ' mm</div>' +
+              '</div>' +
+              '<div class="plot-progress">' +
+                '<div class="plot-percent">' + pct + '%</div>' +
+                '<div class="plot-days">近 12 周采样</div>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+        }
+
+        var ab = document.getElementById('mbAdviceList');
+        if (ab) {
+          ab.innerHTML = (G.lists.advice || []).slice(0, 2).map(function (a) {
+            return '<div class="suggestion-item">' +
+              '<div class="suggestion-text">' + a.title + '：' + a.desc + '</div>' +
+              '<div class="suggestion-btn" onclick="navigateTo(\'mb_record_task.html\')">记农事</div>' +
+            '</div>';
+          }).join('');
+        }
+      } catch (e) {
+        /* 数据层异常时保留「数据加载中」占位，不影响页面其余功能 */
+      }
+    })();
   </script>
 </body>
 </html>

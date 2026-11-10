@@ -18,6 +18,12 @@
  *   DataStore.upsertSource(item)   → 新增/更新数据源
  *   DataStore.removeSource(id)     → 删除数据源
  *   DataStore.upsertModel(item)    → 新增/更新模型监控记录
+ *   DataStore.highlights()         → 成果亮点列表（底部绝对量口径）
+ *   DataStore.coverage()           → 覆盖地块规划口径 + 台账实际数
+ *   DataStore.ops()                → 系统运维信息（上线/最近故障/手动天数）
+ *   DataStore.lastUpdatedAt()      → 最近一次数据变更时间
+ *   DataStore.heartbeat(id)        → 记录数据源心跳时间
+ *   DataStore.recalcCollections()  → 按本地原始记录重算归集量
  *   DataStore.subscribe(fn)        → 订阅变更，返回 unsubscribe
  *   DataStore.reset()              → 恢复默认数据
  */
@@ -92,6 +98,20 @@
     { id:'MS05', date:'2026-10', title:'数据运营中心上线', desc:'八大驾驶舱数据全面打通', status:'done' }
   ];
 
+  // 成果亮点（驾驶舱底部绝对量口径，可后台维护）
+  var DEFAULT_HIGHLIGHTS = [
+    { id:'HL01', item:'全年节水', value:8600, unit:'吨', desc:'滴灌与水肥一体化替代传统漫灌' },
+    { id:'HL02', item:'全年节肥', value:42,   unit:'吨', desc:'测土配方施肥，按需供给' },
+    { id:'HL03', item:'全年减药', value:1.8,  unit:'吨', desc:'绿色防控与生物农药替代' },
+    { id:'HL04', item:'优质果率', value:86,   unit:'%',  desc:'分级分选后一级果占比' }
+  ];
+
+  // 数字化覆盖地块：planned 为规划口径（可维护），ledgerFallback 为台账未落库时的兜底值
+  var DEFAULT_COVERAGE = { planned: 126, ledgerFallback: 23 };
+
+  // 系统运行信息：按上线/最近故障日期计算稳定运行天数，manualUptimeDays 可人工覆盖
+  var DEFAULT_OPS = { onlineSince: '2025-10-20', lastDowntime: '', manualUptimeDays: null };
+
   /* ---------------- 读写与广播 ---------------- */
 
   var subscribers = [];
@@ -118,7 +138,11 @@
       models: deepClone(DEFAULT_MODELS),
       modelCalls: deepClone(DEFAULT_MODEL_CALLS),
       achievements: deepClone(DEFAULT_ACHIEVEMENTS),
-      milestones: deepClone(DEFAULT_MILESTONES)
+      milestones: deepClone(DEFAULT_MILESTONES),
+      highlights: deepClone(DEFAULT_HIGHLIGHTS),
+      coverage: deepClone(DEFAULT_COVERAGE),
+      ops: deepClone(DEFAULT_OPS),
+      updatedAt: new Date().toISOString()
     };
   }
 
@@ -143,6 +167,8 @@
     if (stored) {
       // 逐键合并，保证新增字段在旧数据上也能补齐默认值
       Object.keys(base).forEach(function(k){ if (stored[k] === undefined) stored[k] = base[k]; });
+      stored.coverage = Object.assign({}, base.coverage, stored.coverage || {});
+      stored.ops = Object.assign({}, base.ops, stored.ops || {});
       inMemory = stored;
     } else {
       inMemory = base;
@@ -158,6 +184,7 @@
   }
 
   function broadcast(reason){
+    if (inMemory) inMemory.updatedAt = new Date().toISOString();
     save();
     notify(reason);
     try {
@@ -165,14 +192,77 @@
     } catch(e){}
   }
 
+  /* ---------------- 口径与派生计算 ---------------- */
+
+  function readJson(key, fallback){
+    try {
+      var raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch(e){ return fallback; }
+  }
+
+  /** 地块台账实际条数：优先取地块管理落库数据，未落库时使用兜底值 */
+  function plotLedgerCount(fallback){
+    var arr = readJson('smartorchard_plot_master', null);
+    if (Array.isArray(arr) && arr.length){
+      var valid = arr.filter(function(x){ return x && x.code; }).length;
+      return valid || arr.length;
+    }
+    return Number(fallback) || 0;
+  }
+
+  /** 稳定运行天数：人工值优先，其次按最近故障/上线日期计算；无有效日期返回 null */
+  function uptimeDaysOf(ops){
+    ops = ops || {};
+    if (ops.manualUptimeDays !== null && ops.manualUptimeDays !== undefined && ops.manualUptimeDays !== ''){
+      var m = Number(ops.manualUptimeDays);
+      if (isFinite(m)) return Math.max(0, Math.round(m));
+    }
+    var base = ops.lastDowntime || ops.onlineSince || '';
+    if (!base) return null;
+    var t = new Date(String(base).replace(/-/g, '/')).getTime();
+    if (!isFinite(t)) return null;
+    return Math.max(0, Math.floor((Date.now() - t) / 86400000));
+  }
+
+  /** 按本地原始记录计数，用于「按原始记录重算」预览 */
+  function rawCollectionCount(category){
+    function countList(key){
+      var v = readJson(key, null);
+      if (Array.isArray(v)) return v.length;
+      if (v && typeof v === 'object') return Object.keys(v).length;
+      return 0;
+    }
+    if (category === '农事') return countList('smartorchard_farming_records');
+    if (category === '设备'){
+      var d = readJson('applefarm_device_v1', null);
+      return d && Array.isArray(d.logs) ? d.logs.length : 0;
+    }
+    if (category === '销售') return countList('h5_orders') + countList('h5_sales_orders');
+    if (category === '溯源'){
+      var t = readJson('smartorchard_trace_v1', null);
+      if (!t || typeof t !== 'object') return 0;
+      return ['batches', 'codes', 'scanLogs'].reduce(function(s, k){
+        var v = t[k];
+        if (Array.isArray(v)) return s + v.length;
+        if (v && typeof v === 'object') return s + Object.keys(v).length;
+        return s;
+      }, 0);
+    }
+    return 0; // 环境数据暂无本地原始记录可计数
+  }
+
   /* ---------------- 汇总计算 ---------------- */
 
   function summary(){
     var d = ensure();
     var totalAmount = d.collections.reduce(function(s, x){ return s + (x.amount || 0); }, 0);
-    var avgRate = d.collections.length
-      ? d.collections.reduce(function(s, x){ return s + (x.rate || 0); }, 0) / d.collections.length
-      : 0;
+    // 合格率按归集量加权，避免小样本来源拉平整体质量
+    var weightedRate = totalAmount > 0
+      ? d.collections.reduce(function(s, x){ return s + (x.amount || 0) * (x.rate || 0); }, 0) / totalAmount
+      : (d.collections.length
+        ? d.collections.reduce(function(s, x){ return s + (x.rate || 0); }, 0) / d.collections.length
+        : 0);
     var totalCalls = d.models.reduce(function(s, x){ return s + (x.calls || 0); }, 0);
     var avgHit = d.models.length
       ? d.models.reduce(function(s, x){ return s + (x.hitRate || 0); }, 0) / d.models.length
@@ -182,10 +272,13 @@
       : 0;
     var onlineModels = d.models.filter(function(x){ return x.status === 'online'; }).length;
     var onlineSources = d.sources.filter(function(x){ return x.status === 'online'; }).length;
+    var warningSources = d.sources.filter(function(x){ return x.status === 'warning'; }).length;
+    var offlineSources = d.sources.filter(function(x){ return x.status === 'offline'; }).length;
+    var coverage = d.coverage || DEFAULT_COVERAGE;
     return {
       totalAmount: totalAmount,
       totalAmountYi: Math.round(totalAmount / 100000000 * 100) / 100,
-      avgRate: Math.round(avgRate * 10) / 10,
+      avgRate: Math.round(weightedRate * 10) / 10,
       totalCalls: totalCalls,
       totalCallsWan: Math.round(totalCalls / 10000 * 10) / 10,
       avgHit: Math.round(avgHit * 10) / 10,
@@ -193,9 +286,12 @@
       onlineModels: onlineModels,
       modelTotal: d.models.length,
       onlineSources: onlineSources,
+      warningSources: warningSources,
+      offlineSources: offlineSources,
       sourceTotal: d.sources.length,
-      plotCoverage: 126,
-      uptimeDays: 386
+      plotCoverage: Number(coverage.planned) || 0,
+      plotLedger: plotLedgerCount(coverage.ledgerFallback),
+      uptimeDays: uptimeDaysOf(d.ops)
     };
   }
 
@@ -321,6 +417,154 @@
       broadcast('milestone-remove:' + id);
       return true;
     },
+
+    /* ---- 成果亮点维护（绝对量口径，替代大屏硬编码） ---- */
+    highlights: function(){ return deepClone(ensure().highlights); },
+    upsertHighlight: function(item){
+      var d = ensure();
+      item = item || {};
+      var name = String(item.item || '').trim();
+      var value = Number(item.value);
+      if (!name) return { ok:false, message:'请填写亮点名称' };
+      if (!isFinite(value) || value < 0) return { ok:false, message:'亮点数值需为不小于 0 的数字' };
+      var idx = d.highlights.findIndex(function(x){ return x.id === item.id; });
+      var payload = {
+        id: item.id || nextId(d.highlights, 'HL'),
+        item: name,
+        value: Math.round(value * 100) / 100,
+        unit: String(item.unit || '').trim(),
+        desc: String(item.desc || '').trim()
+      };
+      if (idx >= 0) d.highlights[idx] = Object.assign({}, d.highlights[idx], payload);
+      else d.highlights.push(payload);
+      broadcast('highlight:' + payload.id);
+      return { ok:true, item: payload };
+    },
+    removeHighlight: function(id){
+      var d = ensure();
+      d.highlights = d.highlights.filter(function(x){ return x.id !== id; });
+      broadcast('highlight-remove:' + id);
+      return true;
+    },
+
+    /* ---- 数字化覆盖地块口径（规划口径可维护，台账口径自动统计） ---- */
+    coverage: function(){
+      var d = ensure();
+      return { planned: Number(d.coverage.planned) || 0, ledger: plotLedgerCount(d.coverage.ledgerFallback) };
+    },
+    setCoverage: function(patch){
+      var d = ensure();
+      patch = patch || {};
+      var planned = patch.planned === undefined ? d.coverage.planned : Number(patch.planned);
+      var fallback = patch.ledgerFallback === undefined ? d.coverage.ledgerFallback : Number(patch.ledgerFallback);
+      if (!isFinite(planned) || planned < 0) return { ok:false, message:'规划地块数需为不小于 0 的数字' };
+      if (!isFinite(fallback) || fallback < 0) return { ok:false, message:'台账兜底数需为不小于 0 的数字' };
+      d.coverage.planned = Math.round(planned);
+      d.coverage.ledgerFallback = Math.round(fallback);
+      broadcast('coverage');
+      return { ok:true, coverage: DataStore.coverage() };
+    },
+
+    /* ---- 系统运维信息（稳定运行天数口径） ---- */
+    ops: function(){ return deepClone(ensure().ops); },
+    setOps: function(patch){
+      var d = ensure();
+      patch = patch || {};
+      var dateRe = /^\d{4}-\d{2}-\d{2}$/;
+      if (patch.onlineSince !== undefined){
+        var since = String(patch.onlineSince || '').trim();
+        if (since && !dateRe.test(since)) return { ok:false, message:'上线日期格式应为 YYYY-MM-DD' };
+        d.ops.onlineSince = since;
+      }
+      if (patch.lastDowntime !== undefined){
+        var down = String(patch.lastDowntime || '').trim();
+        if (down && !dateRe.test(down)) return { ok:false, message:'最近故障日期格式应为 YYYY-MM-DD' };
+        d.ops.lastDowntime = down;
+      }
+      if (patch.manualUptimeDays !== undefined){
+        var manual = patch.manualUptimeDays;
+        if (manual === null || manual === '') d.ops.manualUptimeDays = null;
+        else {
+          var n = Number(manual);
+          if (!isFinite(n) || n < 0) return { ok:false, message:'手动天数需为不小于 0 的数字' };
+          d.ops.manualUptimeDays = Math.round(n);
+        }
+      }
+      broadcast('ops');
+      return { ok:true, ops: DataStore.ops(), uptimeDays: uptimeDaysOf(d.ops) };
+    },
+
+    /* ---- 趋势与调用量维护（后台可编辑，驾驶舱只读） ---- */
+    upsertCollectionTrend: function(list){
+      var d = ensure();
+      if (!Array.isArray(list) || list.length !== 12) return { ok:false, message:'归集趋势需为 12 个月数据' };
+      for (var i = 0; i < list.length; i++){
+        var v = Number(list[i] && list[i].value);
+        if (!isFinite(v) || v < 0) return { ok:false, message:'第 ' + (i + 1) + ' 个月数值无效' };
+      }
+      var next = list.map(function(x, idx){
+        return { month: String((x && x.month) || (idx + 1) + '月'), value: Math.round(Number(x && x.value) * 10) / 10 };
+      });
+      d.collectionTrend = next;
+      broadcast('collectionTrend');
+      return { ok:true, list: deepClone(next) };
+    },
+    upsertModelCalls: function(list){
+      var d = ensure();
+      if (!Array.isArray(list) || list.length !== 14) return { ok:false, message:'模型调用量需为 14 天数据' };
+      for (var i = 0; i < list.length; i++){
+        var v = Number(list[i] && list[i].value);
+        if (!isFinite(v) || v < 0) return { ok:false, message:'第 ' + (i + 1) + ' 天数值无效' };
+      }
+      var next = list.map(function(x, idx){
+        return { date: String((x && x.date) || ''), value: Math.round(Number(x && x.value) * 10) / 10 };
+      });
+      d.modelCalls = next;
+      broadcast('modelCalls');
+      return { ok:true, list: deepClone(next) };
+    },
+
+    /* ---- 数据源心跳（后台手动记录采集任务存活时间） ---- */
+    heartbeat: function(id){
+      var d = ensure();
+      var item = d.sources.filter(function(x){ return x.id === id; })[0];
+      if (!item) return { ok:false, message:'数据源不存在' };
+      var now = new Date();
+      function pad(n){ return n < 10 ? '0' + n : String(n); }
+      item.lastHeartbeatAt = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) +
+        ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+      broadcast('source-heartbeat:' + id);
+      return { ok:true, lastHeartbeatAt: item.lastHeartbeatAt };
+    },
+
+    /* ---- 按本地原始记录重算归集量（预览 / 可显式应用） ---- */
+    recalcCollections: function(apply){
+      var d = ensure();
+      var items = d.collections.map(function(x){
+        var count = rawCollectionCount(x.category);
+        return {
+          id: x.id,
+          source: x.source,
+          category: x.category,
+          current: x.amount,
+          count: count,
+          next: count > 0 ? count : x.amount,
+          skipped: count <= 0
+        };
+      });
+      if (apply){
+        var changed = false;
+        items.forEach(function(it){
+          if (it.skipped) return;
+          var row = d.collections.filter(function(x){ return x.id === it.id; })[0];
+          if (row && row.amount !== it.next){ row.amount = it.next; changed = true; }
+        });
+        if (changed) broadcast('collection-recalc');
+      }
+      return { ok:true, applied: !!apply, items: items };
+    },
+
+    lastUpdatedAt: function(){ return ensure().updatedAt || ''; },
 
     subscribe: function(fn){
       subscribers.push(fn);

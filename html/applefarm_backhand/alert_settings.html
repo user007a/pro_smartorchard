@@ -642,9 +642,43 @@
               预警源类型
             </h3>
             <div class="source-list" id="alertSourceList"></div>
-            <div class="silence-status" style="margin-top:var(--space-lg);">共享数据源 AlertStore 统一管理 设备 / 人工上报 / 模型 / 库存 / 系统 五类来源，规则与预警同源；状态按规则与预警的真实接入情况动态判定。</div>
+            <div class="silence-status" style="margin-top:var(--space-lg);">共享数据源 AlertStore 统一管理 设备 / 人工上报 / 模型 / 库存 / 系统 / 资质到期 六类来源，规则与预警同源；状态按规则与预警的真实接入情况动态判定。</div>
           </div>
         </div>
+
+        <!-- 看板达标阈值（驾驶舱近 24h 指标判定口径） -->
+        <div class="settings-card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--primary-500);"><path d="M3 3v18h18"/><path d="m7 15 4-5 3 3 5-7"/></svg>
+            看板达标阈值
+          </h3>
+          <div class="silence-row">
+            <div class="form-group">
+              <label>平均响应（分钟）</label>
+              <input type="number" class="form-input" id="targetRespond" min="1" step="1">
+            </div>
+            <div class="form-group">
+              <label>平均处置（分钟）</label>
+              <input type="number" class="form-input" id="targetHandle" min="1" step="1">
+            </div>
+            <div class="form-group">
+              <label>平均闭环（分钟）</label>
+              <input type="number" class="form-input" id="targetClose" min="1" step="1">
+            </div>
+            <div class="form-group">
+              <label>超时率上限（%）</label>
+              <input type="number" class="form-input" id="targetOverdue" min="1" max="100" step="1">
+            </div>
+            <div class="form-group">
+              <button class="jg-btn jg-btn-primary" id="btnSaveTargets">保存达标阈值</button>
+            </div>
+            <div class="form-group">
+              <button class="jg-btn" id="btnResetTargets">恢复默认</button>
+            </div>
+          </div>
+          <div class="silence-status" id="targetStatus">阈值仅作用于智能预警驾驶舱「近 24 小时」指标的达标判定，不影响预警生成与推送。</div>
+        </div>
+
                 <div class="search-section">
           <div class="search-bar">
             <select class="search-select" id="typeSelect">
@@ -1267,6 +1301,7 @@
 
     renderSlaConfig();
     renderAlertSources();
+    renderTargets();
     initSilence();
 
     filteredData = AlertStore.rules();
@@ -1281,6 +1316,8 @@
 
     document.getElementById('btnSaveSla').addEventListener('click', saveSlaConfig);
     document.getElementById('btnResetSla').addEventListener('click', resetSlaConfig);
+    document.getElementById('btnSaveTargets').addEventListener('click', saveTargets);
+    document.getElementById('btnResetTargets').addEventListener('click', resetTargets);
     document.getElementById('btnSaveSilence').addEventListener('click', saveSilence);
     document.querySelectorAll('#silenceStart, #silenceEnd, #silenceScope').forEach(function(el) {
       el.addEventListener('change', renderSilenceStatus);
@@ -1583,6 +1620,80 @@
     applySlaToRules();
     reloadRules();
     showToast('已恢复默认 SLA 配置', 'success');
+  }
+
+  // ---------- 看板达标阈值（AlertStore.config.targets）----------
+  const TARGET_FIELDS = [
+    { key: 'avgRespond', input: 'targetRespond', label: '平均响应', unit: '分钟' },
+    { key: 'avgHandle', input: 'targetHandle', label: '平均处置', unit: '分钟' },
+    { key: 'avgClose', input: 'targetClose', label: '平均闭环', unit: '分钟' },
+    { key: 'overdueRate', input: 'targetOverdue', label: '超时率上限', unit: '%' }
+  ];
+
+  function readTargets() {
+    const cfg = AlertStore.config();
+    const stored = (cfg && cfg.targets) || {};
+    const defs = AlertStore.DEFAULT_TARGETS || {};
+    const out = {};
+    TARGET_FIELDS.forEach(function(f) {
+      const v = Number(stored[f.key]);
+      out[f.key] = (isFinite(v) && v > 0) ? v : (defs[f.key] || 0);
+    });
+    return out;
+  }
+
+  function renderTargets() {
+    const t = readTargets();
+    TARGET_FIELDS.forEach(function(f) {
+      const el = document.getElementById(f.input);
+      if (el) el.value = t[f.key];
+    });
+    const el = document.getElementById('targetStatus');
+    if (el) {
+      el.textContent = '当前阈值：平均响应 ≤ ' + t.avgRespond + ' 分钟 · 平均处置 ≤ ' + t.avgHandle
+        + ' 分钟 · 平均闭环 ≤ ' + t.avgClose + ' 分钟 · 超时率 ≤ ' + t.overdueRate
+        + '%　（仅作用于智能预警驾驶舱「近 24 小时」指标的达标判定）';
+    }
+  }
+
+  function collectTargets() {
+    const out = {};
+    for (let i = 0; i < TARGET_FIELDS.length; i++) {
+      const f = TARGET_FIELDS[i];
+      const el = document.getElementById(f.input);
+      const raw = el ? String(el.value).trim() : '';
+      if (!raw) { showToast(f.label + '阈值不能为空', 'warning'); return null; }
+      const v = Number(raw);
+      if (!isFinite(v) || v <= 0) { showToast(f.label + '阈值必须为正数', 'warning'); return null; }
+      if (f.key === 'overdueRate' && v > 100) { showToast('超时率上限不能超过 100%', 'warning'); return null; }
+      out[f.key] = v;
+    }
+    return out;
+  }
+
+  function saveTargets() {
+    const next = collectTargets();
+    if (!next) return;
+    const res = AlertStore.saveConfig({ targets: next });
+    if (!res || res.ok === false) {
+      showToast((res && res.message) || '看板阈值保存失败', 'error');
+      return;
+    }
+    renderTargets();
+    showToast('看板达标阈值已保存', 'success');
+  }
+
+  function resetTargets() {
+    const defs = AlertStore.DEFAULT_TARGETS || {};
+    const next = {};
+    TARGET_FIELDS.forEach(function(f) { next[f.key] = defs[f.key]; });
+    const res = AlertStore.saveConfig({ targets: next });
+    if (!res || res.ok === false) {
+      showToast((res && res.message) || '看板阈值保存失败', 'error');
+      return;
+    }
+    renderTargets();
+    showToast('已恢复默认看板阈值', 'success');
   }
 
   // ---------- 预警源类型与共享数据源接入状态 ----------

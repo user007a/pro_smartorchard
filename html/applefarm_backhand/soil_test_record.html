@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 土壤检测记录</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style>
+  .stat-grid-4 {
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:16px; margin-bottom:12px;
+  }
+  .st-card {
+    background:#fff; border:1px solid var(--border-light); border-radius:12px;
+    padding:14px 16px; box-shadow:0 1px 3px rgba(16,24,40,.05);
+  }
+  .st-label { font-size:12.5px; color:var(--text-tertiary); display:flex; align-items:center; gap:6px; }
+  .st-value {
+    font-size:24px; font-weight:700; color:var(--text-primary); margin-top:6px;
+    font-variant-numeric:tabular-nums; letter-spacing:-.3px;
+  }
+  .st-value small { font-size:12px; font-weight:500; color:var(--text-tertiary); margin-left:3px; }
+  .st-sub { margin-top:5px; font-size:11.5px; color:var(--text-tertiary); }
+  .st-sub.warn { color:var(--warning); }
+  .data-table { min-width:1180px; }
+  .data-table th { white-space:nowrap; }
+  .num-cell { font-variant-numeric:tabular-nums; text-align:right; }
+  .num-cell.low { color:var(--error); font-weight:600; }
+  .num-cell.warn { color:var(--warning); font-weight:600; }
+  .source-badge {
+    display:inline-block; margin-left:6px; padding:1px 7px; border-radius:4px;
+    font-size:11px; background:var(--gray-100); color:var(--text-tertiary); border:1px solid var(--border-default);
+  }
+  .empty-row td { text-align:center; color:var(--text-tertiary); padding:40px 0; }
+  #pagination-container { padding:12px 16px; }
+</style>
+</head>
+<body data-active-menu="enterprise" data-active-submenu="soil-test">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">土壤检测记录</h1>
+            <p class="page-desc">检测报告录入与查询，数据源 smartorchard_soil_tests_v1，生产指挥大屏与移动端同源读取</p>
+          </div>
+          <div class="page-actions">
+            <button class="jg-btn jg-btn-primary" onclick="openSoilForm('create')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+                <path d="M12 5v14"/><path d="M5 12h14"/>
+              </svg>
+              新增检测记录
+            </button>
+            <button class="jg-btn" onclick="exportSoil()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              导出
+            </button>
+          </div>
+        </div>
+
+        <div class="stat-grid-4" id="statGrid"></div>
+
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="plotSelect"><option value="">全部地块</option></select>
+            <select class="search-select" id="baseSelect" style="min-width:150px;"><option value="">全部基地</option></select>
+            <input type="date" class="search-input" id="startDate" style="width:160px;">
+            <span style="color:var(--text-tertiary);font-size:13px;">至</span>
+            <input type="date" class="search-input" id="endDate" style="width:160px;">
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索检测编号 / 地块名称 / 化验室...">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="handleSearch()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                搜索
+              </button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:56px;">序号</th>
+                  <th style="width:112px;">检测编号</th>
+                  <th style="width:88px;">地块</th>
+                  <th style="width:110px;">地块名称</th>
+                  <th style="width:140px;">所属基地</th>
+                  <th style="width:104px;">采样日期</th>
+                  <th style="width:140px;">化验室</th>
+                  <th style="width:100px;">有机质(%)</th>
+                  <th style="width:104px;">速效氮</th>
+                  <th style="width:104px;">速效磷</th>
+                  <th style="width:104px;">速效钾</th>
+                  <th style="width:88px;">pH</th>
+                  <th style="width:112px;">EC(μS/cm)</th>
+                  <th style="width:168px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/shared/soil-store.js"></script>
+<script>
+/* ============================================================
+ * 土壤检测记录
+ * 数据源：js/shared/soil-store.js → smartorchard_soil_tests_v1
+ * 口径：EC 全端统一 µS/cm；生产指挥大屏按 1 mS/cm = 1000 µS/cm 换算展示
+ * 地块下拉来自地块主数据 smartorchard_plot_master
+ * ============================================================ */
+
+var PAGE_SIZE = 10;
+var currentPage = 1;
+var filtered = [];
+var plotMap = {};
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function toast(msg, type) {
+  if (typeof Toast === 'undefined') return;
+  if (typeof Toast.show === 'function') { Toast.show(msg, type || 'info'); return; }
+  if (typeof Toast[type] === 'function') Toast[type](msg);
+}
+
+/* ---------- 地块字典 ---------- */
+function loadPlots() {
+  plotMap = {};
+  SoilStore.plotList().forEach(function (p) { plotMap[p.code] = p; });
+}
+
+function plotOptions() {
+  return SoilStore.plotList().map(function (p) {
+    return { value: p.code, label: p.code + ' · ' + (p.name || '') };
+  });
+}
+
+/* ---------- 统计卡 ---------- */
+function renderStats() {
+  var s = SoilStore.summary();
+  var total = SoilStore.tests().length;
+  var lowP = SoilStore.tests().filter(function (t) { return Number(t.availableP) < 30; }).length;
+  var card = function (label, value, unit, sub, warn) {
+    return '<div class="st-card"><div class="st-label">' + label + '</div>' +
+      '<div class="st-value">' + (value === null ? '暂无数据' : value) +
+      (value === null ? '' : '<small>' + unit + '</small>') + '</div>' +
+      '<div class="st-sub' + (warn ? ' warn' : '') + '">' + sub + '</div></div>';
+  };
+  document.getElementById('statGrid').innerHTML =
+    card('检测报告数', total, '份', '覆盖 ' + Object.keys(plotMap).length + ' 个地块台账') +
+    card('有机质均值', s.organicMatter === null ? null : s.organicMatter, '%', '最近采样 ' + (s.sampleDate || '—')) +
+    card('速效氮 / 磷 / 钾', s.availableN === null ? null : s.availableN + ' / ' + s.availableP + ' / ' + s.availableK, 'mg/kg',
+      '速效磷低于 30 mg/kg 的记录 ' + lowP + ' 份', lowP > 0) +
+    card('pH / EC 均值', s.ph === null ? null : s.ph + ' / ' + s.ec, s.ph === null ? '' : 'pH · μS/cm',
+      '样本 ' + s.sampleCount + ' 块 · ' + (s.sampleDate || '—'));
+}
+
+/* ---------- 表格行 ---------- */
+function renderRow(t, seq) {
+  var plot = plotMap[t.plotCode] || { name: '-', base: '-' };
+  var gm = Number(t.organicMatter) || 0;
+  var ap = Number(t.availableP) || 0;
+  var an = Number(t.availableN) || 0;
+  var ak = Number(t.availableK) || 0;
+  var ph = Number(t.ph) || 0;
+  var ec = Number(t.ec) || 0;
+  function cell(v, cls) {
+    return '<td class="num-cell' + (cls ? ' ' + cls : '') + '">' + v + '</td>';
+  }
+  return '<tr data-id="' + esc(t.id) + '">' +
+    '<td>' + seq + '</td>' +
+    '<td><strong>' + esc(t.id) + '</strong></td>' +
+    '<td><strong>' + esc(t.plotCode) + '</strong></td>' +
+    '<td>' + esc(plot.name) + '</td>' +
+    '<td>' + esc(plot.base) + '</td>' +
+    '<td>' + esc(t.sampleDate || '-') + '</td>' +
+    '<td>' + esc(t.lab || '-') + '</td>' +
+    cell(gm.toFixed(1), gm < 2 ? 'low' : '') +
+    cell(an, an < 40 ? 'low' : '') +
+    cell(ap, ap < 30 ? 'low' : '') +
+    cell(ak, ak < 120 ? 'warn' : '') +
+    cell(ph.toFixed(2), ph < 5.5 || ph > 8.5 ? 'warn' : '') +
+    cell(ec, ec > 1500 ? 'warn' : '') +
+    '<td><div class="action-btns">' +
+      '<button class="action-btn" onclick="openSoilDetail(\'' + esc(t.id) + '\')">详情</button>' +
+      '<button class="action-btn" onclick="openSoilForm(\'edit\',\'' + esc(t.id) + '\')">编辑</button>' +
+      '<button class="action-btn" onclick="deleteSoil(\'' + esc(t.id) + '\')">删除</button>' +
+    '</div></td>' +
+  '</tr>';
+}
+
+/* ---------- 过滤 ---------- */
+function filteredList() {
+  var plot = document.getElementById('plotSelect').value;
+  var base = document.getElementById('baseSelect').value;
+  var start = document.getElementById('startDate').value;
+  var end = document.getElementById('endDate').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  return SoilStore.tests().filter(function (t) {
+    if (plot && t.plotCode !== plot) return false;
+    if (base) {
+      var p = plotMap[t.plotCode];
+      if (!p || p.base !== base) return false;
+    }
+    if (start && String(t.sampleDate || '') < start) return false;
+    if (end && String(t.sampleDate || '') > end) return false;
+    if (kw) {
+      var p2 = plotMap[t.plotCode] || {};
+      var hay = (t.id + ' ' + t.plotCode + ' ' + (p2.name || '') + ' ' + (t.lab || '')).toLowerCase();
+      if (hay.indexOf(kw) < 0) return false;
+    }
+    return true;
+  }).sort(function (a, b) {
+    return String(b.sampleDate || '').localeCompare(String(a.sampleDate || ''));
+  });
+}
+
+/* ---------- 分页 ---------- */
+function renderPagination() {
+  var total = filtered.length;
+  var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (currentPage > pages) currentPage = pages;
+  var html = '<div class="pagination">';
+  html += '<button class="page-btn' + (currentPage <= 1 ? ' disabled' : '') + '" onclick="goPage(' + (currentPage - 1) + ')">‹</button>';
+  for (var i = 1; i <= pages; i++) {
+    if (i === 1 || i === pages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+      html += '<button class="page-btn' + (i === currentPage ? ' active' : '') + '" onclick="goPage(' + i + ')">' + i + '</button>';
+    } else if (i === currentPage - 2 || i === currentPage + 2) {
+      html += '<span style="padding:0 8px;color:var(--text-tertiary);">...</span>';
+    }
+  }
+  html += '<button class="page-btn' + (currentPage >= pages ? ' disabled' : '') + '" onclick="goPage(' + (currentPage + 1) + ')">›</button>';
+  html += '<span style="margin-left:16px;font-size:13px;color:var(--text-tertiary);">第 ' + currentPage + ' 页/共 ' + pages + ' 页，共 ' + total + ' 条记录</span>';
+  html += '</div>';
+  document.getElementById('pagination-container').innerHTML = html;
+}
+
+function renderTable() {
+  var tbody = document.getElementById('dataTableBody');
+  var start = (currentPage - 1) * PAGE_SIZE;
+  var rows = filtered.slice(start, start + PAGE_SIZE);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="14">暂无检测记录，请点击「新增检测记录」录入</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function (t, i) { return renderRow(t, start + i + 1); }).join('');
+}
+
+function refresh() {
+  filtered = filteredList();
+  renderStats();
+  renderTable();
+  renderPagination();
+}
+
+function goPage(p) {
+  var pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (p < 1 || p > pages) return;
+  currentPage = p;
+  renderTable();
+  renderPagination();
+}
+
+function handleSearch() {
+  currentPage = 1;
+  refresh();
+}
+
+function resetFilter() {
+  ['plotSelect', 'baseSelect', 'startDate', 'endDate', 'searchInput'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  currentPage = 1;
+  refresh();
+}
+
+/* ---------- 表单 ---------- */
+function soilFormFields() {
+  return [
+    {
+      name: 'plotCode', label: '地块', type: 'select', required: true, placeholder: '请选择地块',
+      options: plotOptions()
+    },
+    { name: 'sampleDate', label: '采样日期', type: 'date', required: true },
+    { name: 'lab', label: '化验室 / 检测机构', type: 'text', required: true, placeholder: '如 天水市农技推广中心' },
+    { name: 'organicMatter', label: '有机质(%)', type: 'number', step: '0.1', min: 0, max: 10, required: true },
+    { name: 'availableN', label: '速效氮(mg/kg)', type: 'number', step: '1', min: 0, max: 400, required: true },
+    { name: 'availableP', label: '速效磷(mg/kg)', type: 'number', step: '1', min: 0, max: 200, required: true },
+    { name: 'availableK', label: '速效钾(mg/kg)', type: 'number', step: '1', min: 0, max: 600, required: true },
+    { name: 'ph', label: 'pH', type: 'number', step: '0.01', min: 3, max: 10, required: true },
+    { name: 'ec', label: 'EC(μS/cm)', type: 'number', step: '1', min: 0, max: 5000, required: true,
+      hint: '统一按 μS/cm 存储；大屏与后台展示时换算为 mS/cm（1 mS/cm = 1000 μS/cm）' }
+  ];
+}
+
+function openSoilForm(mode, id) {
+  var rec = null;
+  if (mode === 'edit') {
+    rec = SoilStore.tests().filter(function (t) { return String(t.id) === String(id); })[0];
+    if (!rec) return;
+  }
+  var values = rec ? {
+    plotCode: rec.plotCode,
+    sampleDate: rec.sampleDate,
+    lab: rec.lab,
+    organicMatter: rec.organicMatter,
+    availableN: rec.availableN,
+    availableP: rec.availableP,
+    availableK: rec.availableK,
+    ph: rec.ph,
+    ec: rec.ec
+  } : { sampleDate: new Date().toISOString().slice(0, 10), lab: '天水市农技推广中心' };
+
+  Modal.form({
+    title: mode === 'edit' ? '编辑检测记录 · ' + rec.id : '新增检测记录',
+    fields: soilFormFields(),
+    values: values,
+    submitText: '保存',
+    width: '640px',
+    onSubmit: function (data) {
+      var payload = Object.assign({}, data);
+      if (mode === 'edit') payload.id = rec.id;
+      var res = SoilStore.upsert(payload);
+      if (!res.ok) {
+        toast(res.message, 'error');
+        return false;
+      }
+      toast(res.message, 'success');
+      refresh();
+      return true;
+    }
+  });
+}
+
+/* ---------- 详情 ---------- */
+function openSoilDetail(id) {
+  var t = SoilStore.tests().filter(function (x) { return String(x.id) === String(id); })[0];
+  if (!t) return;
+  var p = plotMap[t.plotCode] || {};
+  var view = Object.assign({}, t, {
+    plotName: p.name || '-',
+    base: p.base || '-',
+    updatedAt: t.updatedAt || t.sampleDate || '-'
+  });
+  Modal.detail('土壤检测详情', view, {
+    width: '620px',
+    fields: [
+      { name: 'id', label: '检测编号' },
+      { name: 'plotCode', label: '地块编号' },
+      { name: 'plotName', label: '地块名称' },
+      { name: 'base', label: '所属基地' },
+      { name: 'sampleDate', label: '采样日期' },
+      { name: 'lab', label: '化验室' },
+      { name: 'organicMatter', label: '有机质(%)', render: function (v) { return Number(v).toFixed(1); } },
+      { name: 'availableN', label: '速效氮(mg/kg)' },
+      { name: 'availableP', label: '速效磷(mg/kg)' },
+      { name: 'availableK', label: '速效钾(mg/kg)' },
+      { name: 'ph', label: 'pH', render: function (v) { return Number(v).toFixed(2); } },
+      { name: 'ec', label: 'EC(μS/cm)', render: function (v) { return Number(v) + '（' + (Number(v) / 1000).toFixed(2) + ' mS/cm）'; } },
+      { name: 'updatedAt', label: '更新时间' }
+    ]
+  });
+}
+
+/* ---------- 删除 ---------- */
+function deleteSoil(id) {
+  if (typeof Confirm === 'undefined' || !Confirm.delete) return;
+  Confirm.delete('确定删除该检测记录吗？删除后大屏与养分评分将同步更新。').then(function (ok) {
+    if (!ok) return;
+    SoilStore.remove(id);
+    toast('删除成功', 'success');
+    refresh();
+  });
+}
+
+/* ---------- 导出 ---------- */
+function exportSoil() {
+  if (!filtered.length) { toast('当前没有可导出的记录', 'warning'); return; }
+  var head = ['检测编号', '地块编号', '地块名称', '所属基地', '采样日期', '化验室', '有机质(%)', '速效氮(mg/kg)', '速效磷(mg/kg)', '速效钾(mg/kg)', 'pH', 'EC(μS/cm)'];
+  var lines = [head.join(',')];
+  filtered.forEach(function (t) {
+    var p = plotMap[t.plotCode] || {};
+    lines.push([
+      t.id, t.plotCode, p.name || '', p.base || '', t.sampleDate, t.lab || '',
+      t.organicMatter, t.availableN, t.availableP, t.availableK, t.ph, t.ec
+    ].join(','));
+  });
+  var blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '土壤检测记录_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('已导出 ' + filtered.length + ' 条记录', 'success');
+}
+
+/* ---------- 初始化 ---------- */
+document.addEventListener('DOMContentLoaded', function () {
+  loadPlots();
+  var plotSel = document.getElementById('plotSelect');
+  plotOptions().forEach(function (o) {
+    var opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.label;
+    plotSel.appendChild(opt);
+  });
+  var baseSel = document.getElementById('baseSelect');
+  var bases = [];
+  SoilStore.plotList().forEach(function (p) {
+    if (p.base && bases.indexOf(p.base) < 0) bases.push(p.base);
+  });
+  bases.forEach(function (b) {
+    var opt = document.createElement('option');
+    opt.value = b;
+    opt.textContent = b;
+    baseSel.appendChild(opt);
+  });
+  refresh();
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

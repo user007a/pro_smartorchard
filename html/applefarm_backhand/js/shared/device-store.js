@@ -915,7 +915,8 @@
       assets: buildAssetSeed(),
       commands: buildCommandSeed(),
       models: buildModelSeed(),
-      audits: []
+      audits: [],
+      updatedAt: new Date().toISOString()
     };
   }
 
@@ -935,6 +936,7 @@
 
   function save() {
     try {
+      if (inMemory) inMemory.updatedAt = new Date().toISOString();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory));
       return true;
     } catch (e) {
@@ -1187,7 +1189,7 @@
     var dev = d.devices.filter(function (x) { return x.id === deviceId; })[0];
     if (!dev) return null;
     var t = typeOf(dev.type);
-    var ms = d.maintains.filter(function (x) { return x.deviceId === deviceId; });
+    var ms = d.maintains.concat(mobileMaintains(d)).filter(function (x) { return x.deviceId === deviceId; });
     var completed = ms.filter(function (x) { return x.status === 'completed'; });
     var repairMs = completed.filter(function (x) { return x.type === '故障维修'; });
     var totalDowntime = ms.reduce(function (s, x) { return s + num(x.downtime); }, 0);
@@ -1235,6 +1237,30 @@
     };
   }
 
+  /** 合并移动端维护申请（smartorchard_maintenance_logs），避免移动端报修游离在维保台账之外 */
+  function mobileMaintains(d) {
+    var logs = [];
+    try { logs = JSON.parse(localStorage.getItem('smartorchard_maintenance_logs') || '[]'); } catch (e) { logs = []; }
+    if (!Array.isArray(logs) || !logs.length) return [];
+    var known = {};
+    (d.maintains || []).forEach(function (x) { known[x.id] = true; });
+    return logs.map(function (l) {
+      var id = 'MB-' + (l.id || l.createTime || '');
+      if (known[id]) return null;
+      var dev = (d.devices || []).filter(function (x) { return x.name === l.device || x.id === l.device; })[0];
+      return {
+        id: id, deviceId: dev ? dev.id : '', type: '故障维修',
+        content: l.reason || '移动端报修',
+        planDate: String(l.createTime || '').slice(0, 10),
+        status: 'pending', manager: '待派单',
+        faultType: l.urgencyText || '移动端提交', faultDesc: l.reason || '',
+        downtime: 0, workHours: 0, cost: 0,
+        startTime: '', endTime: '', result: '',
+        source: 'mobile', mobileId: l.id || ''
+      };
+    }).filter(Boolean);
+  }
+
   function stats() {
     var d = ensure();
     var devices = d.devices;
@@ -1245,7 +1271,7 @@
     var inuse = devices.filter(function (x) { return x.assetStatus === 'inuse'; });
     var avgOnlineRate = total ? devices.reduce(function (s, x) { return s + num(x.onlineRate); }, 0) / total : 0;
     var avgUptimeRate = total ? devices.reduce(function (s, x) { return s + num(x.uptimeRate); }, 0) / total : 0;
-    var ms = d.maintains;
+    var ms = d.maintains.concat(mobileMaintains(d));
     var completed = ms.filter(function (x) { return x.status === 'completed'; });
     var repairs = completed.filter(function (x) { return x.type === '故障维修'; });
     var totalDowntime = ms.reduce(function (s, x) { return s + num(x.downtime); }, 0);
@@ -1295,6 +1321,117 @@
         .sort(function (a, b) { return b.total - a.total; }),
       byBase: Object.keys(byBase).map(function (k) { return byBase[k]; })
         .sort(function (a, b) { return b.total - a.total; })
+    };
+  }
+
+  /* 驾驶舱分类：大屏 7 类 + 其他，统一由设备类型字典派生 */
+  var DASHBOARD_CATEGORIES = [
+    { key: 'weather', name: '气象站', types: ['weather_station', 'env_sensor', 'air_quality'] },
+    { key: 'lamp', name: '杀虫灯', types: ['insect_lamp'] },
+    { key: 'water', name: '水肥一体机', types: ['water_fertilizer', 'irrigation_controller'] },
+    { key: 'camera', name: '监控摄像头', types: ['camera', 'ipc'] },
+    { key: 'drone', name: '植保无人机', types: ['drone', 'drone_hangar'] },
+    { key: 'soil', name: '土壤传感器', types: ['soil_sensor', 'store_sensor'] },
+    { key: 'pest', name: '虫情测报灯', types: ['pest_monitor'] }
+  ];
+
+  /**
+   * 驾驶舱分类汇总：在线/总数/在线率，最后追加“其他设备”保证分项合计等于台账总数
+   * @returns {Array<{key,name,types,total,online,rate}>}
+   */
+  function dashboardSummary() {
+    var list = ensure().devices;
+    var mapped = {};
+    var out = DASHBOARD_CATEGORIES.map(function (c) {
+      c.types.forEach(function (t) { mapped[t] = 1; });
+      var items = list.filter(function (x) { return c.types.indexOf(x.type) >= 0; });
+      var online = items.filter(function (x) { return x.status === 'online'; }).length;
+      return {
+        key: c.key, name: c.name, types: c.types.slice(),
+        total: items.length, online: online,
+        rate: items.length ? Math.round(online / items.length * 1000) / 10 : 0
+      };
+    });
+    var rest = list.filter(function (x) { return !mapped[x.type]; });
+    if (rest.length) {
+      var restOnline = rest.filter(function (x) { return x.status === 'online'; }).length;
+      out.push({
+        key: 'other', name: '其他设备', types: [],
+        total: rest.length, online: restOnline,
+        rate: Math.round(restOnline / rest.length * 1000) / 10
+      });
+    }
+    return out;
+  }
+
+  /* ---------------- 环境 / 土壤实况汇总（大屏、移动端共用） ---------------- */
+
+  var ENV_TYPES = ['weather_station', 'env_sensor', 'air_quality'];
+  var SOIL_TYPES = ['soil_sensor'];
+
+  /**
+   * 环境实况：取气象站/环境站测点均值
+   * @returns {{airTemp,airHum,light,rainfall,windSpeed,surfaceTemp,sampleCount,stationTotal,updatedAt,bases}}
+   */
+  function envSummary() {
+    var all = ensure().devices;
+    var stations = all.filter(function (x) { return ENV_TYPES.indexOf(x.type) >= 0; });
+    var valid = stations.filter(function (x) { return x.readings && typeof x.readings === 'object'; });
+    var keys = ['airTemp', 'airHum', 'light', 'rainfall', 'windSpeed', 'surfaceTemp'];
+    var sum = {}, cnt = {};
+    keys.forEach(function (k) { sum[k] = 0; cnt[k] = 0; });
+    var updatedAt = '', bases = {};
+    valid.forEach(function (d) {
+      var r = d.readings || {};
+      keys.forEach(function (k) {
+        var v = Number(r[k]);
+        if (isFinite(v)) { sum[k] += v; cnt[k]++; }
+      });
+      if (d.lastSeenAt && d.lastSeenAt > updatedAt) updatedAt = d.lastSeenAt;
+      if (d.base) bases[d.base] = 1;
+    });
+    function avg(k) { return cnt[k] ? Math.round(sum[k] / cnt[k] * 10) / 10 : null; }
+    return {
+      airTemp: avg('airTemp'), airHum: avg('airHum'), light: avg('light'),
+      rainfall: avg('rainfall'), windSpeed: avg('windSpeed'), surfaceTemp: avg('surfaceTemp'),
+      sampleCount: valid.length, stationTotal: stations.length,
+      updatedAt: updatedAt,
+      bases: Object.keys(bases)
+    };
+  }
+
+  /**
+   * 土壤实况：取土壤传感器测点均值（EC 保持 mS/cm 原始读数）
+   * @returns {{soilTemp,soilMoist,soilEc,soilPh,sampleCount,sensorTotal,updatedAt,bases}}
+   */
+  function soilSummary() {
+    var all = ensure().devices;
+    var sensors = all.filter(function (x) { return SOIL_TYPES.indexOf(x.type) >= 0; });
+    var valid = sensors.filter(function (x) { return x.readings && typeof x.readings === 'object'; });
+    var keys = ['soilTemp', 'soilMoist', 'soilEc', 'soilPh'];
+    var sum = {}, cnt = {};
+    keys.forEach(function (k) { sum[k] = 0; cnt[k] = 0; });
+    var updatedAt = '', bases = {};
+    valid.forEach(function (d) {
+      var r = d.readings || {};
+      keys.forEach(function (k) {
+        var v = Number(r[k]);
+        if (isFinite(v)) { sum[k] += v; cnt[k]++; }
+      });
+      if (d.lastSeenAt && d.lastSeenAt > updatedAt) updatedAt = d.lastSeenAt;
+      if (d.base) bases[d.base] = 1;
+    });
+    function avg(k, p) {
+      if (!cnt[k]) return null;
+      var f = Math.pow(10, p == null ? 1 : p);
+      return Math.round(sum[k] / cnt[k] * f) / f;
+    }
+    return {
+      soilTemp: avg('soilTemp'), soilMoist: avg('soilMoist'),
+      soilEc: avg('soilEc', 2), soilPh: avg('soilPh', 2),
+      sampleCount: valid.length, sensorTotal: sensors.length,
+      updatedAt: updatedAt,
+      bases: Object.keys(bases)
     };
   }
 
@@ -1480,26 +1617,55 @@
    * 11. 通用 upsert / remove
    * ============================================================ */
 
+  /**
+   * 实体名 → (列表键, ID 前缀)
+   * 列表键必须与 defaults() 中的实际键一致，否则取不到种子数据会生成重复 ID。
+   */
   var ID_PREFIX = {
-    access: 'AC-', gateway: 'GW-', camera: 'VC-', device: 'D-',
-    maintain: 'M-', log: 'L', calibration: 'CAL-', spare: 'SP-',
-    asset: 'AC-', command: 'CMD-'
+    access:     { list: 'access',     prefix: 'AC-' },
+    gateway:    { list: 'gateways',   prefix: 'GW-' },
+    camera:     { list: 'cameras',    prefix: 'VC-' },
+    device:     { list: 'devices',    prefix: 'D-' },
+    maintain:   { list: 'maintains',  prefix: 'M-' },
+    log:        { list: 'logs',       prefix: 'L' },
+    calibration:{ list: 'calibrations', prefix: 'CAL-' },
+    spare:      { list: 'spares',     prefix: 'SP-' },
+    asset:      { list: 'assets',     prefix: 'AC-' },
+    command:    { list: 'commands',   prefix: 'CMD-' }
   };
 
   function nextId(entity) {
     var d = ensure();
-    var list = d[entity] || [];
-    var prefix = ID_PREFIX[entity] || '';
+    var cfg = ID_PREFIX[entity];
+    if (!cfg) return '';
+    var list = d[cfg.list] || [];
+
+    // 日期型编号：在固定前缀后追加序号，序号只统计同前缀的记录
+    function seqOf(head, width) {
+      var max = 0;
+      list.forEach(function (x) {
+        var s = String(x.id || '');
+        if (s.indexOf(head) !== 0) return;
+        var n = parseInt(s.slice(head.length), 10);
+        if (!isNaN(n) && n > max) max = n;
+      });
+      return head + String(max + 1).padStart(width, '0');
+    }
+
+    if (entity === 'command') {
+      return seqOf('CMD-' + todayStr().replace(/-/g, '') + '-', 3);
+    }
+    if (entity === 'asset') {
+      // 资产盘点单号按「年月 + 序号」，避免与门禁接入编号 AC-001 冲突
+      return seqOf('AC-' + todayStr().replace(/-/g, '').slice(0, 6), 2);
+    }
+
     var max = 0;
     list.forEach(function (x) {
       var m = String(x.id || '').match(/(\d+)\s*$/);
       if (m) { var n = parseInt(m[1], 10); if (n > max) max = n; }
     });
-    if (entity === 'log') return 'L' + String(max + 1).padStart(3, '0');
-    if (entity === 'command') {
-      return 'CMD-' + todayStr().replace(/-/g, '') + '-' + String(max + 1).padStart(3, '0');
-    }
-    return prefix + String(max + 1).padStart(3, '0');
+    return cfg.prefix + String(max + 1).padStart(3, '0');
   }
 
   function upsert(listName, item) {
@@ -1581,11 +1747,12 @@
     accessWaysOf: accessWaysOf,
 
     /* 读取 */
+    lastUpdatedAt: function () { return ensure().updatedAt || ''; },
     accessConfigs: function () { return clone(ensure().access); },
     gateways: function () { return clone(ensure().gateways); },
     cameras: function () { return clone(ensure().cameras); },
     devices: function () { return clone(ensure().devices); },
-    maintains: function () { return clone(ensure().maintains); },
+    maintains: function () { return clone(ensure().maintains.concat(mobileMaintains(ensure()))); },
     logs: function () { return clone(ensure().logs); },
     calibrations: function () { return clone(ensure().calibrations); },
     spares: function () { return clone(ensure().spares); },
@@ -1634,6 +1801,10 @@
     calibrationSummary: calibrationSummary,
     spareSummary: spareSummary,
     stats: stats,
+    dashboardSummary: dashboardSummary,
+    envSummary: envSummary,
+    soilSummary: soilSummary,
+    dashboardCategories: DASHBOARD_CATEGORIES,
     healthOf: healthOf,
 
     /* 外键 */
@@ -1846,6 +2017,80 @@
     validate: validate,
     todayStr: todayStr,
     stampNow: stampNow,
+
+    /**
+     * 设备状态 → 预警中心同步（幂等）
+     * offline → 重要（离线超 24h → 紧急）；maintain / assetStatus=repair → 提醒；
+     * 未闭环的故障维修单 → 提醒 / 重要。设备恢复后从清单消失，由 AlertStore 自动闭环。
+     */
+    syncDeviceAlerts: function () {
+      var S = global.AlertStore;
+      if (!S || typeof S.syncSource !== 'function') {
+        return { ok: false, message: '预警数据层未加载' };
+      }
+      var now = Date.now();
+      var items = [];
+      ensure().devices.forEach(function (d) {
+        if (d.assetStatus === 'scrapped') return;
+        var reason = '', level = '', title = '';
+        if (d.status === 'offline') {
+          reason = 'offline';
+          var seen = d.lastSeenAt ? new Date(String(d.lastSeenAt).replace(/-/g, '/')).getTime() : 0;
+          var over24 = seen > 0 && (now - seen > 24 * 3600 * 1000);
+          level = over24 ? 'urgent' : 'important';
+          title = '设备离线：' + d.name + (over24 ? ' 离线超过 24 小时' : ' 离线');
+        } else if (d.status === 'maintain') {
+          reason = 'maintain'; level = 'reminder';
+          title = '设备维护中：' + d.name;
+        } else if (d.assetStatus === 'repair') {
+          reason = 'repair'; level = 'reminder';
+          title = '设备维修中：' + d.name;
+        }
+        if (!reason) return;
+        items.push({
+          dedupeKey: 'device:' + d.id + ':' + reason,
+          type: 'device',
+          category: 'device',
+          title: title,
+          desc: (d.base || '') + ' ' + (d.plotId ? ('地块' + d.plotId) : (d.location || '')) +
+            '；运行状态：' + (RUN_STATUS_TEXT[d.status] || d.status) +
+            '；资产状态：' + (ASSET_STATUS_TEXT[d.assetStatus] || d.assetStatus || ''),
+          level: level,
+          base: d.base || '',
+          plot: d.plotId ? ('地块' + d.plotId) : (d.location || ''),
+          plotCode: d.plotId || '',
+          device: d.name,
+          deviceId: d.id,
+          targetType: 'device',
+          targetId: d.id
+        });
+      });
+      var devMap = {};
+      ensure().devices.forEach(function (d) { devMap[d.id] = d; });
+      ensure().maintains.forEach(function (m) {
+        if (m.type !== '故障维修') return;
+        if (m.status !== 'pending' && m.status !== 'processing') return;
+        var d = devMap[m.deviceId] || {};
+        items.push({
+          dedupeKey: 'device:' + m.deviceId + ':repair-order:' + m.id,
+          type: 'device',
+          category: 'device',
+          title: '设备故障维修：' + (d.name || m.deviceId) + ' - ' + (m.content || m.faultDesc || ''),
+          desc: (d.base || '') + ' ' + (d.plotId ? ('地块' + d.plotId) : '') +
+            '；维修单 ' + m.id + ' 状态：' + (MAINTAIN_STATUS_TEXT[m.status] || m.status) +
+            (m.faultDesc ? '；故障：' + m.faultDesc : ''),
+          level: m.status === 'processing' ? 'important' : 'reminder',
+          base: d.base || '',
+          plot: d.plotId ? ('地块' + d.plotId) : '',
+          plotCode: d.plotId || '',
+          device: d.name || m.deviceId,
+          deviceId: m.deviceId,
+          targetType: 'device',
+          targetId: m.deviceId
+        });
+      });
+      return S.syncSource('device', items, 'device:');
+    },
 
     subscribe: function (fn) {
       subscribers.push(fn);

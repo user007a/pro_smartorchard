@@ -1461,6 +1461,46 @@
     storages: function () { return all('storages'); },
     shipments: function () { return all('shipments'); },
 
+    /**
+     * 采收量汇总（P0-07）
+     * 口径：仅 status==='completed' 的记录，按结束时间归属区间
+     * @param {string} [startDate] YYYY-MM-DD 含
+     * @param {string} [endDate]   YYYY-MM-DD 含
+     */
+    summarizeRecords: function (startDate, endDate) {
+      var list = all('records').filter(function (r) {
+        if (r.status !== 'completed') return false;
+        var d = String(r.endTime || r.startTime || '').slice(0, 10);
+        if (startDate && d < startDate) return false;
+        if (endDate && d > endDate) return false;
+        return true;
+      });
+      var kg = 0;
+      list.forEach(function (r) { kg += num(r.qty); });
+      return {
+        kg: Math.round(kg * 10) / 10,
+        tons: Math.round(kg / 1000 * 100) / 100,
+        count: list.length,
+        hasData: list.length > 0,
+        startDate: startDate || '',
+        endDate: endDate || ''
+      };
+    },
+
+    /** 本月采收量：无完成记录时 hasData=false，前端显示空态而非 0.0t */
+    monthSummary: function (ym) {
+      var now = new Date();
+      var m = ym || (now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2));
+      var y = m.slice(0, 4), mo = m.slice(5, 7);
+      var days = new Date(Number(y), Number(mo), 0).getDate();
+      return this.summarizeRecords(m + '-01', m + '-' + ('0' + days).slice(-2));
+    },
+
+    /** 本季采收量：固定 2026-09-01 ~ 2026-12-31（与采收管理季口径一致） */
+    seasonSummary: function () {
+      return this.summarizeRecords('2026-09-01', '2026-12-31');
+    },
+
     get: get,
     all: all,
     savePlan: savePlan,

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 共享数据层 -->
   <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/device-store.js"></script>
   <style>
     /* ========== 页面专属样式（仅保留设计系统未覆盖的部分） ========== */
 
@@ -637,7 +638,7 @@
           <div class="os-metrics">
             <div class="os-metric">
               <div class="os-metric-label">土壤水分</div>
-              <div class="os-metric-value">68<span class="os-metric-unit">%</span></div>
+              <div class="os-metric-value"><span id="homeOsSoil">--</span><span class="os-metric-unit">%</span></div>
               <div class="os-metric-note">适宜范围 60%~80%</div>
             </div>
             <div class="os-metric">
@@ -755,10 +756,10 @@
               <span class="mb-env-name">空气温度</span>
               <span class="mb-env-status online">在线</span>
             </div>
-            <div><span class="mb-env-value">28</span><span class="mb-env-unit">°C</span></div>
-            <div class="mb-env-trend up">
+            <div><span class="mb-env-value" id="homeEnvTemp">--</span><span class="mb-env-unit">°C</span></div>
+            <div class="mb-env-trend up" id="homeEnvTempTr">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
-              0.6 较昨日
+              环境站实测
             </div>
           </div>
           <div class="mb-env-card" onclick="navigateTo('mb_device.html')">
@@ -766,10 +767,10 @@
               <span class="mb-env-name">土壤湿度</span>
               <span class="mb-env-status online">在线</span>
             </div>
-            <div><span class="mb-env-value">68</span><span class="mb-env-unit">%</span></div>
-            <div class="mb-env-trend down">
+            <div><span class="mb-env-value" id="homeEnvSoil">--</span><span class="mb-env-unit">%</span></div>
+            <div class="mb-env-trend down" id="homeEnvSoilTr">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-              2.0 较昨日
+              土壤仪实测
             </div>
           </div>
           <div class="mb-env-card" onclick="navigateTo('mb_device.html')">
@@ -777,10 +778,10 @@
               <span class="mb-env-name">光照强度</span>
               <span class="mb-env-status online">在线</span>
             </div>
-            <div><span class="mb-env-value">42</span><span class="mb-env-unit">klx</span></div>
-            <div class="mb-env-trend up">
+            <div><span class="mb-env-value" id="homeEnvLight">--</span><span class="mb-env-unit">klx</span></div>
+            <div class="mb-env-trend up" id="homeEnvLightTr">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>
-              3.1 较昨日
+              实时光照
             </div>
           </div>
         </div>
@@ -1039,6 +1040,39 @@
     window.addEventListener('storage', function (e) {
       if (e.key === MSG_KEY) loadMessages();
     });
+  </script>
+  <script>
+    /* 环境监测：与后台设备台账同源（P0-08 / P1-08）
+       数据来自 DeviceStore.envSummary() / soilSummary()，缺失显示 -- 与“未配置”。 */
+    (function () {
+      if (!window.DeviceStore) return;
+      try {
+        var env = DeviceStore.envSummary();
+        var soil = DeviceStore.soilSummary();
+        function put(id, v, digits) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.textContent = (v === null || v === undefined || isNaN(v)) ? '--' : (digits != null ? Number(v).toFixed(digits) : v);
+        }
+        put('homeEnvTemp', env.airTemp, 1);
+        put('homeEnvSoil', soil.soilMoist, 1);
+        put('homeEnvLight', env.light != null ? env.light / 1000 : null, 1);
+        put('homeOsSoil', soil.soilMoist, 1);
+
+        var cards = document.querySelectorAll('.mb-env-card');
+        var flags = [env.sampleCount > 0, soil.sampleCount > 0, env.light != null];
+        for (var i = 0; i < cards.length && i < flags.length; i++) {
+          var st = cards[i].querySelector('.mb-env-status');
+          if (!st) continue;
+          st.textContent = flags[i] ? '在线' : '未配置';
+          st.className = 'mb-env-status ' + (flags[i] ? 'online' : 'offline');
+        }
+        var t = document.getElementById('homeEnvTempTr');
+        if (t) t.lastChild.textContent = ' 样本 ' + (env.sampleCount || 0) + ' 台气象站';
+        var s = document.getElementById('homeEnvSoilTr');
+        if (s) s.lastChild.textContent = ' 样本 ' + (soil.sampleCount || 0) + ' 台土壤仪';
+      } catch (e) { console.warn('[mb_home] 环境数据绑定失败', e); }
+    })();
   </script>
 </body>
 </html>

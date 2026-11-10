@@ -85,25 +85,25 @@
     </div>
   </div>
 
-  <!-- 统计卡片 - 小尺寸样式（本月数据） -->
+  <!-- 统计卡片 - 小尺寸样式（本月数据，金额由 BizStore 收入构成回填） -->
   <div class="patrol-stats" style="grid-template-columns:repeat(5, 1fr);">
     <div class="patrol-stat-card green">
-      <div class="stat-value">¥ 168,500</div>
+      <div class="stat-value" id="revAdopt">¥ 168,500</div>
       <div class="stat-label">认养收入</div>
       <div class="stat-trend" style="font-size:12px; color:var(--success);">↑ 18.3% 较上月</div>
     </div>
     <div class="patrol-stat-card blue">
-      <div class="stat-value">¥ 148,200</div>
+      <div class="stat-value" id="revWholesale">¥ 148,200</div>
       <div class="stat-label">批发收入</div>
       <div class="stat-trend" style="font-size:12px; color:var(--success);">↑ 8.5% 较上月</div>
     </div>
     <div class="patrol-stat-card orange">
-      <div class="stat-value">¥ 62,000</div>
+      <div class="stat-value" id="revRetail">¥ 62,000</div>
       <div class="stat-label">零售收入</div>
       <div class="stat-trend" style="font-size:12px; color:var(--error);">↓ 2.1% 较上月</div>
     </div>
     <div class="patrol-stat-card purple">
-      <div class="stat-value">¥ 378,700</div>
+      <div class="stat-value" id="revTotal">¥ 378,700</div>
       <div class="stat-label">本月总收入</div>
       <div class="stat-trend" style="font-size:12px; color:var(--success);">↑ 12.5% 较上月</div>
     </div>
@@ -145,11 +145,66 @@
 </div>
 
 <!-- 引入交互脚本 -->
+<script src="js/shared/biz-store.js"></script>
 <script src="js/components/chart.js"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const months = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+
+  /* 分类收入曲线与金额统一取自 BizStore（与经营分析驾驶舱同源，合计 = 年度营收） */
+  function mixSeries(name) {
+    if (typeof BizStore === 'undefined') return null;
+    const rows = BizStore.revenueTrendByName(name);
+    if (!rows || !rows.length) return null;
+    return rows.map(function (r) { return Math.round(r.value * 10000); });  /* 万元 → 元 */
+  }
+  function mixAmount(name) {
+    if (typeof BizStore === 'undefined') return null;
+    const item = BizStore.revenueMix().filter(function (x) { return String(x.name || '').indexOf(name) >= 0; })[0];
+    return item ? Math.round((Number(item.value) || 0) * 10000) : null;
+  }
+  const SERIES = {
+    adopt: mixSeries('认养'),
+    wholesale: mixSeries('批发'),
+    retail: mixSeries('零售'),
+    pick: mixSeries('观光')
+  };
+  const AMOUNT = {
+    adopt: mixAmount('认养'),
+    wholesale: mixAmount('批发'),
+    retail: mixAmount('零售'),
+    pick: mixAmount('观光')
+  };
+  function seriesOf(key, fallback) {
+    return SERIES[key] || fallback;
+  }
+  function amountOf(key, fallback) {
+    return AMOUNT[key] == null ? fallback : AMOUNT[key];
+  }
+  function fmtMoney(n) {
+    return Number(n || 0).toLocaleString('en-US');
+  }
+  /* 6 月金额：取当月曲线值，无曲线时回落年度金额 */
+  function monthAmount(key, fallback) {
+    const s = SERIES[key];
+    return s && s.length > 5 ? s[5] : fallback;
+  }
+
+  /* 顶部统计卡：认养 / 批发 / 零售 / 本月总收入，金额来自 BizStore 收入构成 */
+  function paintStatCards() {
+    const set = function (id, val) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '¥ ' + fmtMoney(val);
+    };
+    const a = monthAmount('adopt', 168500);
+    const w = monthAmount('wholesale', 148200);
+    const r = monthAmount('retail', 62000);
+    set('revAdopt', a);
+    set('revWholesale', w);
+    set('revRetail', r);
+    set('revTotal', a + w + r);
+  }
 
   // 4 个 tab 完整数据
   const revenueDataSet = {
@@ -161,16 +216,16 @@ document.addEventListener('DOMContentLoaded', function() {
       trendData: {
         categories: months,
         series: [
-          { name: '认养收入', data: [118500, 122000, 132500, 142800, 156800, 168500, 158000, 152000, 165200, 142800, 115800, 98500], color: '#1890ff', area: true },
-          { name: '批发收入', data: [85000, 92000, 106000, 118000, 135000, 148200, 132500, 118000, 125000, 102500, 72000, 58000], color: '#52c41a', area: true },
-          { name: '零售收入', data: [32000, 38000, 42000, 51000, 58000, 62000, 56000, 48000, 52000, 45000, 32000, 28000], color: '#ff6b35', area: true }
+          { name: '认养收入', data: seriesOf('adopt', [118500, 122000, 132500, 142800, 156800, 168500, 158000, 152000, 165200, 142800, 115800, 98500]), color: '#1890ff', area: true },
+          { name: '批发收入', data: seriesOf('wholesale', [85000, 92000, 106000, 118000, 135000, 148200, 132500, 118000, 125000, 102500, 72000, 58000]), color: '#52c41a', area: true },
+          { name: '零售收入', data: seriesOf('retail', [32000, 38000, 42000, 51000, 58000, 62000, 56000, 48000, 52000, 45000, 32000, 28000]), color: '#ff6b35', area: true }
         ]
       },
       pieData: {
         series: [
-          { name: '认养收入', value: 168500 },
-          { name: '批发收入', value: 148200 },
-          { name: '零售收入', value: 62000 }
+          { name: '认养收入', value: amountOf('adopt', 168500) },
+          { name: '批发收入', value: amountOf('wholesale', 148200) },
+          { name: '零售收入', value: amountOf('retail', 62000) }
         ]
       },
       tableCols: ['排名', '客户名称', '收入(元)', '占比'],
@@ -190,26 +245,26 @@ document.addEventListener('DOMContentLoaded', function() {
       trendData: {
         categories: months,
         series: [
-          { name: '认养收入', data: [118500, 122000, 132500, 142800, 156800, 168500, 158000, 152000, 165200, 142800, 115800, 98500], color: '#1890ff', area: true },
-          { name: '批发收入', data: [85000, 92000, 106000, 118000, 135000, 148200, 132500, 118000, 125000, 102500, 72000, 58000], color: '#52c41a', area: true },
-          { name: '零售收入', data: [32000, 38000, 42000, 51000, 58000, 62000, 56000, 48000, 52000, 45000, 32000, 28000], color: '#ff6b35', area: true },
-          { name: '观光采摘', data: [12000, 15000, 28000, 35000, 42000, 38000, 52000, 45000, 32000, 18000, 12000, 8000], color: '#722ed1', area: true }
+          { name: '认养收入', data: seriesOf('adopt', [118500, 122000, 132500, 142800, 156800, 168500, 158000, 152000, 165200, 142800, 115800, 98500]), color: '#1890ff', area: true },
+          { name: '批发收入', data: seriesOf('wholesale', [85000, 92000, 106000, 118000, 135000, 148200, 132500, 118000, 125000, 102500, 72000, 58000]), color: '#52c41a', area: true },
+          { name: '零售收入', data: seriesOf('retail', [32000, 38000, 42000, 51000, 58000, 62000, 56000, 48000, 52000, 45000, 32000, 28000]), color: '#ff6b35', area: true },
+          { name: '观光采摘', data: seriesOf('pick', [12000, 15000, 28000, 35000, 42000, 38000, 52000, 45000, 32000, 18000, 12000, 8000]), color: '#722ed1', area: true }
         ]
       },
       pieData: {
         series: [
-          { name: '认养收入', value: 168500 },
-          { name: '批发收入', value: 148200 },
-          { name: '零售收入', value: 62000 },
-          { name: '观光采摘', value: 38000 }
+          { name: '认养收入', value: amountOf('adopt', 168500) },
+          { name: '批发收入', value: amountOf('wholesale', 148200) },
+          { name: '零售收入', value: amountOf('retail', 62000) },
+          { name: '观光采摘', value: amountOf('pick', 38000) }
         ]
       },
       tableCols: ['序号', '收入类型', '本月金额(元)', '全年累计(元)', '同比'],
       tableRows: [
-        ['1', '认养收入', '168,500', '1,673,400', '↑ 18.3%'],
-        ['2', '批发收入', '148,200', '1,292,200', '↑ 8.5%'],
-        ['3', '零售收入', '62,000', '544,000', '↓ 2.1%'],
-        ['4', '观光采摘', '38,000', '337,000', '↑ 25.6%']
+        ['1', '认养收入', fmtMoney(monthAmount('adopt', 168500)), fmtMoney(amountOf('adopt', 1673400)), '↑ 18.3%'],
+        ['2', '批发收入', fmtMoney(monthAmount('wholesale', 148200)), fmtMoney(amountOf('wholesale', 1292200)), '↑ 8.5%'],
+        ['3', '零售收入', fmtMoney(monthAmount('retail', 62000)), fmtMoney(amountOf('retail', 544000)), '↓ 2.1%'],
+        ['4', '观光采摘', fmtMoney(monthAmount('pick', 38000)), fmtMoney(amountOf('pick', 337000)), '↑ 25.6%']
       ]
     },
     customer: {
@@ -321,6 +376,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   renderTab('trend');
+  paintStatCards();
 
   document.querySelectorAll('#revenue-tabs .tab-item').forEach(tab => {
     tab.addEventListener('click', function() {

@@ -1193,6 +1193,58 @@
     flightLogs: function () { return all('flightLogs'); },
     anomalies: function () { return all('anomalies'); },
 
+    /**
+     * 农事执行统计（P0-03 统一口径）
+     * - 计划口径：plans；任务口径：tasks
+     * - 达成率 = 完成计划数 /（计划总数 − 已取消计划数）
+     * - 逾期：状态为 overdue，或截止日期早于今天且未完成/未取消/未退回
+     */
+    farmingStats: function () {
+      var planList = all('plans');
+      var taskList = all('tasks');
+      var today = todayStr();
+      var completed = 0, executing = 0, pending = 0, cancelled = 0, delayed = 0;
+      planList.forEach(function (x) {
+        switch (x.status) {
+          case 'completed': completed++; break;
+          case 'executing': executing++; break;
+          case 'cancelled': cancelled++; break;
+          case 'delayed': delayed++; break;
+          default: pending++;
+        }
+      });
+      var effective = planList.length - cancelled;
+      var overdue = taskList.filter(function (x) {
+        if (['completed', 'cancelled', 'rejected'].indexOf(x.status) >= 0) return false;
+        if (x.status === 'overdue') return true;
+        return !!(x.deadline && x.deadline < today);
+      }).length;
+      return {
+        planTotal: planList.length,
+        planCompleted: completed,
+        planExecuting: executing,
+        planPending: pending,
+        planCancelled: cancelled,
+        planDelayed: delayed,
+        planRate: effective > 0 ? Math.round(completed / effective * 1000) / 10 : 0,
+        taskTotal: taskList.length,
+        taskOverdue: overdue,
+        today: today,
+        updatedAt: stampNow()
+      };
+    },
+
+    /** 农事待办：未完成且按截止时间升序（逾期优先），供大屏与移动端复用 */
+    todoTasks: function (n) {
+      return all('tasks').filter(function (x) {
+        return x.status === 'pending' || x.status === 'processing' || x.status === 'overdue';
+      }).sort(function (a, b) {
+        var ad = a.deadline || '9999-12-31';
+        var bd = b.deadline || '9999-12-31';
+        return ad < bd ? -1 : (ad > bd ? 1 : 0);
+      }).slice(0, n || 3);
+    },
+
     get: get,
     upsert: upsert,
     remove: remove,

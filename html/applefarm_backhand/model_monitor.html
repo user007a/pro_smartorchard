@@ -37,6 +37,10 @@
 
   .data-table { min-width: 800px; }
   .empty-row td { text-align: center; color: var(--text-tertiary); padding: 40px 0; }
+
+  /* 近 14 天调用量编辑栅格 */
+  .calls-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px 8px; }
+  .calls-grid label { display: block; font-size: 11px; color: var(--text-tertiary); margin-bottom: 4px; white-space: nowrap; }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -65,7 +69,10 @@
 
         <!-- 调用量趋势 -->
         <div class="chart-section">
-          <h2 class="section-title">近 14 天模型调用量（万次）</h2>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <h2 class="section-title" style="margin:0;padding:0;border:none;">近 14 天模型调用量（万次）</h2>
+            <button class="btn" onclick="openCallsEditor()">编辑调用量</button>
+          </div>
           <div id="chart-model-calls" style="height:300px;"></div>
         </div>
 
@@ -281,8 +288,31 @@
     }
   }
 
+  /* ---------------- 近 14 天调用量维护（写入共享数据层，驾驶舱同步） ---------------- */
+  function openCallsEditor(){
+    var calls = DataStore.modelCalls();
+    var html = '<div class="calls-grid">' + calls.map(function(x, i){
+      return '<div><label>' + esc(x.date) + '</label>' +
+        '<input type="number" class="form-input" name="d' + i + '" min="0" step="0.1" value="' + x.value + '" required></div>';
+    }).join('') + '</div>';
+    Modal.form({
+      title: '编辑近 14 天模型调用量',
+      submitText: '保存',
+      width: '760px',
+      fields: [{ name: 'calls', type: 'custom', html: html }],
+      onSubmit: function(data){
+        var list = calls.map(function(x, i){ return { date: x.date, value: data['d' + i] }; });
+        var res = DataStore.upsertModelCalls(list);
+        if (!res.ok){ Toast.show(res.message, 'error'); return false; }
+        Toast.show('调用量已更新，驾驶舱已同步', 'success');
+        return true;
+      }
+    });
+  }
+
   document.getElementById('btnCreate').addEventListener('click', function(){ openModelModal(null); });
   document.getElementById('btnExport').addEventListener('click', exportCsv);
+  window.openCallsEditor = openCallsEditor;
 
   els.tbody.addEventListener('click', function(e){
     var btn = e.target.closest('button[data-act]');

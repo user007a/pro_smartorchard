@@ -68,6 +68,9 @@
     background: var(--primary-500);
     transition: width 0.5s ease;
   }
+  /* 趋势编辑：12 个月数值栅格 */
+  .trend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 12px; }
+  .trend-grid label { display: block; font-size: 12px; color: var(--text-tertiary); margin-bottom: 4px; }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
   .main-wrapper{margin-left:0!important;width:100%!important;}
@@ -96,7 +99,13 @@
 
         <!-- 归集趋势 -->
         <div class="chart-section">
-          <h2 class="section-title">近 12 月数据归集趋势（万条）</h2>
+          <div class="section-toolbar">
+            <h2 class="section-title" style="margin:0;padding:0;border:none;">近 12 月数据归集趋势（万条）</h2>
+            <div style="display:flex;gap:8px;">
+              <button class="btn" onclick="openTrendEditor()">编辑趋势</button>
+              <button class="btn" onclick="openCoverageEditor()">覆盖地块口径</button>
+            </div>
+          </div>
           <div id="chart-collection-trend" style="height:300px;"></div>
         </div>
 
@@ -105,7 +114,10 @@
           <div class="data-section">
             <div class="section-toolbar">
               <h2 class="section-title" style="margin:0;padding:0;border:none;">归集明细</h2>
-              <button class="btn btn-primary" onclick="openCollectionForm()">新增归集记录</button>
+              <div style="display:flex;gap:8px;">
+                <button class="btn" onclick="recalcCollections()">按原始记录重算</button>
+                <button class="btn btn-primary" onclick="openCollectionForm()">新增归集记录</button>
+              </div>
             </div>
             <div class="data-table-wrapper">
               <table class="data-table">
@@ -174,7 +186,7 @@
       '<div class="stat-card">' +
         '<div class="stat-label">数据质量合格率</div>' +
         '<div class="stat-value">' + fmt(s.avgRate) + '<span class="unit">%</span></div>' +
-        '<div class="stat-sub">各来源平均值</div>' +
+        '<div class="stat-sub">按归集量加权计算</div>' +
       '</div>' +
       '<div class="stat-card">' +
         '<div class="stat-label">数据来源数</div>' +
@@ -184,7 +196,7 @@
       '<div class="stat-card">' +
         '<div class="stat-label">数字化覆盖地块</div>' +
         '<div class="stat-value">' + fmt(s.plotCoverage) + '<span class="unit">个</span></div>' +
-        '<div class="stat-sub">标准化地块全覆盖</div>' +
+        '<div class="stat-sub">规划口径 · 台账 ' + fmt(s.plotLedger) + ' 块</div>' +
       '</div>';
   }
 
@@ -319,9 +331,68 @@
     });
   }
 
+  /* ---------------- 数字化覆盖地块口径 ---------------- */
+  function openCoverageEditor(){
+    var c = DataStore.coverage();
+    Modal.form({
+      title: '数字化覆盖地块口径',
+      submitText: '保存',
+      width: '480px',
+      values: { planned: c.planned, ledgerFallback: c.ledger },
+      fields: [
+        { name: 'planned', label: '规划覆盖地块（块）', type: 'number', min: 0, step: 1, required: true, hint: '用于驾驶舱「规划 126 块」口径展示' },
+        { name: 'ledgerFallback', label: '台账兜底数量（块）', type: 'number', min: 0, step: 1, hint: '地块管理尚未落库时，驾驶舱「台账」展示该值' }
+      ],
+      onSubmit: function(data){
+        var res = DataStore.setCoverage({ planned: data.planned, ledgerFallback: data.ledgerFallback });
+        if (!res.ok){ Toast.show(res.message, 'error'); return false; }
+        Toast.show('覆盖地块口径已更新，驾驶舱已同步', 'success');
+        return true;
+      }
+    });
+  }
+
+  /* ---------------- 近 12 月归集趋势维护 ---------------- */
+  function openTrendEditor(){
+    var trend = DataStore.collectionTrend();
+    var html = '<div class="trend-grid">' + trend.map(function(x, i){
+      return '<div><label>' + esc(x.month) + '（万条）</label>' +
+        '<input type="number" class="form-input" name="t' + i + '" min="0" step="0.1" value="' + x.value + '" required></div>';
+    }).join('') + '</div>';
+    Modal.form({
+      title: '编辑近 12 月归集趋势',
+      submitText: '保存',
+      width: '640px',
+      fields: [{ name: 'trend', type: 'custom', html: html }],
+      onSubmit: function(data){
+        var list = trend.map(function(x, i){ return { month: x.month, value: data['t' + i] }; });
+        var res = DataStore.upsertCollectionTrend(list);
+        if (!res.ok){ Toast.show(res.message, 'error'); return false; }
+        Toast.show('归集趋势已更新，驾驶舱已同步', 'success');
+        return true;
+      }
+    });
+  }
+
+  /* ---------------- 按本地原始记录重算归集量 ---------------- */
+  function recalcCollections(){
+    Confirm.delete('将按本地原始记录重新统计各类归集量（农事记录、设备日志、H5 订单、溯源批次等），演示环境数据量较小，重算后数值会明显下降。是否继续？').then(function(ok){
+      if (!ok) return;
+      var res = DataStore.recalcCollections(true);
+      var applied = res.items.filter(function(x){ return !x.skipped; });
+      var skipped = res.items.filter(function(x){ return x.skipped; });
+      var msg = '已重算 ' + applied.length + ' 类归集量';
+      if (skipped.length) msg += '，' + skipped.length + ' 类暂无原始记录已保留原值';
+      Toast.show(msg, 'success');
+    });
+  }
+
   window.openCollectionForm = openCollectionForm;
   window.editCollection = editCollection;
   window.deleteCollection = deleteCollection;
+  window.openCoverageEditor = openCoverageEditor;
+  window.openTrendEditor = openTrendEditor;
+  window.recalcCollections = recalcCollections;
 
   DataStore.subscribe(function(){
     renderAll();

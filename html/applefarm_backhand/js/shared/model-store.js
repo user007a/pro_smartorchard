@@ -33,6 +33,9 @@
   var STORAGE_KEY = 'applefarm_models_v1';
   var KEYS = ['growth', 'phenology', 'weather', 'pest', 'yield', 'price'];
   var UPDATED_AT = '2026-09-24 14:30';
+  /* 种子版本：演示数据按月滚动维护，版本号变化时把「已随时间失效」的数据块刷新到新种子
+     （当前只刷新气象口径与地块关联字段，其余模型保留后台已保存的编辑结果） */
+  var SEED_VERSION = '2026-11-10';
 
   var TONE_COLOR = {
     success: 'var(--success)',
@@ -132,6 +135,56 @@
         { plot: '招远E区-3号', title: '招远E区-3号', desc: '叶片发黄 · 昨天', level: 'orange' }
       ],
       alertCount: 5
+    },
+    /* 大屏物候生长驾驶舱所需的生长看板数据（后台唯一数据源） */
+    dashboard: {
+      vigorIndex: 90,            /* 长势指数 0-100 */
+      maturityHitRate: 94,       /* 成熟度预测吻合率 % */
+      lastSampledAt: '2026-10-21'
+    },
+    gdd: {
+      unit: '℃·d',
+      cumulative: 3120,          /* 生育期积温累计 */
+      weeklyAvg: 62,             /* 近 12 周周均增量 */
+      compareNormal: '+4%',      /* 较常年同期 */
+      weeks: ['-11','-10','-9','-8','-7','-6','-5','-4','-3','-2','-1','本周'],
+      weekly: [1810,1930,2060,2190,2320,2450,2590,2730,2860,2970,3060,3120]
+    },
+    keyMetrics: [
+      { key: 'fruitWeight',  name: '平均单果重',     value: 268,  unit: 'g',      delta: '+6.4%', trend: 'up',   grade: '良好', gradeTone: 'ok' },
+      { key: 'solubleSolid', name: '可溶性固形物',   value: 13.6, unit: '%',      delta: '+0.8',  trend: 'up',   grade: '达标', gradeTone: 'ok' },
+      { key: 'coloring',     name: '着色度',         value: 82,   unit: '%',      delta: '+5.1%', trend: 'up',   grade: '良好', gradeTone: 'ok' },
+      { key: 'firmness',     name: '果实硬度',       value: 7.8,  unit: 'kg/cm²', delta: '-0.3',  trend: 'down', grade: '正常', gradeTone: 'nor' }
+    ],
+    growthCurves: {
+      weeks: ['-11','-10','-9','-8','-7','-6','-5','-4','-3','-2','-1','本周'],
+      metrics: [
+        { key: 'diameter', name: '果实横径', unit: 'mm',     ylab: '果实横径' },
+        { key: 'height',   name: '株高',     unit: 'cm',     ylab: '株高' },
+        { key: 'firmness', name: '果实硬度', unit: 'kg/cm²', ylab: '果实硬度' }
+      ],
+      series: [
+        { plotId: 'A1', plot: '1号东', variety: '富士', values: {
+          diameter: [48.1,50.6,52.8,55.1,57.9,60.4,63.2,66.0,68.7,71.3,73.9,76.2],
+          height:   [204,207,210,213,216,219,222,226,229,232,236,240],
+          firmness: [8.6,8.5,8.4,8.3,8.2,8.1,8.0,7.9,7.9,7.8,7.8,7.8]
+        } },
+        { plotId: 'B2', plot: '2号北', variety: '王林', values: {
+          diameter: [46.3,48.4,50.9,53.2,55.8,58.6,61.1,63.7,66.4,69.0,71.9,74.5],
+          height:   [199,202,205,208,211,214,217,220,223,226,229,232],
+          firmness: [8.4,8.3,8.2,8.1,8.1,8.0,7.9,7.8,7.8,7.7,7.7,7.7]
+        } },
+        { plotId: 'C3', plot: '3号西', variety: '花牛苹果', values: {
+          diameter: [50.2,52.9,55.4,58.0,60.7,63.5,66.2,69.0,71.8,74.4,76.6,78.6],
+          height:   [212,215,218,221,224,227,230,233,236,239,242,245],
+          firmness: [8.8,8.7,8.6,8.5,8.4,8.3,8.2,8.1,8.0,8.0,7.9,7.9]
+        } },
+        { plotId: 'D1', plot: '1号南', variety: '富士', values: {
+          diameter: [47.4,49.8,52.1,54.6,57.2,59.9,62.5,65.2,67.9,70.5,73.0,75.4],
+          height:   [207,210,213,216,219,222,225,228,231,234,237,240],
+          firmness: [8.5,8.4,8.3,8.2,8.2,8.1,8.0,7.9,7.9,7.8,7.8,7.8]
+        } }
+      ]
     },
     meta: {
       title: '生长模型',
@@ -234,30 +287,31 @@
     name: '气象模型',
     statusText: '运行中',
     updatedAt: UPDATED_AT,
+    /* 11 月口径（采收期）：与设备测点 D-001 读数对齐，避免大屏 / 移动端各说一套 */
     kpi: [
-      kpi('当前温度', '26', '°C', '↑ 2° 较昨日', 'success', 'blue'),
-      kpi('相对湿度', '68', '%', '适宜', 'muted', 'green'),
-      kpi('风速·东南风', '3.2', 'm/s', '3级', 'muted', 'orange'),
+      kpi('当前温度', '18.6', '°C', '设备测点均值', 'success', 'blue'),
+      kpi('相对湿度', '54.2', '%', '适宜', 'muted', 'green'),
+      kpi('风速·东南风', '2.8', 'm/s', '2级', 'muted', 'orange'),
       kpi('今日降雨', '0', 'mm', '晴朗', 'success', 'purple')
     ],
     charts: {
       tempTrend: {
         categories: ['今天','明天','周四','周五','周六','周日'],
         series: [
-          { name: '最高温', data: [26, 28, 25, 22, 20, 24], color: '#fa8c16', smooth: true },
-          { name: '最低温', data: [18, 19, 17, 16, 15, 16], color: '#1890ff', smooth: true }
+          { name: '最高温', data: [19, 18, 17, 15, 14, 16], color: '#fa8c16', smooth: true },
+          { name: '最低温', data: [6, 5, 4, 2, 1, 3], color: '#1890ff', smooth: true }
         ]
       }
     },
     lists: {
       forecast: [
-        { date: '今天', icon: '☀️', high: '26°', low: '18°', active: true },
-        { date: '明天', icon: '⛅', high: '28°', low: '19°', active: false },
-        { date: '周四', icon: '☁', high: '25°', low: '17°', active: false },
-        { date: '周五', icon: '🌧', high: '22°', low: '16°', active: false },
-        { date: '周六', icon: '🌧', high: '20°', low: '15°', active: false },
-        { date: '周日', icon: '⛅', high: '24°', low: '16°', active: false },
-        { date: '周一', icon: '☀️', high: '27°', low: '18°', active: false }
+        { date: '今天', icon: '☀️', high: '19°', low: '6°', rain: 0, active: true },
+        { date: '明天', icon: '⛅', high: '18°', low: '5°', rain: 0, active: false },
+        { date: '周四', icon: '☁', high: '17°', low: '4°', rain: 0.4, active: false },
+        { date: '周五', icon: '🌧', high: '15°', low: '2°', rain: 2.6, active: false },
+        { date: '周六', icon: '🌧', high: '14°', low: '1°', rain: 3.1, active: false },
+        { date: '周日', icon: '⛅', high: '16°', low: '3°', rain: 0.2, active: false },
+        { date: '周一', icon: '☀️', high: '17°', low: '4°', rain: 0, active: false }
       ],
       riskProbability: [
         { name: '高温热害', value: '12%', percent: 12, level: 'low' },
@@ -288,6 +342,17 @@
       subtitle: '天气预报 · 气象风险与极端天气预警',
       icon: 'sun',
       badge: '模型运行中',
+      /* P1-03：补齐大屏气象趋势所需字段（11 月口径），缺失时大屏显示“暂无数据” */
+      extended: {
+        observedAt: '2026-11-10 08:12',
+        precipitation: 0,        /* 今日降水量 mm */
+        sunshineHours: 5.6,      /* 今日日照时数 h */
+        rainProbability: 20,     /* 明日降水概率 % */
+        tempDrop: 4,             /* 未来 48h 降温幅度 ℃ */
+        humidity: 54.2,
+        windSpeed: 2.8,
+        rainfall: 0
+      },
       tabs: [
         { key: 'forecast', label: '实时与预报' },
         { key: 'index', label: '指数与预警' }
@@ -297,19 +362,20 @@
 
   /* ---------------- 4. 病虫害模型 ---------------- */
 
+  /* plotCode 为地块主数据（smartorchard_plot_master）主键，模型地块必须可回链台账 */
   var PEST_PLOTS = [
-    { id: 'A1', name: '1号东', pts: [[258,58],[448,46],[452,182],[300,190],[256,172]], variety: '富士', area: 9.2, level: 'low', riskIndex: 18, pest: '无', manager: '张建国', updated: '09-23 14:30', yieldL: '高', health: 92 },
-    { id: 'A2', name: '2号东', pts: [[462,44],[652,52],[656,184],[466,188]], variety: '王林', area: 8.6, level: 'low', riskIndex: 22, pest: '无', manager: '张建国', updated: '09-23 14:30', yieldL: '高', health: 90 },
-    { id: 'A3', name: '3号东', pts: [[666,50],[702,44],[794,184],[700,190],[662,180]], variety: '花牛苹果', area: 7.8, level: 'medium', riskIndex: 52, pest: '早期落叶病', manager: '李红', updated: '09-24 09:15', yieldL: '中', health: 74 },
-    { id: 'A4', name: '4号东', pts: [[714,46],[888,52],[894,186],[800,182],[708,120]], variety: '红星', area: 8.1, level: 'low', riskIndex: 15, pest: '无', manager: '李红', updated: '09-23 14:30', yieldL: '高', health: 91 },
-    { id: 'B1', name: '1号北', pts: [[254,206],[446,200],[450,376],[300,384],[254,360]], variety: '富士', area: 9.0, level: 'low', riskIndex: 20, pest: '无', manager: '王强', updated: '09-23 14:30', yieldL: '高', health: 93 },
-    { id: 'B2', name: '2号北', pts: [[460,198],[648,204],[652,380],[464,382]], variety: '王林', area: 8.4, level: 'medium', riskIndex: 58, pest: '蚜虫', manager: '王强', updated: '09-24 08:50', yieldL: '低', health: 61 },
-    { id: 'B3', name: '3号北', pts: [[660,204],[772,200],[776,378],[664,380]], variety: '花牛苹果', area: 8.0, level: 'high', riskIndex: 82, pest: '轮纹病', manager: '赵敏', updated: '09-24 11:20', yieldL: '中', health: 89 },
-    { id: 'B4', name: '4号北', pts: [[788,210],[892,206],[896,378],[790,374]], variety: '红星', area: 7.9, level: 'medium', riskIndex: 47, pest: '红蜘蛛', manager: '赵敏', updated: '09-24 10:05', yieldL: '中', health: 77 },
-    { id: 'C1', name: '1号西', pts: [[256,398],[448,392],[452,552],[270,560],[256,530]], variety: '富士', area: 8.7, level: 'low', riskIndex: 25, pest: '无', manager: '孙磊', updated: '09-23 14:30', yieldL: '高', health: 90 },
-    { id: 'C2', name: '2号西', pts: [[462,392],[650,396],[654,556],[466,558]], variety: '王林', area: 8.2, level: 'low', riskIndex: 28, pest: '无', manager: '孙磊', updated: '09-23 14:30', yieldL: '中', health: 88 },
-    { id: 'C3', name: '3号西', pts: [[664,396],[888,390],[892,556],[672,560]], variety: '花牛苹果', area: 7.6, level: 'high', riskIndex: 76, pest: '炭疽病', manager: '周涛', updated: '09-24 11:00', yieldL: '低', health: 58 },
-    { id: 'D1', name: '1号南', pts: [[258,578],[632,566],[640,684],[300,692],[262,640]], variety: '富士', area: 8.3, level: 'low', riskIndex: 19, pest: '无', manager: '周涛', updated: '09-23 14:30', yieldL: '高', health: 91 }
+    { id: 'A1', plotCode: 'D-001', name: '1号东', pts: [[258,58],[448,46],[452,182],[300,190],[256,172]], variety: '富士', area: 9.2, level: 'low', riskIndex: 18, pest: '无', manager: '张建国', updated: '09-23 14:30', yieldL: '高', health: 92 },
+    { id: 'A2', plotCode: 'D-002', name: '2号东', pts: [[462,44],[652,52],[656,184],[466,188]], variety: '王林', area: 8.6, level: 'low', riskIndex: 22, pest: '无', manager: '张建国', updated: '09-23 14:30', yieldL: '高', health: 90 },
+    { id: 'A3', plotCode: 'D-003', name: '3号东', pts: [[666,50],[702,44],[794,184],[700,190],[662,180]], variety: '花牛苹果', area: 7.8, level: 'medium', riskIndex: 52, pest: '早期落叶病', manager: '李红', updated: '09-24 09:15', yieldL: '中', health: 74 },
+    { id: 'A4', plotCode: 'D-004', name: '4号东', pts: [[714,46],[888,52],[894,186],[800,182],[708,120]], variety: '红星', area: 8.1, level: 'low', riskIndex: 15, pest: '无', manager: '李红', updated: '09-23 14:30', yieldL: '高', health: 91 },
+    { id: 'B1', plotCode: 'D-005', name: '1号北', pts: [[254,206],[446,200],[450,376],[300,384],[254,360]], variety: '富士', area: 9.0, level: 'low', riskIndex: 20, pest: '无', manager: '王强', updated: '09-23 14:30', yieldL: '高', health: 93 },
+    { id: 'B2', plotCode: 'D-006', name: '2号北', pts: [[460,198],[648,204],[652,380],[464,382]], variety: '王林', area: 8.4, level: 'medium', riskIndex: 58, pest: '蚜虫', manager: '王强', updated: '09-24 08:50', yieldL: '低', health: 61 },
+    { id: 'B3', plotCode: 'D-007', name: '3号北', pts: [[660,204],[772,200],[776,378],[664,380]], variety: '花牛苹果', area: 8.0, level: 'high', riskIndex: 82, pest: '轮纹病', manager: '赵敏', updated: '09-24 11:20', yieldL: '中', health: 89 },
+    { id: 'B4', plotCode: 'D-008', name: '4号北', pts: [[788,210],[892,206],[896,378],[790,374]], variety: '红星', area: 7.9, level: 'medium', riskIndex: 47, pest: '红蜘蛛', manager: '赵敏', updated: '09-24 10:05', yieldL: '中', health: 77 },
+    { id: 'C1', plotCode: 'D-009', name: '1号西', pts: [[256,398],[448,392],[452,552],[270,560],[256,530]], variety: '富士', area: 8.7, level: 'low', riskIndex: 25, pest: '无', manager: '孙磊', updated: '09-23 14:30', yieldL: '高', health: 90 },
+    { id: 'C2', plotCode: 'D-010', name: '2号西', pts: [[462,392],[650,396],[654,556],[466,558]], variety: '王林', area: 8.2, level: 'low', riskIndex: 28, pest: '无', manager: '孙磊', updated: '09-23 14:30', yieldL: '中', health: 88 },
+    { id: 'C3', plotCode: 'D-011', name: '3号西', pts: [[664,396],[888,390],[892,556],[672,560]], variety: '花牛苹果', area: 7.6, level: 'high', riskIndex: 76, pest: '炭疽病', manager: '周涛', updated: '09-24 11:00', yieldL: '低', health: 58 },
+    { id: 'D1', plotCode: 'D-012', name: '1号南', pts: [[258,578],[632,566],[640,684],[300,692],[262,640]], variety: '富士', area: 8.3, level: 'low', riskIndex: 19, pest: '无', manager: '周涛', updated: '09-23 14:30', yieldL: '高', health: 91 }
   ];
 
   var PEST_BASE_PLOTS = [
@@ -599,6 +665,11 @@
           stored[k] = mergeModel(base[k], item);
         }
       });
+      // 种子版本升级：把随时间失效的数据块（气象口径）刷新到新种子，其余保留用户编辑结果
+      if (stored.__seedVersion !== SEED_VERSION) {
+        stored.weather = base.weather;
+        stored.__seedVersion = SEED_VERSION;
+      }
       inMemory = stored;
     } else {
       inMemory = base;
@@ -625,11 +696,198 @@
     return KEYS.indexOf(key) >= 0;
   }
 
+  /* ---------------- 派生计算：物候期快照 / 病虫害风险等级 ---------------- */
+
+  // MM-DD → 月日序数（月×100+日），同年内可直接比较大小
+  function mmddOrdinal(text){
+    var m = /^(\d{1,2})-(\d{1,2})$/.exec(String(text || '').trim());
+    if (!m) return null;
+    var mo = Math.min(12, Math.max(1, parseInt(m[1], 10)));
+    var d = Math.min(31, Math.max(1, parseInt(m[2], 10)));
+    return mo * 100 + d;
+  }
+
+  function ordinalToUtc(year, ord){
+    return Date.UTC(year, Math.floor(ord / 100) - 1, ord % 100);
+  }
+
+  function pad2(n){ return ('0' + n).slice(-2); }
+
   /* ---------------- 对外 API ---------------- */
 
   var ModelStore = {
     STORAGE_KEY: STORAGE_KEY,
     KEYS: KEYS.slice(),
+
+    /**
+     * 物候期快照：以 phenology.lists.stages 为唯一真源派生
+     * 大屏、移动端、后台首页统一读取本方法，禁止各自硬编码当前物候期
+     * @param {Date|string} [date] 传入日期时按该日期计算，缺省为今天
+     * @returns {object|null} { today, currentStage, stageStart, stageEnd, progress, nextStage, harvestWindow }
+     */
+    phenologySnapshot: function(date){
+      var model = ensure().phenology;
+      var stages = (model.lists && model.lists.stages) || [];
+      if (!stages.length) return null;
+
+      var dt = date ? new Date(date) : new Date();
+      if (isNaN(dt.getTime())) dt = new Date();
+      var year = dt.getFullYear();
+      var now = (dt.getMonth() + 1) * 100 + dt.getDate();
+
+      var idx = -1;
+      for (var i = 0; i < stages.length; i++) {
+        var s = mmddOrdinal(stages[i].start);
+        var e = mmddOrdinal(stages[i].end);
+        if (s === null || e === null) continue;
+        if (now >= s && now <= e) { idx = i; break; }
+      }
+      if (idx < 0) {
+        // 落在配置空档时，取最近一个已开始的物候期
+        idx = 0;
+        for (var j = 0; j < stages.length; j++) {
+          var sj = mmddOrdinal(stages[j].start);
+          if (sj !== null && sj <= now) idx = j;
+        }
+      }
+
+      var st = stages[idx];
+      var start = mmddOrdinal(st.start);
+      var end = mmddOrdinal(st.end);
+      var progress = 0;
+      if (start !== null && end !== null && end > start) {
+        var t0 = ordinalToUtc(year, start);
+        var t1 = ordinalToUtc(year, end);
+        var tn = Date.UTC(year, dt.getMonth(), dt.getDate());
+        progress = Math.max(0, Math.min(100, Math.round((tn - t0) / (t1 - t0) * 100)));
+      }
+
+      var harvestIndex = -1;
+      for (var k = 0; k < stages.length; k++) {
+        if (String(stages[k].name).indexOf('采收') >= 0) { harvestIndex = k; break; }
+      }
+      var harvestWindow = { start: '', end: '', isOpen: false, daysLeft: 0 };
+      if (harvestIndex >= 0) {
+        var hs = mmddOrdinal(stages[harvestIndex].start);
+        var he = mmddOrdinal(stages[harvestIndex].end);
+        var daysLeft = 0;
+        if (he !== null) {
+          var todayUtc = Date.UTC(year, dt.getMonth(), dt.getDate());
+          daysLeft = Math.max(0, Math.round((ordinalToUtc(year, he) - todayUtc) / 86400000));
+        }
+        harvestWindow = {
+          start: stages[harvestIndex].start || '',
+          end: stages[harvestIndex].end || '',
+          isOpen: hs !== null && he !== null && now >= hs && now <= he,
+          daysLeft: daysLeft
+        };
+      }
+
+      return {
+        today: pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate()),
+        year: year,
+        currentStage: st.name,
+        stageStart: st.start,
+        stageEnd: st.end,
+        progress: progress,
+        nextStage: (stages[(idx + 1) % stages.length] || {}).name || '',
+        harvestWindow: harvestWindow
+      };
+    },
+
+    /**
+     * 病虫害风险等级归一：兼容 level 字符串与 riskIndex 数值
+     * 规则与 pest.meta.riskLevelRule 一致：≥70 高 · 40-69 中 · <40 低
+     */
+    riskLevelOf: function(value){
+      if (value === 'low' || value === 'medium' || value === 'high') return value;
+      var n = Number(value);
+      if (isNaN(n)) return 'low';
+      return n >= 70 ? 'high' : (n >= 40 ? 'medium' : 'low');
+    },
+
+    /**
+     * 综合健康指数：Σ(地块 health × 面积) / Σ面积
+     * 口径版本 v1（面积加权），仅统计已建模地块，返回值带样本数，供大屏直接展示
+     * @returns {{value:number, sampleCount:number, totalArea:number, updatedAt:string, method:string}}
+     */
+    healthIndex: function(){
+      var model = ensure().pest;
+      var plots = (model.lists && model.lists.plots) || [];
+      var wsum = 0, asum = 0, updatedAt = '';
+      plots.forEach(function(p){
+        var a = Number(p.area) || 0;
+        var h = Number(p.health);
+        if (!a || isNaN(h)) return;
+        wsum += h * a;
+        asum += a;
+        if (p.updated && p.updated > updatedAt) updatedAt = p.updated;
+      });
+      return {
+        value: asum ? Math.round(wsum / asum * 10) / 10 : 0,
+        sampleCount: plots.length,
+        totalArea: Math.round(asum * 10) / 10,
+        updatedAt: updatedAt || model.updatedAt || '',
+        method: 'area-weighted'
+      };
+    },
+
+    /**
+     * 四维健康评分（P1-01）：长势 / 水分 / 养分 / 病虫
+     * 每项均可追溯到模型或原始检测数据；无数据的维度返回 available=false（前端显示“未检测”）
+     * 权重版本 v1：长势 30% / 水分 20% / 养分 20% / 病虫 30%
+     * @param {{soilMoist?:number}} [opts] 土壤含水率原始读数（来自 DeviceStore）
+     */
+    healthDimensions: function(opts){
+      var o = opts || {};
+      var g = ensure().growth;
+      var p = ensure().pest;
+      var plots = (p.lists && p.lists.plots) || [];
+      var soil = (typeof global.SoilStore !== 'undefined' && global.SoilStore) ? global.SoilStore.summary() : null;
+
+      var growth = g && g.dashboard && typeof g.dashboard.vigorIndex === 'number'
+        ? g.dashboard.vigorIndex : null;
+
+      var water = (typeof o.soilMoist === 'number' && isFinite(o.soilMoist))
+        ? Math.max(0, Math.min(100, Math.round(o.soilMoist / 60 * 100))) : null;
+
+      function cap(v, max){ return Math.max(0, Math.min(1, v / max)); }
+      var nutrient = null;
+      if (soil && soil.sampleCount > 0) {
+        nutrient = Math.round(100 * (
+          0.4 * cap(Number(soil.organicMatter) || 0, 2.5) +
+          0.2 * cap(Number(soil.availableN) || 0, 80) +
+          0.2 * cap(Number(soil.availableP) || 0, 30) +
+          0.2 * cap(Number(soil.availableK) || 0, 200)
+        ));
+      }
+
+      var pest = null;
+      if (plots.length) {
+        var wsum = 0, asum = 0;
+        plots.forEach(function(x){
+          var a = Number(x.area) || 0;
+          var r = Number(x.riskIndex);
+          if (!a || isNaN(r)) return;
+          wsum += r * a; asum += a;
+        });
+        if (asum) pest = Math.max(0, Math.min(100, Math.round(100 - wsum / asum)));
+      }
+
+      function item(key, name, value, source){
+        return { key: key, name: name, value: value, source: source, available: value !== null };
+      }
+      return {
+        version: 'v1',
+        weights: { growth: 0.3, water: 0.2, nutrient: 0.2, pest: 0.3 },
+        items: [
+          item('growth', '长势', growth, '生长模型 · 长势指数'),
+          item('water', '水分', water, '土壤墒情仪 · 含水率/60%'),
+          item('nutrient', '养分', nutrient, '土壤检测报告 · 有机质与速效氮磷钾'),
+          item('pest', '病虫', pest, '病虫害模型 · 100−面积加权风险指数')
+        ]
+      };
+    },
 
     all: function(){ return deepClone(ensure()); },
 

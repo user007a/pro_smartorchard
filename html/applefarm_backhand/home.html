@@ -412,7 +412,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="#52c41a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                 </svg>
-                当前物候期：膨大期
+                当前物候期：<span id="homePheno">—</span>
               </div>
             </div>
           </div>
@@ -465,9 +465,9 @@
                 </svg>
               </span>
             </div>
-            <div class="stat-value" id="kpiAlert">5<span style="font-size:12px;color:#6b7280;">条</span></div>
+            <div class="stat-value" id="kpiAlert">--<span style="font-size:12px;color:#6b7280;">条</span></div>
             <div class="stat-footer">
-              <span class="stat-trend down">较昨日-2条</span>
+              <span class="stat-trend" id="kpiAlertTrend">--</span>
             </div>
           </div>
           <div class="stat-card purple">
@@ -744,38 +744,7 @@
               <a href="alert_device.html" class="panel-link">全部预警 →</a>
             </div>
             <div class="panel-body">
-              <div class="alert-list">
-                <div class="alert-group">
-                  <div class="alert-group-title">今天</div>
-                  <div class="alert-item" onclick="showToast('查看预警详情', 'info')">
-                    <span class="alert-level red"></span>
-                    <div class="alert-content">
-                      <div class="alert-title">土壤湿度异常</div>
-                      <div class="alert-desc">3号地块土壤湿度低于预警阈值(25%)，当前值18%</div>
-                      <div class="alert-meta">设备编号：SENSOR-003 | 地块：3号果园-东区</div>
-                    </div>
-                    <div class="alert-time">5分钟前</div>
-                  </div>
-                  <div class="alert-item" onclick="showToast('查看预警详情', 'info')">
-                    <span class="alert-level orange"></span>
-                    <div class="alert-content">
-                      <div class="alert-title">病虫害风险预警</div>
-                      <div class="alert-desc">轮纹病风险指数升至75%，建议及时防治</div>
-                      <div class="alert-meta">影响地块：1号、2号、4号果园</div>
-                    </div>
-                    <div class="alert-time">15分钟前</div>
-                  </div>
-                  <div class="alert-item" onclick="showToast('查看预警详情', 'info')">
-                    <span class="alert-level orange"></span>
-                    <div class="alert-content">
-                      <div class="alert-title">设备离线告警</div>
-                      <div class="alert-desc">气象站-007离线超过30分钟</div>
-                      <div class="alert-meta">设备类型：气象站 | 位置：5号果园</div>
-                    </div>
-                    <div class="alert-time">30分钟前</div>
-                  </div>
-                </div>
-              </div>
+              <div class="alert-list" id="homeAlertList"></div>
             </div>
           </div>
 
@@ -895,7 +864,20 @@
           </div>
 
     </div>
+<script src="js/shared/model-store.js"></script>
+<script>
+/* 当前物候期统一取物候模型快照，与模型管理、大屏、移动端同源 */
+(function () {
+  var el = document.getElementById('homePheno');
+  if (!el || !window.ModelStore) return;
+  try {
+    var s = ModelStore.phenologySnapshot();
+    if (s) el.textContent = s.currentStage;
+  } catch (e) { el.textContent = '—'; }
+})();
+</script>
 <script src="js/shared/harvest-store.js"></script>
+<script src="js/shared/alert-data.js"></script>
 <script>
 document.getElementById('currentDate').textContent = new Date().toLocaleDateString('zh-CN', {
   year: 'numeric',
@@ -975,10 +957,80 @@ function updateLastUpdate() {
 const HOME_KPI = {
   kpiTask:    { base: 12,    unit: '项', digits: 0 },
   kpiDevice:  { base: 96.7,  unit: '%',  digits: 1 },
-  kpiAlert:   { base: 5,     unit: '条', digits: 0 },
   kpiAdopt:   { base: 8,     unit: '棵', digits: 0 },
   kpiTrace:   { base: 23,    unit: '个', digits: 0 }
 };
+
+/** 活跃预警 KPI + 实时预警列表：统一取共享数据源 AlertStore */
+function refreshAlertKPI() {
+  const el = document.getElementById('kpiAlert');
+  const trend = document.getElementById('kpiAlertTrend');
+  if (!el || !window.AlertStore) return;
+  try {
+    const st = AlertStore.stats();
+    const active = st.pending + st.processing + st.transferred;   /* 累计未闭环 */
+    el.innerHTML = active + '<span style="font-size:12px;color:#6b7280;">条</span>';
+    if (trend) {
+      const todayNew = AlertStore.topToday(999, ['pending','processing','transferred','closed','ignored','voided']).length;
+      const todayOpen = AlertStore.topToday(999, ['pending','processing','transferred']).length;
+      trend.className = 'stat-trend';
+      trend.textContent = '累计未闭环 · 今日新增 ' + todayNew + ' 条 / 待处理 ' + todayOpen + ' 条';
+    }
+  } catch (e) {
+    el.innerHTML = '--<span style="font-size:12px;color:#6b7280;">条</span>';
+  }
+}
+
+const HOME_ALERT_LEVEL_CLS = { urgent:'red', important:'orange', reminder:'yellow', notice:'blue' };
+
+function renderHomeAlerts() {
+  const box = document.getElementById('homeAlertList');
+  if (!box || !window.AlertStore) return;
+  try {
+    const arr = AlertStore.topToday(20, ['pending','processing','transferred'])
+      .sort(function(a, b){ return String(b.time || '').localeCompare(String(a.time || '')); })
+      .slice(0, 6);
+    if (!arr.length) {
+      box.innerHTML = '<div class="alert-group"><div class="alert-group-title">今天</div>'
+        + '<div class="alert-desc" style="padding:8px 0;">今日暂无待处理预警</div></div>';
+      return;
+    }
+    const groups = {};
+    arr.forEach(function(x){
+      const day = String(x.time || '').slice(0, 10);
+      (groups[day] = groups[day] || []).push(x);
+    });
+    const now = new Date();
+    const todayKey = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    box.innerHTML = Object.keys(groups).sort().reverse().map(function(day){
+      return '<div class="alert-group"><div class="alert-group-title">'
+        + (day === todayKey ? '今天' : day) + '</div>'
+        + groups[day].map(function(x){
+          const plot = AlertStore.resolvePlot(x);
+          const loc = plot.matched
+            ? (plot.base || '') + ' ' + (plot.plot ? plot.plot.name : plot.plotCode)
+            : (x.location || x.base || '');
+          return '<div class="alert-item" onclick="showToast(\'查看预警详情\', \'info\')">'
+            + '<span class="alert-level ' + (HOME_ALERT_LEVEL_CLS[x.level] || 'blue') + '"></span>'
+            + '<div class="alert-content">'
+            + '<div class="alert-title">' + escapeHtml(x.title) + '</div>'
+            + '<div class="alert-desc">' + escapeHtml(x.desc || '') + '</div>'
+            + '<div class="alert-meta">' + escapeHtml(x.statusText || '') + (loc ? ' | ' + escapeHtml(loc) : '') + '</div>'
+            + '</div>'
+            + '<div class="alert-time">' + escapeHtml(String(x.time || '').slice(11, 16)) + '</div>'
+            + '</div>';
+        }).join('') + '</div>';
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<div class="alert-desc" style="padding:8px 0;">预警数据加载失败</div>';
+  }
+}
+
+function escapeHtml(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 /** 本月采收量：读取采收管理共享数据源（已完成采收记录，单位吨） */
 function refreshHarvestKPI() {
@@ -1033,6 +1085,8 @@ function refreshHomeKPI() {
     el.innerHTML = txt + '<span style="font-size:12px;color:#6b7280;">' + cfg.unit + '</span>';
   });
   refreshHarvestKPI();
+  refreshAlertKPI();
+  renderHomeAlerts();
   updateLastUpdate();
 }
 setInterval(refreshHomeKPI, 30000);   // 30 秒自动刷新 KPI
@@ -1050,6 +1104,15 @@ setInterval(updateLiveClocks, 1000);  // 每秒刷新摄像头时间戳
   updateLastUpdate();
   refreshHomeKPI();
 })();
+
+// ===== 预警数据变更后刷新首页预警面板 =====
+window.addEventListener('storage', function(e) {
+  if (!e.key) return;
+  if (e.key.indexOf('applefarm_alert_state') === 0) {
+    refreshAlertKPI();
+    renderHomeAlerts();
+  }
+});
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>

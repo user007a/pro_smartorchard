@@ -53,7 +53,7 @@ check('STATUS 六态', () => assert(Object.keys(AlertStore.STATUS_TEXT).length =
 check('种子 46 条', () => assert(AlertStore.all().length === 46, 'len=' + AlertStore.all().length));
 check('rules 25 条', () => assert(AlertStore.rules().length === 25, 'len=' + AlertStore.rules().length));
 
-console.log('\n== 2. 状态迁移（v1 → v2）==');
+console.log('\n== 2. 状态迁移（v1 / v2 → v3）==');
 check('历史 completed 迁移为 closed', () => {
   const closed = AlertStore.all().filter(a => a.status === 'closed');
   return assert(closed.length === 18, 'closed=' + closed.length);
@@ -62,6 +62,37 @@ check('无遗留 completed 状态', () => assert(AlertStore.all().every(a => a.s
 check('全部记录有 source', () => assert(AlertStore.all().every(a => !!a.source)));
 check('全部记录有 category', () => assert(AlertStore.all().every(a => !!a.category)));
 check('全部记录有 base', () => assert(AlertStore.all().every(a => a.base !== undefined && a.base !== null)));
+
+console.log('\n== 2.1 时间戳与时效口径 ==');
+check('种子均有 respondDue / handleDue', () => AlertStore.all().every(a => !!a.respondDue));
+check('种子均有 plotSlot 字段', () => AlertStore.all().every(a => a.plotSlot !== undefined));
+check('闭环记录均有 closedAt', () => {
+  const closed = AlertStore.all().filter(a => a.status === 'closed');
+  return assert(closed.length > 0 && closed.every(a => !!a.closedAt), 'closed=' + closed.length);
+});
+check('时间戳顺序 time ≤ acceptedAt ≤ closedAt', () => {
+  const bad = AlertStore.all().filter(a => {
+    if (!a.acceptedAt) return false;
+    if (a.acceptedAt < a.time) return true;
+    return !!(a.closedAt && a.closedAt < a.acceptedAt);
+  });
+  return assert(bad.length === 0, 'bad=' + bad.map(a => a.id).join(','));
+});
+check('种子时间均在最近 30 天内且不晚于今天 23:59', () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0).getTime();
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+  const bad = AlertStore.all().filter(a => {
+    const t = new Date(a.time.replace(/-/g, '/')).getTime();
+    return !isFinite(t) || t < start || t > end;
+  });
+  return assert(bad.length === 0, 'bad=' + bad.map(a => a.id + '@' + a.time).join(','));
+});
+check('slaMetrics 三项时长均有样本', () => {
+  const m = AlertStore.slaMetrics();
+  return assert(m.sampleResp > 0 && m.sampleHandle > 0 && m.sampleClose > 0 && m.avgResp !== null && m.avgHandle !== null && m.avgClose !== null, JSON.stringify(m));
+});
+
 
 console.log('\n== 3. 六态流转校验 ==');
 check('pending → processing 允许', () => {
@@ -197,6 +228,75 @@ check('bySourceAndCategory 过滤正确', () => {
   return assert(l.length > 0 && l.every(a => a.source === 'device' && a.category === 'device'), 'len=' + l.length);
 });
 
+console.log('\n== 6.1 时间窗 / 字典 / 地块解析 ==');
+check('sourceMeta 6 类且含 cert', () => {
+  const m = AlertStore.sourceMeta();
+  return assert(m.length === 6 && m.some(x => x.key === 'cert' && x.color), 'len=' + m.length);
+});
+check('categoryMeta 10 类且含 manual', () => {
+  const m = AlertStore.categoryMeta();
+  return assert(m.length === 10 && m.some(x => x.key === 'manual' && x.color), 'len=' + m.length);
+});
+check('slaMinutes urgent/respond = 15', () => assert(AlertStore.slaMinutes('urgent', 'respond') === 15));
+check('slaMinutes notice/handle 无时限返回 null', () => assert(AlertStore.slaMinutes('notice', 'handle') === null));
+check('windowAlerts(24) 为全量真子集', () => {
+  const w = AlertStore.windowAlerts(24);
+  const all = AlertStore.all();
+  const since = Date.now() - 24 * 3600 * 1000;
+  return assert(w.length <= all.length && w.every(a => new Date(a.time.replace(/-/g, '/')).getTime() >= since), 'win=' + w.length + ' all=' + all.length);
+});
+check('statsWindow.total 与 windowAlerts 一致', () => {
+  const w = AlertStore.windowAlerts(24);
+  return assert(AlertStore.statsWindow(24).total === w.length);
+});
+check('topToday 只含今日未闭环', () => {
+  const today = (() => {
+    const d = new Date();
+    const p = n => (n < 10 ? '0' + n : '' + n);
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  })();
+  const t = AlertStore.topToday(10);
+  return assert(t.every(a => a.time.slice(0, 10) === today && ['pending','processing','transferred'].includes(a.status)), 'len=' + t.length);
+});
+check('dailyTrend(7) 长度 7 且日期连续', () => {
+  const t = AlertStore.dailyTrend(7);
+  if (t.length !== 7) return 'len=' + t.length;
+  for (let i = 1; i < t.length; i++) {
+    const prev = new Date(t[i - 1].date.replace(/-/g, '/')).getTime();
+    const cur = new Date(t[i].date.replace(/-/g, '/')).getTime();
+    if (cur - prev !== 86400000) return 'gap at ' + i;
+  }
+  return true;
+});
+check('plotSlots 返回 12 个槽位', () => {
+  store['smartorchard_plot_master'] = JSON.stringify([
+    { code:'D-001', name:'东区1号地', enterprise:'天水麦积区基地', variety:'花牛苹果', manager:'惠加宁' },
+    { code:'D-002', name:'东区2号地', enterprise:'天水麦积区基地', variety:'红富士', manager:'马开明' },
+    { code:'D-003', name:'西区1号地', enterprise:'天水麦积区基地', variety:'黄元帅', manager:'贾建平' },
+    { code:'D-004', name:'北区1号地', enterprise:'天水秦州区基地', variety:'花牛苹果', manager:'周春林' },
+    { code:'D-005', name:'南区1号地', enterprise:'天水甘谷县基地', variety:'红富士', manager:'马明' }
+  ]);
+  const slots = AlertStore.plotSlots();
+  return assert(slots.length === 12 && slots[0].slot === 'A1' && slots[0].plotCode === 'D-001', JSON.stringify(slots[0]));
+});
+check('resolvePlot 按基地别名 + 槽位匹配', () => {
+  const r = AlertStore.resolvePlot({ base:'天水麦积区基地', plotSlot:'A1' });
+  return assert(r.matched === true && r.plotCode === 'D-001' && r.plot.manager === '惠加宁', JSON.stringify(r).substring(0, 160));
+});
+check('resolvePlot 别名基地归一', () => {
+  const r = AlertStore.resolvePlot({ base:'天水秦州基地', plotSlot:'B1' });
+  return assert(r.matched === true && r.base === '天水秦州区基地' && r.plotCode === 'D-004', JSON.stringify(r).substring(0, 160));
+});
+check('resolvePlot 外部基地标记未匹配', () => {
+  const r = AlertStore.resolvePlot({ base:'青岛莱西基地', plotSlot:'C1' });
+  return assert(r.matched === false && r.reason === 'external', JSON.stringify(r));
+});
+check('aggregateByPlot 总数守恒', () => {
+  const all = AlertStore.all();
+  const g = AlertStore.aggregateByPlot(all);
+  return assert(g.total === all.length && g.matchedCount + g.unmatchedCount === all.length, JSON.stringify({ total:g.total, m:g.matchedCount, u:g.unmatchedCount }));
+});
+
 console.log('\n== 7. 规则引擎 ==');
 check('evaluate 命中规则并生成预警', () => {
   const r = AlertStore.evaluate({
@@ -288,11 +388,23 @@ check('isSilenced 可调用', () => {
   const v = AlertStore.isSilenced('urgent');
   return assert(typeof v === 'boolean');
 });
+check('config 默认看板阈值', () => {
+  const t = AlertStore.config().targets;
+  return assert(t.avgRespond === 30 && t.avgHandle === 120 && t.avgClose === 1440 && t.overdueRate === 10, JSON.stringify(t));
+});
+check('saveConfig 写看板阈值', () => {
+  const r = AlertStore.saveConfig({ targets: { avgRespond: 20 } });
+  return assert(r.ok === true && AlertStore.config().targets.avgRespond === 20, JSON.stringify(r));
+});
+check('saveConfig 拒绝非法阈值', () => {
+  const r = AlertStore.saveConfig({ targets: { avgRespond: -5 } });
+  return assert(r.ok === false && AlertStore.config().targets.avgRespond === 20, JSON.stringify(r));
+});
 
 console.log('\n== 10. 持久化与迁移 ==');
-check('存储为 v2 对象结构', () => {
+check('存储为 v3 对象结构', () => {
   const raw = JSON.parse(store['applefarm_alert_state_v1']);
-  return assert(raw.version === 2 && Array.isArray(raw.alerts) && Array.isArray(raw.rules), 'version=' + raw.version);
+  return assert(raw.version === 3 && Array.isArray(raw.alerts) && Array.isArray(raw.rules), 'version=' + raw.version);
 });
 check('v1 裸数组可被迁移', () => {
   store['applefarm_alert_state_v1'] = JSON.stringify([

@@ -169,6 +169,20 @@
   .tl-link:hover { text-decoration: underline; }
   .tl-link.danger { color: var(--error); }
 
+  /* ---------- 成果亮点与系统运维 ---------- */
+  .ops-form {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    align-items: end;
+  }
+  .ops-label {
+    display: block;
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+    margin-bottom: 6px;
+  }
+
   /* ---------- 响应式 ---------- */
   @media (max-width: 1280px) {
     .kpi-strip { grid-template-columns: repeat(3, 1fr); }
@@ -232,6 +246,9 @@
           <button class="ar-tab" data-tab="milestone" onclick="switchTab('milestone')">
             <i data-uicon="clock"></i>数字化里程碑<span class="tab-count" id="msCount">-</span>
           </button>
+          <button class="ar-tab" data-tab="highlight" onclick="switchTab('highlight')">
+            <i data-uicon="star"></i>成果亮点与运维
+          </button>
         </div>
 
         <!-- 面板一：实施前后对比 -->
@@ -292,6 +309,64 @@
             </div>
             <div class="ar-card-body">
               <div class="timeline-grid" id="timeline-grid"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 面板四：成果亮点与系统运维 -->
+        <div class="ar-panel" id="panel-highlight">
+          <div class="ar-card" style="margin-bottom:16px;">
+            <div class="ar-card-head">
+              <div class="ar-card-title">
+                <span class="bar"></span>成果亮点
+                <span class="hint">驾驶舱底部绝对量口径，替代页面硬编码</span>
+              </div>
+              <button class="btn btn-primary" onclick="openHighlightForm()">新增亮点</button>
+            </div>
+            <div class="ar-card-body no-pad">
+              <div class="data-table-wrapper">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>亮点名称</th>
+                      <th>数值</th>
+                      <th>单位</th>
+                      <th>说明</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hlTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="ar-card">
+            <div class="ar-card-head">
+              <div class="ar-card-title">
+                <span class="bar"></span>系统运行信息
+                <span class="hint">用于计算驾驶舱「系统稳定运行」天数</span>
+              </div>
+              <span class="ar-note" id="uptimePreview"></span>
+            </div>
+            <div class="ar-card-body">
+              <div class="ops-form">
+                <div>
+                  <label class="ops-label">系统上线日期</label>
+                  <input type="date" class="form-input" id="opsOnlineSince">
+                </div>
+                <div>
+                  <label class="ops-label">最近故障日期</label>
+                  <input type="date" class="form-input" id="opsLastDowntime">
+                </div>
+                <div>
+                  <label class="ops-label">手动天数（留空自动计算）</label>
+                  <input type="number" class="form-input" id="opsManualDays" min="0" step="1" placeholder="自动计算">
+                </div>
+                <div>
+                  <button class="btn btn-primary" onclick="saveOps()">保存</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -579,14 +654,104 @@
     });
   }
 
+  /* ---------------- 成果亮点与系统运维（写入共享数据层，驾驶舱同步） ---------------- */
+  function renderHighlights(){
+    var body = document.getElementById('hlTableBody');
+    if (!body) return;
+    var list = DataStore.highlights();
+    if (!list.length){
+      body.innerHTML = '<tr class="empty-row"><td colspan="5">暂无成果亮点</td></tr>';
+      return;
+    }
+    body.innerHTML = list.map(function(x){
+      return '<tr>' +
+        '<td>' + esc(x.item) + '</td>' +
+        '<td class="num"><strong>' + esc(x.value) + '</strong></td>' +
+        '<td>' + esc(x.unit || '-') + '</td>' +
+        '<td class="desc-cell">' + esc(x.desc || '-') + '</td>' +
+        '<td><div class="action-btns">' +
+          '<button class="action-btn" onclick="openHighlightForm(\'' + x.id + '\')">编辑</button>' +
+          '<button class="action-btn delete" onclick="deleteHighlight(\'' + x.id + '\')">删除</button>' +
+        '</div></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function openHighlightForm(id){
+    var item = null;
+    if (id){
+      item = DataStore.highlights().filter(function(x){ return x.id === id; })[0] || null;
+      if (!item){ Toast.show('成果亮点不存在', 'error'); return; }
+    }
+    Modal.form({
+      title: item ? '编辑成果亮点' : '新增成果亮点',
+      submitText: item ? '保存' : '新增',
+      width: '520px',
+      values: item ? { item: item.item, value: item.value, unit: item.unit, desc: item.desc || '' } : {},
+      fields: [
+        { name: 'item', label: '亮点名称', type: 'text', required: true, placeholder: '如：全年节水' },
+        { name: 'value', label: '数值', type: 'number', min: 0, step: 0.01, required: true, placeholder: '如：8600' },
+        { name: 'unit', label: '单位', type: 'text', placeholder: '如：吨、%' },
+        { name: 'desc', label: '说明', type: 'textarea', placeholder: '口径说明，如：滴灌替代漫灌' }
+      ],
+      onSubmit: function(data){
+        var res = DataStore.upsertHighlight({
+          id: item ? item.id : '',
+          item: data.item,
+          value: data.value,
+          unit: data.unit,
+          desc: data.desc
+        });
+        if (!res.ok){ Toast.show(res.message, 'error'); return false; }
+        Toast.show(item ? '成果亮点已更新，驾驶舱已同步' : '成果亮点已新增，驾驶舱已同步', 'success');
+        return true;
+      }
+    });
+  }
+
+  function deleteHighlight(id){
+    var item = DataStore.highlights().filter(function(x){ return x.id === id; })[0];
+    if (!item) return;
+    Confirm.delete('确定删除成果亮点「' + esc(item.item) + '」吗？删除后驾驶舱底部将同步移除。').then(function(ok){
+      if (!ok) return;
+      DataStore.removeHighlight(id);
+      Toast.show('成果亮点已删除', 'success');
+    });
+  }
+
+  function renderOps(){
+    var ops = DataStore.ops();
+    document.getElementById('opsOnlineSince').value = ops.onlineSince || '';
+    document.getElementById('opsLastDowntime').value = ops.lastDowntime || '';
+    document.getElementById('opsManualDays').value =
+      (ops.manualUptimeDays === null || ops.manualUptimeDays === undefined) ? '' : ops.manualUptimeDays;
+    var days = DataStore.summary().uptimeDays;
+    document.getElementById('uptimePreview').textContent = '当前展示：' + (days == null ? '—' : days + ' 天');
+  }
+
+  function saveOps(){
+    var res = DataStore.setOps({
+      onlineSince: document.getElementById('opsOnlineSince').value,
+      lastDowntime: document.getElementById('opsLastDowntime').value,
+      manualUptimeDays: document.getElementById('opsManualDays').value
+    });
+    if (!res.ok){ Toast.show(res.message, 'error'); return; }
+    Toast.show('系统运行信息已保存，驾驶舱已同步', 'success');
+  }
+
   window.editAchievement = editAchievement;
   window.openMilestoneForm = openMilestoneForm;
   window.deleteMilestone = deleteMilestone;
+  window.openHighlightForm = openHighlightForm;
+  window.deleteHighlight = deleteHighlight;
+  window.saveOps = saveOps;
 
   DataStore.subscribe(function(){
     renderStats();
     renderTable();
     renderTimeline();
+    renderHighlights();
+    renderOps();
     renderChart();
   });
 })();

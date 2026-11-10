@@ -116,6 +116,7 @@ body{display:block;background:
 .hstat.kpi .n{font-size:28px;font-weight:700;line-height:1;color:var(--text-1)}
 .hstat.kpi .n small{font-size:14px;color:var(--text-2);font-family:var(--font);margin-left:2px}
 .hstat.kpi .l{font-size:12px;color:var(--text-3);margin-top:6px;white-space:nowrap}
+.hstat.kpi .l b{color:var(--text-1);font-weight:700}
 .hstat.kpi.warn .n{color:var(--warn)}
 .hstat.kpi.risk .n{color:var(--risk)}
 
@@ -336,7 +337,7 @@ body{display:block;background:
     </div>
     <div class="hstat kpi"><div class="n"><span id="kpiDevices">0</span><small>台</small></div><div class="l">设备接入</div></div>
     <div class="hstat kpi"><div class="n"><span class="sk" id="kpiCalls" data-live data-base="128.4" data-amp="0.15" data-dec="1">128.4</span><small>万次</small></div><div class="l">AI 模型调用</div></div>
-    <div class="hstat kpi"><div class="n"><span id="kpiPlots">126</span><small>块</small></div><div class="l">数字化覆盖地块</div></div>
+    <div class="hstat kpi"><div class="n"><span id="kpiPlots">126</span><small>块</small></div><div class="l">规划覆盖地块 · 台账 <b id="kpiPlotLedger">23</b> 块</div></div>
     <div class="hstat kpi"><div class="n"><span id="kpiRate">99.2</span><small>%</small></div><div class="l">数据质量合格率</div></div>
     <div class="hstat kpi"><div class="n"><span id="kpiUptime">386</span><small>天</small></div><div class="l">系统稳定运行</div></div>
   </section>
@@ -354,6 +355,7 @@ body{display:block;background:
         </div>
         <div class="dr-head"><span>数据来源</span><span style="text-align:right">归集量</span><span>占比</span><span>同比</span><span style="text-align:right">合格率</span></div>
         <div class="drs" id="colRows"></div>
+        <div class="src-note" id="colNote">运营统计口径 · 后台人工统计维护，非实时抽取</div>
       </div>
 
       <!-- 数据归集趋势 -->
@@ -411,12 +413,7 @@ body{display:block;background:
           <div class="as"><div class="n"><span id="effTodo">—</span><small>件</small></div><div class="l">人均待办事项</div></div>
           <div class="as wm"><div class="n"><span id="effExpertMin">—</span><small>min</small></div><div class="l">专家平均响应</div></div>
         </div>
-        <div class="roles">
-          <div class="role top"><span class="rn">作业岗</span><span class="tk"><i style="width:92%"></i></span><span class="p"><b>92%</b></span></div>
-          <div class="role"><span class="rn">技术岗</span><span class="tk"><i style="width:88%"></i></span><span class="p"><b>88%</b></span></div>
-          <div class="role"><span class="rn">管理岗</span><span class="tk"><i style="width:86%"></i></span><span class="p"><b>86%</b></span></div>
-          <div class="role"><span class="rn">销售岗</span><span class="tk"><i style="width:79%"></i></span><span class="p"><b>79%</b></span></div>
-        </div>
+        <div class="roles" id="effRoles"></div>
       </div>
 
       <!-- 设备归集 -->
@@ -458,7 +455,7 @@ body{display:block;background:
     <!-- 成果亮点 -->
     <div class="bcard">
       <div class="bh"><i></i>成果亮点<span>全年累计成效</span></div>
-      <div class="hls">
+      <div class="hls" id="hlBox">
         <div class="hl"><div class="n">8600<small>吨</small></div><div class="l">全年节水</div></div>
         <div class="hl"><div class="n">42<small>吨</small></div><div class="l">全年节肥</div></div>
         <div class="hl"><div class="n">1.8<small>吨</small></div><div class="l">全年减药</div></div>
@@ -516,11 +513,25 @@ body{display:block;background:
   document.addEventListener('webkitfullscreenchange',sync);
 })();
 
-/* ---------- 数据时间戳：所有 [data-stamp] 统一填充 ---------- */
+/* ---------- 数据时间戳：填充数据层最近一次变更时间，而非浏览器当前时间 ---------- */
 (function(){
   var p=function(n){return ('0'+n).slice(-2);};
-  var d=new Date(),t=p(d.getHours())+':'+p(d.getMinutes());
-  [].forEach.call(document.querySelectorAll('[data-stamp]'),function(e){e.textContent='更新 '+t;});
+  function stamp(){
+    var t=null;
+    try{
+      [window.DataStore,window.DeviceStore].forEach(function(st){
+        if(st&&st.lastUpdatedAt){
+          var v=new Date(st.lastUpdatedAt());
+          if(!isNaN(v.getTime())&&(!t||v>t))t=v;
+        }
+      });
+    }catch(e){}
+    if(!t)t=new Date();
+    var txt='更新 '+p(t.getHours())+':'+p(t.getMinutes());
+    [].forEach.call(document.querySelectorAll('[data-stamp]'),function(e){e.textContent=txt;});
+  }
+  window.__daStamp=stamp;
+  stamp();
 })();
 
 /* ---------- 加载态：骨架屏演示（接入真实接口后由数据到达驱动移除） ---------- */
@@ -576,21 +587,55 @@ body{display:block;background:
   }
 })();
 
-/* ---------- 关键数据每 30 秒自动刷新：时间戳 + 轻微数字波动 ---------- */
+/* ---------- 岗位效率：按绩效看板落库的岗位综合评分聚合 ---------- */
+var ROLE_ORDER=['作业岗','技术岗','管理岗','销售岗'];
+function renderRoles(){
+  var box=document.getElementById('effRoles');
+  if(!box) return;
+  var data=[];
+  try{ data=JSON.parse(localStorage.getItem('snzg_performance_results')||'[]'); }catch(e){ data=[]; }
+  var map={}, order=ROLE_ORDER.slice();
+  (Array.isArray(data)?data:[]).forEach(function(x){
+    if(!x||!x.role) return;
+    if(!map[x.role]){
+      map[x.role]={sum:0,n:0};
+      if(order.indexOf(x.role)<0) order.push(x.role);
+    }
+    map[x.role].sum+=Number(x.total)||0;
+    map[x.role].n++;
+  });
+  var rows=order.filter(function(r){return map[r];}).map(function(r){
+    return {role:r,score:Math.round(map[r].sum/map[r].n*10)/10};
+  });
+  if(!rows.length){ box.innerHTML='<div class="empty">暂无岗位绩效数据</div>'; return; }
+  var top=Math.max.apply(null,rows.map(function(x){return x.score;}));
+  box.innerHTML=rows.map(function(x){
+    return '<div class="role'+(x.score===top?' top':'')+'">'+
+      '<span class="rn" title="来源：绩效看板综合评分">'+x.role+'</span>'+
+      '<span class="tk"><i style="width:'+Math.min(100,x.score)+'%"></i></span>'+
+      '<span class="p"><b>'+x.score+'%</b></span></div>';
+  }).join('');
+}
+renderRoles();
+window.addEventListener('storage',function(e){ if(e.key==='snzg_performance_results') renderRoles(); });
+
+/* ---------- 关键数据实时刷新：仅在 ?demo=1 演示模式下做轻微数字抖动 ---------- */
 /* 抖动基准取自 data-base；Store 渲染时会同步改写 data-base，保证抖动围绕真实值 */
+var DEMO_MODE=/(?:^|[?&])demo=1(?:&|$)/.test(location.search);
 var LIVE_NODES=[].slice.call(document.querySelectorAll('[data-live]'));
 function regLive(el,base,dec,amp){
   if(!el) return;
   el.setAttribute('data-base',base);
   el.setAttribute('data-dec',dec);
   el.setAttribute('data-amp',amp!=null?amp:(dec>0?Math.max(base*0.01,0.01):Math.max(base*0.005,1)));
+  el.textContent=fmtLive(base,dec);
   if(LIVE_NODES.indexOf(el)<0) LIVE_NODES.push(el);
 }
 function fmtLive(v,dec){
   return dec>0 ? v.toFixed(dec) : Math.round(v).toLocaleString('en-US');
 }
 (function(){
-  var p=function(n){return ('0'+n).slice(-2);};
+  if(!DEMO_MODE) return;
   function refresh(){
     LIVE_NODES.forEach(function(e){
       var base=parseFloat(e.getAttribute('data-base'));
@@ -599,8 +644,6 @@ function fmtLive(v,dec){
       var dec=parseInt(e.getAttribute('data-dec')||'0',10);
       e.textContent=fmtLive(base+(Math.random()*2-1)*amp,dec);
     });
-    var d=new Date(),t=p(d.getHours())+':'+p(d.getMinutes());
-    [].forEach.call(document.querySelectorAll('[data-stamp]'),function(e){e.textContent='更新 '+t;});
   }
   refresh();
   setInterval(refresh,30000);
@@ -628,17 +671,10 @@ function fmtLive(v,dec){
   function renderCollections(list,s){
     var box=$('colRows');
     var total=(list||[]).reduce(function(a,x){return a+(Number(x.amount)||0);},0);
-    var srcTotal=0, srcOnline=0;
-    try{
-      var srcs=DataStore.sources()||[];
-      srcTotal=srcs.length;
-      srcOnline=srcs.filter(function(x){return x.status!=='offline';}).length;
-    }catch(e){}
-    var m=$('colMeta');
-    if(m){
-      m.innerHTML=(list?list.length:0)+' 类数据 · 累计 <b>'+(total/100000000).toFixed(2)+' 亿条</b>'+
-        (srcTotal?(' · 数据源 '+srcOnline+'/'+srcTotal+' 在线'):'');
-    }
+    var metaHtml=(list?list.length:0)+' 类数据 · 累计 <b>'+(total/100000000).toFixed(2)+' 亿条</b>'+
+      (s&&s.sourceTotal?(' · 在线 <b>'+s.onlineSources+'</b> · 异常 '+s.warningSources+' · 离线 '+s.offlineSources):'');
+    setMeta(metaHtml);
+    function setMeta(html){var m=$('colMeta');if(m)m.innerHTML=html;}
     if(!list||!list.length){empty(box,'后台尚未维护数据归集记录');return;}
     clear(box);
     list.forEach(function(x){
@@ -660,17 +696,6 @@ function fmtLive(v,dec){
       row.querySelector('.q').textContent=rate.toFixed(1)+'%';
       box.appendChild(row);
     });
-    var m=$('colMeta');
-    if(m){
-      var srcTotal=0, srcOnline=0;
-      try{
-        var srcs=DataStore.sources()||[];
-        srcTotal=srcs.length;
-        srcOnline=srcs.filter(function(x){return x.status!=='offline';}).length;
-      }catch(e){}
-      m.innerHTML=list.length+' 类数据 · 累计 <b>'+(total/100000000).toFixed(2)+' 亿条</b>'+
-        (srcTotal?(' · 数据源 '+srcOnline+'/'+srcTotal+' 在线'):'');
-    }
   }
 
   /* ---------- 数据归集趋势（collectionTrend） ---------- */
@@ -869,12 +894,31 @@ function fmtLive(v,dec){
     setText('milSpan',f===l?String(f):f+' → '+l);
   }
 
+  /* ---------- 成果亮点（DataStore.highlights，绝对量口径） ---------- */
+  function renderHighlights(list){
+    var box=$('hlBox');
+    if(!box)return;
+    if(!list||!list.length){empty(box,'后台尚未维护成果亮点');return;}
+    clear(box);
+    list.forEach(function(x){
+      var cell=document.createElement('div');
+      cell.className='hl'+((x.item||'').indexOf('优质果')>=0?' g':'');
+      cell.innerHTML='<div class="n"></div><div class="l"></div>';
+      var n=cell.querySelector('.n');
+      n.textContent=String(x.value==null?'—':x.value);
+      var sm=document.createElement('small');sm.textContent=x.unit||'';n.appendChild(sm);
+      cell.querySelector('.l').textContent=x.item||'—';
+      box.appendChild(cell);
+    });
+  }
+
   /* ---------- 汇总 ---------- */
   function render(){
     var s=DataStore.summary();
     setText('kpiPlots',s.plotCoverage);
+    setText('kpiPlotLedger',s.plotLedger);
     setText('kpiRate',s.avgRate);
-    setText('kpiUptime',s.uptimeDays);
+    setText('kpiUptime',s.uptimeDays==null?'—':s.uptimeDays);
     setText('stripHit',s.avgHit);
     setText('stripResp',s.avgResp);
     setBase('kpiAmount',s.totalAmountYi,2,s.totalAmountYi*0.003);
@@ -888,6 +932,8 @@ function fmtLive(v,dec){
     renderDevice();
     renderEff(DataStore.achievements());
     renderMils(DataStore.milestones());
+    renderHighlights(DataStore.highlights());
+    if(window.__daStamp) window.__daStamp();
   }
 
   function init(){

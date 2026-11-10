@@ -164,7 +164,7 @@
 (function(){
   'use strict';
 
-  var PIE_COLORS = ['#1890ff', '#52c41a', '#ff6b35', '#722ed1'];
+  var PIE_COLORS = ['#1890ff', '#52c41a', '#ff6b35', '#722ed1', '#13c2c2'];
 
   function fmt(n){
     n = Number(n) || 0;
@@ -198,7 +198,7 @@
       '<div class="stat-card">' +
         '<div class="stat-label">年度营收</div>' +
         '<div class="stat-value">' + fmt(s.totalRevenue) + '<span class="unit">万元</span></div>' +
-        '<div class="stat-sub">四类收入合计 ' + fmt(s.mixSum) + ' 万元</div>' +
+        '<div class="stat-sub">收入项合计 ' + fmt(s.mixSum) + ' 万元</div>' +
       '</div>' +
       '<div class="stat-card">' +
         '<div class="stat-label">年度目标</div>' +
@@ -217,7 +217,7 @@
       '<div class="stat-card">' +
         '<div class="stat-label">收入类型数</div>' +
         '<div class="stat-value">' + fmt(mix.length) + '<span class="unit">类</span></div>' +
-        '<div class="stat-sub">鲜果销售 / 认养 / 农资 / 冷链</div>' +
+        '<div class="stat-sub">认养 / 批发 / 零售 / 观光 / 其他</div>' +
       '</div>';
   }
 
@@ -290,7 +290,14 @@
 
   function openEditModal(){
     var list = BizStore.revenueMix();
-    var fields = list.map(function(x, i){
+    var fields = [{
+      name: 'revenueTarget',
+      label: '年度营收目标（万元）',
+      type: 'number',
+      required: true,
+      placeholder: '如 960',
+      hint: '用于计算年度营收完成率，须为正数'
+    }].concat(list.map(function(x, i){
       return {
         name: 'v' + i,
         label: x.name + '（万元）',
@@ -299,8 +306,8 @@
         placeholder: '如 1221.8',
         hint: '保留 1 位小数，金额需为非负数'
       };
-    });
-    var values = {};
+    }));
+    var values = { revenueTarget: pct(BizStore.summary().revenueTarget) };
     list.forEach(function(x, i){ values['v' + i] = pct(x.value); });
 
     Modal.form({
@@ -310,6 +317,13 @@
       submitText: '保存',
       width: '560px',
       onSubmit: function(formData){
+        var targetRaw = formData['revenueTarget'];
+        var target = Number(targetRaw);
+        if (targetRaw === '' || targetRaw === undefined || isNaN(target) || target <= 0){
+          Toast.show('年度营收目标必须为正数', 'warning');
+          return false;
+        }
+
         var next = list.map(function(x, i){
           var raw = formData['v' + i];
           var n = Number(raw);
@@ -323,7 +337,8 @@
         if (next.some(function(x){ return x === null; })) return false;
 
         var total = BizStore.setRevenueMix(next);
-        Toast.show('保存成功，年度营收更新为 ' + fmt(total) + ' 万元', 'success');
+        var newTarget = BizStore.setRevenueTarget(target);
+        Toast.show('保存成功，年度营收更新为 ' + fmt(total) + ' 万元，目标 ' + fmt(newTarget) + ' 万元', 'success');
         return true;
       }
     });

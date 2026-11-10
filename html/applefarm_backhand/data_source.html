@@ -130,6 +130,7 @@
                   <th>接入地址</th>
                   <th>采集频率</th>
                   <th>状态</th>
+                  <th>最近心跳</th>
                   <th>更新时间</th>
                   <th>操作</th>
                 </tr>
@@ -233,7 +234,7 @@
     els.totalInfo.textContent = '共 ' + list.length + ' 条记录';
 
     if (!list.length){
-      els.tbody.innerHTML = '<tr class="empty-row"><td colspan="8">暂无符合条件的数据源</td></tr>';
+      els.tbody.innerHTML = '<tr class="empty-row"><td colspan="9">暂无符合条件的数据源</td></tr>';
       return;
     }
 
@@ -245,9 +246,11 @@
         '<td>' + esc(x.endpoint || '-') + '</td>' +
         '<td>' + esc(x.freq || '-') + '</td>' +
         '<td><span class="status-tag ' + (STATUS_CLASS[x.status] || 'disabled') + '">' + statusText(x.status) + '</span></td>' +
+        '<td>' + esc(x.lastHeartbeatAt || '-') + '</td>' +
         '<td>' + esc(x.updatedAt || '-') + '</td>' +
         '<td><div class="action-btns">' +
           '<button class="action-btn edit" data-act="edit" data-id="' + x.id + '">编辑</button>' +
+          '<button class="action-btn" data-act="beat" data-id="' + x.id + '">记录心跳</button>' +
           '<button class="action-btn delete" data-act="del" data-id="' + x.id + '">删除</button>' +
         '</div></td>' +
       '</tr>';
@@ -328,6 +331,14 @@
     openSourceModal(item);
   }
 
+  function handleHeartbeat(id){
+    var item = DataStore.sources().filter(function(x){ return x.id === id; })[0];
+    if (!item){ Toast.show('数据源不存在', 'error'); return; }
+    var res = DataStore.heartbeat(id);
+    if (!res.ok){ Toast.show(res.message, 'error'); return; }
+    Toast.show('已记录心跳：' + res.lastHeartbeatAt, 'success');
+  }
+
   function handleDelete(id){
     var item = DataStore.sources().filter(function(x){ return x.id === id; })[0];
     if (!item){ Toast.show('数据源不存在', 'error'); return; }
@@ -340,9 +351,9 @@
 
   function exportCsv(){
     var list = filteredSources();
-    var headers = ['数据源名称', '类型', '协议', '接入地址', '采集频率', '状态', '更新时间'];
+    var headers = ['数据源名称', '类型', '协议', '接入地址', '采集频率', '状态', '最近心跳', '更新时间'];
     var rows = list.map(function(x){
-      return [x.name, x.type, x.protocol, x.endpoint, x.freq, statusText(x.status), x.updatedAt];
+      return [x.name, x.type, x.protocol, x.endpoint, x.freq, statusText(x.status), x.lastHeartbeatAt || '', x.updatedAt];
     });
     var csv = [headers.join(',')].concat(rows.map(function(r){ return r.join(','); })).join('\n');
     try {
@@ -377,7 +388,9 @@
     var btn = e.target.closest('button[data-act]');
     if (!btn) return;
     var id = btn.getAttribute('data-id');
-    if (btn.getAttribute('data-act') === 'edit') handleEdit(id);
+    var act = btn.getAttribute('data-act');
+    if (act === 'edit') handleEdit(id);
+    else if (act === 'beat') handleHeartbeat(id);
     else handleDelete(id);
   });
 

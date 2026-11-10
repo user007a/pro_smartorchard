@@ -1597,7 +1597,7 @@
         temp: (11 + seed % 7).toFixed(1),
         moisture: 18 + seed % 16,
         ph: (6.2 + (seed % 8) / 10).toFixed(1),
-        ec: 120 + seed % 90,
+        ec: 1150 + seed % 181,
         updatedAt: soilAt,
         source: '土壤墒情仪 SM-' + pad(seed % 5 + 1, 2)
       },

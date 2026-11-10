@@ -558,6 +558,13 @@
       </div>
 
       <div class="form-group" style="margin-bottom:var(--space-4);">
+        <div class="form-label">所属地块</div>
+        <select id="reportPlot" style="width:100%;padding:11px 12px;border-radius:12px;border:1px solid #dcdfe6;background:#fff;color:#1f2d3d;font-size:14px;">
+          <option value="">未指定地块</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:var(--space-4);">
         <div class="form-label">备注说明</div>
         <textarea class="remark-input" placeholder="请描述异常情况..." id="reportRemark"></textarea>
       </div>
@@ -1043,7 +1050,28 @@
 
     /* ---------- 异常上报 ---------- */
     function openReportModal() {
+      fillReportPlots();
       document.getElementById('reportModal').classList.add('show');
+    }
+
+    /* 地块下拉：来自地块主数据，按当前基地过滤 */
+    function fillReportPlots() {
+      var sel = document.getElementById('reportPlot');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">未指定地块</option>';
+      if (!window.AlertStore || typeof AlertStore.plotMaster !== 'function') return;
+      var list = AlertStore.plotMaster() || [];
+      var baseName = readSavedBase();
+      var same = list.filter(function (p) {
+        return !baseName || AlertStore.normalizeBase(p.enterprise) === AlertStore.normalizeBase(baseName);
+      });
+      var use = same.length ? same : list;
+      use.forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = p.code;
+        opt.textContent = p.code + ' ' + p.name + (p.variety ? '（' + p.variety + '）' : '');
+        sel.appendChild(opt);
+      });
     }
 
     function closeReportModal() {
@@ -1110,6 +1138,11 @@
         var catMap = { '病虫害': 'pest', '设备故障': 'device' };
         var lvMap  = { '病虫害': 'important', '设备故障': 'important' };
         var baseName = readSavedBase();
+        var picked = document.getElementById('reportPlot') ? document.getElementById('reportPlot').value : '';
+        var pickedPlot = null;
+        if (picked && typeof AlertStore.plotMaster === 'function') {
+          pickedPlot = (AlertStore.plotMaster() || []).filter(function (p) { return p.code === picked; })[0] || null;
+        }
         AlertStore.create({
           source: 'manual',
           category: catMap[reportType] || 'quality',
@@ -1117,7 +1150,11 @@
           title: '人工上报：' + reportType,
           desc: rec.remark || ('巡查发现' + reportType + '异常，已上传现场照片。'),
           base: baseName,
-          location: baseName ? baseName + ' - 巡园发现' : '巡园发现',
+          plot: pickedPlot ? ('地块' + pickedPlot.code) : '',
+          plotCode: pickedPlot ? pickedPlot.code : '',
+          location: baseName
+            ? baseName + ' - ' + (pickedPlot ? ('地块' + pickedPlot.code) : '巡园发现')
+            : (pickedPlot ? ('地块' + pickedPlot.code) : '巡园发现'),
           dedupeKey: 'manual:' + rec.id,
           value: null,
           threshold: '人工巡查判断'

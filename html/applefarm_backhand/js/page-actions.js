@@ -42,6 +42,228 @@ const BASE_IMAGE_MAX = 4;
 /* ============================================================
  * 证书相关辅助（数据源统一为共享数据层 CertStore）
  * ============================================================ */
+
+/* ---------- 证书附件上传控件（企业资质扫描件 / 检测报告 PDF） ----------
+ * 需同时被顶层字段构造器（certCreateFields / certEditFields）与
+ * PageActions 内部的弹窗交互绑定逻辑使用，故定义在模块顶层。
+ * options: { max 上限个数（默认 6）, hint 提示文案 }
+ */
+function buildCertAttachmentsUploader(files, options) {
+  const opt = options || {};
+  const max = opt.max || 6;
+  const list = (Array.isArray(files) ? files : []).slice(0, max);
+  const previews = list.map(f => {
+    const url = f.url || '';
+    const name = f.name || '附件';
+    const inner = (f.type || '').indexOf('image') === 0
+      ? `<img src="${url}" alt="${name}" />`
+      : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:20px;">📄</div>`;
+    return `
+      <div class="ent-upload-item" data-url="${url.replace(/"/g, '&quot;')}" data-name="${name.replace(/"/g, '&quot;')}" data-type="${(f.type || '').replace(/"/g, '&quot;')}" data-size="${f.size || 0}" data-source="preset">
+        ${inner}
+        <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="ent-upload" data-field="attachments" data-max="${max}">
+      <div class="ent-upload-toolbar">
+        <label class="ent-upload-btn">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3v10M3 8h10"/>
+          </svg>
+          添加附件
+          <input type="file" accept="image/*,application/pdf" multiple class="ent-upload-input" />
+        </label>
+        <span class="ent-upload-count">已上传 <b class="ent-upload-num">${list.length}</b> / ${max} 个</span>
+        <span class="ent-upload-hint">${opt.hint || '支持 JPG / PNG / PDF，单个不超过 5MB'}</span>
+      </div>
+      <div class="ent-upload-list">${previews}</div>
+    </div>
+  `;
+}
+
+function collectCertAttachments(modal) {
+  const wrap = modal.querySelector('.ent-upload[data-field="attachments"]');
+  if (!wrap) return [];
+  const out = [];
+  wrap.querySelectorAll('.ent-upload-item').forEach(item => {
+    const url = item.dataset.url;
+    if (!url) return;
+    out.push({
+      url: url,
+      name: item.dataset.name || '附件',
+      type: item.dataset.type || '',
+      size: Number(item.dataset.size) || 0,
+      uploadedAt: (window.CertStore ? CertStore.stampNow() : new Date().toISOString())
+    });
+  });
+  return out;
+}
+
+// 刷新上传控件的计数与剩余空位占位卡
+function updateUploadState(wrap) {
+  const max = parseInt(wrap.dataset.max, 10) || 4;
+  const count = wrap.querySelectorAll('.ent-upload-item').length;
+  const num = wrap.querySelector('.ent-upload-num');
+  if (num) num.textContent = count;
+  const btn = wrap.querySelector('.ent-upload-btn');
+  if (btn) btn.classList.toggle('is-disabled', count >= max);
+  const fileInput = wrap.querySelector('.ent-upload-input');
+  if (fileInput) fileInput.disabled = count >= max;
+
+  const list = wrap.querySelector('.ent-upload-list');
+  if (!list) return;
+  // 移除旧的空位占位卡
+  list.querySelectorAll('.ent-upload-slot').forEach(el => el.remove());
+  // 按剩余额度补足占位卡
+  for (let i = count; i < max; i++) {
+    const slot = document.createElement('button');
+    slot.type = 'button';
+    slot.className = 'ent-upload-slot';
+    slot.setAttribute('aria-label', '添加图片');
+    slot.innerHTML = `
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 4v12M4 10h12"/>
+      </svg>
+      <span>${i + 1}</span>
+    `;
+    list.appendChild(slot);
+  }
+}
+
+/* ---------- 弹窗表单上传交互（证书附件 / 基地图片） ----------
+ * 需同时被顶层函数 openCertCreateForm 与 PageActions 内部使用，故定义在模块顶层。
+ */
+function addBaseImageItem(list, url, source, name) {
+  const wrap = list.closest('.ent-upload');
+  const max = wrap ? (parseInt(wrap.dataset.max, 10) || 4) : 4;
+  const existingCount = list.querySelectorAll('.ent-upload-item').length;
+  if (existingCount >= max) {
+    window.Toast && window.Toast.show(`最多上传 ${max} 张图片`, 'warning');
+    return;
+  }
+  // 重复检测
+  const dup = Array.from(list.querySelectorAll('.ent-upload-item')).some(el => el.dataset.url === url);
+  if (dup) {
+    window.Toast && window.Toast.show('该图片已存在', 'warning');
+    return;
+  }
+  const item = document.createElement('div');
+  item.className = 'ent-upload-item';
+  item.dataset.url = url;
+  item.dataset.source = source;
+  item.innerHTML = `
+    <img src="${url}" alt="${name || '基地图片'}" />
+    <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">
+      <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+    </button>
+  `;
+  list.appendChild(item);
+  if (wrap) updateUploadState(wrap);
+}
+
+
+function bindEnterpriseFormInteractions(modal) {
+  // 证书附件上传（与图片上传结构一致，但记录文件名 / 类型 / 大小）
+  const attachWrap = modal.querySelector('.ent-upload[data-field="attachments"]');
+  if (attachWrap) {
+    const aList = attachWrap.querySelector('.ent-upload-list');
+    const aInput = attachWrap.querySelector('.ent-upload-input');
+    const aMax = parseInt(attachWrap.dataset.max, 10) || 6;
+    updateUploadState(attachWrap);
+    aInput.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+      const remain = Math.max(0, aMax - aList.querySelectorAll('.ent-upload-item').length);
+      files.slice(0, remain).forEach(file => {
+        if (file.size > 5 * 1024 * 1024) {
+          window.Toast && window.Toast.show(`${file.name} 超过 5MB，已跳过`, 'warning');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const item = document.createElement('div');
+          item.className = 'ent-upload-item';
+          item.dataset.url = ev.target.result;
+          item.dataset.name = file.name;
+          item.dataset.type = file.type || '';
+          item.dataset.size = file.size || 0;
+          item.dataset.source = 'local';
+          const isImg = (file.type || '').indexOf('image') === 0;
+          item.innerHTML = `
+            ${isImg ? `<img src="${ev.target.result}" alt="${file.name}" />` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:20px;">📄</div>'}
+            <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+            </button>
+          `;
+          aList.appendChild(item);
+          updateUploadState(attachWrap);
+        };
+        reader.readAsDataURL(file);
+      });
+      e.target.value = '';
+    });
+    aList.addEventListener('click', (e) => {
+      const removeBtn = e.target.closest('.ent-upload-remove');
+      if (removeBtn) {
+        const item = removeBtn.closest('.ent-upload-item');
+        if (item) item.remove();
+        updateUploadState(attachWrap);
+        return;
+      }
+      const slot = e.target.closest('.ent-upload-slot');
+      if (slot) aInput.click();
+    });
+  }
+
+  const uploadWrap = modal.querySelector('.ent-upload[data-field="baseImages"]');
+  if (!uploadWrap) return;
+  const list = uploadWrap.querySelector('.ent-upload-list');
+  const fileInput = uploadWrap.querySelector('.ent-upload-input');
+  const max = parseInt(uploadWrap.dataset.max, 10) || 4;
+
+  updateUploadState(uploadWrap);
+
+  fileInput.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const existing = list.querySelectorAll('.ent-upload-item').length;
+    const remain = Math.max(0, max - existing);
+    if (files.length > remain) {
+      window.Toast && window.Toast.show(`最多上传 ${max} 张图片，超出部分已忽略`, 'warning');
+    }
+    files.slice(0, remain).forEach(file => {
+      if (file.size > 5 * 1024 * 1024) {
+        window.Toast && window.Toast.show(`${file.name} 超过 5MB，已跳过`, 'warning');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        addBaseImageItem(list, ev.target.result, 'local');
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  });
+
+  list.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.ent-upload-remove');
+    if (removeBtn) {
+      const item = removeBtn.closest('.ent-upload-item');
+      if (item) item.remove();
+      updateUploadState(uploadWrap);
+      return;
+    }
+    const slot = e.target.closest('.ent-upload-slot');
+    if (slot) fileInput.click();
+  });
+}
+
+
 function certStore() {
   return (typeof window !== 'undefined' && window.CertStore) ? window.CertStore : null;
 }
@@ -506,220 +728,7 @@ const PageActions = (function() {
     return urls;
   }
 
-  /* ========== 证书附件上传（企业资质扫描件 / 检测报告 PDF） ========== */
-  // options: { max 上限个数（默认 6）, hint 提示文案 }
-  function buildCertAttachmentsUploader(files, options) {
-    const opt = options || {};
-    const max = opt.max || 6;
-    const list = (Array.isArray(files) ? files : []).slice(0, max);
-    const previews = list.map((f, i) => {
-      const url = f.url || '';
-      const name = f.name || '附件';
-      const inner = (f.type || '').indexOf('image') === 0
-        ? `<img src="${url}" alt="${name}" />`
-        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:20px;">📄</div>`;
-      return `
-        <div class="ent-upload-item" data-url="${url.replace(/"/g, '&quot;')}" data-name="${name.replace(/"/g, '&quot;')}" data-type="${(f.type || '').replace(/"/g, '&quot;')}" data-size="${f.size || 0}" data-source="preset">
-          ${inner}
-          <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">
-            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
-          </button>
-        </div>
-      `;
-    }).join('');
-
-    return `
-      <div class="ent-upload" data-field="attachments" data-max="${max}">
-        <div class="ent-upload-toolbar">
-          <label class="ent-upload-btn">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M8 3v10M3 8h10"/>
-            </svg>
-            添加附件
-            <input type="file" accept="image/*,application/pdf" multiple class="ent-upload-input" />
-          </label>
-          <span class="ent-upload-count">已上传 <b class="ent-upload-num">${list.length}</b> / ${max} 个</span>
-          <span class="ent-upload-hint">${opt.hint || '支持 JPG / PNG / PDF，单个不超过 5MB'}</span>
-        </div>
-        <div class="ent-upload-list">${previews}</div>
-      </div>
-    `;
-  }
-
-  function collectCertAttachments(modal) {
-    const wrap = modal.querySelector('.ent-upload[data-field="attachments"]');
-    if (!wrap) return [];
-    const out = [];
-    wrap.querySelectorAll('.ent-upload-item').forEach(item => {
-      const url = item.dataset.url;
-      if (!url) return;
-      out.push({
-        url: url,
-        name: item.dataset.name || '附件',
-        type: item.dataset.type || '',
-        size: Number(item.dataset.size) || 0,
-        uploadedAt: CertStore.stampNow()
-      });
-    });
-    return out;
-  }
-
-  // 刷新上传控件的计数与剩余空位占位卡
-  function updateUploadState(wrap) {
-    const max = parseInt(wrap.dataset.max, 10) || 4;
-    const count = wrap.querySelectorAll('.ent-upload-item').length;
-    const num = wrap.querySelector('.ent-upload-num');
-    if (num) num.textContent = count;
-    const btn = wrap.querySelector('.ent-upload-btn');
-    if (btn) btn.classList.toggle('is-disabled', count >= max);
-    const fileInput = wrap.querySelector('.ent-upload-input');
-    if (fileInput) fileInput.disabled = count >= max;
-
-    const list = wrap.querySelector('.ent-upload-list');
-    if (!list) return;
-    // 移除旧的空位占位卡
-    list.querySelectorAll('.ent-upload-slot').forEach(el => el.remove());
-    // 按剩余额度补足占位卡
-    for (let i = count; i < max; i++) {
-      const slot = document.createElement('button');
-      slot.type = 'button';
-      slot.className = 'ent-upload-slot';
-      slot.setAttribute('aria-label', '添加图片');
-      slot.innerHTML = `
-        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10 4v12M4 10h12"/>
-        </svg>
-        <span>${i + 1}</span>
-      `;
-      list.appendChild(slot);
-    }
-  }
-
   // 弹窗打开后为表单中的图片上传 custom 字段绑定交互事件
-  function bindEnterpriseFormInteractions(modal) {
-    // 证书附件上传（与图片上传结构一致，但记录文件名 / 类型 / 大小）
-    const attachWrap = modal.querySelector('.ent-upload[data-field="attachments"]');
-    if (attachWrap) {
-      const aList = attachWrap.querySelector('.ent-upload-list');
-      const aInput = attachWrap.querySelector('.ent-upload-input');
-      const aMax = parseInt(attachWrap.dataset.max, 10) || 6;
-      updateUploadState(attachWrap);
-      aInput.addEventListener('change', (e) => {
-        const files = Array.from(e.target.files || []);
-        if (!files.length) return;
-        const remain = Math.max(0, aMax - aList.querySelectorAll('.ent-upload-item').length);
-        files.slice(0, remain).forEach(file => {
-          if (file.size > 5 * 1024 * 1024) {
-            window.Toast && window.Toast.show(`${file.name} 超过 5MB，已跳过`, 'warning');
-            return;
-          }
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            const item = document.createElement('div');
-            item.className = 'ent-upload-item';
-            item.dataset.url = ev.target.result;
-            item.dataset.name = file.name;
-            item.dataset.type = file.type || '';
-            item.dataset.size = file.size || 0;
-            item.dataset.source = 'local';
-            const isImg = (file.type || '').indexOf('image') === 0;
-            item.innerHTML = `
-              ${isImg ? `<img src="${ev.target.result}" alt="${file.name}" />` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:20px;">📄</div>'}
-              <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">
-                <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
-              </button>
-            `;
-            aList.appendChild(item);
-            updateUploadState(attachWrap);
-          };
-          reader.readAsDataURL(file);
-        });
-        e.target.value = '';
-      });
-      aList.addEventListener('click', (e) => {
-        const removeBtn = e.target.closest('.ent-upload-remove');
-        if (removeBtn) {
-          const item = removeBtn.closest('.ent-upload-item');
-          if (item) item.remove();
-          updateUploadState(attachWrap);
-          return;
-        }
-        const slot = e.target.closest('.ent-upload-slot');
-        if (slot) aInput.click();
-      });
-    }
-
-    const uploadWrap = modal.querySelector('.ent-upload[data-field="baseImages"]');
-    if (!uploadWrap) return;
-    const list = uploadWrap.querySelector('.ent-upload-list');
-    const fileInput = uploadWrap.querySelector('.ent-upload-input');
-    const max = parseInt(uploadWrap.dataset.max, 10) || 4;
-
-    updateUploadState(uploadWrap);
-
-    fileInput.addEventListener('change', (e) => {
-      const files = Array.from(e.target.files || []);
-      if (!files.length) return;
-      const existing = list.querySelectorAll('.ent-upload-item').length;
-      const remain = Math.max(0, max - existing);
-      if (files.length > remain) {
-        window.Toast && window.Toast.show(`最多上传 ${max} 张图片，超出部分已忽略`, 'warning');
-      }
-      files.slice(0, remain).forEach(file => {
-        if (file.size > 5 * 1024 * 1024) {
-          window.Toast && window.Toast.show(`${file.name} 超过 5MB，已跳过`, 'warning');
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          addBaseImageItem(list, ev.target.result, 'local');
-        };
-        reader.readAsDataURL(file);
-      });
-      e.target.value = '';
-    });
-
-    list.addEventListener('click', (e) => {
-      const removeBtn = e.target.closest('.ent-upload-remove');
-      if (removeBtn) {
-        const item = removeBtn.closest('.ent-upload-item');
-        if (item) item.remove();
-        updateUploadState(uploadWrap);
-        return;
-      }
-      const slot = e.target.closest('.ent-upload-slot');
-      if (slot) fileInput.click();
-    });
-  }
-
-  function addBaseImageItem(list, url, source, name) {
-    const wrap = list.closest('.ent-upload');
-    const max = wrap ? (parseInt(wrap.dataset.max, 10) || 4) : 4;
-    const existingCount = list.querySelectorAll('.ent-upload-item').length;
-    if (existingCount >= max) {
-      window.Toast && window.Toast.show(`最多上传 ${max} 张图片`, 'warning');
-      return;
-    }
-    // 重复检测
-    const dup = Array.from(list.querySelectorAll('.ent-upload-item')).some(el => el.dataset.url === url);
-    if (dup) {
-      window.Toast && window.Toast.show('该图片已存在', 'warning');
-      return;
-    }
-    const item = document.createElement('div');
-    item.className = 'ent-upload-item';
-    item.dataset.url = url;
-    item.dataset.source = source;
-    item.innerHTML = `
-      <img src="${url}" alt="${name || '基地图片'}" />
-      <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">
-        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
-      </button>
-    `;
-    list.appendChild(item);
-    if (wrap) updateUploadState(wrap);
-  }
-
   // 获取状态样式类
   function getStatusClass(status) {
     const classMap = {
@@ -1244,6 +1253,7 @@ const PageActions = (function() {
           Toast.show(res.message || '作废失败', 'error');
           return false;
         }
+        if (CertStore.syncCertAlerts) CertStore.syncCertAlerts();
         Toast.show('证书已作废', 'success');
         return true;
       }
@@ -1273,6 +1283,7 @@ const PageActions = (function() {
           Toast.show(res.message || '续期失败', 'error');
           return false;
         }
+        if (CertStore.syncCertAlerts) CertStore.syncCertAlerts();
         Toast.show('续期成功，有效期至 ' + res.item.validEnd, 'success');
         return true;
       }

@@ -987,6 +987,43 @@
     esc: esc,
     lastError: function () { return lastError; },
 
+    /**
+     * 资质临期 → 预警中心同步（幂等）
+     * 已过期或 ≤30 天 → 紧急；≤90 天 → 重要。续期后从清单消失，自动闭环。
+     */
+    syncCertAlerts: function () {
+      var S = global.AlertStore;
+      if (!S || typeof S.syncSource !== 'function') {
+        return { ok: false, message: '预警数据层未加载' };
+      }
+      var items = [];
+      expiringList(90).forEach(function (c) {
+        if (c.status === 'draft' || c.status === 'revoked') return;
+        var d = remainDays(c);
+        if (d === null) return;
+        var urgent = d <= 30;
+        var level = urgent ? 'urgent' : 'important';
+        var name = typeNameOf(c) || c.name || c.typeCode;
+        items.push({
+          dedupeKey: 'cert:' + c.id + ':expire',
+          type: 'farming',
+          category: 'quality',
+          title: (d < 0 ? '资质已过期：' : '资质临期：') + name,
+          desc: (c.certNo || '') + ' 有效期至 ' + (c.validEnd || '') +
+            '，剩余 ' + d + ' 天' + (c.scope ? '；覆盖范围：' + c.scope : ''),
+          level: level,
+          base: '',
+          plot: '',
+          plotCode: '',
+          targetType: 'cert',
+          targetId: c.id,
+          threshold: '≤90 天',
+          value: d
+        });
+      });
+      return S.syncSource('cert', items, 'cert:');
+    },
+
     subscribe: function (fn) {
       subscribers.push(fn);
       try { fn('init'); } catch (e) {}
