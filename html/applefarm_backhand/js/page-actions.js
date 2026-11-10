@@ -407,8 +407,8 @@ function certCreateFields(category) {
     : [];
   const head = [
     { name: 'category', label: '证书分类', type: 'select', required: true, options: [
-      { value: 'qualification', label: '企业资质' },
-      { value: 'batch', label: '批次凭证' }
+      { value: 'qualification', label: '企业资质', selected: cat === 'qualification' },
+      { value: 'batch', label: '批次凭证', selected: cat === 'batch' }
     ]},
     { name: 'typeCode', label: '证书类型', type: 'select', required: true, options: typeList.map(t => ({ value: t.code, label: t.name })) }
   ];
