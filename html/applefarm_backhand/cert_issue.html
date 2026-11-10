@@ -8,6 +8,11 @@
 <link rel="stylesheet" href="css/sidebar-layout.css">
 <link rel="stylesheet" href="css/page-content.css">
 <style>
+  .issue-layout {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:var(--space-xl);
+  }
   .form-section, .preview-section {
     background:var(--bg-card);
     border-radius:var(--radius-lg);
@@ -46,6 +51,7 @@
     transition:all var(--transition-fast);
     background:var(--bg-card);
     outline:none;
+    width:100%;
   }
   .form-item input:focus, .form-item select:focus, .form-item textarea:focus {
     border-color:var(--primary-500);
@@ -105,7 +111,7 @@
     display:grid;
     grid-template-columns:repeat(2, 1fr);
     gap:var(--space-md);
-    padding-right:100px;
+    padding-right:110px;
   }
   .cert-row {
     display:flex;
@@ -128,7 +134,7 @@
   .cert-qr {
     position:absolute;
     right:var(--space-xl);
-    top:calc(50% - 50px);
+    top:calc(50% - 55px);
   }
   .qr-box {
     width:100px;
@@ -139,8 +145,11 @@
     display:flex;
     align-items:center;
     justify-content:center;
+    overflow:hidden;
     box-shadow:var(--shadow-sm);
   }
+  .qr-box img, .qr-box canvas { width:100%; height:100%; display:block; }
+  .qr-empty { font-size:11px; color:var(--text-tertiary); text-align:center; line-height:1.5; padding:6px; }
   .cert-footer {
     padding-top:var(--space-xl);
     margin-top:var(--space-xl);
@@ -148,6 +157,8 @@
     display:flex;
     justify-content:space-between;
     align-items:center;
+    gap:var(--space-md);
+    flex-wrap:wrap;
   }
   .cert-stamp {
     font-size:var(--font-size-xs);
@@ -157,6 +168,18 @@
     border:1px solid var(--border-default);
     border-radius:var(--radius-md);
   }
+  .stamp-area {
+    position:relative;
+    text-align:center;
+  }
+  .stamp-canvas {
+    border:1px dashed var(--border-default);
+    border-radius:6px;
+    cursor:crosshair;
+    background:#fff;
+    touch-action:none;
+  }
+  .stamp-actions { display:flex; gap:6px; margin-top:6px; justify-content:center; }
   .preview-section {
     position:relative;
   }
@@ -169,6 +192,57 @@
     padding:4px 10px;
     background:var(--warning-bg);
     border-radius:var(--radius-full);
+  }
+  /* 前置校验提示 */
+  .guard-box {
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-md);
+    padding:var(--space-md) var(--space-lg);
+    margin-bottom:var(--space-lg);
+    font-size:var(--font-size-sm);
+    line-height:1.7;
+  }
+  .guard-box.ok { background:var(--success-bg); border-color:var(--success-border); color:var(--success); }
+  .guard-box.warn { background:var(--warning-bg); border-color:var(--warning-border); color:#ad8b00; }
+  .guard-box.error { background:var(--error-bg); border-color:var(--error-border); color:var(--error); }
+  .guard-box ul { margin:6px 0 0; padding-left:18px; }
+  .guard-box li { margin:2px 0; }
+  /* 已签发记录 */
+  .issued-list { margin-top:var(--space-xl); }
+  .issued-item {
+    display:flex;align-items:center;justify-content:space-between;gap:var(--space-md);
+    padding:10px 14px;border:1px solid var(--border-light);border-radius:var(--radius-md);
+    margin-bottom:8px;font-size:var(--font-size-sm);
+  }
+  .issued-item .no { font-weight:var(--font-weight-semibold); color:var(--text-primary); }
+  .issued-item .meta { color:var(--text-tertiary); font-size:var(--font-size-xs); }
+  .status-tag {
+    display:inline-flex;align-items:center;gap:4px;
+    padding:4px 10px;border-radius:var(--radius-full);
+    font-size:var(--font-size-xs);font-weight:var(--font-weight-medium);white-space:nowrap;
+  }
+  .status-tag::before { content:''; width:6px; height:6px; border-radius:50%; }
+  .status-tag.enabled { background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); }
+  .status-tag.enabled::before { background:var(--success); }
+  .status-tag.pending { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .status-tag.pending::before { background:var(--warning); }
+  .status-tag.draft { background:var(--gray-100); color:var(--text-secondary); border:1px solid var(--border-default); }
+  .status-tag.draft::before { background:var(--text-tertiary); }
+  .status-tag.disabled { background:var(--gray-100); color:var(--text-tertiary); border:1px solid var(--border-default); }
+  .status-tag.disabled::before { background:var(--text-tertiary); }
+  /* 移动端适配 */
+  @media (max-width: 1024px) {
+    .issue-layout { grid-template-columns:1fr; }
+  }
+  @media (max-width: 768px) {
+    .form-section, .preview-section { padding:var(--space-lg); }
+    .form-row { grid-template-columns:1fr; gap:var(--space-md); }
+    .form-item.full { grid-column:span 1; }
+    .cert-body { grid-template-columns:1fr; padding-right:0; }
+    .cert-qr { position:static; margin-top:var(--space-lg); display:flex; justify-content:center; }
+    .form-actions { flex-direction:column; }
+    .form-actions .jg-btn { width:100%; }
+    .issued-item { flex-direction:column; align-items:flex-start; gap:6px; }
   }
 </style>
 <style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
@@ -193,26 +267,24 @@
 
     <main class="main-content">
       <div class="content-wrapper">
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-xl);">
+        <div class="issue-layout">
           <div class="form-section">
             <h2 class="section-title">填写信息</h2>
+
+            <div class="guard-box" id="guardBox">请选择批次号，系统将自动校验检测报告与安全间隔期。</div>
 
             <div class="form-row">
               <div class="form-item">
                 <label>选择模板</label>
                 <select id="certTemplate">
-                  <option>花牛苹果合格证</option>
-                  <option>礼盒装合格证</option>
+                  <option value="standard">承诺达标合格证（标准版）</option>
+                  <option value="gift">承诺达标合格证（礼盒装）</option>
+                  <option value="origin">原产地证明合格证</option>
                 </select>
               </div>
               <div class="form-item">
                 <label>产品名称</label>
-                <select id="certProduct">
-                  <option value="花牛苹果">花牛苹果</option>
-                  <option value="金帅苹果">金帅苹果</option>
-                  <option value="秦冠苹果">秦冠苹果</option>
-                  <option value="礼盒装苹果">礼盒装苹果</option>
-                </select>
+                <select id="certProduct"></select>
               </div>
             </div>
 
@@ -223,7 +295,7 @@
               </div>
               <div class="form-item">
                 <label>生产日期</label>
-                <input type="date" id="certProduceDate">
+                <input type="date" id="certProduceDate" readonly>
               </div>
             </div>
 
@@ -235,10 +307,10 @@
               <div class="form-item">
                 <label>等级</label>
                 <select id="certGrade">
-                  <option>特级</option>
-                  <option>一级</option>
-                  <option>二级</option>
-                  <option>三级</option>
+                  <option value="特级">特级</option>
+                  <option value="一级">一级</option>
+                  <option value="二级">二级</option>
+                  <option value="三级">三级</option>
                 </select>
               </div>
             </div>
@@ -246,14 +318,25 @@
             <div class="form-row">
               <div class="form-item">
                 <label>检测结论</label>
-                <select id="certResult">
-                  <option>合格</option>
-                  <option>不合格</option>
+                <select id="certResult" readonly disabled>
+                  <option value="合格">合格</option>
+                  <option value="不合格">不合格</option>
                 </select>
               </div>
               <div class="form-item">
                 <label>检测人</label>
-                <input type="text" id="certTester" placeholder="输入检测人姓名">
+                <input type="text" id="certTester" placeholder="取自检测报告">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-item">
+                <label>客户名称</label>
+                <input type="text" id="certCustomer" placeholder="选填，采购方名称">
+              </div>
+              <div class="form-item">
+                <label>责任人</label>
+                <select id="certOperator"></select>
               </div>
             </div>
 
@@ -263,7 +346,7 @@
             </div>
 
             <div class="form-actions">
-              <button class="jg-btn">
+              <button class="jg-btn" onclick="certIssueSaveDraft()">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
                   <path d="M14 2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/>
                   <polyline points="14 2 14 8 20 8"/>
@@ -273,13 +356,15 @@
                 </svg>
                 保存草稿
               </button>
-              <button class="jg-btn jg-btn-primary btn-issue">
+              <button class="jg-btn jg-btn-primary btn-issue" onclick="certIssueSubmit()">
                 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
                   <path d="M8 3V13M3 8H13"/>
                 </svg>
                 生成合格证
               </button>
             </div>
+
+            <div class="issued-list" id="issuedList"></div>
           </div>
 
           <div class="preview-section">
@@ -288,53 +373,62 @@
 
             <div class="cert-preview" style="position:relative;">
               <div class="cert-header">
-                <div class="cert-title">承诺达标合格证</div>
+                <div class="cert-title" id="previewTitle">承诺达标合格证</div>
                 <div class="cert-subtitle">Certificate of Compliance</div>
               </div>
 
               <div class="cert-body">
                 <div class="cert-row">
                   <span class="cert-label">产品名称</span>
-                  <span class="cert-value">花牛苹果</span>
+                  <span class="cert-value" data-preview="product">—</span>
                 </div>
                 <div class="cert-row">
                   <span class="cert-label">批次号</span>
-                  <span class="cert-value">20260613001</span>
+                  <span class="cert-value" data-preview="batch">—</span>
                 </div>
                 <div class="cert-row">
                   <span class="cert-label">生产日期</span>
-                  <span class="cert-value">2026-09-13</span>
+                  <span class="cert-value" data-preview="produceDate">—</span>
                 </div>
                 <div class="cert-row">
                   <span class="cert-label">净含量</span>
-                  <span class="cert-value">500g/袋</span>
+                  <span class="cert-value" data-preview="netWeight">—</span>
                 </div>
                 <div class="cert-row">
                   <span class="cert-label">等级</span>
-                  <span class="cert-value">特级</span>
+                  <span class="cert-value" data-preview="grade">—</span>
                 </div>
                 <div class="cert-row">
                   <span class="cert-label">检测结论</span>
-                  <span class="cert-value" style="color:var(--success);">合格</span>
+                  <span class="cert-value" data-preview="result">—</span>
+                </div>
+                <div class="cert-row">
+                  <span class="cert-label">证书编号</span>
+                  <span class="cert-value" data-preview="certNo">—</span>
+                </div>
+                <div class="cert-row">
+                  <span class="cert-label">有效期至</span>
+                  <span class="cert-value" data-preview="validEnd">—</span>
                 </div>
               </div>
 
               <div class="cert-qr">
-                <div class="qr-box">
-                  <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="1.5">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                    <path d="M7 7h3v3H7zM14 7h3v3h-3zM7 14h3v3H7z"/>
-                  </svg>
+                <div class="qr-box" id="certQrBox">
+                  <div class="qr-empty">生成后自动生成<br>可扫描二维码</div>
                 </div>
               </div>
 
               <div class="cert-footer">
-                <div style="font-size:var(--font-size-xs); color:var(--text-secondary);">扫描二维码验证真伪</div>
-                <div style="position:relative;">
-                  <canvas id="certStampCanvas" width="140" height="60" style="border:1px dashed var(--border-default);border-radius:6px;cursor:crosshair;background:#fff;" title="电子签章：在白色区域内用鼠标签名"></canvas>
-                  <div style="display:flex;gap:6px;margin-top:6px;">
-                    <button type="button" onclick="clearCertStamp()" style="font-size:11px;padding:2px 8px;background:#fff;border:1px solid var(--border-default);border-radius:4px;cursor:pointer;">清除</button>
-                    <button type="button" onclick="confirmCertStamp()" style="font-size:11px;padding:2px 8px;background:var(--primary);color:#fff;border:none;border-radius:4px;cursor:pointer;">确认签章</button>
+                <div style="font-size:var(--font-size-xs); color:var(--text-secondary);">
+                  扫描二维码验证真伪<br>
+                  <span id="qrHint" style="color:var(--text-tertiary);">链接生成于溯源短链域名</span>
+                </div>
+                <div class="stamp-area">
+                  <div class="cert-stamp">天水花牛苹果（集团）有限责任公司</div>
+                  <canvas id="certStampCanvas" class="stamp-canvas" width="160" height="70" title="电子签章：在白色区域内用鼠标签名"></canvas>
+                  <div class="stamp-actions">
+                    <button type="button" onclick="clearCertStamp()" style="font-size:11px;padding:3px 10px;background:#fff;border:1px solid var(--border-default);border-radius:4px;cursor:pointer;">清除</button>
+                    <button type="button" onclick="confirmCertStamp()" style="font-size:11px;padding:3px 10px;background:var(--primary);color:#fff;border:none;border-radius:4px;cursor:pointer;">确认签章</button>
                   </div>
                 </div>
               </div>
@@ -348,69 +442,221 @@
 
 <script src="js/components/modal.js"></script>
 <script src="js/components/confirm.js"></script>
+<script src="js/shared/cert-store.js"></script>
+<script src="js/shared/harvest-store.js"></script>
+<script src="js/shared/trace-store.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="js/page-actions.js"></script>
 <script>
 /* ============================================================
- * 合格证开具 —— 批次来自「批次管理」主数据，产品复用证书签发源
- * 开具后写入本地存储，可在「证书管理」中查询
+ * 农产品合格证开具
+ * ---------------------------------------------------------------
+ * 批次来源：HarvestStore（采收管理，采收完成且已入库的批次）
+ * 前置校验：① 批次存在且采收完成  ② 该批次有有效且合格的检测报告
+ *           ③ 农资安全间隔期已过（物资使用记录）  ④ 同批次不可重复开具
+ * 落库：CertStore（证书管理页可查询、可作废、可续期）
+ * 二维码：真实二维码库 qrcodejs + 溯源短链域名 https://t.snzg.cn
  * ============================================================ */
 
-// 批次主数据（与 trace_batch.html 保持一致）
-const CERT_BATCHES = [
-  {batchNo:'PC-20260901-001',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-01'},
-  {batchNo:'PC-20260902-002',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-02'},
-  {batchNo:'PC-20260903-003',product:'金帅苹果',spec:'4kg/箱',grade:'二级',harvestDate:'2026-09-03'},
-  {batchNo:'PC-20260904-004',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-04'},
-  {batchNo:'PC-20260905-005',product:'花牛苹果',spec:'5kg/箱',grade:'二级',harvestDate:'2026-09-05'},
-  {batchNo:'PC-20260906-006',product:'花牛苹果',spec:'4kg/箱',grade:'三级',harvestDate:'2026-09-06'},
-  {batchNo:'PC-20260907-007',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-07'},
-  {batchNo:'PC-20260908-008',product:'花牛苹果',spec:'5kg/箱',grade:'二级',harvestDate:'2026-09-08'},
-  {batchNo:'PC-20260909-009',product:'花牛苹果',spec:'4kg/箱',grade:'一级',harvestDate:'2026-09-09'},
-  {batchNo:'PC-20260910-010',product:'金帅苹果',spec:'4kg/箱',grade:'二级',harvestDate:'2026-09-10'},
-  {batchNo:'PC-20260911-011',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-11'},
-  {batchNo:'PC-20260912-012',product:'秦冠苹果',spec:'6kg/箱',grade:'三级',harvestDate:'2026-09-12'},
-  {batchNo:'PC-20260913-013',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-13'},
-  {batchNo:'PC-20260914-014',product:'花牛苹果',spec:'5kg/箱',grade:'二级',harvestDate:'2026-09-14'},
-  {batchNo:'PC-20260915-015',product:'花牛苹果',spec:'4kg/箱',grade:'一级',harvestDate:'2026-09-15'},
-  {batchNo:'PC-20260916-016',product:'金帅苹果',spec:'4kg/箱',grade:'二级',harvestDate:'2026-09-16'},
-  {batchNo:'PC-20260917-017',product:'花牛苹果',spec:'5kg/箱',grade:'一级',harvestDate:'2026-09-17'},
-  {batchNo:'PC-20260918-018',product:'花牛苹果',spec:'5kg/箱',grade:'三级',harvestDate:'2026-09-18'},
-  {batchNo:'PC-20260919-019',product:'花牛苹果',spec:'4kg/箱',grade:'一级',harvestDate:'2026-09-19'},
-  {batchNo:'PC-20260920-020',product:'秦冠苹果',spec:'6kg/箱',grade:'二级',harvestDate:'2026-09-20'}
-];
+const OPERATOR_LIST = ['惠加宁', '黄忠坚', '徐水应', '朱泉龙', '陈小忠', '廖春亮', '李建明', '李根', '张才孙', '刘全国', '毛定卫', '叶三东', '周才贵', '程名高', '邓小华', '周成友', '危红卫', '方超', '曹红英', '崔新根', '超级用户'];
+const PRODUCT_LIST = ['花牛苹果', '金帅苹果', '秦冠苹果', '礼盒装苹果'];
 
-// 选择批次后带出产品 / 净含量 / 等级 / 生产日期
+let currentBatch = null;   // 当前选中批次的采收记录
+let currentInspection = null; // 当前批次的有效检测报告
+let stampDataUrl = '';     // 电子签章 base64
+
+/* ---------- 批次列表：取自采收管理中采收完成的批次 ---------- */
+function availableBatches() {
+  if (typeof HarvestStore === 'undefined') return [];
+  return HarvestStore.records().filter(function (r) {
+    return r.status === 'completed' && r.batchNo;
+  });
+}
+
+/* ---------- 检测报告：取自溯源模块，结论合格且在有效期内 ---------- */
+function validInspection(batchNo) {
+  if (typeof TraceStore === 'undefined') return null;
+  var st = TraceStore.inspectionState(batchNo);
+  if (!st || !st.hasValid) return null;
+  return st.latest || null;
+}
+
+/* ---------- 选择批次后带出信息 + 前置校验 ---------- */
 function syncFromBatch() {
   const batchNo = document.getElementById('certBatch').value;
-  const b = CERT_BATCHES.find(x => x.batchNo === batchNo);
-  if (!b) return;
-  document.getElementById('certProduct').value = b.product;
-  document.getElementById('certNetWeight').value = b.spec;
-  document.getElementById('certGrade').value = b.grade;
-  document.getElementById('certProduceDate').value = b.harvestDate;
+  currentBatch = null;
+  currentInspection = null;
+  if (!batchNo) {
+    document.getElementById('certProduceDate').value = '';
+    renderGuardText('请选择批次号，系统将自动校验检测报告与安全间隔期。', 'warn');
+    syncPreview();
+    return;
+  }
+  const list = availableBatches();
+  currentBatch = list.filter(function (r) { return r.batchNo === batchNo; })[0] || null;
+  if (!currentBatch) {
+    renderGuardText('批次 ' + batchNo + ' 不在采收管理中或采收未完成，无法开具合格证。', 'error');
+    syncPreview();
+    return;
+  }
+  document.getElementById('certProduceDate').value = (currentBatch.startTime || '').slice(0, 10);
+  document.getElementById('certProduct').value = currentBatch.variety || '花牛苹果';
+  document.getElementById('certGrade').value = currentBatch.levelName || '一级';
+  document.getElementById('certNetWeight').value = currentBatch.qty ? (currentBatch.qty + ' kg') : '';
+
+  currentInspection = validInspection(batchNo);
+  if (currentInspection) {
+    document.getElementById('certResult').value = currentInspection.conclusion === '合格' ? '合格' : '不合格';
+    document.getElementById('certTester').value = currentInspection.operator || currentInspection.institution || '';
+  }
+
+  renderGuardBox(batchNo);
   syncPreview();
 }
 
-// 实时预览
-function syncPreview() {
-  const get = id => { const el = document.getElementById(id); return el ? el.value : ''; };
-  const values = [
-    get('certProduct'),
-    get('certBatch'),
-    get('certProduceDate'),
-    get('certNetWeight'),
-    get('certGrade'),
-    get('certResult')
-  ];
-  document.querySelectorAll('.cert-preview .cert-body .cert-value').forEach((el, i) => {
-    if (values[i] !== undefined) el.textContent = values[i] || '—';
+/* ---------- 前置校验提示 ---------- */
+function renderGuardBox(batchNo) {
+  const box = document.getElementById('guardBox');
+  const guard = CertStore.harvestGuard(batchNo, { typeCode: 'quality_cert', skipDuplicate: true });
+  const items = [];
+
+  const rec = currentBatch;
+  items.push({
+    ok: true,
+    text: '批次 ' + batchNo + ' · ' + (rec ? (rec.variety || '') : '') + ' · 采收 ' + (rec ? (rec.startTime || '').slice(0, 10) : '') + ' · ' + (rec ? rec.qty : 0) + ' kg'
   });
-  const stamp = document.querySelector('.cert-preview .cert-stamp');
-  if (stamp) stamp.textContent = '天水花牛苹果（集团）有限责任公司';
+
+  if (currentInspection) {
+    items.push({
+      ok: true,
+      text: '检测报告 ' + currentInspection.reportNo + '（' + currentInspection.institution + '，结论 ' + currentInspection.conclusion + '，有效期至 ' + (currentInspection.validUntil || '—') + '）'
+    });
+  } else {
+    items.push({ ok: false, text: '该批次无有效且结论合格的检测报告，禁止开具合格证' });
+  }
+
+  const usage = CertStore.usageRecords();
+  const safety = latestSafetyFor(rec, usage);
+  if (safety) {
+    const safeDate = CertStore.shiftDate(safety.date, safety.days);
+    const passed = rec && (rec.startTime || '').slice(0, 10) >= safeDate;
+    items.push({
+      ok: passed,
+      text: '安全间隔期：' + safety.date + ' 使用农资后需间隔 ' + safety.days + ' 天（最早可采收日 ' + safeDate + '）' + (passed ? '，已满足' : '，未满足')
+    });
+  }
+
+  const dup = CertStore.certsOfBatch(batchNo).filter(function (c) {
+    return c.typeCode === 'quality_cert' && c.status !== 'revoked';
+  })[0];
+  if (dup) {
+    items.push({ ok: false, text: '该批次已开具质量合格证（' + dup.certNo + '），如需重开请先在证书管理中作废原证' });
+  }
+
+  renderGuardList(items, guard.ok && !dup);
 }
 
-// 电子签章：Canvas 鼠标签名 + 转 base64 持久化（PC-B-057）
-(function initCertStamp(){
+/* ---------- 最近一次农资使用与安全间隔期 ---------- */
+function latestSafetyFor(rec, usages) {
+  if (!rec || !usages || !usages.length) return null;
+  const plot = rec.plot || '';
+  let latest = null;
+  usages.forEach(function (u) {
+    if (plot && u.plot && String(u.plot) !== plot) return;
+    const d = String(u.time || u.useDate || '').slice(0, 10);
+    if (!d) return;
+    if (!latest || d > latest.date) latest = { date: d, days: Number(u.safetyInterval) || 0 };
+  });
+  return latest;
+}
+
+function renderGuardList(items, ok) {
+  const box = document.getElementById('guardBox');
+  if (!box) return;
+  const cls = ok ? 'ok' : 'warn';
+  box.className = 'guard-box ' + cls;
+  box.innerHTML = '<strong>开具前置校验</strong><ul>' +
+    items.map(function (i) {
+      return '<li>' + (i.ok ? '✔ ' : '✖ ') + CertStore.esc(i.text) + '</li>';
+    }).join('') + '</ul>';
+}
+
+function renderGuardText(text, level) {
+  const box = document.getElementById('guardBox');
+  if (!box) return;
+  box.className = 'guard-box ' + (level || 'warn');
+  box.textContent = text;
+}
+
+/* ---------- 实时预览 ---------- */
+function syncPreview() {
+  const get = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const values = {
+    product: get('certProduct'),
+    batch: get('certBatch'),
+    produceDate: get('certProduceDate'),
+    netWeight: get('certNetWeight'),
+    grade: get('certGrade'),
+    result: get('certResult'),
+    certNo: CertStore.nextCertNo('batch', 'quality_cert', get('certProduceDate') || CertStore.today()),
+    validEnd: CertStore.shiftDate(get('certProduceDate') || CertStore.today(), 365)
+  };
+  document.querySelectorAll('.cert-preview [data-preview]').forEach(function (el) {
+    const key = el.getAttribute('data-preview');
+    el.textContent = values[key] || '—';
+  });
+  const title = document.getElementById('previewTitle');
+  if (title) {
+    const tpl = get('certTemplate');
+    title.textContent = tpl === 'origin' ? '原产地证明合格证' : (tpl === 'gift' ? '承诺达标合格证（礼盒装）' : '承诺达标合格证');
+  }
+  renderQrPreview();
+}
+
+/* ---------- 二维码：真实可扫（qrcodejs + 溯源短链） ---------- */
+function shortLinkBase() {
+  if (typeof TraceStore !== 'undefined' && typeof TraceStore.shortUrlOf === 'function') {
+    try {
+      var u = TraceStore.shortUrlOf('CERT-PROBE');
+      return u.replace(/\/[^/]*$/, '');
+    } catch (e) { /* 忽略 */ }
+  }
+  return 'https://t.snzg.cn';
+}
+
+function certQrUrl(certNo, batchNo) {
+  var base = shortLinkBase();
+  var code = (batchNo || certNo || '').replace(/[^A-Za-z0-9]/g, '');
+  return base + '/C' + code;
+}
+
+function renderQrPreview() {
+  const box = document.getElementById('certQrBox');
+  if (!box) return;
+  var url = certQrUrl('', document.getElementById('certBatch') ? document.getElementById('certBatch').value : '');
+  box.innerHTML = '';
+  if (typeof QRCode !== 'function') {
+    box.innerHTML = '<div class="qr-empty">二维码组件加载中…</div>';
+    return;
+  }
+  try {
+    new QRCode(box, {
+      text: url,
+      width: 92,
+      height: 92,
+      colorDark: '#1f1f1f',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  } catch (e) {
+    box.innerHTML = '<div class="qr-empty">二维码生成失败</div>';
+  }
+  var hint = document.getElementById('qrHint');
+  if (hint) hint.textContent = url;
+}
+
+/* ---------- 电子签章：Canvas 鼠标签名，签发时随证书一起入库 ---------- */
+(function initCertStamp() {
   var c = document.getElementById('certStampCanvas');
   if (!c) return;
   var ctx = c.getContext('2d');
@@ -420,6 +666,7 @@ function syncPreview() {
   ctx.lineCap = 'round';
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, c.width, c.height);
+
   function pos(e) {
     var rect = c.getBoundingClientRect();
     var x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
@@ -440,9 +687,8 @@ function syncPreview() {
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
   }
-  function end(e) {
-    drawing = false;
-  }
+  function end() { drawing = false; }
+
   c.addEventListener('mousedown', start);
   c.addEventListener('mousemove', move);
   c.addEventListener('mouseup', end);
@@ -450,33 +696,208 @@ function syncPreview() {
   c.addEventListener('touchstart', start, { passive: false });
   c.addEventListener('touchmove', move, { passive: false });
   c.addEventListener('touchend', end);
-  window.clearCertStamp = function() {
+
+  window.clearCertStamp = function () {
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, c.width, c.height);
+    stampDataUrl = '';
   };
-  window.confirmCertStamp = function() {
-    var dataUrl = c.toDataURL('image/png');
-    try { localStorage.setItem('cert_stamp_dataurl', dataUrl); } catch (e) {}
-    if (typeof Toast !== 'undefined') Toast.success('签章已保存');
+  window.confirmCertStamp = function () {
+    stampDataUrl = c.toDataURL('image/png');
+    try { localStorage.setItem('smartorchard_cert_stamp', stampDataUrl); } catch (e) {}
+    if (typeof Toast !== 'undefined') Toast.show('签章已保存，将随证书一并归档');
     else alert('签章已保存');
   };
 })();
 
-document.addEventListener('DOMContentLoaded', function() {
-  const batchSelect = document.getElementById('certBatch');
-  batchSelect.innerHTML = CERT_BATCHES
-    .map(b => `<option value="${b.batchNo}">${b.batchNo} · ${b.product} · ${b.spec}</option>`)
-    .join('');
-  batchSelect.addEventListener('change', syncFromBatch);
+/* ---------- 收集表单 ---------- */
+function collectIssue() {
+  const get = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const batchNo = get('certBatch');
+  const issueDate = get('certProduceDate') || CertStore.today();
+  const netWeight = get('certNetWeight');
+  const tester = get('certTester');
+  const customer = get('certCustomer');
+  const operator = get('certOperator');
+  const result = get('certResult');
 
-  ['certProduct', 'certProduceDate', 'certNetWeight', 'certGrade', 'certResult'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', syncPreview);
-    if (el) el.addEventListener('input', syncPreview);
+  return {
+    batchNo: batchNo,
+    issueDate: issueDate,
+    validStart: issueDate,
+    validEnd: CertStore.shiftDate(issueDate, 365),
+    product: get('certProduct'),
+    netWeight: netWeight,
+    grade: get('certGrade'),
+    customer: customer,
+    operator: operator,
+    conclusion: result,
+    tester: tester,
+    reportNo: currentInspection ? currentInspection.reportNo : '',
+    stamp: stampDataUrl
+  };
+}
+
+/* ---------- 开具：完整校验 → 生成编号 → 落库 ---------- */
+function certIssueSubmit() {
+  const data = collectIssue();
+
+  if (!data.batchNo) { Toast.show('请选择批次号', 'error'); return; }
+  if (!data.netWeight) { Toast.show('请输入净含量', 'error'); return; }
+  if (!data.tester) { Toast.show('请填写检测人', 'error'); return; }
+  if (!data.operator) { Toast.show('请选择责任人', 'error'); return; }
+  if (data.conclusion !== '合格') { Toast.show('检测结论不为合格，禁止开具合格证', 'error'); return; }
+  if (!stampDataUrl) { Toast.show('请先完成电子签章后再开具合格证', 'warning'); return; }
+
+  const guard = CertStore.harvestGuard(data.batchNo, { typeCode: 'quality_cert' });
+  if (!guard.ok) { Toast.show(guard.message, 'error'); return; }
+
+  const certNo = CertStore.nextCertNo('batch', 'quality_cert', data.issueDate);
+  const qrUrl = certQrUrl(certNo, data.batchNo);
+
+  const payload = {
+    certNo: certNo,
+    category: 'batch',
+    typeCode: 'quality_cert',
+    type: '质量合格证',
+    issueOrg: '天水花牛苹果（集团）有限责任公司',
+    issueDate: data.issueDate,
+    validStart: data.validStart,
+    validEnd: data.validEnd,
+    status: 'active',
+    batchNo: data.batchNo,
+    customer: data.customer || '未指定',
+    product: data.product,
+    variety: currentBatch ? currentBatch.variety : '',
+    netWeight: data.netWeight,
+    grade: data.grade,
+    conclusion: data.conclusion,
+    tester: data.tester,
+    reportNo: data.reportNo,
+    qrUrl: qrUrl,
+    traceCode: currentBatch ? (currentBatch.traceCode || '') : '',
+    stamp: data.stamp,
+    owner: '质量部',
+    operator: data.operator
+  };
+
+  const res = CertStore.saveCert(payload);
+  if (!res.ok) { Toast.show(res.message || '生成失败', 'error'); return; }
+
+  renderIssuedList();
+  syncPreview();
+
+  Confirm.success('合格证已生成！证书编号：' + res.item.certNo, {
+    confirmText: '下载证书凭证',
+    icon: '✅'
+  }).then(function (ok) {
+    if (ok) PageActions.downloadCert(res.item.id);
+  });
+}
+
+/* ---------- 保存草稿：写入 CertStore（草稿态） ---------- */
+function certIssueSaveDraft() {
+  const data = collectIssue();
+  if (!data.batchNo) { Toast.show('请选择批次号', 'error'); return; }
+  if (!data.operator) { Toast.show('请选择责任人', 'error'); return; }
+
+  const certNo = CertStore.nextCertNo('batch', 'quality_cert', data.issueDate);
+  const payload = {
+    certNo: certNo,
+    category: 'batch',
+    typeCode: 'quality_cert',
+    type: '质量合格证',
+    issueOrg: '天水花牛苹果（集团）有限责任公司',
+    issueDate: data.issueDate,
+    validStart: data.validStart,
+    validEnd: data.validEnd,
+    status: 'draft',
+    batchNo: data.batchNo,
+    customer: data.customer || '未指定',
+    product: data.product,
+    netWeight: data.netWeight,
+    grade: data.grade,
+    conclusion: data.conclusion,
+    tester: data.tester,
+    reportNo: data.reportNo,
+    stamp: data.stamp,
+    owner: '质量部',
+    operator: data.operator
+  };
+  const res = CertStore.saveCert(payload);
+  if (!res.ok) { Toast.show(res.message || '保存草稿失败', 'error'); return; }
+  renderIssuedList();
+  Toast.show('草稿已保存：' + res.item.certNo, 'success');
+}
+
+/* ---------- 本批次已签发记录 ---------- */
+function renderIssuedList() {
+  const box = document.getElementById('issuedList');
+  if (!box) return;
+  const batchNo = document.getElementById('certBatch') ? document.getElementById('certBatch').value : '';
+  const list = batchNo ? CertStore.certsOfBatch(batchNo) : [];
+  if (!list.length) { box.innerHTML = ''; return; }
+  box.innerHTML = '<h3 style="font-size:var(--font-size-base);font-weight:var(--font-weight-semibold);margin-bottom:10px;">该批次证书记录</h3>' +
+    list.map(function (c) {
+      const sv = CertStore.computeStatus(c);
+      return '<div class="issued-item">' +
+        '<div><div class="no">' + CertStore.esc(c.certNo) + '</div>' +
+        '<div class="meta">' + CertStore.esc(c.type) + ' · ' + CertStore.esc(c.issueDate) + ' · 经办 ' + CertStore.esc(c.operator || '—') + '</div></div>' +
+        '<span class="status-tag ' + sv.cls + '">' + sv.text + '</span></div>';
+    }).join('');
+}
+
+/* ---------- 初始化 ---------- */
+document.addEventListener('DOMContentLoaded', function () {
+  const batchSelect = document.getElementById('certBatch');
+  const batches = availableBatches();
+  batchSelect.innerHTML = '<option value="">请选择批次号</option>' +
+    batches.map(function (r) {
+      return '<option value="' + r.batchNo + '">' + r.batchNo + ' · ' + r.variety + ' · ' + r.qty + 'kg · ' + (r.startTime || '').slice(0, 10) + '</option>';
+    }).join('');
+  batchSelect.addEventListener('change', function () {
+    syncFromBatch();
+    renderIssuedList();
   });
 
-  syncFromBatch();
+  const productSelect = document.getElementById('certProduct');
+  productSelect.innerHTML = PRODUCT_LIST.map(function (p) {
+    return '<option value="' + p + '">' + p + '</option>';
+  }).join('');
+
+  const operatorSelect = document.getElementById('certOperator');
+  operatorSelect.innerHTML = OPERATOR_LIST.map(function (n) {
+    return '<option value="' + n + '">' + n + '</option>';
+  }).join('');
+
+  ['certTemplate', 'certProduct', 'certNetWeight', 'certGrade', 'certCustomer', 'certOperator'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', syncPreview);
+    el.addEventListener('input', syncPreview);
+  });
+
+  // 恢复上次签章
+  try {
+    var saved = localStorage.getItem('smartorchard_cert_stamp');
+    if (saved) {
+      stampDataUrl = saved;
+      var img = new Image();
+      img.onload = function () {
+        var c = document.getElementById('certStampCanvas');
+        if (c) c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      };
+      img.src = saved;
+    }
+  } catch (e) {}
+
+  syncPreview();
+  renderIssuedList();
   PageActions.init('cert-issue');
+
+  CertStore.subscribe(function () {
+    renderIssuedList();
+  });
 });
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>

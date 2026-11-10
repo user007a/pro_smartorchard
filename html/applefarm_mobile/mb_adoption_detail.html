@@ -9,6 +9,8 @@
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/adoption-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/device-store.js"></script>
   <style>
     /* 页面特定样式 - 使用设计系统变量 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: var(--space-10); }
@@ -351,15 +353,38 @@
 
   <script>
     var currentPanel = '';
+    var currentTreeCode = '';
 
     /* 从认养果树列表带入的果树编号 */
     (function () {
       var m = location.search.match(/[?&]tree=([^&]+)/);
       if (!m) return;
       var code = decodeURIComponent(m[1]);
+      currentTreeCode = String(code || '').replace(/^AD-/i, '');
       var sub = document.querySelector('.header-sub');
       if (sub) sub.textContent = '果树编号 #' + code + ' · 查看认养果树信息';
     })();
+
+    // 设备管理 ↔ 移动端：果树 cameraId → DeviceStore 摄像头档案
+    var CAMERA_STATUS_TEXT = { online: '在线', warning: '告警', offline: '离线' };
+
+    function resolveCamera() {
+      var S = window.AdoptionStore;
+      var D = window.DeviceStore;
+      if (!currentTreeCode || !S || typeof S.findTree !== 'function') return null;
+      var tree = null;
+      try { tree = S.findTree(currentTreeCode); } catch (e) { tree = null; }
+      if (!tree || !tree.cameraId || tree.openMonitor === false) return null;
+      var camera = null;
+      if (D && typeof D.cameras === 'function') {
+        try {
+          camera = D.cameras().filter(function (c) {
+            return c.id === tree.cameraId || c.code === tree.cameraId;
+          })[0] || null;
+        } catch (e) { camera = null; }
+      }
+      return { cameraId: tree.cameraId, camera: camera };
+    }
 
     function goBack() {
       window.history.back();
@@ -394,8 +419,8 @@
     }
 
     function panelBody(type) {
-      if (type === 'video') return renderDemoFrame('果树视频 · 演示画面', '🍎');
-      if (type === 'monitor') return renderDemoFrame('实时监控 · 演示画面', '🎥');
+      if (type === 'video') return renderCameraFrame('果树视频', '🍎');
+      if (type === 'monitor') return renderCameraFrame('实时监控', '🎥');
       if (type === 'farming') return renderFarmingBody();
       if (type === 'growth') return renderGrowthBody();
       if (type === 'updates') return renderUpdatesBody();
@@ -408,6 +433,30 @@
         '<div class="demo-frame-icon">' + icon + '</div>' +
       '</div>' +
       '<div class="demo-note">' + label + '（原型演示画面，未接入真实摄像头/图传）</div>';
+    }
+
+    // 有绑定摄像头时展示设备档案，缺失时保留演示画面提示
+    function renderCameraFrame(label, icon) {
+      var mon = resolveCamera();
+      if (!mon) {
+        return renderDemoFrame(label + ' · 暂未绑定视频通道', icon);
+      }
+      var cam = mon.camera || {};
+      var rows = [
+        ['摄像头', cam.name || mon.cameraId],
+        ['设备编码', cam.code || mon.cameraId],
+        ['所在基地', cam.base || '—'],
+        ['安装位置', cam.location || '—'],
+        ['设备状态', CAMERA_STATUS_TEXT[cam.status] || cam.status || '—'],
+        ['分辨率', cam.resolution || '—']
+      ];
+      var info = rows.map(function (r) {
+        return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border-light);font-size:var(--font-sm);">' +
+          '<span style="color:var(--text-light);">' + r[0] + '</span>' +
+          '<span style="color:var(--text);font-weight:var(--font-medium);text-align:right;">' + escapeHtml(r[1]) + '</span></div>';
+      }).join('');
+      return '<div style="background:var(--bg-white);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);border:1px solid var(--border);margin-bottom:var(--space-3);">' + info + '</div>' +
+        renderDemoFrame(label + ' · ' + (cam.name || mon.cameraId), icon);
     }
 
     function renderFarmingBody() {

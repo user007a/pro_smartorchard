@@ -312,6 +312,7 @@
 
 <script src="js/shared/harvest-store.js"></script>
 <script src="js/shared/trace-store.js"></script>
+<script src="js/shared/cert-store.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
 // 追溯码统一来自 TraceStore
@@ -403,29 +404,24 @@ const MATERIAL_TRACE = {
   'NPK复合肥':{'regNo':'农肥（2019）准字7788号','ingredient':'N-P₂O₅-K₂O 15-15-15','safety':'—'}
 };
 
-// 质量检测（取自证书管理 cert_manage.html，按批次）
-const CERT_BY_BATCH = {
-  'PC-20260901-001':[{certNo:'ZH-2026-09101',type:'质量合格证',date:'2026-09-01',status:'有效'},{certNo:'ZH-2026-09121',type:'检测报告',date:'2026-09-01',status:'有效'}],
-  'PC-20260902-002':[{certNo:'ZH-2026-09102',type:'检测报告',date:'2026-09-02',status:'有效'},{certNo:'ZH-2026-09122',type:'质量合格证',date:'2026-09-02',status:'有效'}],
-  'PC-20260903-003':[{certNo:'ZH-2026-09103',type:'检测报告',date:'2026-08-20',status:'已过期'},{certNo:'ZH-2026-09123',type:'原产地证明',date:'2026-09-03',status:'有效'}],
-  'PC-20260904-004':[{certNo:'ZH-2026-09104',type:'质量合格证',date:'2026-09-04',status:'已撤销'}],
-  'PC-20260905-005':[{certNo:'ZH-2026-09105',type:'质量合格证',date:'2026-09-05',status:'有效'}],
-  'PC-20260906-006':[{certNo:'ZH-2026-09106',type:'检测报告',date:'2026-09-06',status:'有效'}],
-  'PC-20260907-007':[{certNo:'ZH-2026-09107',type:'原产地证明',date:'2026-09-07',status:'有效'}],
-  'PC-20260908-008':[{certNo:'ZH-2026-09108',type:'质量合格证',date:'2026-09-08',status:'有效'}],
-  'PC-20260909-009':[{certNo:'ZH-2026-09109',type:'检测报告',date:'2026-09-09',status:'有效'}],
-  'PC-20260910-010':[{certNo:'ZH-2026-09110',type:'检测报告',date:'2026-08-25',status:'已过期'}],
-  'PC-20260911-011':[{certNo:'ZH-2026-09111',type:'原产地证明',date:'2026-09-11',status:'有效'}],
-  'PC-20260912-012':[{certNo:'ZH-2026-09112',type:'质量合格证',date:'2026-09-12',status:'有效'}],
-  'PC-20260913-013':[{certNo:'ZH-2026-09113',type:'检测报告',date:'2026-09-13',status:'有效'}],
-  'PC-20260914-014':[{certNo:'ZH-2026-09114',type:'质量合格证',date:'2026-09-14',status:'有效'}],
-  'PC-20260915-015':[{certNo:'ZH-2026-09115',type:'原产地证明',date:'2026-09-15',status:'有效'}],
-  'PC-20260916-016':[{certNo:'ZH-2026-09116',type:'质量合格证',date:'2026-09-16',status:'有效'}],
-  'PC-20260917-017':[{certNo:'ZH-2026-09117',type:'检测报告',date:'2026-09-17',status:'有效'}],
-  'PC-20260918-018':[{certNo:'ZH-2026-09118',type:'检测报告',date:'2026-08-30',status:'已过期'}],
-  'PC-20260919-019':[{certNo:'ZH-2026-09119',type:'原产地证明',date:'2026-09-19',status:'有效'}],
-  'PC-20260920-020':[{certNo:'ZH-2026-09120',type:'质量合格证',date:'2026-09-20',status:'已撤销'}]
-};
+// 批次证书（统一取自共享数据层 CertStore，按批次动态查询，状态实时派生）
+function certsOfBatch(batchNo) {
+  if (typeof CertStore === 'undefined') return [];
+  return CertStore.certsOfBatch(batchNo).map(function (c) {
+    var sv = CertStore.computeStatus(c);
+    return {
+      id: c.id,
+      certNo: c.certNo,
+      type: c.type,
+      date: c.issueDate,
+      status: sv.text,
+      statusClass: sv.cls,
+      issuer: c.issueOrg,
+      customer: c.customer,
+      qrUrl: c.qrUrl
+    };
+  });
+}
 
 // 冷链配送（取自采收发货 harvest_post.html，按采后处理单号）
 const SHIP_BY_PROCESS = {
@@ -719,6 +715,26 @@ function viewDetail(code) {
     </div>
   `).join('');
 
+  const batchCerts = certsOfBatch(item.batch);
+  const certsHtml = batchCerts.length ? `
+    <div class="chain-box" style="margin-top:16px;">
+      <div class="chain-title">批次证书（${batchCerts.length} 项）</div>
+      ${batchCerts.map(ct => `
+        <div class="detail-grid">
+          <span class="detail-label">${ct.type}</span>
+          <span class="detail-value">
+            ${ct.certNo}　签发 ${ct.date}
+            <span class="status-tag ${ct.statusClass}">${ct.status}</span>
+            ${ct.qrUrl ? '　<a href="' + ct.qrUrl + '" target="_blank" rel="noopener" style="color:#1890ff;">验证链接</a>' : ''}
+          </span>
+        </div>
+      `).join('')}
+    </div>` : `
+    <div class="chain-box" style="margin-top:16px;border:1px solid #fde68a;background:#fffbeb;">
+      <div class="chain-title" style="color:#b45309;">该批次暂无证书</div>
+      <div class="detail-value" style="font-size:13px;color:#92400e;">尚未开具质量合格证，请前往「证书管理 › 农产品合格证」开具。</div>
+    </div>`;
+
   document.getElementById('detailContent').innerHTML = `
     <div class="chain-box">
       <div class="chain-title">溯源链路</div>
@@ -739,6 +755,7 @@ function viewDetail(code) {
     <div class="detail-grid"><span class="detail-label">对外短链</span><span class="detail-value" style="word-break:break-all;font-size:12px;">${buildH5Url(c.code)}</span></div>
     <div class="detail-grid"><span class="detail-label">存证哈希</span><span class="detail-value" style="word-break:break-all;font-size:12px;">${firstEvent ? firstEvent.hash : '待上链'}</span></div>
     ${reportHtml}
+    ${certsHtml}
     <div class="chain-box" style="margin-top:16px;">
       <div class="chain-title">基地实景与环境（带时间戳）</div>
       <div class="detail-grid"><span class="detail-label">VR 实景</span><span class="detail-value">${env.vrUrl ? '<a href="' + env.vrUrl + '" target="_blank" style="color:#1890ff;">进入基地 VR 全景</a>' : '未接入'}</span></div>

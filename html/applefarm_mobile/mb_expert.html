@@ -254,41 +254,7 @@
     <div class="content">
       <div class="card">
         <div class="card-title">推荐专家</div>
-        <div class="expert-card">
-          <div class="expert-avatar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
-          </div>
-          <div class="expert-info">
-            <div class="expert-name">王教授</div>
-            <div class="expert-title">农业大学果树学教授</div>
-            <div class="expert-tags">
-              <span class="expert-tag">苹果栽培</span>
-              <span class="expert-tag">病虫害防治</span>
-              <span class="expert-tag">施肥管理</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="expert-card">
-          <div class="expert-avatar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
-          </div>
-          <div class="expert-info">
-            <div class="expert-name">李农艺师</div>
-            <div class="expert-title">资深苹果种植专家</div>
-            <div class="expert-tags">
-              <span class="expert-tag">物候期管理</span>
-              <span class="expert-tag">水肥一体化</span>
-              <span class="expert-tag">采收技术</span>
-            </div>
-          </div>
-        </div>
+        <div id="expertList"></div>
       </div>
 
       <div class="card">
@@ -376,6 +342,53 @@
 
   <script>
     var QUESTION_KEY = 'smartorchard_expert_questions';
+    var STAFF_KEY = 'mb_staff_accounts';
+
+    /* 与后台「作业人员账号」isExpert 标记联动；后台未标记时用兜底名录 */
+    var FALLBACK_EXPERTS = [
+      { name: '王教授', title: '农业大学果树学教授', tags: ['苹果栽培', '病虫害防治', '施肥管理'] },
+      { name: '李农艺师', title: '资深苹果种植专家', tags: ['物候期管理', '水肥一体化', '采收技术'] }
+    ];
+
+    function currentOperator() {
+      try {
+        var u = JSON.parse(localStorage.getItem('smartorchard_current_user') || 'null');
+        return { name: (u && u.name) || '移动端用户', id: (u && u.username) || '' };
+      } catch (e) {
+        return { name: '移动端用户', id: '' };
+      }
+    }
+
+    function renderExperts() {
+      var box = document.getElementById('expertList');
+      var list = MobileStore.list(STAFF_KEY).filter(function (s) {
+        return s && s.isExpert && s.status !== 'disabled';
+      }).map(function (s) {
+        return {
+          name: s.name,
+          title: (s.role === '管理员' ? '平台技术专家' : s.role) + (s.base ? ' · ' + s.base : ''),
+          tags: String(s.expertTitle || '农技咨询').split(/[\/、,，]/).map(function (t) { return t.trim(); }).filter(Boolean)
+        };
+      });
+      if (!list.length) list = FALLBACK_EXPERTS;
+
+      box.innerHTML = list.map(function (e) {
+        return '<div class="expert-card">' +
+          '<div class="expert-avatar">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' +
+            '</svg>' +
+          '</div>' +
+          '<div class="expert-info">' +
+            '<div class="expert-name">' + esc(e.name) + '</div>' +
+            '<div class="expert-title">' + esc(e.title) + '</div>' +
+            '<div class="expert-tags">' + (e.tags || []).map(function (t) {
+              return '<span class="expert-tag">' + esc(t) + '</span>';
+            }).join('') + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
 
     function navigateTo(page) {
       window.location.href = page;
@@ -436,11 +449,15 @@
       if (!desc) { MobileStore.toast('请输入问题描述', 'warning'); return; }
       if (desc.length < 5) { MobileStore.toast('问题描述至少 5 个字', 'warning'); return; }
 
+      var me = currentOperator();
       MobileStore.push(QUESTION_KEY, {
         title: title,
         desc: desc,
         status: 'pending',
-        time: MobileStore.fmtTime(Date.now())
+        time: MobileStore.fmtTime(Date.now()),
+        source: 'mobile',
+        operator: me.name,
+        operatorId: me.id
       });
 
       closeAskModal();
@@ -449,8 +466,12 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+      renderExperts();
       renderQuestions();
       MobileStore.subscribe(renderQuestions);
+      MobileStore.subscribe(function (key) {
+        if (key === STAFF_KEY) renderExperts();
+      });
     });
   </script>
 </body>

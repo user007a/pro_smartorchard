@@ -6,6 +6,8 @@
   <title>我的认养 - 移动商城</title>
   <script src="js/h5-auth.js"></script>
   <script>H5Auth.require();</script>
+  <script src="../applefarm_backhand/js/shared/adoption-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/device-store.js"></script>
   <link rel="stylesheet" href="../applefarm_mobile/css/mobile-design-system.css">
   <style>
     .adoption-section { padding: var(--space-4); padding-bottom: 100px; }
@@ -171,6 +173,16 @@
       background: var(--gray-200);
     }
 
+    .action-btn.monitor {
+      background: var(--info-bg, #e6f4ff);
+      color: var(--info, #1677ff);
+      border: 1px solid var(--info-border, #91caff);
+    }
+
+    .action-btn.monitor:active {
+      background: var(--info-bg, #d6e9ff);
+    }
+
     .empty-state {
       text-align: center;
       padding: var(--space-8) var(--space-4);
@@ -293,6 +305,32 @@
       return s;
     }
 
+    // 设备管理 ↔ H5：按果树编号回溯 AdoptionStore 的 cameraId，再取 DeviceStore 摄像头档案
+    var CAMERA_STATUS_TEXT = { online: '在线', warning: '告警', offline: '离线' };
+
+    function resolveMonitor(item) {
+      var S = window.AdoptionStore;
+      var D = window.DeviceStore;
+      var code = normalizeTreeId(item && (item.id || item.treeNo));
+      if (!S || !code || typeof S.findTree !== 'function') return null;
+      var tree = null;
+      try { tree = S.findTree(code); } catch (e) { tree = null; }
+      if (!tree || !tree.cameraId || tree.openMonitor === false) return null;
+      var camera = null;
+      if (D && typeof D.cameras === 'function') {
+        try {
+          camera = D.cameras().filter(function (c) {
+            return c.id === tree.cameraId || c.code === tree.cameraId;
+          })[0] || null;
+        } catch (e) { camera = null; }
+      }
+      return {
+        treeCode: tree.treeCode,
+        cameraId: tree.cameraId,
+        camera: camera
+      };
+    }
+
     function cardHtml(item) {
       var treeId = normalizeTreeId(item.id) || normalizeTreeId(item.treeNo) || '—';
       var st = STATUS_MAP[item.status] || { text: item.status || '认养中', cls: 'active' };
@@ -304,6 +342,11 @@
       var fee = item.fee || item.price || '—';
       var area = item.area || item.plotArea || (name + '果园');
       var expect = item.expectHarvest || item.harvestDate || '—';
+      var mon = resolveMonitor(item);
+      var monText = mon
+        ? ((mon.camera && mon.camera.name) || mon.cameraId) +
+          (mon.camera && mon.camera.status ? '（' + (CAMERA_STATUS_TEXT[mon.camera.status] || mon.camera.status) + '）' : '')
+        : '未开放';
 
       return '<div class="adoption-card">' +
         '<div class="adoption-header">' +
@@ -325,6 +368,8 @@
             '<span class="detail-value">' + escHtml(fee) + '</span></div>' +
           '<div class="detail-row"><span class="detail-label">所在区域</span>' +
             '<span class="detail-value">' + escHtml(area) + '</span></div>' +
+          '<div class="detail-row"><span class="detail-label">实景监控</span>' +
+            '<span class="detail-value">' + escHtml(monText) + '</span></div>' +
         '</div>' +
         '<div class="adoption-progress">' +
           '<div class="progress-title">生长进度</div>' +
@@ -334,6 +379,7 @@
         '<div class="adoption-actions">' +
           '<div class="action-btn primary" onclick="viewTrace(\'' + escHtml(treeId) + '\')">查看溯源</div>' +
           '<div class="action-btn secondary" onclick="viewPhotos(\'' + escHtml(treeId) + '\')">查看照片</div>' +
+          (mon ? '<div class="action-btn monitor" onclick="viewMonitor(\'' + escHtml(treeId) + '\')">实景监控</div>' : '') +
         '</div>' +
       '</div>';
     }
@@ -408,6 +454,41 @@
         '<h3 style="margin:0;">果树相册 ' + treeId + '</h3>' +
         '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;">×</button>' +
         '</div>' + html +
+        '</div>';
+      document.body.appendChild(overlay);
+    }
+
+    // 实景监控面板：展示设备管理绑定的摄像头档案（原型阶段为演示画面）
+    function viewMonitor(treeId) {
+      var mon = resolveMonitor({ id: treeId });
+      if (!mon) { showToast('该果树暂未开放实景监控'); return; }
+      var cam = mon.camera || {};
+      var rows = [
+        ['果树编号', mon.treeCode],
+        ['摄像头', cam.name || mon.cameraId],
+        ['设备编码', cam.code || mon.cameraId],
+        ['所在基地', cam.base || '—'],
+        ['安装位置', cam.location || '—'],
+        ['设备状态', CAMERA_STATUS_TEXT[cam.status] || cam.status || '—'],
+        ['分辨率', cam.resolution || '—']
+      ];
+      var infoHtml = rows.map(function (r) {
+        return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #eee;font-size:13px;">' +
+          '<span style="color:#888;">' + escHtml(r[0]) + '</span>' +
+          '<span style="color:#333;text-align:right;">' + escHtml(r[1]) + '</span></div>';
+      }).join('');
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      overlay.innerHTML =
+        '<div style="background:#fff;border-radius:10px;width:90%;max-width:420px;max-height:80vh;overflow-y:auto;padding:16px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+            '<h3 style="margin:0;">实景监控 ' + escHtml(mon.treeCode) + '</h3>' +
+            '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;">×</button>' +
+          '</div>' +
+          '<div style="height:160px;border-radius:8px;background:linear-gradient(135deg,#e8f3e8,#c8e6c9);display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:12px;">' +
+            '<div style="font-size:40px;">🎥</div>' +
+            '<div style="font-size:12px;color:#5a7d5a;margin-top:6px;">演示画面 · 未接真实图传</div>' +
+          '</div>' + infoHtml +
         '</div>';
       document.body.appendChild(overlay);
     }

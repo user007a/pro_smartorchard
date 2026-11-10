@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 校准检定</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; backdrop-filter:blur(4px); }
+  .modal-overlay.show { display:block; }
+  .modal-box { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:var(--bg-card); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.15);
+    width:760px; max-width:94vw; max-height:86vh; overflow-y:auto; z-index:1000; animation:modalSlideIn .25s ease-out; }
+  .modal-box.show { display:block; }
+  @keyframes modalSlideIn { from{opacity:0;transform:translate(-50%,-50%) scale(.95)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;
+    padding-bottom:16px; border-bottom:1px solid var(--border-light); }
+  .modal-header h3 { font-size:16px; font-weight:600; color:var(--text-primary); margin:0; }
+  .modal-close { width:28px; height:28px; border:none; background:var(--gray-100); border-radius:6px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; }
+  .modal-close:hover { background:var(--error-bg); color:var(--error); }
+  .modal-body { padding:0 4px; }
+  .modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; padding:16px 0 0;
+    border-top:1px solid var(--border-light); }
+
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .form-group { margin-bottom:16px; }
+  .form-group.full { grid-column:1 / -1; }
+  .form-group label { display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:8px; }
+  .form-group input, .form-group select, .form-group textarea { width:100%; padding:10px;
+    border:1px solid var(--border-default); border-radius:8px; font-size:13px; box-sizing:border-box; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline:none; border-color:var(--primary-400); box-shadow:0 0 0 3px rgba(24,144,255,.1); }
+  .form-group textarea { min-height:64px; resize:vertical; }
+
+  .stat-card-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:16px; }
+  .stat-card { background:#fff; border:1px solid #eef0ee; border-radius:12px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .stat-label { font-size:12px; color:var(--text-tertiary); margin-bottom:6px; }
+  .stat-value { font-size:26px; font-weight:700; color:var(--text-primary); font-variant-numeric:tabular-nums; }
+  .stat-value .unit { font-size:13px; font-weight:500; color:var(--text-tertiary); margin-left:4px; }
+  .stat-sub { margin-top:6px; font-size:12px; color:var(--text-tertiary); }
+  .stat-sub.err { color:var(--error); }
+  .stat-sub.warn { color:var(--warning); }
+
+  .status-tag { display:inline-flex; align-items:center; padding:3px 10px; font-size:11.5px;
+    font-weight:500; border-radius:20px; white-space:nowrap; }
+  .status-tag.online { background:#d9f7be; color:#3a8618; border:1px solid #b7eb8f; }
+  .status-tag.warning { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .status-tag.offline { background:var(--error-bg); color:#cf1322; border:1px solid #ffccc7; }
+  .type-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-size:11.5px;
+    font-weight:500; background:var(--gray-100); color:var(--text-secondary); border:1px solid var(--border-default); }
+  .action-btns { display:flex; gap:6px; flex-wrap:nowrap; }
+  .action-btn { padding:4px 10px; font-size:11.5px; font-weight:500; border:1px solid transparent;
+    border-radius:6px; cursor:pointer; white-space:nowrap; background:none; }
+  .action-btn.detail { color:#2b6cb0; background:#f5f8fc; border-color:#c5d9f0; }
+  .action-btn.edit { color:var(--primary-600); background:var(--gray-50); border-color:var(--border-default); }
+  .action-btn.del { color:#cf1322; background:var(--error-bg); border-color:#ffccc7; }
+  .data-table { min-width:1280px; }
+  .data-table th { white-space:nowrap; }
+  .empty-row td { text-align:center; color:var(--text-tertiary); padding:40px 0; }
+  #pagination-container { padding:12px 16px; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="device" data-active-submenu="device-calibration">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <nav class="device-tabs" aria-label="运维工单">
+        <a href="device_maintain.html">维护工单</a>
+        <a href="device_calibration.html" class="active">校准检定</a>
+        <a href="device_spare.html">备品备件</a>
+        <a href="mb_device_maintain.html">移动报修</a>
+      </nav>
+
+      <div class="stat-card-row" id="statCards"></div>
+
+      <div class="content-wrapper">
+
+        <!-- ===== 搜索栏区 ===== -->
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="deviceSelect"><option value="">全部设备</option></select>
+            <select class="search-select" id="typeSelect" style="min-width:120px;">
+              <option value="">全部校准类型</option>
+            </select>
+            <select class="search-select" id="resultSelect" style="min-width:110px;">
+              <option value="">全部结论</option>
+              <option value="pass">合格</option>
+              <option value="fail">不合格</option>
+              <option value="expired">已过期</option>
+            </select>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索校准编号 / 证书编号 / 内容...">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="handleSearch()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 操作按钮区 ===== -->
+        <div class="page-section action-bar">
+          <button class="jg-btn-outline" onclick="openEditModal('')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/>
+            </svg>新增校准记录
+          </button>
+          <button class="jg-btn-outline" onclick="generateFromCycle()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
+            </svg>按周期生成待校准
+          </button>
+          <button class="jg-btn-outline" onclick="exportRecords()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/>
+            </svg>导出记录
+          </button>
+        </div>
+
+        <!-- ===== 数据表格区 ===== -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:96px;">校准编号</th>
+                  <th style="width:78px;">设备编号</th>
+                  <th style="width:140px;">设备名称</th>
+                  <th style="width:96px;">校准类型</th>
+                  <th style="width:96px;">计划日期</th>
+                  <th style="width:96px;">实际日期</th>
+                  <th style="width:76px;">执行人</th>
+                  <th style="width:76px;">复核人</th>
+                  <th style="width:78px;">结论</th>
+                  <th style="width:96px;">有效期至</th>
+                  <th style="width:130px;">证书编号</th>
+                  <th style="width:160px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ===== 编辑弹窗 ===== -->
+<div class="modal-overlay" id="editOverlay"></div>
+<div class="modal-box" id="editModal">
+  <div class="modal-header">
+    <h3 id="editTitle">校准记录</h3>
+    <button class="modal-close" onclick="closeEditModal()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>关联设备 <span style="color:var(--error);">*</span></label>
+        <select id="fDevice"></select>
+      </div>
+      <div class="form-group">
+        <label>校准类型</label>
+        <select id="fType">
+          <option value="例行校准">例行校准</option>
+          <option value="计量检定">计量检定</option>
+          <option value="第三方检定">第三方检定</option>
+          <option value="故障后校准">故障后校准</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>计划日期 <span style="color:var(--error);">*</span></label>
+        <input type="date" id="fPlanDate" />
+      </div>
+      <div class="form-group">
+        <label>实际日期</label>
+        <input type="date" id="fActualDate" />
+      </div>
+      <div class="form-group">
+        <label>执行人</label>
+        <select id="fOperator"></select>
+      </div>
+      <div class="form-group">
+        <label>复核人</label>
+        <select id="fReviewer"></select>
+      </div>
+      <div class="form-group">
+        <label>校准结论</label>
+        <select id="fResult">
+          <option value="pass">合格</option>
+          <option value="fail">不合格</option>
+          <option value="expired">已过期</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>有效期至</label>
+        <input type="date" id="fNextDate" />
+      </div>
+      <div class="form-group">
+        <label>证书编号</label>
+        <input type="text" id="fCertificate" placeholder="如 CAL-JS-2026-0812" />
+      </div>
+      <div class="form-group">
+        <label>最大偏差</label>
+        <input type="text" id="fDeviation" placeholder="如 ±0.2℃" />
+      </div>
+      <div class="form-group full">
+        <label>校准内容</label>
+        <textarea id="fContent" placeholder="描述校准项目、标准器、方法与结果"></textarea>
+      </div>
+      <div class="form-group full">
+        <label>结论说明</label>
+        <input type="text" id="fConclusion" placeholder="合格 / 不合格原因说明" />
+      </div>
+      <div class="form-group full">
+        <label>备注</label>
+        <input type="text" id="fRemark" placeholder="选填" />
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="jg-btn" onclick="closeEditModal()">取消</button>
+    <button class="jg-btn jg-btn-primary" onclick="saveRecord()">保存</button>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/shared/device-store.js"></script>
+<script src="js/shared/device-ui.js"></script>
+<script>
+/* ============================================================
+ * 校准检定
+ * 数据源：js/shared/device-store.js → calibrations()
+ *
+ * 计量类设备（土壤墒情、电子秤、温控仪、水质仪）的校准记录是农产品
+ * 质量追溯与 GAP 认证的关键凭据，必须与设备台账一一关联。
+ * ============================================================ */
+
+var RESULT_TEXT = { pass: '合格', fail: '不合格', expired: '已过期' };
+var RESULT_STATE = { pass: 'online', fail: 'offline', expired: 'warning' };
+var currentId = '';
+var page = null;
+
+function todayStr() {
+  var d = new Date();
+  var p = function (n) { return n < 10 ? '0' + n : n; };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+/* ---------- 下拉初始化 ---------- */
+function initSelects() {
+  var devs = DeviceStore.devices();
+  DeviceUI.fillSelect('deviceSelect', devs.map(function (d) {
+    return { value: d.id, label: d.id + ' · ' + d.name };
+  }), '全部设备');
+  DeviceUI.fillSelect('fDevice', devs.map(function (d) {
+    return { value: d.id, label: d.id + ' · ' + d.name };
+  }), '请选择设备');
+  DeviceUI.fillSelect('fOperator', DeviceUI.operatorOptions(), '请选择执行人');
+  DeviceUI.fillSelect('fReviewer', DeviceUI.operatorOptions(), '请选择复核人');
+
+  var types = {};
+  DeviceStore.calibrations().forEach(function (c) { types[c.type] = true; });
+  var sel = document.getElementById('typeSelect');
+  sel.innerHTML = '<option value="">全部校准类型</option>' +
+    Object.keys(types).map(function (t) { return '<option value="' + DeviceUI.esc(t) + '">' + DeviceUI.esc(t) + '</option>'; }).join('');
+}
+
+/* ---------- 统计卡 ---------- */
+function renderStats() {
+  var list = DeviceStore.calibrations();
+  var s = DeviceStore.calibrationSummary();
+  var expiring = list.filter(function (c) {
+    if (!c.nextDate || c.result !== 'pass') return false;
+    var diff = (new Date(c.nextDate) - new Date()) / 86400000;
+    return diff >= 0 && diff <= 90;
+  }).length;
+  document.getElementById('statCards').innerHTML =
+    '<div class="stat-card"><div class="stat-label">校准记录</div>' +
+    '<div class="stat-value">' + s.total + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub">覆盖 ' + Object.keys(s.byDevice || {}).length + ' 台计量设备</div></div>' +
+    '<div class="stat-card"><div class="stat-label">合格</div>' +
+    '<div class="stat-value">' + s.pass + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub">合格率 ' + (s.total ? Math.round(s.pass / s.total * 100) : 0) + '%</div></div>' +
+    '<div class="stat-card"><div class="stat-label">不合格</div>' +
+    '<div class="stat-value" style="color:var(--error);">' + s.fail + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub err">需复校或更换设备</div></div>' +
+    '<div class="stat-card"><div class="stat-label">已过期</div>' +
+    '<div class="stat-value" style="color:var(--warning);">' + s.expired + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub warn">应尽快安排复检</div></div>' +
+    '<div class="stat-card"><div class="stat-label">90 天内到期</div>' +
+    '<div class="stat-value">' + expiring + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub">提前排期避免超期</div></div>';
+}
+
+/* ---------- 表格行 ---------- */
+function renderRow(item, index) {
+  var dev = DeviceStore.deviceOf(item.deviceId);
+  return '<tr>' +
+    '<td>' + index + '</td>' +
+    '<td><strong>' + DeviceUI.esc(item.id) + '</strong></td>' +
+    '<td>' + DeviceUI.esc(item.deviceId || '-') + '</td>' +
+    '<td>' + DeviceUI.esc(dev ? dev.name : '-') + '</td>' +
+    '<td><span class="type-badge">' + DeviceUI.esc(item.type) + '</span></td>' +
+    '<td>' + DeviceUI.esc(item.planDate || '-') + '</td>' +
+    '<td>' + DeviceUI.esc(item.actualDate || '-') + '</td>' +
+    '<td>' + DeviceUI.esc(item.operator || '-') + '</td>' +
+    '<td>' + DeviceUI.esc(item.reviewer || '-') + '</td>' +
+    '<td>' + DeviceUI.statusTag(RESULT_STATE[item.result] || 'offline', RESULT_TEXT[item.result] || item.result) + '</td>' +
+    '<td>' + DeviceUI.esc(item.nextDate || '-') + '</td>' +
+    '<td style="font-size:11.5px;color:var(--text-tertiary);">' + DeviceUI.esc(item.certificate || '-') + '</td>' +
+    '<td><div class="action-btns">' +
+      '<button class="action-btn detail" onclick="openDetail(\'' + DeviceUI.esc(item.id) + '\')">详情</button>' +
+      '<button class="action-btn edit" onclick="openEditModal(\'' + DeviceUI.esc(item.id) + '\')">编辑</button>' +
+      '<button class="action-btn del" onclick="deleteRecord(\'' + DeviceUI.esc(item.id) + '\')">删除</button>' +
+    '</div></td>' +
+  '</tr>';
+}
+
+/* ---------- 过滤 ---------- */
+function filteredList() {
+  var dev = document.getElementById('deviceSelect').value;
+  var type = document.getElementById('typeSelect').value;
+  var result = document.getElementById('resultSelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  return DeviceStore.calibrations().filter(function (c) {
+    if (dev && c.deviceId !== dev) return false;
+    if (type && c.type !== type) return false;
+    if (result && c.result !== result) return false;
+    if (kw) {
+      var hay = (c.id + ' ' + (c.certificate || '') + ' ' + (c.content || '') + ' ' + (c.conclusion || '')).toLowerCase();
+      if (hay.indexOf(kw) < 0) return false;
+    }
+    return true;
+  }).sort(function (a, b) { return (b.planDate || '').localeCompare(a.planDate || ''); });
+}
+
+function handleSearch() {
+  var list = filteredList();
+  page.updateData(list);
+  DeviceUI.toast('找到 ' + list.length + ' 条校准记录', 'info');
+}
+
+function resetFilter() {
+  ['deviceSelect', 'typeSelect', 'resultSelect', 'searchInput'].forEach(function (id) {
+    document.getElementById(id).value = '';
+  });
+  page.updateData(filteredList());
+  DeviceUI.toast('已重置搜索条件', 'info');
+}
+
+/* ---------- 详情 ---------- */
+function openDetail(id) {
+  var c = DeviceStore.calibrations().filter(function (x) { return x.id === id; })[0];
+  if (!c) return;
+  var dev = DeviceStore.deviceOf(c.deviceId);
+  DeviceUI.detailModal('校准记录 · ' + c.id, [
+    ['校准编号', c.id],
+    ['设备编号', c.deviceId],
+    ['设备名称', dev ? dev.name : '—'],
+    ['设备类型', dev ? DeviceStore.typeName(dev.type) : '—'],
+    ['校准类型', c.type],
+    ['计划日期', c.planDate || '—'],
+    ['实际日期', c.actualDate || '—'],
+    ['执行人', c.operator || '—'],
+    ['复核人', c.reviewer || '—'],
+    ['校准结论', RESULT_TEXT[c.result] || c.result],
+    ['有效期至', c.nextDate || '—'],
+    ['证书编号', c.certificate || '—'],
+    ['最大偏差', c.deviation || '—'],
+    ['校准内容', c.content || '—'],
+    ['结论说明', c.conclusion || '—'],
+    ['备注', c.remark || '—']
+  ], { editId: c.id, editFn: 'openEditModal' });
+}
+
+/* ---------- 新增 / 编辑 ---------- */
+function openEditModal(id) {
+  currentId = id || '';
+  var c = id ? DeviceStore.calibrations().filter(function (x) { return x.id === id; })[0] : null;
+  document.getElementById('editTitle').textContent = c ? ('编辑校准记录 · ' + c.id) : '新增校准记录';
+  document.getElementById('fDevice').value = c ? c.deviceId : '';
+  document.getElementById('fType').value = c ? c.type : '例行校准';
+  document.getElementById('fPlanDate').value = c ? c.planDate : todayStr();
+  document.getElementById('fActualDate').value = c ? (c.actualDate || '') : '';
+  document.getElementById('fOperator').value = c ? (c.operator || '') : '';
+  document.getElementById('fReviewer').value = c ? (c.reviewer || '') : '';
+  document.getElementById('fResult').value = c ? c.result : 'pass';
+  document.getElementById('fNextDate').value = c ? (c.nextDate || '') : '';
+  document.getElementById('fCertificate').value = c ? (c.certificate || '') : '';
+  document.getElementById('fDeviation').value = c ? (c.deviation || '') : '';
+  document.getElementById('fContent').value = c ? (c.content || '') : '';
+  document.getElementById('fConclusion').value = c ? (c.conclusion || '') : '';
+  document.getElementById('fRemark').value = c ? (c.remark || '') : '';
+  document.getElementById('editOverlay').classList.add('show');
+  document.getElementById('editModal').classList.add('show');
+}
+
+function closeEditModal() {
+  document.getElementById('editOverlay').classList.remove('show');
+  document.getElementById('editModal').classList.remove('show');
+}
+
+function saveRecord() {
+  var deviceId = document.getElementById('fDevice').value;
+  var planDate = document.getElementById('fPlanDate').value;
+  if (!deviceId) { DeviceUI.toast('请选择关联设备', 'error'); return; }
+  if (!planDate) { DeviceUI.toast('请填写计划日期', 'error'); return; }
+
+  var item = {
+    id: currentId || DeviceStore.nextId('calibration'),
+    deviceId: deviceId,
+    type: document.getElementById('fType').value,
+    planDate: planDate,
+    actualDate: document.getElementById('fActualDate').value,
+    operator: document.getElementById('fOperator').value,
+    reviewer: document.getElementById('fReviewer').value,
+    result: document.getElementById('fResult').value,
+    nextDate: document.getElementById('fNextDate').value,
+    certificate: document.getElementById('fCertificate').value.trim(),
+    deviation: document.getElementById('fDeviation').value.trim(),
+    content: document.getElementById('fContent').value.trim(),
+    conclusion: document.getElementById('fConclusion').value.trim(),
+    remark: document.getElementById('fRemark').value.trim(),
+    createdAt: DeviceStore.stampNow()
+  };
+
+  var check = DeviceStore.validate('calibration', item, currentId || null);
+  if (!check.ok) { DeviceUI.toast(check.message, 'error'); return; }
+
+  DeviceStore.upsertCalibration(item);
+  closeEditModal();
+  refreshAll();
+  DeviceUI.toast('校准记录已保存', 'success');
+}
+
+function deleteRecord(id) {
+  DeviceUI.confirmDelete('确定删除校准记录「' + id + '」吗？').then(function (ok) {
+    if (!ok) return;
+    DeviceStore.removeCalibration(id);
+    refreshAll();
+    DeviceUI.toast('校准记录已删除', 'success');
+  });
+}
+
+/* ---------- 按校准周期生成待校准 ---------- */
+function generateFromCycle() {
+  var devices = DeviceStore.devices();
+  var list = DeviceStore.calibrations();
+  var today = todayStr();
+  var created = 0;
+  devices.forEach(function (d) {
+    if (!d.calibrateCycle || d.calibrateCycle <= 0) return;
+    if (d.assetStatus === 'scrapped') return;
+    var exists = list.filter(function (c) {
+      return c.deviceId === d.id && c.actualDate === '' && c.result === 'pass';
+    })[0];
+    if (exists) return;
+    var last = d.lastCalibrateDate || d.enableDate || today;
+    var due = new Date(last + 'T00:00:00');
+    due.setMonth(due.getMonth() + Number(d.calibrateCycle));
+    var dueStr = due.getFullYear() + '-' + String(due.getMonth() + 1).padStart(2, '0') + '-' +
+      String(due.getDate()).padStart(2, '0');
+    if (dueStr > today) return;  // 未到期不生成
+    DeviceStore.upsertCalibration({
+      id: DeviceStore.nextId('calibration'),
+      deviceId: d.id,
+      type: '例行校准',
+      planDate: today,
+      actualDate: '',
+      operator: '',
+      reviewer: '',
+      result: 'expired',
+      nextDate: '',
+      certificate: '',
+      deviation: '',
+      content: '按校准周期自动生成：上次校准 ' + last + '，周期 ' + d.calibrateCycle + ' 个月',
+      conclusion: '',
+      remark: '系统自动生成',
+      createdAt: DeviceStore.stampNow()
+    });
+    created++;
+  });
+  refreshAll();
+  DeviceUI.toast(created ? ('已生成 ' + created + ' 条待校准记录', 'success') : '暂无到期需校准的设备', created ? 'success' : 'info');
+}
+
+/* ---------- 导出 ---------- */
+function exportRecords() {
+  var list = filteredList();
+  var headers = ['校准编号', '设备编号', '设备名称', '校准类型', '计划日期', '实际日期', '执行人', '复核人', '结论', '有效期至', '证书编号', '最大偏差', '校准内容'];
+  var rows = list.map(function (c) {
+    var dev = DeviceStore.deviceOf(c.deviceId);
+    return [c.id, c.deviceId, dev ? dev.name : '', c.type, c.planDate, c.actualDate || '',
+      c.operator || '', c.reviewer || '', RESULT_TEXT[c.result] || c.result,
+      c.nextDate || '', c.certificate || '', c.deviation || '', c.content || ''];
+  });
+  DeviceUI.exportCsv('设备校准记录', headers, rows);
+}
+
+/* ---------- 刷新 ---------- */
+function refreshAll() {
+  renderStats();
+  initSelects();
+  page.updateData(filteredList());
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  initSelects();
+  page = DeviceUI.pagination({
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow,
+    emptyCols: 13,
+    pageSize: 10
+  });
+  page.init({ data: [] });
+
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') handleSearch();
+  });
+
+  DeviceStore.subscribe(function (reason) {
+    if (reason === 'init') return;
+    page.updateData(filteredList());
+  });
+
+  refreshAll();
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

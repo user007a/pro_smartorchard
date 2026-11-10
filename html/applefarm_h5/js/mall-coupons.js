@@ -34,10 +34,20 @@
   function all() {
     if (cache) return cache;
     var list = null;
-    try {
-      var v = JSON.parse(localStorage.getItem(KEY) || 'null');
-      if (Array.isArray(v) && v.length) list = v;
-    } catch (e) { list = null; }
+    /* 优先使用后台统一数据层：带有效期 / 库存 / 每人限领校验 */
+    if (global.MallStore && typeof global.MallStore.coupons === 'function') {
+      try {
+        list = global.MallStore.coupons().filter(function (c) {
+          return global.MallStore.couponUsable(c, 0, '');
+        });
+      } catch (e) { list = null; }
+    }
+    if (!list || !list.length) {
+      try {
+        var v = JSON.parse(localStorage.getItem(KEY) || 'null');
+        if (Array.isArray(v) && v.length) list = v;
+      } catch (e) { list = null; }
+    }
     if (!list) {
       list = DEFAULT_COUPONS.map(function (c) { return Object.assign({}, c); });
       try { localStorage.setItem(KEY, JSON.stringify(list)); } catch (e) { /* 只读降级 */ }

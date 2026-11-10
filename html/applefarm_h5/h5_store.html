@@ -455,8 +455,10 @@
     </div>
   </div>
 
+  <script src="../applefarm_backhand/js/shared/mall-store.js"></script>
   <script src="js/mall-products.js"></script>
   <script src="js/mall-coupons.js"></script>
+  <script src="js/mall-promotions.js"></script>
   <script src="js/h5-auth.js"></script>
   <script>
     function navigateTo(page) { window.location.href = page; }
@@ -469,22 +471,42 @@
     var currentKeyword = '';
 
     /* ========== 商品列表渲染 ========== */
+    /* 商品页活动：后台「促销活动」绑定 SKU 且投放渠道含商品页时生效 */
+    function promoFor(pid) {
+      if (typeof MallPromotions === 'undefined') return null;
+      var list = MallPromotions.byTarget('goods');
+      for (var i = 0; i < list.length; i++) {
+        var pr = list[i];
+        if (Array.isArray(pr.skuIds) && pr.skuIds.indexOf(pid) >= 0) return pr;
+      }
+      return null;
+    }
+    function soldOut(p) {
+      return p.stock != null && Number(p.stock) <= 0;
+    }
     function cardHtml(p) {
       var esc = MallProducts.esc;
-      var tag = MallProducts.label(p);
+      var promo = promoFor(p.id);
+      var tag = promo ? '限时活动' : MallProducts.label(p);
+      var tagType = promo ? 'error' : MallProducts.labelType(p);
       var badge = tag
-        ? '<span class="mb-tag ' + MallProducts.labelType(p) + '" style="position:absolute;top:8px;left:8px;">' + esc(tag) + '</span>'
+        ? '<span class="mb-tag ' + tagType + '" style="position:absolute;top:8px;left:8px;">' + esc(tag) + '</span>'
         : '';
-      var original = p.original > 0 ? '<span class="product-price-original">¥' + p.original + '</span>' : '';
+      var out = soldOut(p)
+        ? '<span class="mb-tag default" style="position:absolute;top:8px;right:8px;">已售罄</span>'
+        : '';
+      var price = promo ? promo.price : p.price;
+      var original = (promo ? (p.price || promo.original) : p.original) > 0
+        ? '<span class="product-price-original">¥' + (promo ? p.price : p.original) + '</span>' : '';
       return '<div class="product-card" onclick="showProductModal(\'' + esc(p.id) + '\')">' +
-        '<div class="product-img">' + badge +
+        '<div class="product-img">' + badge + out +
           '<img src="' + esc(p.img) + '" alt="' + esc(p.name) + '" style="width:100%;height:100%;object-fit:cover;">' +
         '</div>' +
         '<div class="product-info">' +
           '<div class="product-name">' + esc(p.name) + '</div>' +
-          '<div class="product-desc">' + esc(p.desc) + '</div>' +
+          '<div class="product-desc">' + esc(p.desc || '') + (p.spec ? ' · ' + esc(p.spec) : '') + '</div>' +
           '<div class="product-bottom">' +
-            '<div><span class="product-price">¥' + p.price + '</span>' + original + '</div>' +
+            '<div><span class="product-price">¥' + price + '</span>' + original + '</div>' +
             '<button class="product-cart-btn" aria-label="加入购物车" onclick="event.stopPropagation(); addToCart(\'' + esc(p.id) + '\')">' +
               '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
             '</button>' +
@@ -746,6 +768,7 @@
     MallProducts.ready.then(function () {
       renderProductList();
       MallProducts.subscribe(renderProductList);
+      if (typeof MallPromotions !== 'undefined') MallPromotions.subscribe(renderProductList);
       // 图片错误兜底
       document.querySelectorAll('img').forEach(function (img) {
         img.onerror = function () { handleImageError(this); };

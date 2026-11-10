@@ -557,6 +557,12 @@
             <option value="bag">套袋</option>
             <option value="pest">病虫害防治</option>
           </select>
+          <select class="search-select" id="statusSelect">
+            <option value="">全部状态</option>
+            <option value="pending">待推送</option>
+            <option value="pushed">已推送</option>
+            <option value="failed">推送失败</option>
+          </select>
           <input type="date" class="search-date" id="startDate">
           <span class="date-separator">至</span>
           <input type="date" class="search-date" id="endDate">
@@ -709,43 +715,23 @@
 <!-- 引入交互脚本 -->
 <!-- 跨端桥接层：读取移动端写入的 smartorchard_adoption_tags（农事绑定记录） -->
 <script src="js/shared/mobile-bridge.js"></script>
+<script src="js/shared/adoption-store.js"></script>
+<script src="js/shared/production-store.js"></script>
 <script>
-  // Mock数据
-  const mockData = [
-    { id: '1', code: 'FRM20260615001', treeCode: 'A001', treeName: '花牛苹果 #A001', adopter: '惠加宁', type: 'fertilize', typeText: '施肥', date: '2026-09-15 09:30', status: 'pushed', base: '麦积区基地' },
-    { id: '2', code: 'FRM20260614102', treeCode: 'A002', treeName: '花牛苹果 #A002', adopter: '黄忠坚', type: 'water', typeText: '浇水', date: '2026-09-14 14:20', status: 'pushed', base: '麦积区基地' },
-    { id: '3', code: 'FRM20260613103', treeCode: 'B001', treeName: '花牛苹果 #B001', adopter: '徐水应', type: 'prune', typeText: '修剪', date: '2026-09-13 10:15', status: 'failed', base: '麦积区基地' },
-    { id: '4', code: 'FRM20260612104', treeCode: 'B004', treeName: '花牛苹果 #B004', adopter: '朱泉龙', type: 'bag', typeText: '套袋', date: '2026-09-12 15:45', status: 'pushed', base: '麦积区基地' },
-    { id: '5', code: 'FRM20260611105', treeCode: 'C003', treeName: '秦冠 #C003', adopter: '陈小忠', type: 'pest', typeText: '病虫害防治', date: '2026-09-11 08:30', status: 'pending', base: '麦积区基地' },
-    { id: '6', code: 'FRM20260610106', treeCode: 'D002', treeName: '金帅 #D002', adopter: '廖春亮', type: 'fertilize', typeText: '施肥', date: '2026-09-10 11:20', status: 'pushed', base: '白水基地' },
-    { id: '7', code: 'FRM20260609107', treeCode: 'E001', treeName: '花牛苹果 #E001', adopter: '李建明', type: 'water', typeText: '浇水', date: '2026-09-09 16:00', status: 'pushed', base: '宜川基地' },
-    { id: '8', code: 'FRM20260608108', treeCode: 'E004', treeName: '花牛苹果 #E004', adopter: '李根', type: 'prune', typeText: '修剪', date: '2026-09-08 09:15', status: 'pushed', base: '宜川基地' },
-    { id: '9', code: 'FRM20260607109', treeCode: 'F003', treeName: '花牛苹果 #F003', adopter: '张才孙', type: 'bag', typeText: '套袋', date: '2026-09-07 14:30', status: 'failed', base: '宜川基地' },
-    { id: '10', code: 'FRM20260606110', treeCode: 'A001', treeName: '花牛苹果 #A001', adopter: '惠加宁', type: 'fertilize', typeText: '施肥', date: '2026-09-06 10:00', status: 'pushed', base: '麦积区基地' },
-    { id: '11', code: 'FRM20260605111', treeCode: 'A002', treeName: '花牛苹果 #A002', adopter: '黄忠坚', type: 'water', typeText: '浇水', date: '2026-09-05 15:45', status: 'pending', base: '麦积区基地' },
-    { id: '12', code: 'FRM20260604112', treeCode: 'B001', treeName: '花牛苹果 #B001', adopter: '徐水应', type: 'pest', typeText: '病虫害防治', date: '2026-09-04 08:20', status: 'pushed', base: '麦积区基地' },
-    { id: '13', code: 'FRM20260603113', treeCode: 'B004', treeName: '花牛苹果 #B004', adopter: '朱泉龙', type: 'prune', typeText: '修剪', date: '2026-09-03 11:30', status: 'pushed', base: '麦积区基地' },
-    { id: '14', code: 'FRM20260602114', treeCode: 'C003', treeName: '秦冠 #C003', adopter: '陈小忠', type: 'bag', typeText: '套袋', date: '2026-09-02 16:15', status: 'pushed', base: '麦积区基地' },
-    { id: '15', code: 'FRM20260601115', treeCode: 'D002', treeName: '金帅 #D002', adopter: '廖春亮', type: 'fertilize', typeText: '施肥', date: '2026-09-01 09:00', status: 'pushed', base: '白水基地' },
-    { id: '16', code: 'FRM20260531116', treeCode: 'E001', treeName: '花牛苹果 #E001', adopter: '李建明', type: 'water', typeText: '浇水', date: '2026-09-30 14:00', status: 'failed', base: '宜川基地' },
-    { id: '17', code: 'FRM20260530117', treeCode: 'E004', treeName: '花牛苹果 #E004', adopter: '李根', type: 'prune', typeText: '修剪', date: '2026-09-30 10:30', status: 'pending', base: '宜川基地' },
-    { id: '18', code: 'FRM20260529118', treeCode: 'F003', treeName: '花牛苹果 #F003', adopter: '张才孙', type: 'pest', typeText: '病虫害防治', date: '2026-09-29 08:45', status: 'pushed', base: '宜川基地' },
-    { id: '19', code: 'FRM20260528119', treeCode: 'A001', treeName: '花牛苹果 #A001', adopter: '惠加宁', type: 'bag', typeText: '套袋', date: '2026-09-28 15:20', status: 'pushed', base: '麦积区基地' },
-    { id: '20', code: 'FRM20260527120', treeCode: 'A002', treeName: '花牛苹果 #A002', adopter: '黄忠坚', type: 'fertilize', typeText: '施肥', date: '2026-09-27 09:30', status: 'pushed', base: '麦积区基地' },
-    { id: '21', code: 'FRM20260526121', treeCode: 'B001', treeName: '花牛苹果 #B001', adopter: '徐水应', type: 'water', typeText: '浇水', date: '2026-09-26 13:45', status: 'pushed', base: '麦积区基地' },
-    { id: '22', code: 'FRM20260525122', treeCode: 'B004', treeName: '花牛苹果 #B004', adopter: '朱泉龙', type: 'prune', typeText: '修剪', date: '2026-09-25 11:00', status: 'pending', base: '麦积区基地' },
-    { id: '23', code: 'FRM20260524123', treeCode: 'C003', treeName: '秦冠 #C003', adopter: '陈小忠', type: 'fertilize', typeText: '施肥', date: '2026-09-24 16:30', status: 'pushed', base: '麦积区基地' },
-  ];
+  /* ============================================================
+   * 数据来源：统一数据层 AdoptionStore（禁止页面内维护 mock）
+   * ============================================================ */
+  const S = window.AdoptionStore;
+
+  // 页面级提示：复用 common-functions.js 的全局 Toast
+  function toast(message, type) {
+    if (window.Toast && typeof window.Toast.show === 'function') {
+      window.Toast.show(message, type === 'error' ? 'error' : 'success');
+    }
+  }
 
   const pageSize = 8;
   let currentPage = 1;
-
-  /* ============================================================
-   * 跨端闭环：移动端 mb_adoption_farming.html 现场绑定的农事
-   * 写入 localStorage['smartorchard_adoption_tags']（kind='farming_bind'），
-   * 此处经 MobileBridge.farmingBinds() 读回并映射为 PC 端表格结构，
-   * 与原有 23 条基础数据合并展示，移动端来源单独标注角标。
-   * ============================================================ */
 
   // 移动端农事类型文案 → PC 端类型枚举（用于类型筛选与标签配色）
   const BIND_TYPE_MAP = {
@@ -753,7 +739,12 @@
     '浇水': 'water', '灌溉': 'water',
     '修剪': 'prune',
     '套袋': 'bag',
-    '病虫害防治': 'pest', '喷药': 'pest', '杀菌': 'pest'
+    '病虫害防治': 'pest', '喷药': 'pest', '杀菌': 'pest',
+    '授粉': 'prune'
+  };
+
+  const TYPE_LABEL = {
+    fertilize: '施肥', water: '浇水', prune: '修剪', bag: '套袋', pest: '病虫害防治'
   };
 
   function escHtml(s) {
@@ -762,7 +753,13 @@
     });
   }
 
-  // ISO / 时间戳 → 'YYYY-MM-DD HH:mm'（便于与日期筛选、mockData 同口径比较）
+  function displayBase(name) {
+    const s = String(name || '');
+    if (!s) return '-';
+    return /基地$/.test(s) ? s : s + '基地';
+  }
+
+  // ISO / 时间戳 → 'YYYY-MM-DD HH:mm'
   function fmtBindTime(ts) {
     var d = ts instanceof Date ? ts : new Date(ts);
     if (isNaN(d.getTime())) return String(ts || '');
@@ -771,30 +768,59 @@
       ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
+  /* 后台农事台账 → 行模型 */
+  function farmingToRow(f) {
+    const records = Array.isArray(f.records) ? f.records : [];
+    const types = [];
+    records.forEach(function (r) {
+      const t = BIND_TYPE_MAP[r.type] || '';
+      if (t && types.indexOf(t) < 0) types.push(t);
+    });
+    const type = types.length === 1 ? types[0] : 'mixed';
+    const typeText = records.length
+      ? records.map(function (r) { return r.type; }).filter(Boolean).join(' / ')
+      : '农事';
+    const tree = S.findTree(f.treeCode);
+    return {
+      id: f.id,
+      code: f.id,
+      treeCode: f.treeCode,
+      treeName: f.treeName || (tree ? tree.treeName : f.treeCode),
+      treeMissing: !f.treeCode,
+      adopter: f.adopter || (tree ? tree.adopter : '—'),
+      type: type,
+      typeText: typeText,
+      date: f.bindTime ? String(f.bindTime).slice(0, 10) : String(f.createdAt || '').slice(0, 10),
+      status: f.status || 'pending',
+      base: displayBase(f.baseName),
+      records: records,
+      count: f.count != null ? f.count : records.length,
+      source: 'backend'
+    };
+  }
+
+  /* 移动端现场绑定 → 行模型（编号统一走 S.normalizeCode） */
   function mobileBindRecords() {
-    if (typeof MobileBridge === 'undefined') return [];
-    var binds = MobileBridge.farmingBinds();
-    if (!Array.isArray(binds)) return [];
-    return binds.map(function (b, i) {
+    return S.mobileFarmingBinds().map(function (b) {
       b = b || {};
       var records = Array.isArray(b.records) ? b.records : [];
-      // 类型取首条农事类型，多条混合时归为 mixed
       var typeText = records.length ? (records[0].type || '') : '';
       var type = BIND_TYPE_MAP[typeText] || 'mixed';
-      var treeCode = (b.treeNo || '').trim();
-      var stamp = Date.now().toString(36).toUpperCase().slice(-5);
+      var treeCode = S.normalizeCode(b.treeNo || b.treeCode || '');
+      var tree = treeCode ? S.findTree(treeCode) : null;
+      var stamp = String(b.id || '').replace(/[^A-Za-z0-9]/g, '').slice(-6).toUpperCase() || 'MOB';
       return {
-        id: b.id || ('FB-' + (i + 1)),
-        code: 'MOB' + (records.length ? ('-' + records.length + '项-' + stamp) : ('-' + stamp)),
+        id: b.id || ('FB-' + treeCode),
+        code: 'MOB-' + stamp,
         treeCode: treeCode,
-        treeName: b.treeName || treeCode || '未指定果树',
+        treeName: b.treeName || (tree ? tree.treeName : (treeCode || '未指定果树')),
         treeMissing: !treeCode,
-        adopter: b.adopter || '—',
+        adopter: b.adopter || (tree ? tree.adopter : '—'),
         type: type,
         typeText: typeText || (records.length ? records.length + ' 项农事' : '农事绑定'),
         date: fmtBindTime(b.bindTime || b.createTime),
         status: b.status || 'pending',
-        base: b.base || '移动端现场',
+        base: displayBase(tree ? tree.baseName : b.base),
         records: records,
         count: b.count != null ? b.count : records.length,
         source: 'mobile'
@@ -802,13 +828,15 @@
     });
   }
 
-  // 全量数据 = 移动端现场绑定（优先展示）+ 原有基础数据
+  // 全量数据 = 移动端现场绑定（优先展示）+ 后台农事台账
   let allData = [];
   let filteredData = [];
 
   function loadData() {
-    allData = mobileBindRecords().concat(mockData);
-    filteredData = [...allData];
+    allData = mobileBindRecords().concat(S.farmings().map(farmingToRow)).sort(function (a, b) {
+      return String(b.date).localeCompare(String(a.date));
+    });
+    filteredData = allData.slice();
     currentPage = 1;
     goToPage(1);
   }
@@ -817,7 +845,12 @@
   function renderTable(data) {
     const tbody = document.getElementById('farmingList');
     tbody.innerHTML = '';
-    
+
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-tertiary);">暂无符合条件的农事记录</td></tr>';
+      return;
+    }
+
     data.forEach((item, __seq) => {
       const statusText = item.status === 'pushed' ? '✓ 已推送' : item.status === 'failed' ? '✕ 推送失败' : '○ 待推送';
       const statusClass = item.status;
@@ -826,7 +859,7 @@
       const isMobile = item.source === 'mobile';
       const sourceHtml = isMobile
         ? '<span class="source-badge">移动端</span>'
-        : '<span class="source-badge mock">基础数据</span>';
+        : '<span class="source-badge mock">后台台账</span>';
       // 移动端记录若缺果树编号，用 warning 色标提示追溯不全
       const treeNameHtml = item.treeMissing
         ? `<span style="color:var(--warning);">${escHtml(item.treeName)}</span>`
@@ -858,11 +891,6 @@
         </td>
       `;
       tbody.appendChild(row);
-    });
-
-    // 绑定复选框事件
-    document.querySelectorAll('.farming-checkbox').forEach(checkbox => {
-      checkbox.addEventListener('change', updateSelectedCount);
     });
   }
 
@@ -897,27 +925,12 @@
     document.querySelector(`.page-btn[onclick="goToPage(${currentPage})"]`)?.classList.add('active');
   }
 
-  // 全选功能
-  function toggleSelectAll() {
-    const checkboxes = document.querySelectorAll('.farming-checkbox');
-    const selectAll = document.getElementById('selectAll');
-    checkboxes.forEach(checkbox => {
-      checkbox.checked = selectAll.checked;
-    });
-    updateSelectedCount();
-  }
-
-  // 更新选中数量
-  function updateSelectedCount() {
-    const checkboxes = document.querySelectorAll('.farming-checkbox:checked');
-    const __sc = document.getElementById('selectedCount'); if (__sc) __sc.textContent = checkboxes.length;
-  }
-
   // 搜索功能
   function handleSearch() {
     const keyword = document.getElementById('adopterSearch').value.toLowerCase();
     const base = document.getElementById('baseSelect').value;
     const type = document.getElementById('typeSelect').value;
+    const status = document.getElementById('statusSelect').value;
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
     
@@ -927,15 +940,16 @@
         || String(item.code || '').toLowerCase().includes(keyword);
       const matchBase = !base || String(item.base || '').includes(base);
       const matchType = !type || item.type === type;
-      const matchDate = (!startDate && !endDate) || 
-                       (startDate && item.date >= startDate) && 
-                       (endDate && item.date <= endDate);
-      return matchKeyword && matchBase && matchType && matchDate;
+      const matchStatus = !status || item.status === status;
+      const day = String(item.date || '').slice(0, 10);
+      const matchDate = (!startDate && !endDate) ||
+                       (!startDate || day >= startDate) &&
+                       (!endDate || day <= endDate);
+      return matchKeyword && matchBase && matchType && matchStatus && matchDate;
     });
 
     currentPage = 1;
-    renderTable(filteredData);
-    updatePagination();
+    goToPage(1);
   }
 
   // 弹窗操作
@@ -970,7 +984,7 @@
         </div>` : '';
       document.getElementById('detailContent').innerHTML = `
         <div class="detail-row"><div class="detail-label">记录编号</div><div class="detail-value text-mono">${escHtml(item.code)}</div></div>
-        <div class="detail-row"><div class="detail-label">数据来源</div><div class="detail-value">${isMobile ? '<span class="source-badge">移动端现场绑定</span>' : '<span class="source-badge mock">后台基础数据</span>'}</div></div>
+        <div class="detail-row"><div class="detail-label">数据来源</div><div class="detail-value">${isMobile ? '<span class="source-badge">移动端现场绑定</span>' : '<span class="source-badge mock">后台农事台账</span>'}</div></div>
         <div class="detail-row"><div class="detail-label">认养果树</div><div class="detail-value">${item.treeMissing ? `<span style="color:var(--warning);">${escHtml(item.treeName)}</span>` : escHtml(item.treeName)}</div></div>
         <div class="detail-row"><div class="detail-label">认养人</div><div class="detail-value">${escHtml(item.adopter)}</div></div>
         <div class="detail-row"><div class="detail-label">所属基地</div><div class="detail-value">${escHtml(item.base)}</div></div>
@@ -986,6 +1000,7 @@
   // 重推弹窗
   function showRepush(id) {
     const item = allData.find(d => String(d.id) === String(id));
+    window.__currentFarmingId = id;
     document.getElementById('repushInfo').textContent = item
       ? `将重新推送：${item.code} - ${item.treeName}`
       : '未找到对应记录';
@@ -993,35 +1008,89 @@
   }
 
   function confirmRepush() {
-    alert('推送成功！');
-    closeModal('repushModal');
+    const id = window.__currentFarmingId;
+    if (!id) return;
+    try {
+      S.pushFarming(id);
+      toast('推送成功');
+      closeModal('repushModal');
+      window.__currentFarmingId = null;
+      loadData();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
   }
 
-  // 新增弹窗
+  // 新增弹窗：果树下拉取自数据层已认养果树
   function showAddModal() {
-    document.getElementById('addTree').value = 'A001';
+    const sel = document.getElementById('addTree');
+    const adopted = S.trees().filter(function (t) { return t.status === 'adopted' && t.adopter; });
+    sel.innerHTML = adopted.length
+      ? adopted.map(function (t) { return '<option value="' + t.treeCode + '">' + t.treeName + ' - ' + t.adopter + '</option>'; }).join('')
+      : '<option value="">暂无可选认养果树</option>';
     document.getElementById('addType').value = 'fertilize';
-    document.getElementById('addDate').value = '';
+    document.getElementById('addDate').value = new Date().toISOString().slice(0, 10);
     document.getElementById('addRemark').value = '';
     showModal('addModal');
   }
 
   function saveAdd() {
-    alert('新增成功！');
-    closeModal('addModal');
+    const treeCode = document.getElementById('addTree').value;
+    const type = document.getElementById('addType').value;
+    const date = document.getElementById('addDate').value;
+    const remark = document.getElementById('addRemark').value || '';
+    if (!treeCode) { toast('暂无可选认养果树', 'error'); return; }
+    if (!date) { toast('请选择执行日期', 'error'); return; }
+    try {
+      const rec = S.saveFarming({
+        treeCode: treeCode,
+        bindTime: date,
+        remark: remark,
+        records: [{
+          title: remark || (TYPE_LABEL[type] || '农事作业'),
+          type: TYPE_LABEL[type] || '农事',
+          time: date
+        }]
+      });
+      toast('农事记录已创建：' + rec.id);
+      closeModal('addModal');
+      loadData();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
   }
 
   // 导出功能
   function handleExport() {
-    alert(`已导出全部 ${filteredData.length} 条记录`);
+    const rows = filteredData.length ? filteredData : allData;
+    if (!rows.length) { toast('暂无可导出的农事记录', 'error'); return; }
+    const header = ['记录编号', '来源', '认养果树', '认养人', '农事类型', '执行日期', '状态', '所属基地'];
+    const lines = [header.join(',')].concat(rows.map(function (i) {
+      return [
+        i.code, i.source === 'mobile' ? '移动端' : '后台台账',
+        i.treeName, i.adopter, i.typeText, i.date,
+        i.status === 'pushed' ? '已推送' : i.status === 'failed' ? '推送失败' : '待推送',
+        i.base
+      ].map(function (v) {
+        return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+      }).join(',');
+    }));
+    const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '认养农事记录_' + new Date().toISOString().slice(0, 10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('已导出 ' + rows.length + ' 条农事记录');
   }
 
-  // 初始化：合并移动端现场绑定数据后渲染
+  // 初始化：合并移动端现场绑定与后台台账后渲染
   loadData();
 
-  // 移动端现场新增绑定后回到本页即可看到最新数据
+  // 数据层变更 / 跨标签页同步
+  if (S && S.onChange) S.onChange(loadData);
   window.addEventListener('storage', function (e) {
-    if (e && e.key === 'smartorchard_adoption_tags') loadData();
+    if (!e.key || e.key === S.CROSS.tags || e.key === S.STORAGE_KEY) loadData();
   });
 </script>
 

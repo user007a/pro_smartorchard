@@ -6,6 +6,8 @@
   <title>结算订单 - 移动商城</title>
   <script src="js/h5-auth.js"></script>
   <script>H5Auth.require();</script>
+  <script src="../applefarm_backhand/js/shared/adoption-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/mall-store.js"></script>
   <link rel="stylesheet" href="../applefarm_mobile/css/mobile-design-system.css">
   <style>
     .checkout-section { padding: var(--space-4); padding-bottom: 160px; }
@@ -210,9 +212,22 @@
         <div class="option-row">
           <span class="option-label">需要发票</span>
           <label class="invoice-toggle">
-            <input type="checkbox" id="invoiceToggle">
+            <input type="checkbox" id="invoiceToggle" onchange="toggleInvoiceFields(this.checked)">
             <span class="invoice-slider"></span>
           </label>
+        </div>
+        <div id="invoiceFields" style="display:none;padding:0 0 12px;">
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <label style="flex:1;text-align:center;padding:8px;border:1px solid var(--border-default,#e5e6eb);border-radius:8px;font-size:13px;cursor:pointer;">
+              <input type="radio" name="invTitleType" value="personal" checked onchange="syncInvoiceTitleType()" style="margin-right:4px;">个人
+            </label>
+            <label style="flex:1;text-align:center;padding:8px;border:1px solid var(--border-default,#e5e6eb);border-radius:8px;font-size:13px;cursor:pointer;">
+              <input type="radio" name="invTitleType" value="company" onchange="syncInvoiceTitleType()" style="margin-right:4px;">企业
+            </label>
+          </div>
+          <input id="invoiceTitle" type="text" placeholder="发票抬头（个人可留姓名）" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border-default,#e5e6eb);border-radius:8px;font-size:13px;margin-bottom:8px;">
+          <input id="invoiceTaxNo" type="text" placeholder="企业税号（企业抬头必填）" style="display:none;width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border-default,#e5e6eb);border-radius:8px;font-size:13px;margin-bottom:8px;">
+          <input id="invoiceEmail" type="email" placeholder="接收邮箱（电子发票必填）" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border-default,#e5e6eb);border-radius:8px;font-size:13px;">
         </div>
         <div class="option-row">
           <span class="option-label">优惠券</span>
@@ -352,20 +367,126 @@
 
     /* 勾选需要发票时，向后台「发票管理」推送一条开票申请 */
     function pushInvoiceApply(orderNo, amount) {
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_invoices') || '[]'); } catch (e) { list = []; }
-      if (!Array.isArray(list)) list = [];
+      var typeEl = document.querySelector('input[name="invTitleType"]:checked');
+      var titleType = typeEl ? typeEl.value : 'personal';
+      var titleEl = document.getElementById('invoiceTitle');
+      var taxEl = document.getElementById('invoiceTaxNo');
+      var emailEl = document.getElementById('invoiceEmail');
       var addr = snapshotAddress();
-      list.unshift({
+      var inv = {
         id: 'INV' + Date.now(),
-        title: addr.name || '个人',
+        titleType: titleType,
+        title: (titleEl && titleEl.value.trim()) || addr.name || '个人',
+        taxNo: taxEl ? taxEl.value.trim() : '',
+        email: emailEl ? emailEl.value.trim() : '',
+        phone: addr.phone || '',
         amount: Number(amount) || 0,
         type: '电子普通发票',
+        contentType: '商品明细',
         orderNo: orderNo,
         applyTime: new Date().toISOString(),
         status: 'pending'
-      });
+      };
+      var res = (typeof MallStore !== 'undefined') ? MallStore.saveInvoice(inv) : null;
+      if (res && res.ok) return;
+      var list = [];
+      try { list = JSON.parse(localStorage.getItem('h5_invoices') || '[]'); } catch (e) { list = []; }
+      if (!Array.isArray(list)) list = [];
+      list.unshift(inv);
       localStorage.setItem('h5_invoices', JSON.stringify(list));
+    }
+
+    /* 发票表单显隐：企业抬头才显示税号输入 */
+    function toggleInvoiceFields(show) {
+      var box = document.getElementById('invoiceFields');
+      if (box) box.style.display = show ? 'block' : 'none';
+      if (show) syncInvoiceTitleType();
+    }
+    function syncInvoiceTitleType() {
+      var checked = document.querySelector('input[name="invTitleType"]:checked');
+      var isCompany = checked && checked.value === 'company';
+      var tax = document.getElementById('invoiceTaxNo');
+      if (tax) tax.style.display = isCompany ? 'block' : 'none';
+    }
+
+    /* 当前 H5 登录用户 → 后台会员归属 */
+    function currentMember() {
+      if (typeof MallStore === 'undefined') return null;
+      var user = (typeof H5Auth !== 'undefined' && H5Auth.currentUser) ? H5Auth.currentUser() : '';
+      var p = (typeof H5Auth !== 'undefined' && H5Auth.profile) ? H5Auth.profile() : {};
+      var phone = p.phone || '';
+      var list = MallStore.members();
+      for (var i = 0; i < list.length; i++) {
+        var m = list[i];
+        if (user && m.userId && m.userId === user) return m;
+        if (phone && m.phone === phone) return m;
+        if (user && m.nickname === user) return m;
+      }
+      return null;
+    }
+
+    /* ============================================================
+     * 认养商品下单：从「可认养果树池」按套餐棵数分配果树，
+     * 生成待支付认养订单并挂到商城订单上；支付成功后再激活果树。
+     * ============================================================ */
+    function isAdoptItem(it) {
+      return !!it && (it.cat === 'adopt' || String(it.id || '').indexOf('adopt') === 0);
+    }
+
+    function treesPerItem(it) {
+      return String(it && it.id) === 'adopt2' ? 2 : 1;
+    }
+
+    /* 返回认养订单号数组；果树不足或写入失败返回 null（调用方中止下单） */
+    function createAdoptionOrders(items, address) {
+      if (typeof AdoptionStore === 'undefined') return [];
+      var S = AdoptionStore;
+      var adoptItems = items.filter(isAdoptItem);
+      if (!adoptItems.length) return [];
+
+      var needed = 0;
+      adoptItems.forEach(function (it) { needed += treesPerItem(it) * (Number(it.qty) || 1); });
+
+      var pool = S.trees().filter(function (t) { return t.status === 'available'; });
+      if (pool.length < needed) return null;
+
+      var user = (typeof H5Auth !== 'undefined' && H5Auth.currentUser) ? H5Auth.currentUser() : '';
+      var today = new Date().toISOString().slice(0, 10);
+      var made = [];
+
+      function rollback() {
+        made.forEach(function (no) { try { S.cancelOrder(no); } catch (e) {} });
+        return null;
+      }
+
+      for (var k = 0; k < adoptItems.length; k++) {
+        var it = adoptItems[k];
+        var per = treesPerItem(it);
+        var count = per * (Number(it.qty) || 1);
+        var unitPrice = round2((Number(it.price) || 0) / per);
+        for (var i = 0; i < count; i++) {
+          var tree = pool.shift();
+          if (!tree) return rollback();
+          var order;
+          try {
+            order = S.saveOrder({
+              treeCode: tree.treeCode,
+              adopter: address.name || user || 'H5 用户',
+              phone: /^1\d{10}$/.test(address.phone || '') ? address.phone : '',
+              amount: unitPrice > 0 ? unitPrice : (Number(tree.price) || 1888),
+              duration: 3,
+              startDate: today,
+              status: 'pending',
+              customerId: user,
+              payMethod: 'wechat'
+            });
+          } catch (e) {
+            return rollback();
+          }
+          made.push(order.orderNo);
+        }
+      }
+      return made;
     }
 
     function submitOrder() {
@@ -378,22 +499,42 @@
       var orderNo = 'ORD' + Date.now();
       // 券码在下单后会被 MallCoupons.clear() 清除，需在此之前留档
       var couponCode = MallCoupons.selected();
+      var member = currentMember();
+      var memberKey = (member && member.id) || (typeof H5Auth !== 'undefined' && H5Auth.currentUser ? H5Auth.currentUser() : '') || 'guest';
+      var subtotal = data.subtotal;
+      var couponOff = couponCode ? round2(MallCoupons.calc(subtotal, couponCode)) : 0;
+      var pointsOff = round2(pointsDeduct(subtotal));
+      var pointsUsed = (function () { try { return parseInt(localStorage.getItem('h5_points_used') || '0', 10) || 0; } catch (e) { return 0; } })();
       var order = {
         id: orderNo,
         no: orderNo,
+        memberId: member ? member.id : '',
+        userId: (typeof H5Auth !== 'undefined' && H5Auth.currentUser) ? H5Auth.currentUser() : '',
         items: items,
-        subtotal: data.subtotal,
+        subtotal: subtotal,
         discount: data.discount,
+        couponCode: couponCode,
+        couponDiscount: couponOff,
+        pointsUsed: pointsUsed,
+        pointsDiscount: pointsOff,
+        freight: 0,
         total: data.total,
         payment: payment,
         invoice: needInvoice,
         address: snapshotAddress(),
-        couponCode: couponCode,
-        pointsUsed: (function () { try { return parseInt(localStorage.getItem('h5_points_used') || '0', 10) || 0; } catch (e) { return 0; } })(),
+        receiveName: snapshotAddress().name,
         status: '待付款',
         statusCode: 'pending',
         createdAt: new Date().toISOString()
       };
+      /* 认养 SKU：分配果树 → 生成待支付认养订单；库存不足则中止，避免超卖 */
+      var adoptOrders = createAdoptionOrders(items, order.address);
+      if (adoptOrders === null) {
+        showToast('可认养果树不足，请减少数量或稍后再试');
+        return;
+      }
+      order.adoptionOrders = adoptOrders;
+      order.hasAdoption = adoptOrders.length > 0;
       /* 落库必须原子化：任一步失败都要回滚并明确提示，禁止出现「提示成功但数据丢失」 */
       var list = [];
       try { list = JSON.parse(localStorage.getItem('h5_orders') || '[]'); }
@@ -403,10 +544,25 @@
       try {
         localStorage.setItem('h5_orders', JSON.stringify(list));
       } catch (err) {
+        adoptOrders.forEach(function (no) { try { AdoptionStore.cancelOrder(no); } catch (e) {} });
         showToast('订单保存失败（浏览器存储不可用），请检查隐私模式或清理空间后重试');
         return;
       }
       if (needInvoice) { try { pushInvoiceApply(orderNo, data.total); } catch (e) {} }
+      /* 核销优惠券 + 会员累计：统一走 MallStore，后台券统计与大屏即时可见 */
+      if (typeof MallStore !== 'undefined') {
+        try {
+          if (couponCode) MallStore.consumeCoupon(couponCode, memberKey, orderNo);
+          if (member && pointsUsed > 0) {
+            MallStore.saveMember(Object.assign({}, member, {
+              points: Math.max(0, (Number(member.points) || 0) - pointsUsed),
+              lastOrderAt: order.createdAt
+            }));
+          } else if (member) {
+            MallStore.saveMember(Object.assign({}, member, { lastOrderAt: order.createdAt }));
+          }
+        } catch (e) { /* 统计回写失败不阻断下单 */ }
+      }
       try {
         localStorage.removeItem('h5_cart');
         localStorage.removeItem('h5_checkout_single');
@@ -415,7 +571,9 @@
         // 券码一次性使用，下单后清除，避免下次下单静默复用上次优惠
         MallCoupons.clear();
       } catch (e) {}
-      showToast('订单已生成：' + orderNo + '，使用' + payment + (needInvoice ? '，已申请发票' : ''));
+      showToast('订单已生成：' + orderNo + '，使用' + payment +
+        (adoptOrders.length ? '，已锁定 ' + adoptOrders.length + ' 棵果树待支付' : '') +
+        (needInvoice ? '，已申请发票' : ''));
       setTimeout(function() { window.location.href = 'h5_order.html?focus=' + orderNo; }, 1200);
     }
 

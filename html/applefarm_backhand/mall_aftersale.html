@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>售后与退款</title>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/mall-subpage.css">
+</head>
+<body>
+<div class="mall-page">
+  <div class="mall-head">
+    <div>
+      <h2>售后与退款</h2>
+      <p>售后单由 C端订单发起退款时自动创建；同意后退款并回写订单状态为已退款。</p>
+    </div>
+    <div class="mall-actions">
+      <button class="mall-btn" onclick="render()">刷新</button>
+    </div>
+  </div>
+
+  <div class="mall-kpis">
+    <div class="mall-kpi"><div class="k">售后单总数</div><div class="v" id="kpiTotal">0</div></div>
+    <div class="mall-kpi"><div class="k">待处理</div><div class="v" id="kpiPending" style="color:#b26a00;">0</div></div>
+    <div class="mall-kpi"><div class="k">退款中</div><div class="v" id="kpiRefunding">0</div></div>
+    <div class="mall-kpi"><div class="k">已退款金额</div><div class="v" id="kpiAmount">¥0</div></div>
+  </div>
+
+  <div class="mall-card">
+    <div class="mall-card-head"><span>售后单列表</span><span class="mall-sub">退款操作会同步更新 H5 订单状态</span></div>
+    <table class="mall-table">
+      <thead><tr>
+        <th style="width:60px;">序号</th><th>售后单 / 订单</th><th>会员</th><th>类型</th>
+        <th>退款金额</th><th>原因</th><th>状态</th><th style="width:190px;">操作</th>
+      </tr></thead>
+      <tbody id="body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="js/shared/mall-store.js"></script>
+<script>
+var STATUS = { pending: '待处理', approved: '退款中', refunded: '已退款', rejected: '已驳回' };
+var STATUS_CLASS = { pending: 'warn', approved: 'warn', refunded: '', rejected: 'off' };
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function fmt(t) {
+  if (!t) return '—';
+  var d = new Date(t);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('zh-CN', { hour12: false });
+}
+function memberName(id) {
+  var m = MallStore.members().filter(function (x) { return x.id === id; })[0];
+  return m ? m.nickname : (id || '—');
+}
+
+function render() {
+  var list = MallStore.afterSales().slice().sort(function (a, b) { return String(b.applyAt).localeCompare(String(a.applyAt)); });
+  document.getElementById('kpiTotal').textContent = list.length;
+  document.getElementById('kpiPending').textContent = list.filter(function (x) { return x.status === 'pending'; }).length;
+  document.getElementById('kpiRefunding').textContent = list.filter(function (x) { return x.status === 'approved'; }).length;
+  var amount = list.filter(function (x) { return x.status === 'refunded'; }).reduce(function (s, x) { return s + Number(x.amount || 0); }, 0);
+  document.getElementById('kpiAmount').textContent = '¥' + amount.toLocaleString('zh-CN');
+
+  document.getElementById('body').innerHTML = list.map(function (x, i) {
+    var acts = '';
+    if (x.status === 'pending') {
+      acts = '<button class="mall-link" onclick="handle(\'' + esc(x.id) + '\',\'refunded\')">同意退款</button>' +
+             '<button class="mall-link danger" onclick="handle(\'' + esc(x.id) + '\',\'rejected\')">驳回</button>';
+    } else if (x.status === 'approved') {
+      acts = '<button class="mall-link" onclick="handle(\'' + esc(x.id) + '\',\'refunded\')">完成退款</button>';
+    } else {
+      acts = '<span class="mall-sub">' + esc(x.handler || '') + ' ' + esc(fmt(x.handleAt)) + '</span>';
+    }
+    return '<tr><td>' + (i + 1) + '</td>' +
+      '<td><strong class="mall-sub" style="font-size:12px;color:#1f2329;">' + esc(x.id) + '</strong>' +
+        '<div class="mall-sub">订单 ' + esc(x.orderNo) + '</div></td>' +
+      '<td>' + esc(memberName(x.memberId)) + '</td>' +
+      '<td>' + (x.type === 'refund' ? '仅退款' : esc(x.type)) + '</td>' +
+      '<td><strong>¥' + Number(x.amount || 0).toLocaleString('zh-CN') + '</strong></td>' +
+      '<td style="max-width:220px;">' + esc(x.reason || '—') + '</td>' +
+      '<td><span class="mall-tag ' + (STATUS_CLASS[x.status] || '') + '">' + (STATUS[x.status] || x.status) + '</span></td>' +
+      '<td><div class="mall-row-actions">' + acts + '</div></td></tr>';
+  }).join('') || '<tr><td colspan="8" class="mall-empty">暂无售后单。可在 C端订单中点击「退款」发起。</td></tr>';
+}
+
+function handle(id, status) {
+  if (status === 'rejected') {
+    var reason = prompt('请填写驳回原因', '不符合退款条件');
+    if (reason === null) return;
+    var r1 = MallStore.updateAfterSale(id, { status: 'rejected', remark: reason, handler: '后台管理员' });
+    if (!r1.ok) { alert(r1.error || '操作失败'); return; }
+  } else {
+    if (!confirm('确认退款？该操作会将订单状态更新为已退款。')) return;
+    var r2 = MallStore.updateAfterSale(id, { status: 'refunded', handler: '后台管理员' });
+    if (!r2.ok) { alert(r2.error || '退款失败'); return; }
+  }
+  render();
+}
+
+document.addEventListener('DOMContentLoaded', render);
+</script>
+</body>
+</html>

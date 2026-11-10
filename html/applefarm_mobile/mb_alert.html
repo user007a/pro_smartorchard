@@ -47,6 +47,42 @@
       color: #fff;
       font-weight: 500;
     }
+    .filter-bar.sub { padding-top: 8px; padding-bottom: 10px; }
+    .alert-status {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: var(--font-2xs);
+      font-weight: 500;
+    }
+    .alert-status.pending     { background: rgba(245,166,35,0.14); color: #c47800; }
+    .alert-status.processing  { background: rgba(9,109,217,0.12);  color: #096dd9; }
+    .alert-status.closed      { background: rgba(56,158,13,0.12);  color: #389e0d; }
+    .alert-status.ignored     { background: rgba(125,128,133,0.14);color: #5b6066; }
+    .alert-status.transferred { background: rgba(47,84,235,0.12);  color: #2f54eb; }
+    .alert-status.voided      { background: rgba(0,0,0,0.06);      color: #909399; text-decoration: line-through; }
+    .alert-src {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: var(--font-2xs);
+      color: #606266;
+      background: #f2f4f7;
+    }
+    .alert-due { font-size: var(--font-2xs); color: #b0b3b8; margin-bottom: 8px; }
+    .alert-due.overdue { color: #e84a3a; font-weight: 500; }
+    .sheet-action {
+      padding: 13px;
+      border-radius: 10px;
+      text-align: center;
+      font-size: var(--font-base);
+      margin-bottom: 8px;
+      cursor: pointer;
+      border: 1px solid #eee;
+      background: #fafafa;
+      color: #333;
+    }
+    .sheet-action.primary { background: linear-gradient(135deg, #f56c4d, #e84a3a); color: #fff; border: none; }
 
     .alert-list { padding: 12px 16px; }
     .alert-card {
@@ -111,56 +147,95 @@
     </div>
     <div class="header-content">
       <div class="header-title">预警中心</div>
-      <div class="header-sub">设备与农事预警统一查看</div>
+      <div class="header-sub">五类来源 · 六态闭环</div>
       <div class="header-stats">
         <div class="header-stat"><div class="num" id="statUrgent">0</div><div class="lbl">待处理</div></div>
-        <div class="header-stat"><div class="num" id="statTotal">0</div><div class="lbl">总预警</div></div>
-        <div class="header-stat"><div class="num" id="statRate">--</div><div class="lbl">处理率</div></div>
+        <div class="header-stat"><div class="num" id="statTotal">0</div><div class="lbl">未闭环</div></div>
+        <div class="header-stat"><div class="num" id="statRate">--</div><div class="lbl">闭环率</div></div>
       </div>
     </div>
   </div>
 
   <div class="filter-bar">
     <div class="filter-chip active" data-filter="all" onclick="setFilter('all')">全部</div>
-    <div class="filter-chip" data-filter="urgent" onclick="setFilter('urgent')">紧急</div>
-    <div class="filter-chip" data-filter="important" onclick="setFilter('important')">重要</div>
-    <div class="filter-chip" data-filter="reminder" onclick="setFilter('reminder')">提醒</div>
-    <div class="filter-chip" data-filter="notice" onclick="setFilter('notice')">通知</div>
-    <div class="filter-chip" data-filter="device" onclick="setFilter('device')">设备</div>
-    <div class="filter-chip" data-filter="farming" onclick="setFilter('farming')">农事</div>
+    <div class="filter-chip" data-filter="pending" onclick="setFilter('pending')">待处理</div>
+    <div class="filter-chip" data-filter="processing" onclick="setFilter('processing')">处理中</div>
+    <div class="filter-chip" data-filter="transferred" onclick="setFilter('transferred')">已转工单</div>
+    <div class="filter-chip" data-filter="closed" onclick="setFilter('closed')">已闭环</div>
+    <div class="filter-chip" data-filter="ignored" onclick="setFilter('ignored')">已忽略</div>
+    <div class="filter-chip" data-filter="voided" onclick="setFilter('voided')">已作废</div>
   </div>
+  <div class="filter-bar sub" id="sourceFilterBar"></div>
 
   <div class="alert-list" id="alertList"></div>
 
   <script>
     // 数据来源：共享数据源 AlertStore（详见 applefarm_backhand/js/shared/alert-data.js）
     var currentFilter = 'all';
+    var currentSource = 'all';
+    var STATUS_TEXT = { pending:'待处理', processing:'处理中', closed:'已闭环',
+                        ignored:'已忽略', transferred:'已转工单', voided:'已作废' };
 
     function levelClass(l){ return ({urgent:'urgent', important:'important', reminder:'reminder', notice:'notice'})[l] || 'notice'; }
-    function typeText(type){ return type === 'device' ? '设备预警' : '农事预警'; }
+    function sourceTextOf(src){
+      var list = (window.AlertStore && AlertStore.SOURCES) || [];
+      for (var i = 0; i < list.length; i++) if (list[i].key === src) return list[i].text;
+      return '系统预警';
+    }
+    function sourceOf(a){
+      if (a.source) return a.source;
+      return a.type === 'device' ? 'device' : 'system';
+    }
+    function statusTextOf(s){ return STATUS_TEXT[s] || s || '—'; }
     function fmtTm(t){
       if (!t) return '';
       var m = String(t).match(/(\d{2})-(\d{2})[ T](\d{2}:\d{2})/);
       return m ? (m[1]+'-'+m[2]+' '+m[3]) : t;
     }
+    function isOverdue(a){
+      if (!a.respondDue) return false;
+      if (a.status !== 'pending' && a.status !== 'processing') return false;
+      var d = new Date(String(a.respondDue).replace(/-/g,'/'));
+      return !isNaN(d.getTime()) && d.getTime() < Date.now();
+    }
     function setFilter(f){
       currentFilter = f;
-      document.querySelectorAll('.filter-chip').forEach(function(c){ c.classList.toggle('active', c.dataset.filter===f); });
+      document.querySelectorAll('.filter-bar:not(.sub) .filter-chip').forEach(function(c){ c.classList.toggle('active', c.dataset.filter===f); });
       render();
+    }
+    function setSource(s){
+      currentSource = s;
+      document.querySelectorAll('#sourceFilterBar .filter-chip').forEach(function(c){ c.classList.toggle('active', c.dataset.source===s); });
+      render();
+    }
+    function renderSourceChips(){
+      var box = document.getElementById('sourceFilterBar');
+      if (!box) return;
+      var sources = (window.AlertStore && AlertStore.SOURCES) || [];
+      var all = window.AlertStore ? AlertStore.all() : [];
+      var chips = ['<div class="filter-chip ' + (currentSource === 'all' ? 'active' : '') + '" data-source="all" onclick="setSource(\'all\')">全部来源</div>'];
+      sources.forEach(function(s){
+        var n = all.filter(function(a){ return sourceOf(a) === s.key; }).length;
+        chips.push('<div class="filter-chip ' + (currentSource === s.key ? 'active' : '') +
+          '" data-source="' + s.key + '" onclick="setSource(\'' + s.key + '\')">' + s.text + (n ? ' ' + n : '') + '</div>');
+      });
+      box.innerHTML = chips.join('');
     }
     function render(){
       var list = (window.AlertStore ? AlertStore.all() : []).filter(function(a){
-        if (currentFilter === 'all') return true;
-        if (currentFilter === 'device' || currentFilter === 'farming') return a.type === currentFilter;
-        return a.level === currentFilter;
+        if (currentFilter !== 'all' && a.status !== currentFilter) return false;
+        if (currentSource !== 'all' && sourceOf(a) !== currentSource) return false;
+        return true;
       });
-      // 排序：pending 在前 + 紧急优先
+      // 排序：未闭环在前 + 紧急优先 + 时间倒序
+      var openStatus = { pending:0, processing:1, transferred:2 };
       list.sort(function(a,b){
         var lvOrder = { urgent:0, important:1, reminder:2, notice:3 };
+        var oa = openStatus[a.status] !== undefined ? openStatus[a.status] : 9;
+        var ob = openStatus[b.status] !== undefined ? openStatus[b.status] : 9;
+        if (oa !== ob) return oa - ob;
         var la = lvOrder[a.level]!==undefined ? lvOrder[a.level] : 9;
         var lb = lvOrder[b.level]!==undefined ? lvOrder[b.level] : 9;
-        if (a.status === 'pending' && b.status !== 'pending') return -1;
-        if (a.status !== 'pending' && b.status === 'pending') return 1;
         if (la !== lb) return la - lb;
         return (b.time||'').localeCompare(a.time||'');
       });
@@ -170,17 +245,27 @@
         return;
       }
       box.innerHTML = list.map(function(a){
-        var actionBtn = a.status === 'pending'
-          ? '<div class="alert-btn primary" onclick="handleAlert(\''+a.id+'\',event)">立即处理</div>'
-          : '<div class="alert-btn" onclick="viewAlert(\''+a.id+'\',event)">查看详情</div>';
+        var actionable = a.status === 'pending' || a.status === 'processing';
+        var actionBtn = actionable
+          ? '<div class="alert-btn primary" onclick="openActionSheet(\''+a.id+'\',event)">立即处理</div>'
+          : (a.status === 'ignored'
+            ? '<div class="alert-btn primary" onclick="reopenAlert(\''+a.id+'\',event)">恢复处理</div>'
+            : '<div class="alert-btn" onclick="viewAlert(\''+a.id+'\',event)">查看详情</div>');
+        var due = '';
+        if (a.respondDue && (a.status === 'pending' || a.status === 'processing')) {
+          due = '<div class="alert-due '+(isOverdue(a)?'overdue':'')+'">响应时限：'+a.respondDue+(isOverdue(a)?'（已超时）':'')+'</div>';
+        }
         return '<div class="alert-card '+levelClass(a.level)+'" onclick="viewAlert(\''+a.id+'\',event)">'+
           '<div class="alert-row1">'+
-            '<div><span class="alert-tag '+levelClass(a.level)+'">'+a.levelText+'</span><span class="alert-type" style="margin-left:6px;">'+typeText(a.type)+'</span></div>'+
+            '<div><span class="alert-tag '+levelClass(a.level)+'">'+a.levelText+'</span>'+
+              '<span class="alert-src" style="margin-left:6px;">'+sourceTextOf(sourceOf(a))+'</span></div>'+
             '<div class="alert-time">'+fmtTm(a.time)+'</div>'+
           '</div>'+
-          '<div class="alert-title">'+a.title+'</div>'+
+          '<div class="alert-title">'+a.title+
+            '<span class="alert-status '+(a.status||'pending')+'" style="margin-left:6px;">'+statusTextOf(a.status)+'</span></div>'+
           '<div class="alert-desc">'+a.desc+'</div>'+
           '<div class="alert-type" style="margin-bottom:10px;">位置：'+a.location+'</div>'+
+          due+
           '<div class="alert-actions">'+
             '<div class="alert-btn" onclick="viewAlert(\''+a.id+'\',event)">详情</div>'+
             actionBtn+
@@ -192,25 +277,63 @@
       if (!window.AlertStore) return;
       var s = AlertStore.stats();
       document.getElementById('statUrgent').textContent = s.pending;
-      document.getElementById('statTotal').textContent = s.total;
-      document.getElementById('statRate').textContent = s.rate + '%';
+      document.getElementById('statTotal').textContent = s.open;
+      document.getElementById('statRate').textContent = s.closedRate + '%';
     }
     function navigateBack(){ if(window.history.length>1){ window.history.back(); } else { window.location.href='mb_home.html'; } }
     function viewAlert(id, e){
       if (e) e.stopPropagation();
       var a = window.AlertStore ? AlertStore.byId(id) : null;
       if (!a) return;
-      showModal(a.title, '【'+typeText(a.type)+' · '+a.levelText+'】\n\n'+a.desc+'\n\n位置：'+a.location+'\n⏰ '+fmtTm(a.time));
+      var extra = '位置：'+a.location+'\n来源：'+sourceTextOf(sourceOf(a))+' · 状态：'+statusTextOf(a.status)+'\n⏰ '+fmtTm(a.time);
+      if (a.assignee) extra += '\n处理人：'+a.assignee;
+      if (a.respondDue) extra += '\n响应时限：'+a.respondDue;
+      showModal(a.title, '【'+a.levelText+'】\n\n'+a.desc+'\n\n'+extra);
     }
-    function handleAlert(id, e){
+    function openActionSheet(id, e){
       if (e) e.stopPropagation();
       var a = window.AlertStore ? AlertStore.byId(id) : null;
       if (!a) return;
-      var now = new Date();
-      var pad = function(n){return n<10?'0'+n:n;};
-      var timeStr = now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes());
-      AlertStore.updateStatus(id, 'completed', '已处理', timeStr+' 现场确认处理');
-      showModal('处理成功', '【'+a.title+'】\n\n处理方式：现场确认\n处理人：当前用户\n状态已更新为已处理。');
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;';
+      overlay.addEventListener('click', function(){ overlay.remove(); });
+      var sheet = document.createElement('div');
+      sheet.style.cssText = 'background:#fff;border-radius:16px 16px 0 0;width:100%;padding:18px 16px 22px;';
+      sheet.addEventListener('click', function(ev){ ev.stopPropagation(); });
+      sheet.innerHTML = '<div style="font-size:16px;font-weight:600;margin-bottom:4px;color:#1f2e1f;">处理预警</div>'
+        + '<div style="font-size:13px;color:#909399;margin-bottom:14px;">'+a.title+'</div>'
+        + '<div class="sheet-action primary" data-to="closed">处理完成（闭环）</div>'
+        + '<div class="sheet-action" data-to="transferred">转工单跟进</div>'
+        + '<div class="sheet-action" data-to="ignored">忽略本条</div>'
+        + '<div class="sheet-action" data-to="cancel" style="background:#fff;color:#909399;">取消</div>';
+      overlay.appendChild(sheet);
+      document.body.appendChild(overlay);
+      sheet.querySelectorAll('.sheet-action').forEach(function(btn){
+        btn.addEventListener('click', function(){
+          var to = btn.dataset.to;
+          overlay.remove();
+          if (to === 'cancel') return;
+          doTransition(id, to);
+        });
+      });
+    }
+    function doTransition(id, to){
+      var a = window.AlertStore ? AlertStore.byId(id) : null;
+      if (!a) return;
+      var actionText = { closed:'现场处理完成', transferred:'转工单跟进', ignored:'现场确认忽略' }[to] || to;
+      var res = AlertStore.transition(id, to, { action: actionText, operator: '当前用户' });
+      if (!res || !res.ok) {
+        showModal('操作未生效', (res && res.message) || '当前状态不支持该流转');
+        return;
+      }
+      showModal('已提交', '【'+a.title+'】\n\n处理方式：'+actionText+'\n处理人：当前用户\n状态：'+(STATUS_TEXT[to] || to));
+      refresh();
+    }
+    function reopenAlert(id, e){
+      if (e) e.stopPropagation();
+      var res = AlertStore.transition(id, 'pending', { action: '恢复处理', operator: '当前用户' });
+      if (res && res.ok) { refresh(); }
+      else { showModal('操作未生效', (res && res.message) || '当前状态不支持恢复'); }
     }
     function showModal(title, content){
       var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="this.remove()">'+
@@ -223,7 +346,7 @@
       document.body.insertAdjacentHTML('beforeend', html);
     }
 
-    function refresh(){ updateStats(); render(); }
+    function refresh(){ updateStats(); renderSourceChips(); render(); }
     function initAlertPage(){
       refresh();
       if (window.AlertStore && !window.__mbAlertSubscribed) {

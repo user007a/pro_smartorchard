@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>运费模板</title>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/mall-subpage.css">
+</head>
+<body>
+<div class="mall-page">
+  <div class="mall-head">
+    <div>
+      <h2>运费模板</h2>
+      <p>按首件/续件计费，H5 结算时按模板计算运费并写入订单。</p>
+    </div>
+    <div class="mall-actions">
+      <button class="mall-btn primary" onclick="openEdit()">新增模板</button>
+    </div>
+  </div>
+
+  <div class="mall-kpis">
+    <div class="mall-kpi"><div class="k">模板数量</div><div class="v" id="kpiTotal">0</div></div>
+    <div class="mall-kpi"><div class="k">启用中</div><div class="v" id="kpiOn">0</div></div>
+    <div class="mall-kpi"><div class="k">首件均价</div><div class="v" id="kpiFirst">¥0</div></div>
+    <div class="mall-kpi"><div class="k">覆盖区域</div><div class="v" id="kpiRegion">0</div></div>
+  </div>
+
+  <div class="mall-card">
+    <div class="mall-card-head"><span>模板列表</span><span class="mall-sub">修改后对新建订单生效</span></div>
+    <table class="mall-table">
+      <thead><tr>
+        <th style="width:60px;">序号</th><th>模板</th><th>覆盖区域</th>
+        <th>首件</th><th>续件</th><th>状态</th><th style="width:150px;">操作</th>
+      </tr></thead>
+      <tbody id="body"></tbody>
+    </table>
+  </div>
+
+  <div class="mall-card" id="editCard" style="display:none;">
+    <div class="mall-card-head"><span id="editTitle">新增运费模板</span></div>
+    <div class="mall-form">
+      <div class="mall-form-row">
+        <div class="mall-field"><label>模板名称</label><input id="fName" placeholder="如 西北冷链"></div>
+        <div class="mall-field"><label>覆盖区域</label><input id="fRegion" placeholder="如 甘肃/青海/宁夏"></div>
+      </div>
+      <div class="mall-form-row">
+        <div class="mall-field"><label>首件数量</label><input id="fFirstQty" type="number" min="1" value="1"></div>
+        <div class="mall-field"><label>首件运费（元）</label><input id="fFirstFee" type="number" min="0" value="12"></div>
+        <div class="mall-field"><label>续件数量</label><input id="fExtraQty" type="number" min="1" value="1"></div>
+        <div class="mall-field"><label>续件运费（元）</label><input id="fExtraFee" type="number" min="0" value="5"></div>
+      </div>
+      <button class="mall-btn primary" onclick="saveTemplate()">保存模板</button>
+      <button class="mall-btn" onclick="document.getElementById('editCard').style.display='none'">取消</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/shared/mall-store.js"></script>
+<script>
+var editingId = null;
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function list() { return MallStore.settings().freight || []; }
+
+function render() {
+  var arr = list();
+  document.getElementById('kpiTotal').textContent = arr.length;
+  document.getElementById('kpiOn').textContent = arr.filter(function (x) { return x.status !== 'off'; }).length;
+  var avg = arr.length ? arr.reduce(function (s, x) { return s + Number(x.firstFee || 0); }, 0) / arr.length : 0;
+  document.getElementById('kpiFirst').textContent = '¥' + (Math.round(avg * 100) / 100);
+  document.getElementById('kpiRegion').textContent = arr.filter(function (x) { return x.region; }).length;
+
+  document.getElementById('body').innerHTML = arr.map(function (x, i) {
+    return '<tr><td>' + (i + 1) + '</td>' +
+      '<td><strong>' + esc(x.name) + '</strong><div class="mall-sub">' + esc(x.id) + '</div></td>' +
+      '<td>' + esc(x.region || '全国') + '</td>' +
+      '<td>首 ' + x.firstQty + ' 件 ¥' + x.firstFee + '</td>' +
+      '<td>续 ' + x.extraQty + ' 件 ¥' + x.extraFee + '</td>' +
+      '<td><span class="mall-tag ' + (x.status === 'off' ? 'off' : '') + '">' + (x.status === 'off' ? '已停用' : '启用中') + '</span></td>' +
+      '<td><div class="mall-row-actions">' +
+        '<button class="mall-link" onclick="openEdit(\'' + esc(x.id) + '\')">编辑</button>' +
+        '<button class="mall-link" onclick="toggle(\'' + esc(x.id) + '\')">' + (x.status === 'off' ? '启用' : '停用') + '</button>' +
+        '<button class="mall-link danger" onclick="remove(\'' + esc(x.id) + '\')">删除</button>' +
+      '</div></td></tr>';
+  }).join('') || '<tr><td colspan="7" class="mall-empty">暂无运费模板</td></tr>';
+}
+
+function openEdit(id) {
+  editingId = id || null;
+  var x = id ? list().filter(function (t) { return t.id === id; })[0] : null;
+  document.getElementById('editTitle').textContent = x ? '编辑运费模板' : '新增运费模板';
+  document.getElementById('fName').value = x ? x.name : '';
+  document.getElementById('fRegion').value = x ? (x.region || '') : '';
+  document.getElementById('fFirstQty').value = x ? x.firstQty : 1;
+  document.getElementById('fFirstFee').value = x ? x.firstFee : 12;
+  document.getElementById('fExtraQty').value = x ? x.extraQty : 1;
+  document.getElementById('fExtraFee').value = x ? x.extraFee : 5;
+  document.getElementById('editCard').style.display = 'block';
+}
+
+function saveTemplate() {
+  var name = document.getElementById('fName').value.trim();
+  if (!name) { alert('请填写模板名称'); return; }
+  var arr = list().slice();
+  var item = {
+    id: editingId || ('FT' + Date.now()),
+    name: name,
+    region: document.getElementById('fRegion').value.trim(),
+    firstQty: Number(document.getElementById('fFirstQty').value) || 1,
+    firstFee: Number(document.getElementById('fFirstFee').value) || 0,
+    extraQty: Number(document.getElementById('fExtraQty').value) || 1,
+    extraFee: Number(document.getElementById('fExtraFee').value) || 0,
+    status: 'on'
+  };
+  var idx = -1;
+  for (var i = 0; i < arr.length; i++) { if (arr[i].id === editingId) { idx = i; break; } }
+  if (idx >= 0) arr[idx] = item; else arr.push(item);
+  var r = MallStore.saveSettings({ freight: arr });
+  if (!r.ok) { alert(r.error || '保存失败'); return; }
+  editingId = null;
+  document.getElementById('editCard').style.display = 'none';
+  render();
+}
+
+function toggle(id) {
+  var arr = list().slice();
+  arr.forEach(function (x) { if (x.id === id) x.status = x.status === 'off' ? 'on' : 'off'; });
+  MallStore.saveSettings({ freight: arr });
+  render();
+}
+
+function remove(id) {
+  if (!confirm('确定删除该运费模板吗？')) return;
+  MallStore.saveSettings({ freight: list().filter(function (x) { return x.id !== id; }) });
+  render();
+}
+
+document.addEventListener('DOMContentLoaded', render);
+</script>
+</body>
+</html>

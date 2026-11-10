@@ -58,6 +58,7 @@
   .status-tag.pending { background: var(--warning-bg); color: var(--warning); }
   .status-tag.issued { background: var(--success-bg); color: var(--success); }
   .status-tag.rejected { background: var(--gray-100); color: var(--text-secondary); }
+  .status-tag.void { background: var(--error-bg); color: var(--error); }
   .amount-cell { color: var(--error); font-weight: var(--font-weight-semibold, 600); font-variant-numeric: tabular-nums; }
   .modal-overlay {
     display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -168,6 +169,7 @@
           <option value="pending">待开票</option>
           <option value="issued">已开票</option>
           <option value="rejected">已驳回</option>
+          <option value="void">已红冲</option>
         </select>
         <select class="search-select" id="typeSelect">
           <option value="">全部类型</option>
@@ -190,7 +192,8 @@
               <th class="checkbox-col" style="width:60px;">序号</th>
               <th style="width:150px;">申请时间</th>
               <th>发票抬头</th>
-              <th style="width:110px;">金额</th>
+              <th style="width:90px;">抬头类型</th>
+              <th style="width:100px;">金额</th>
               <th style="width:140px;">类型</th>
               <th style="width:150px;">关联订单号</th>
               <th style="width:90px;">状态</th>
@@ -270,6 +273,7 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mall-store.js"></script>
 <script src="js/shared/demo-seed.js"></script>
 <script>
 /* ============================================================
@@ -283,7 +287,7 @@
  * ============================================================ */
 var INVOICE_KEY = 'h5_invoices';
 
-var STATUS_TEXT = { pending: '待开票', issued: '已开票', rejected: '已驳回' };
+var STATUS_TEXT = { pending: '待开票', issued: '已开票', rejected: '已驳回', void: '已红冲' };
 var DEFAULT_TYPE = '电子普通发票';
 
 var currentId = null;
@@ -319,26 +323,52 @@ function fmtTime(iso) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
-/* 归一化：容忍缺字段 / 非对象脏数据 */
+/* 归一化：统一走 MallStore，自动补齐抬头类型、税号、邮箱等字段 */
 function normalize(raw) {
+  if (typeof MallStore !== 'undefined') return MallStore.invoices();
   var list = [];
   readAll().forEach(function (v, i) {
     if (!v || typeof v !== 'object') return;
     var amount = Number(v.amount);
     list.push({
       id: v.id || ('INV' + i),
+      titleType: v.titleType === 'company' ? 'company' : 'personal',
       title: v.title || '（未填写抬头）',
+      taxNo: v.taxNo || '',
+      email: v.email || '',
+      phone: v.phone || '',
       amount: isNaN(amount) || amount < 0 ? 0 : amount,
       type: v.type || DEFAULT_TYPE,
+      contentType: v.contentType || '商品明细',
       orderNo: v.orderNo || '',
       applyTime: v.applyTime || v.createdAt || '',
       status: STATUS_TEXT[v.status] ? v.status : 'pending',
       invoiceNo: v.invoiceNo || '',
       issueTime: v.issueTime || '',
-      rejectReason: v.rejectReason || ''
+      rejectReason: v.rejectReason || '',
+      voidReason: v.voidReason || '',
+      reissueOf: v.reissueOf || ''
     });
   });
   return list;
+}
+
+function writeList(list) {
+  if (typeof MallStore !== 'undefined') {
+    var ok = true;
+    list.forEach(function (v) {
+      var r = MallStore.saveInvoice(v);
+      if (!r.ok) { Toast.error(r.error || '发票保存失败'); ok = false; }
+    });
+    return ok;
+  }
+  try {
+    localStorage.setItem(INVOICE_KEY, JSON.stringify(list));
+    return true;
+  } catch (e) {
+    Toast.error('本地存储写入失败，发票状态未能保存');
+    return false;
+  }
 }
 
 function renderStats(list) {
@@ -346,7 +376,7 @@ function renderStats(list) {
   list.forEach(function (v) {
     if (v.status === 'issued') { issued++; amount += v.amount; }
     else if (v.status === 'rejected') rejected++;
-    else pending++;
+    else if (v.status !== 'void') pending++;
   });
   document.getElementById('statPending').textContent = pending;
   document.getElementById('statIssued').textContent = issued;
@@ -393,9 +423,12 @@ function renderTable() {
       btns += '<button class="action-btn ship" onclick="openIssue(\'' + esc(v.id) + '\')">开票</button>' +
               '<button class="action-btn delete" onclick="openReject(\'' + esc(v.id) + '\')">驳回</button>';
     } else if (v.status === 'issued') {
-      btns += '<span style="font-size:var(--font-size-xs);color:var(--text-tertiary);">发票号 ' + esc(v.invoiceNo) + '</span>';
+      btns += '<button class="action-btn detail" onclick="voidInvoice(\'' + esc(v.id) + '\')">红冲</button>' +
+              '<span style="font-size:var(--font-size-xs);color:var(--text-tertiary);">' + esc(v.invoiceNo) + '</span>';
+    } else if (v.status === 'rejected') {
+      btns += '<button class="action-btn download" onclick="reissueInvoice(\'' + esc(v.id) + '\')">重新申请</button>';
     } else {
-      btns += '<span style="font-size:var(--font-size-xs);color:var(--text-tertiary);">已驳回</span>';
+      btns += '<span style="font-size:var(--font-size-xs);color:var(--text-tertiary);">已红冲</span>';
     }
     return '<tr>' +
       '<td class="checkbox-col">' + (i + 1) + '</td>' +
@@ -403,8 +436,10 @@ function renderTable() {
       '<td><div class="invoice-cell"><div class="invoice-icon">' +
           '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
         '</div><div><div class="cell-name">' + esc(v.title) + '</div>' +
+          '<div class="cell-sub">' + (v.taxNo ? '税号 ' + esc(v.taxNo) : '个人抬头') + (v.email ? ' · ' + esc(v.email) : '') + '</div>' +
           (v.issueTime ? '<div class="cell-sub">开票时间 ' + esc(fmtTime(v.issueTime)) + '</div>' : '') +
         '</div></div></td>' +
+      '<td>' + (v.titleType === 'company' ? '企业' : '个人') + '</td>' +
       '<td class="amount-cell">¥' + v.amount.toLocaleString('zh-CN') + '</td>' +
       '<td><span class="type-tag ' + (isVat ? 'vat' : 'normal') + '">' + esc(v.type) + '</span></td>' +
       '<td class="text-mono" style="font-size:var(--font-size-xs);">' + (v.orderNo ? esc(v.orderNo) : '—') + '</td>' +
@@ -442,11 +477,15 @@ function openDetail(id) {
       '<div class="detail-block"><div class="detail-label">开票时间</div><div class="detail-value">' + esc(fmtTime(v.issueTime)) + '</div></div>'
     : (v.status === 'rejected'
       ? '<div class="detail-block"><div class="detail-label">驳回原因</div><div class="detail-value">' + esc(v.rejectReason || '—') + '</div></div>'
-      : '');
+      : (v.status === 'void'
+        ? '<div class="detail-block"><div class="detail-label">红冲原因</div><div class="detail-value">' + esc(v.voidReason || '—') + '</div></div>'
+        : ''));
   document.getElementById('detailBody').innerHTML =
-    '<div class="detail-block"><div class="detail-label">发票抬头</div><div class="detail-value">' + esc(v.title) + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">发票抬头</div><div class="detail-value">' + esc(v.title) + '（' + (v.titleType === 'company' ? '企业' : '个人') + '）</div></div>' +
+    '<div class="detail-block"><div class="detail-label">税号</div><div class="detail-value">' + esc(v.taxNo || '—') + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">接收邮箱 / 电话</div><div class="detail-value">' + esc(v.email || '—') + ' / ' + esc(v.phone || '—') + '</div></div>' +
     '<div class="detail-block"><div class="detail-label">开票金额</div><div class="detail-value">¥' + v.amount.toLocaleString('zh-CN') + '</div></div>' +
-    '<div class="detail-block"><div class="detail-label">发票类型</div><div class="detail-value">' + esc(v.type) + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">发票类型 / 内容</div><div class="detail-value">' + esc(v.type) + ' / ' + esc(v.contentType || '商品明细') + '</div></div>' +
     '<div class="detail-block"><div class="detail-label">关联订单号</div><div class="detail-value">' + (v.orderNo ? esc(v.orderNo) : '—') + '</div></div>' +
     '<div class="detail-block"><div class="detail-label">申请时间</div><div class="detail-value">' + esc(fmtTime(v.applyTime)) + '</div></div>' +
     '<div class="detail-block"><div class="detail-label">当前状态</div><div class="detail-value">' + (STATUS_TEXT[v.status] || v.status) + '</div></div>' +
@@ -467,18 +506,23 @@ function openIssue(id) {
 function confirmIssue() {
   var no = document.getElementById('issueNo').value.trim();
   if (!no) { Toast.warning('请填写发票号码'); return; }
-  var raw = readAll();
-  var hit = false;
-  raw.forEach(function (v) {
-    if (v && v.id === currentId) {
-      v.status = 'issued';
-      v.issueTime = new Date().toISOString();
-      v.invoiceNo = no;
-      hit = true;
-    }
-  });
-  if (!hit) { Toast.error('未找到该发票申请'); return; }
-  writeList(raw);
+  if (typeof MallStore !== 'undefined') {
+    var r = MallStore.updateInvoice(currentId, { status: 'issued', issueTime: new Date().toISOString(), invoiceNo: no, operator: '后台管理员' });
+    if (!r.ok) { Toast.error(r.error || '开票失败'); return; }
+  } else {
+    var raw = readAll();
+    var hit = false;
+    raw.forEach(function (v) {
+      if (v && v.id === currentId) {
+        v.status = 'issued';
+        v.issueTime = new Date().toISOString();
+        v.invoiceNo = no;
+        hit = true;
+      }
+    });
+    if (!hit) { Toast.error('未找到该发票申请'); return; }
+    writeList(raw);
+  }
   closeModal('issueModal');
   renderTable();
   Toast.success('开票完成，发票号 ' + no);
@@ -504,21 +548,60 @@ function confirmReject() {
     title: '驳回发票申请',
     message: '确定驳回「' + (v ? v.title : id) + '」的发票申请吗？驳回后 H5 端「发票管理」将显示该申请已被驳回。',
     onConfirm: function () {
-      var raw = readAll();
-      var hit = false;
-      raw.forEach(function (x) {
-        if (x && x.id === id) {
-          x.status = 'rejected';
-          x.rejectReason = reason;
-          hit = true;
-        }
-      });
-      if (!hit) { Toast.error('未找到该发票申请'); return; }
-      writeList(raw);
+      if (typeof MallStore !== 'undefined') {
+        var r = MallStore.updateInvoice(id, { status: 'rejected', rejectReason: reason, operator: '后台管理员' });
+        if (!r.ok) { Toast.error(r.error || '驳回失败'); return; }
+      } else {
+        var raw = readAll();
+        var hit = false;
+        raw.forEach(function (x) {
+          if (x && x.id === id) {
+            x.status = 'rejected';
+            x.rejectReason = reason;
+            hit = true;
+          }
+        });
+        if (!hit) { Toast.error('未找到该发票申请'); return; }
+        writeList(raw);
+      }
       renderTable();
       Toast.success('已驳回该发票申请');
     }
   });
+}
+
+/* 红冲：已开票发票作废，保留原记录 */
+function voidInvoice(id) {
+  var v = findById(id);
+  if (!v) return;
+  var reason = window.prompt('请填写红冲原因', '开票信息有误，申请红冲');
+  if (reason === null) return;
+  reason = reason.trim();
+  if (!reason) { Toast.warning('红冲原因不能为空'); return; }
+  var r = MallStore.updateInvoice(id, { status: 'void', voidReason: reason, operator: '后台管理员' });
+  if (!r.ok) { Toast.error(r.error || '红冲失败'); return; }
+  renderTable();
+  Toast.success('发票已红冲');
+}
+
+/* 重新申请：基于被驳回申请生成新的待开票记录 */
+function reissueInvoice(id) {
+  var v = findById(id);
+  if (!v) return;
+  var copy = Object.assign({}, v, {
+    id: 'INV' + Date.now(),
+    status: 'pending',
+    invoiceNo: '',
+    issueTime: '',
+    rejectReason: '',
+    voidReason: '',
+    reissueOf: v.id,
+    applyTime: new Date().toISOString()
+  });
+  var r = MallStore.saveInvoice(copy);
+  if (!r.ok) { Toast.error(r.error || '重新申请失败'); return; }
+  renderTable();
+  Toast.success('已生成新的待开票申请');
 }
 
 document.addEventListener('DOMContentLoaded', function () {

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 设备操作审计</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; backdrop-filter:blur(4px); }
+  .modal-overlay.show { display:block; }
+  .modal-box { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:var(--bg-card); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.15);
+    width:760px; max-width:94vw; max-height:86vh; overflow-y:auto; z-index:1000; }
+  .modal-box.show { display:block; }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;
+    padding-bottom:16px; border-bottom:1px solid var(--border-light); }
+  .modal-header h3 { font-size:16px; font-weight:600; color:var(--text-primary); margin:0; }
+  .modal-close { width:28px; height:28px; border:none; background:var(--gray-100); border-radius:6px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; }
+  .modal-close:hover { background:var(--error-bg); color:var(--error); }
+  .modal-body { padding:0 4px; }
+  .modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; padding:16px 0 0;
+    border-top:1px solid var(--border-light); }
+
+  .stat-card-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:16px; }
+  .stat-card { background:#fff; border:1px solid #eef0ee; border-radius:12px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .stat-label { font-size:12px; color:var(--text-tertiary); margin-bottom:6px; }
+  .stat-value { font-size:26px; font-weight:700; color:var(--text-primary); font-variant-numeric:tabular-nums; }
+  .stat-value .unit { font-size:13px; font-weight:500; color:var(--text-tertiary); margin-left:4px; }
+  .stat-sub { margin-top:6px; font-size:12px; color:var(--text-tertiary); }
+
+  .status-tag { display:inline-flex; align-items:center; padding:3px 10px; font-size:11.5px;
+    font-weight:500; border-radius:20px; white-space:nowrap; }
+  .status-tag.online { background:#d9f7be; color:#3a8618; border:1px solid #b7eb8f; }
+  .status-tag.warning { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .status-tag.offline { background:var(--error-bg); color:#cf1322; border:1px solid #ffccc7; }
+  .status-tag.processing { background:var(--info-bg); color:var(--primary-500); border:1px solid var(--info-border); }
+  .type-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-size:11.5px;
+    font-weight:500; background:var(--gray-100); color:var(--text-secondary); border:1px solid var(--border-default); }
+  .action-btns { display:flex; gap:6px; flex-wrap:nowrap; }
+  .action-btn { padding:4px 10px; font-size:11.5px; font-weight:500; border:1px solid transparent;
+    border-radius:6px; cursor:pointer; white-space:nowrap; background:none;
+    color:#2b6cb0; background:#f5f8fc; border-color:#c5d9f0; }
+  .data-table { min-width:1120px; }
+  .data-table th { white-space:nowrap; }
+  .summary-cell { max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .empty-row td { text-align:center; color:var(--text-tertiary); padding:40px 0; }
+  #pagination-container { padding:12px 16px; }
+  .diff-block { background:var(--gray-50); border:1px solid var(--border-light); border-radius:8px;
+    padding:10px 12px; font-family:Consolas,Monaco,monospace; font-size:11.5px; line-height:1.7;
+    max-height:220px; overflow:auto; white-space:pre-wrap; word-break:break-all; }
+  .detail-row { display:flex; gap:12px; padding:9px 0; border-bottom:1px solid var(--border-light); font-size:13px; }
+  .detail-row:last-child { border-bottom:none; }
+  .detail-label { color:var(--text-tertiary); min-width:88px; flex-shrink:0; }
+  .detail-value { color:var(--text-primary); flex:1; word-break:break-all; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="device" data-active-submenu="device-audit">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <nav class="device-tabs" aria-label="运行分析">
+        <a href="device_stats.html">运行统计</a>
+        <a href="device_log.html">设备日志</a>
+        <a href="device_audit.html" class="active">操作审计</a>
+      </nav>
+
+      <div class="stat-card-row" id="statCards"></div>
+
+      <div class="content-wrapper">
+
+        <!-- ===== 搜索栏区 ===== -->
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="actionSelect" style="min-width:120px;">
+              <option value="">全部操作类型</option>
+              <option value="create">新增</option>
+              <option value="update">修改</option>
+              <option value="delete">删除</option>
+              <option value="status">状态变更</option>
+            </select>
+            <select class="search-select" id="entitySelect" style="min-width:130px;">
+              <option value="">全部对象类型</option>
+            </select>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索对象编号 / 操作摘要...">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="handleSearch()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 操作按钮区 ===== -->
+        <div class="page-section action-bar">
+          <button class="jg-btn-outline" onclick="exportAudits()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/>
+            </svg>导出审计记录
+          </button>
+          <span style="margin-left:auto;font-size:12px;color:var(--text-tertiary);align-self:center;">
+            审计日志为只读记录，保留最近 500 条操作轨迹
+          </span>
+        </div>
+
+        <!-- ===== 数据表格区 ===== -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:160px;">操作时间</th>
+                  <th style="width:100px;">操作类型</th>
+                  <th style="width:110px;">对象类型</th>
+                  <th style="width:110px;">对象编号</th>
+                  <th style="width:90px;">操作人</th>
+                  <th>操作摘要</th>
+                  <th style="width:90px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ===== 详情弹窗 ===== -->
+<div class="modal-overlay" id="detailOverlay"></div>
+<div class="modal-box" id="detailModal">
+  <div class="modal-header">
+    <h3>审计详情</h3>
+    <button class="modal-close" onclick="closeDetail()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body" id="detailBody"></div>
+  <div class="modal-footer">
+    <button class="jg-btn" onclick="closeDetail()">关闭</button>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/shared/device-store.js"></script>
+<script src="js/shared/device-ui.js"></script>
+<script>
+/* ============================================================
+ * 设备操作审计
+ * 数据源：js/shared/device-store.js → audits()
+ *
+ * 所有设备台账 / 接入配置 / 网关 / 视频通道 / 维保 / 校准 / 备件 /
+ * 指令 / 盘点单的写操作都会经 DeviceStore.addAudit 记录 before/after，
+ * 满足农业物联网设备运维的可追溯要求。
+ * ============================================================ */
+
+var ACTION_TEXT = { create: '新增', update: '修改', delete: '删除', status: '状态变更' };
+var ACTION_STATE = { create: 'online', update: 'processing', delete: 'offline', status: 'warning' };
+var ENTITY_TEXT = {
+  device: '设备台账', access: '接入配置', gateway: '接入网关', camera: '视频通道',
+  maintain: '维护工单', calibration: '校准记录', spare: '备品备件', command: '远程指令',
+  asset: '盘点单', model: '设备类型', log: '设备日志'
+};
+var page = null;
+
+/* ---------- 统计卡 ---------- */
+function renderStats() {
+  var list = DeviceStore.audits();
+  var today = DeviceStore.todayStr();
+  var todayCnt = list.filter(function (a) { return (a.time || '').indexOf(today) === 0; }).length;
+  var create = list.filter(function (a) { return a.action === 'create'; }).length;
+  var update = list.filter(function (a) { return a.action === 'update'; }).length;
+  var del = list.filter(function (a) { return a.action === 'delete'; }).length;
+  document.getElementById('statCards').innerHTML =
+    '<div class="stat-card"><div class="stat-label">审计记录</div>' +
+    '<div class="stat-value">' + list.length + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub">最近 500 条操作轨迹</div></div>' +
+    '<div class="stat-card"><div class="stat-label">今日操作</div>' +
+    '<div class="stat-value">' + todayCnt + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub">' + today + '</div></div>' +
+    '<div class="stat-card"><div class="stat-label">新增 / 修改</div>' +
+    '<div class="stat-value">' + create + '<span class="unit">/ ' + update + '</span></div>' +
+    '<div class="stat-sub">数据写入与变更</div></div>' +
+    '<div class="stat-card"><div class="stat-label">删除操作</div>' +
+    '<div class="stat-value" style="color:var(--error);">' + del + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub">需重点复核</div></div>';
+}
+
+/* ---------- 下拉初始化 ---------- */
+function initSelects() {
+  var entities = {};
+  DeviceStore.audits().forEach(function (a) { entities[a.entity] = true; });
+  document.getElementById('entitySelect').innerHTML = '<option value="">全部对象类型</option>' +
+    Object.keys(entities).map(function (k) {
+      return '<option value="' + k + '">' + (ENTITY_TEXT[k] || k) + '</option>';
+    }).join('');
+}
+
+/* ---------- 表格行 ---------- */
+function renderRow(item, index) {
+  return '<tr>' +
+    '<td>' + index + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;font-size:12px;">' + DeviceUI.esc(item.time) + '</td>' +
+    '<td>' + DeviceUI.statusTag(ACTION_STATE[item.action] || 'warning', ACTION_TEXT[item.action] || item.action) + '</td>' +
+    '<td><span class="type-badge">' + DeviceUI.esc(ENTITY_TEXT[item.entity] || item.entity) + '</span></td>' +
+    '<td style="font-size:12px;">' + DeviceUI.esc(item.entityId || '-') + '</td>' +
+    '<td>' + DeviceUI.esc(item.operator || '-') + '</td>' +
+    '<td class="summary-cell" title="' + DeviceUI.esc(item.summary || '') + '">' + DeviceUI.esc(item.summary || '-') + '</td>' +
+    '<td><div class="action-btns"><button class="action-btn" onclick="openDetail(\'' + DeviceUI.esc(item.id) + '\')">详情</button></div></td>' +
+  '</tr>';
+}
+
+/* ---------- 过滤 ---------- */
+function filteredList() {
+  var action = document.getElementById('actionSelect').value;
+  var entity = document.getElementById('entitySelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  return DeviceStore.audits().filter(function (a) {
+    if (action && a.action !== action) return false;
+    if (entity && a.entity !== entity) return false;
+    if (kw) {
+      var hay = ((a.entityId || '') + ' ' + (a.summary || '') + ' ' + (a.operator || '')).toLowerCase();
+      if (hay.indexOf(kw) < 0) return false;
+    }
+    return true;
+  });
+}
+
+function handleSearch() {
+  var list = filteredList();
+  page.updateData(list);
+  DeviceUI.toast('找到 ' + list.length + ' 条审计记录', 'info');
+}
+
+function resetFilter() {
+  ['actionSelect', 'entitySelect', 'searchInput'].forEach(function (id) {
+    document.getElementById(id).value = '';
+  });
+  page.updateData(filteredList());
+  DeviceUI.toast('已重置搜索条件', 'info');
+}
+
+/* ---------- 详情 ---------- */
+function openDetail(id) {
+  var a = DeviceStore.audits().filter(function (x) { return x.id === id; })[0];
+  if (!a) return;
+  var before = a.before ? JSON.stringify(a.before, null, 2) : '—';
+  var after = a.after ? JSON.stringify(a.after, null, 2) : '—';
+  document.getElementById('detailBody').innerHTML =
+    '<div class="detail-row"><div class="detail-label">操作时间</div><div class="detail-value">' + DeviceUI.esc(a.time) + '</div></div>' +
+    '<div class="detail-row"><div class="detail-label">操作类型</div><div class="detail-value">' + DeviceUI.esc(ACTION_TEXT[a.action] || a.action) + '</div></div>' +
+    '<div class="detail-row"><div class="detail-label">对象类型</div><div class="detail-value">' + DeviceUI.esc(ENTITY_TEXT[a.entity] || a.entity) + '</div></div>' +
+    '<div class="detail-row"><div class="detail-label">对象编号</div><div class="detail-value">' + DeviceUI.esc(a.entityId || '—') + '</div></div>' +
+    '<div class="detail-row"><div class="detail-label">操作人</div><div class="detail-value">' + DeviceUI.esc(a.operator || '—') + '</div></div>' +
+    '<div class="detail-row"><div class="detail-label">操作摘要</div><div class="detail-value">' + DeviceUI.esc(a.summary || '—') + '</div></div>' +
+    '<div style="margin-top:14px;"><div class="detail-label" style="margin-bottom:6px;">变更前</div><div class="diff-block">' + DeviceUI.esc(before) + '</div></div>' +
+    '<div style="margin-top:14px;"><div class="detail-label" style="margin-bottom:6px;">变更后</div><div class="diff-block">' + DeviceUI.esc(after) + '</div></div>';
+  document.getElementById('detailOverlay').classList.add('show');
+  document.getElementById('detailModal').classList.add('show');
+}
+
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('show');
+  document.getElementById('detailModal').classList.remove('show');
+}
+
+/* ---------- 导出 ---------- */
+function exportAudits() {
+  var list = filteredList();
+  var headers = ['操作时间', '操作类型', '对象类型', '对象编号', '操作人', '操作摘要'];
+  var rows = list.map(function (a) {
+    return [a.time, ACTION_TEXT[a.action] || a.action, ENTITY_TEXT[a.entity] || a.entity,
+      a.entityId || '', a.operator || '', a.summary || ''];
+  });
+  DeviceUI.exportCsv('设备操作审计', headers, rows);
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  initSelects();
+  page = DeviceUI.pagination({
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow,
+    emptyCols: 8,
+    pageSize: 15
+  });
+  page.init({ data: [] });
+  renderStats();
+  page.updateData(filteredList());
+
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') handleSearch();
+  });
+
+  DeviceStore.subscribe(function (reason) {
+    if (reason === 'init') return;
+    renderStats();
+    page.updateData(filteredList());
+  });
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

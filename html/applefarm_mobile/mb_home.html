@@ -913,13 +913,19 @@
         var v = JSON.parse(raw);
         if (!Array.isArray(v)) return [];
         return v
-          .filter(function (m) { return m && typeof m === 'object' && m.enabled !== false; })
+          .filter(function (m) {
+            if (!m || typeof m !== 'object' || m.enabled === false) return false;
+            // 推送对象：mobile 移动端作业人员 / all 全部用户（h5 等对象不在作业端展示）
+            var target = m.target || 'mobile';
+            return target === 'mobile' || target === 'all';
+          })
           .map(function (m) {
             return {
               category: CAT_TAG[m.category] ? m.category : 'notice',
               time: m.time || '',
               title: String(m.title || ''),
-              content: String(m.content || '')
+              content: String(m.content || ''),
+              publisher: String(m.publisher || '')
             };
           })
           .filter(function (m) { return !!m.title; });
@@ -989,7 +995,8 @@
       document.getElementById('msgDetailTitle').textContent = msg.title;
       document.getElementById('msgDetailContent').textContent = msg.content;
       document.getElementById('msgDetailSource').textContent =
-        (CAT_SOURCE[msg.category] || CAT_SOURCE.notice) + (msg.time ? ' · 发布时间：' + String(msg.time).replace('T', ' ').slice(0, 16) : '');
+        (msg.category === 'notice' && msg.publisher ? '人工发布 · 发布人：' + msg.publisher : (CAT_SOURCE[msg.category] || CAT_SOURCE.notice)) +
+        (msg.time ? ' · 发布时间：' + String(msg.time).replace('T', ' ').slice(0, 16) : '');
       document.getElementById('msgDetailOverlay').classList.add('show');
     }
 

@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 售后与退款</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/sales-module.css">
+<style>
+  .reason-cell { max-width: 240px; white-space: normal; line-height: 1.4; color: var(--text-secondary, #4a5a4a); font-size: 12px; }
+  .timeline { margin-top: 4px; }
+</style>
+<style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
+</head>
+<body data-active-menu="sales" data-active-submenu="sales-aftersale">
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3L11 11M11 3L3 11"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <div class="page-header">
+          <h1 class="page-title">售后与退款</h1>
+          <p class="page-subtitle">售后申请、审核、退款 / 退货 / 换货全流程；处理完成会回写订单状态并生成负数收款流水，销售统计同步冲减净销售额。</p>
+        </div>
+
+        <div class="sales-stats" id="asStats"></div>
+
+        <div class="page-section search-section">
+          <div class="search-bar filter-bar">
+            <input type="text" class="search-input" id="asKeyword" placeholder="搜索售后单号 / 订单号 / 客户">
+            <select class="search-select" id="asType">
+              <option value="all">全部类型</option>
+              <option value="refund">仅退款</option>
+              <option value="return">退货退款</option>
+              <option value="exchange">换货</option>
+            </select>
+            <select class="search-select" id="asStatus">
+              <option value="all">全部状态</option>
+              <option value="pending">待审核</option>
+              <option value="processing">处理中</option>
+              <option value="refunding">退款中</option>
+              <option value="returning">退货中</option>
+              <option value="refunded">已退款</option>
+              <option value="returned">已退货</option>
+              <option value="completed">已完成</option>
+              <option value="rejected">已驳回</option>
+            </select>
+            <span class="filter-label">申请日期</span>
+            <input type="date" class="search-input" id="asStart" style="min-width:140px;max-width:160px;">
+            <span class="filter-label">至</span>
+            <input type="date" class="search-input" id="asEnd" style="min-width:140px;max-width:160px;">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="applyFilter()">查询</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+              <button class="jg-btn" onclick="exportAfterSales()">导出 CSV</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-section action-bar">
+          <div class="action-left">
+            <button class="jg-btn jg-btn-primary" onclick="openApply()">+ 发起售后</button>
+          </div>
+          <div class="action-right" style="margin-left:auto;">
+            <span class="selected-info" id="asCountInfo"></span>
+          </div>
+        </div>
+
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table" style="min-width:1600px;">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:160px;">售后单号</th>
+                  <th style="width:160px;">订单编号</th>
+                  <th style="width:150px;">客户</th>
+                  <th style="width:90px;">类型</th>
+                  <th style="width:110px;" class="text-right">申请金额</th>
+                  <th style="width:70px;" class="text-right">数量</th>
+                  <th style="width:240px;">售后原因</th>
+                  <th style="width:130px;">申请时间</th>
+                  <th style="width:90px;">处理人</th>
+                  <th style="width:90px;">状态</th>
+                  <th style="width:200px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="asTableBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container" style="display:flex;justify-content:flex-end;margin-top:14px;"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 发起售后 -->
+<div class="modal-overlay" id="applyModal" style="display:none;">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">发起售后</h3>
+      <button class="modal-close" onclick="closeModal('applyModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label><span class="required"></span>关联订单</label>
+          <select id="apOrder" onchange="syncApplyOrder()"></select>
+          <div class="form-hint">仅列出已收款且当前没有未完成售后单的订单</div>
+        </div>
+        <div class="form-group">
+          <label><span class="required"></span>售后类型</label>
+          <select id="apType" onchange="syncApplyType()">
+            <option value="refund">仅退款</option>
+            <option value="return">退货退款</option>
+            <option value="exchange">换货</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>申请金额（元）</label>
+          <input type="number" id="apAmount" min="0" step="0.01" value="0">
+          <div class="form-hint" id="apAmountHint"></div>
+        </div>
+        <div class="form-group">
+          <label>退货 / 换货数量</label>
+          <input type="number" id="apQty" min="0" step="1" value="0">
+        </div>
+        <div class="form-group">
+          <label>退货是否入库</label>
+          <select id="apRestock">
+            <option value="0">暂不入库</option>
+            <option value="1">退回成品库</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label><span class="required"></span>售后原因</label>
+          <textarea id="apReason" placeholder="如：到货碰伤、规格不符、客户取消复购等"></textarea>
+        </div>
+        <div class="form-group full">
+          <label>备注</label>
+          <input type="text" id="apRemark" placeholder="补充说明，可留空">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('applyModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitApply()">提交售后申请</button>
+    </div>
+  </div>
+</div>
+
+<!-- 售后处理 -->
+<div class="modal-overlay" id="handleModal" style="display:none;">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title" id="handleTitle">售后处理</h3>
+      <button class="modal-close" onclick="closeModal('handleModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:12px;">
+        <label>处理人</label>
+        <input type="text" id="hdOperator" list="operatorOptions" placeholder="选择或输入处理人">
+        <datalist id="operatorOptions"></datalist>
+      </div>
+      <div class="form-group">
+        <label>处理说明</label>
+        <textarea id="hdRemark" placeholder="如：协商补偿 3000 元，客户接受"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer" id="handleFooter"></div>
+  </div>
+</div>
+
+<!-- 售后详情 -->
+<div class="modal-overlay" id="detailModal" style="display:none;">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">售后详情</h3>
+      <button class="modal-close" onclick="closeModal('detailModal')">×</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/shared/sales-store.js"></script>
+<script src="js/common-functions.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+<script>
+(function () {
+  'use strict';
+  var S = window.SalesStore;
+  var PAGE_SIZE = 10;
+  var handleId = '';
+  var F = { keyword: '', type: 'all', status: 'all', startDate: '', endDate: '' };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function toast(msg, type) {
+    if (window.LegacyToast) window.LegacyToast.show(msg, type || 'success');
+  }
+  function wanText(n) { return (Number(n) || 0) >= 10000 ? S.fmtWan(n) : S.fmtMoney(n); }
+  function typeText(t) { return S.AS_TYPE_TEXT[t] || t; }
+  function statusText(s) { return S.AS_STATUS_TEXT[s] || s; }
+  function statusClass(s) {
+    if (s === 'pending') return 'st-confirm';
+    if (s === 'refunding' || s === 'returning' || s === 'processing') return 'st-refunding';
+    if (s === 'refunded' || s === 'returned') return 'st-refunded';
+    if (s === 'rejected') return 'st-cancelled';
+    return 'st-completed';
+  }
+
+  window.closeModal = function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.classList.remove('show');
+    el.style.display = 'none';
+  };
+  function openModal(id) {
+    var el = $(id);
+    el.style.display = 'flex';
+    el.classList.add('show');
+  }
+
+  /* ---------------- 列表 ---------------- */
+  function filterList() {
+    var kw = F.keyword.toLowerCase();
+    return S.afterSales().filter(function (a) {
+      if (F.type !== 'all' && a.type !== F.type) return false;
+      if (F.status !== 'all' && a.status !== F.status) return false;
+      var d = String(a.applyAt || '').slice(0, 10);
+      if (F.startDate && d < F.startDate) return false;
+      if (F.endDate && d > F.endDate) return false;
+      if (kw) {
+        var hay = (a.no + ' ' + a.orderNo + ' ' + a.customerName).toLowerCase();
+        if (hay.indexOf(kw) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderStats() {
+    var list = S.afterSales();
+    var orders = S.orders().filter(function (o) { return o.status !== 'cancelled'; });
+    var pending = list.filter(function (a) { return a.status === 'pending'; });
+    var doing = list.filter(function (a) { return ['processing', 'refunding', 'returning'].indexOf(a.status) >= 0; });
+    var refunded = list.filter(function (a) { return a.status === 'refunded'; }).reduce(function (s, a) { return s + (Number(a.amount) || 0); }, 0);
+    var returned = list.filter(function (a) { return a.status === 'returned'; });
+    var returnedQty = returned.reduce(function (s, a) { return s + (Number(a.qty) || 0); }, 0);
+    var rate = orders.length ? list.length / orders.length : 0;
+
+    function card(label, value, sub, cls) {
+      return '<div class="sales-stat-card ' + (cls || '') + '">' +
+        '<div class="stat-label">' + label + '</div>' +
+        '<div class="stat-value">' + value + '</div>' +
+        '<div class="stat-sub">' + sub + '</div></div>';
+    }
+    $('asStats').innerHTML =
+      card('售后单总数', list.length + ' 单', '售后率 ' + (rate * 100).toFixed(1) + '%', '') +
+      card('待审核', pending.length + ' 单', pending.length ? '请及时处理' : '暂无待办', pending.length ? 'is-warning' : 'is-success') +
+      card('处理中', doing.length + ' 单', '退款 / 退货 / 换货', doing.length ? 'is-primary' : '') +
+      card('已退款金额', wanText(refunded), '仅退款完成口径', 'is-danger') +
+      card('已退货数量', returnedQty + ' 件', returned.length + ' 单完成退货', '') +
+      card('平均处理时长', avgHandleDays(list) + ' 天', '按已处理售后单计算', '');
+  }
+
+  function avgHandleDays(list) {
+    var total = 0;
+    var n = 0;
+    list.forEach(function (a) {
+      if (!a.handledAt) return;
+      var s = new Date(String(a.applyAt).replace(' ', 'T')).getTime();
+      var e = new Date(String(a.handledAt).replace(' ', 'T')).getTime();
+      if (!isNaN(s) && !isNaN(e) && e >= s) { total += (e - s) / 86400000; n++; }
+    });
+    return n ? (total / n).toFixed(1) : '0.0';
+  }
+
+  function row(a, index) {
+    var canHandle = ['pending', 'processing', 'refunding', 'returning'].indexOf(a.status) >= 0;
+    return '<tr>' +
+      '<td>' + (index + 1) + '</td>' +
+      '<td><strong>' + esc(a.no) + '</strong></td>' +
+      '<td>' + esc(a.orderNo) + '</td>' +
+      '<td>' + esc(a.customerName) + '</td>' +
+      '<td>' + typeText(a.type) + '</td>' +
+      '<td class="num money text-right ' + (a.amount > 0 ? 'text-danger' : 'muted') + '">' + (a.amount > 0 ? S.fmtMoney(a.amount) : '—') + '</td>' +
+      '<td class="num text-right">' + (a.qty > 0 ? a.qty : '—') + '</td>' +
+      '<td><div class="reason-cell">' + esc(a.reason) + (a.restock ? '<div class="muted">退货入库：是</div>' : '') + '</div></td>' +
+      '<td class="muted">' + S.fmtTime(a.applyAt) + '</td>' +
+      '<td>' + esc(a.handler || '—') + '</td>' +
+      '<td><span class="status-tag ' + statusClass(a.status) + '">' + statusText(a.status) + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn view" onclick="viewAfterSale(\'' + a.id + '\')">详情</button>' +
+        (canHandle ? '<button class="action-btn edit" onclick="openHandle(\'' + a.id + '\')">' + (a.status === 'pending' ? '审核' : '处理') + '</button>' : '') +
+      '</div></td>' +
+    '</tr>';
+  }
+
+  function refreshTable() {
+    var data = filterList();
+    $('asCountInfo').textContent = '共 ' + data.length + ' 条售后记录';
+    if (!data.length) {
+      $('asTableBody').innerHTML = '<tr class="empty-row"><td colspan="12" style="text-align:center;color:var(--text-tertiary);padding:36px 0;">当前条件下暂无售后记录</td></tr>';
+      $('pagination-container').innerHTML = '';
+      return;
+    }
+    Pagination.init({
+      data: data,
+      pageSize: PAGE_SIZE,
+      containerId: 'pagination-container',
+      tbodyId: 'asTableBody',
+      renderRow: row
+    });
+  }
+
+  function refresh() {
+    renderStats();
+    refreshTable();
+  }
+
+  window.applyFilter = function () {
+    F.keyword = $('asKeyword').value.trim();
+    F.type = $('asType').value;
+    F.status = $('asStatus').value;
+    F.startDate = $('asStart').value;
+    F.endDate = $('asEnd').value;
+    if (F.startDate && F.endDate && F.startDate > F.endDate) {
+      toast('开始日期不能晚于结束日期', 'warning');
+      return;
+    }
+    refreshTable();
+    toast('筛选已生效');
+  };
+
+  window.resetFilter = function () {
+    $('asKeyword').value = '';
+    $('asType').value = 'all';
+    $('asStatus').value = 'all';
+    $('asStart').value = '';
+    $('asEnd').value = '';
+    F = { keyword: '', type: 'all', status: 'all', startDate: '', endDate: '' };
+    refreshTable();
+  };
+
+  /* ---------------- 发起售后 ---------------- */
+  function eligibleOrders() {
+    var openMap = {};
+    S.afterSales().forEach(function (a) {
+      if (['pending', 'processing', 'refunding', 'returning'].indexOf(a.status) >= 0) openMap[a.orderId] = true;
+    });
+    return S.orders().filter(function (o) {
+      if (['cancelled', 'pending', 'confirm', 'refunded', 'returned'].indexOf(o.status) >= 0) return false;
+      if (openMap[o.id]) return false;
+      return Number(o.paidAmount) > 0;
+    });
+  }
+
+  window.openApply = function () {
+    var list = eligibleOrders();
+    if (!list.length) return toast('暂无可发起售后的订单', 'warning');
+    $('apOrder').innerHTML = '<option value="">请选择订单</option>' + list.map(function (o) {
+      return '<option value="' + o.id + '">' + o.no + ' · ' + o.customerName + ' · 已收 ' + (Number(o.paidAmount) || 0).toFixed(2) + ' 元</option>';
+    }).join('');
+    $('apType').value = 'refund';
+    $('apAmount').value = 0;
+    $('apQty').value = 0;
+    $('apRestock').value = '0';
+    $('apReason').value = '';
+    $('apRemark').value = '';
+    $('apAmountHint').textContent = '';
+    openModal('applyModal');
+    syncApplyType();
+  };
+
+  window.syncApplyOrder = function () {
+    var o = S.order($('apOrder').value);
+    if (!o) { $('apAmountHint').textContent = ''; return; }
+    $('apAmountHint').textContent = '该订单已收 ' + S.fmtMoney(o.paidAmount) + '，申请金额不能超过已收金额';
+    if ($('apType').value !== 'exchange') $('apAmount').value = Number(o.paidAmount) || 0;
+  };
+
+  window.syncApplyType = function () {
+    var type = $('apType').value;
+    $('apAmount').disabled = type === 'exchange';
+    if (type === 'exchange') $('apAmount').value = 0;
+    if (type === 'refund') $('apQty').value = 0;
+  };
+
+  window.submitApply = function () {
+    var orderId = $('apOrder').value;
+    if (!orderId) return toast('请选择关联订单', 'warning');
+    var reason = $('apReason').value.trim();
+    if (!reason) return toast('请填写售后原因', 'warning');
+    var r = S.saveAfterSale({
+      orderId: orderId,
+      type: $('apType').value,
+      amount: Number($('apAmount').value) || 0,
+      qty: Number($('apQty').value) || 0,
+      reason: reason,
+      restock: $('apRestock').value === '1',
+      remark: $('apRemark').value
+    });
+    if (!r.ok) return toast(r.message, 'error');
+    closeModal('applyModal');
+    toast('售后申请已提交，等待审核');
+    refresh();
+  };
+
+  /* ---------------- 审核 / 处理 ---------------- */
+  window.openHandle = function (id) {
+    var a = S.afterSales().filter(function (x) { return x.id === id; })[0];
+    if (!a) return toast('售后单不存在', 'error');
+    handleId = id;
+    $('handleTitle').textContent = '售后处理 · ' + a.no;
+    $('hdOperator').value = a.handler || '';
+    $('hdRemark').value = a.remark || '';
+    $('operatorOptions').innerHTML = (window.USER_OPTIONS || []).map(function (n) {
+      return '<option value="' + esc(n) + '">';
+    }).join('');
+
+    var html = '';
+    if (a.status === 'pending') {
+      html = '<button class="jg-btn" onclick="handleAction(\'reject\')">驳回</button>' +
+        '<button class="jg-btn jg-btn-primary" onclick="handleAction(\'approve\')">审核通过</button>';
+    } else if (a.status === 'processing' || a.status === 'refunding' || a.status === 'returning') {
+      html = (a.status === 'processing' ? '<button class="jg-btn" onclick="handleAction(\'reject\')">驳回</button>' : '') +
+        '<button class="jg-btn jg-btn-primary" onclick="handleAction(\'complete\')">' +
+        (a.type === 'exchange' ? '换货完成' : a.type === 'return' ? '确认已退货' : '确认已退款') + '</button>';
+    }
+    $('handleFooter').innerHTML = html;
+    openModal('handleModal');
+  };
+
+  window.handleAction = function (action) {
+    var r = S.handleAfterSale(handleId, action, {
+      operator: $('hdOperator').value.trim() || '售后专员',
+      remark: $('hdRemark').value.trim()
+    });
+    if (!r.ok) return toast(r.message, 'error');
+    closeModal('handleModal');
+    toast(action === 'approve' ? '已审核通过，进入' + statusText(r.data.status) : (action === 'reject' ? '已驳回售后申请' : '售后处理完成'));
+    refresh();
+  };
+
+  /* ---------------- 详情 ---------------- */
+  window.viewAfterSale = function (id) {
+    var a = S.afterSales().filter(function (x) { return x.id === id; })[0];
+    if (!a) return toast('售后单不存在', 'error');
+    var o = S.order(a.orderId);
+    var html = '<div class="detail-section"><div class="detail-section-title">售后信息</div><div class="detail-grid cols-3">' +
+      '<div class="detail-item"><span class="detail-label">售后单号</span><span class="detail-value">' + esc(a.no) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">关联订单</span><span class="detail-value">' + esc(a.orderNo) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">客户</span><span class="detail-value">' + esc(a.customerName) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">售后类型</span><span class="detail-value">' + typeText(a.type) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">申请金额</span><span class="detail-value">' + (a.amount > 0 ? S.fmtMoney(a.amount) : '—') + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">数量</span><span class="detail-value">' + (a.qty > 0 ? a.qty : '—') + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">当前状态</span><span class="detail-value">' + statusText(a.status) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">处理人</span><span class="detail-value">' + esc(a.handler || '—') + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">处理时间</span><span class="detail-value">' + (a.handledAt ? S.fmtTime(a.handledAt) : '—') + '</span></div>' +
+      '<div class="detail-item full"><span class="detail-label">售后原因</span><span class="detail-value">' + esc(a.reason) + '</span></div>' +
+      '<div class="detail-item full"><span class="detail-label">备注</span><span class="detail-value">' + esc(a.remark || '—') + '</span></div>' +
+    '</div></div>';
+
+    if (o) {
+      html += '<div class="detail-section"><div class="detail-section-title">订单信息</div><div class="detail-grid cols-3">' +
+        '<div class="detail-item"><span class="detail-label">订单状态</span><span class="detail-value">' + esc(S.ORDER_STATUS_TEXT[o.status] || o.status) + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">订单金额</span><span class="detail-value">' + S.fmtMoney(o.payableAmount) + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">已收金额</span><span class="detail-value">' + S.fmtMoney(o.paidAmount) + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">渠道</span><span class="detail-value">' + esc(S.CHANNEL_TEXT[o.channel] || o.channel) + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">下单时间</span><span class="detail-value">' + S.fmtTime(o.createdAt) + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">收货人</span><span class="detail-value">' + esc(o.receiver || '—') + '</span></div>' +
+      '</div></div>';
+    }
+
+    html += '<div class="detail-section"><div class="detail-section-title">处理进度</div><div class="timeline">' +
+      '<div class="timeline-item"><div class="tl-time">' + S.fmtTime(a.applyAt) + '</div><div class="tl-title">客户发起售后</div><div class="tl-desc">' + typeText(a.type) + ' · ' + esc(a.reason) + '</div></div>' +
+      (a.handler ? '<div class="timeline-item"><div class="tl-time">' + S.fmtTime(a.handledAt) + '</div><div class="tl-title">' + esc(a.handler) + ' 处理</div><div class="tl-desc">当前状态：' + statusText(a.status) + '</div></div>' : '') +
+      (['pending'].indexOf(a.status) >= 0 ? '<div class="timeline-item"><div class="tl-time">待处理</div><div class="tl-title">等待审核</div><div class="tl-desc">审核通过后进入退款 / 退货流程</div></div>' : '') +
+    '</div></div>';
+
+    $('detailBody').innerHTML = html;
+    openModal('detailModal');
+  };
+
+  /* ---------------- 导出 ---------------- */
+  window.exportAfterSales = function () {
+    var list = filterList();
+    if (!list.length) return toast('当前没有可导出的售后记录', 'warning');
+    var headers = ['售后单号', '订单编号', '客户', '类型', '申请金额', '数量', '原因', '申请时间', '处理人', '处理时间', '状态', '退货入库'];
+    var rows = list.map(function (a) {
+      return [a.no, a.orderNo, a.customerName, typeText(a.type), a.amount, a.qty, a.reason,
+        S.fmtTime(a.applyAt), a.handler || '', a.handledAt ? S.fmtTime(a.handledAt) : '', statusText(a.status), a.restock ? '是' : '否'];
+    });
+    if (S.downloadCsv('售后记录_' + new Date().toISOString().slice(0, 10) + '.csv', headers, rows)) toast('已导出 ' + list.length + ' 条售后记录');
+    else toast('导出失败', 'error');
+  };
+
+  /* ---------------- 初始化 ---------------- */
+  function init() {
+    if (!S) {
+      document.querySelector('.content-wrapper').innerHTML = '<div class="empty-state"><strong>销售数据层加载失败</strong>请刷新页面后重试</div>';
+      return;
+    }
+    refresh();
+    S.subscribe(refresh);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

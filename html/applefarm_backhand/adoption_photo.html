@@ -332,6 +332,7 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/demo-seed.js"></script>
+<script src="js/shared/adoption-store.js"></script>
 <script>
 /* ============================================================
  * 认养成长相册
@@ -345,6 +346,7 @@ var PHOTO_KEY = 'h5_adoption_photos';
 var ADOPTION_KEY = 'snzg_adoptions';
 var H5_DIR = '../applefarm_h5/';
 var OTHER_TREE = '__other__';
+var S = window.AdoptionStore;
 
 /* 成长阶段枚举（与 H5 端 stage 字段兼容） */
 var STAGE_OPTIONS = ['生长', '开花', '结果', '成熟', '采摘'];
@@ -544,6 +546,15 @@ function deletePhoto(treeId, idx) {
     title: '删除照片',
     message: '将删除 ' + treeId + ' 在「' + (p.stage || '成长') + '」阶段的 1 张照片，删除后不可恢复。',
     onConfirm: function () {
+      /* 删除统一走 AdoptionStore，写入前按果树编号归一并校验照片存在 */
+      if (S && S.removePhoto) {
+        try {
+          S.removePhoto(treeId, p.url);
+        } catch (e) { Toast.error(e.message); return; }
+        renderList();
+        Toast.success('照片已删除');
+        return;
+      }
       var cur = readPhotoMap();
       var arr = sortedPhotos(cur[treeId]);
       arr.splice(idx, 1);
@@ -571,29 +582,41 @@ function initStageSelect() {
   });
 }
 
-/* 认养编号去 AD- 前缀：snzg_adoptions 为 AD-A1-001 格式，
-   而 h5_adoption_photos 的键与 H5 端展示统一为 A1-001 */
+/* 认养编号统一归一：AD-A1-001 / A001 / A1-001 一律落为 A1-001，
+   与 AdoptionStore 主键及 H5 端展示口径保持一致 */
 function stripAdPrefix(id) {
-  return String(id || '').trim().replace(/^AD-/i, '').trim();
+  var raw = String(id || '').trim();
+  if (S) return S.normalizeCode(raw) || raw.replace(/^AD-/i, '').trim();
+  return raw.replace(/^AD-/i, '').trim();
 }
 
-/* 果树下拉：已有认养记录（去重）+ 已有照片的果树 + 手工输入新编号 */
+/* 果树下拉：认养台账已认养果树 + H5 认养记录 + 已有照片的果树 + 手工输入新编号 */
 function fillTreeOptions() {
   var sel = document.getElementById('upTreeSelect');
   var map = readPhotoMap();
   var seen = {};
   var html = '';
 
-  readAdoptions().forEach(function (a) {
-    var id = stripAdPrefix(a.id);
+  function addOption(id, label) {
+    id = stripAdPrefix(id);
     if (!id || seen[id]) return;
     seen[id] = true;
-    html += '<option value="' + esc(id) + '">' + esc(id + ' · ' + (a.treeName || '已认养果树')) + '</option>';
+    html += '<option value="' + esc(id) + '">' + esc(label || id) + '</option>';
+  }
+
+  if (S) {
+    S.trees().filter(function (t) { return t.status === 'adopted'; }).forEach(function (t) {
+      addOption(t.treeCode, t.treeCode + ' · ' + (t.adopter ? t.adopter + ' / ' : '') + (t.variety || '已认养果树'));
+    });
+    S.h5Adoptions().forEach(function (a) {
+      addOption(a.treeNo || a.id, (S.normalizeCode(a.treeNo || a.id) || a.id) + ' · ' + (a.adopter || a.name || 'H5 认养'));
+    });
+  }
+  readAdoptions().forEach(function (a) {
+    addOption(a.id, stripAdPrefix(a.id) + ' · ' + (a.treeName || '已认养果树'));
   });
   Object.keys(map).forEach(function (k) {
-    if (seen[k]) return;
-    seen[k] = true;
-    html += '<option value="' + esc(k) + '">' + esc(k + '（已有照片）') + '</option>';
+    addOption(k, k + '（已有照片）');
   });
   html += '<option value="' + OTHER_TREE + '">其他果树（手工输入编号）</option>';
   sel.innerHTML = html || '<option value="' + OTHER_TREE + '">其他果树（手工输入编号）</option>';
@@ -728,15 +751,24 @@ function submitUpload() {
   if (!url) { Toast.warning('请选择要上传的照片文件'); return; }
   if (!time) { Toast.warning('请选择拍摄时间'); return; }
 
-  var map = readPhotoMap();
-  if (!Array.isArray(map[treeId])) map[treeId] = [];
-  map[treeId].push({ url: url, time: time, stage: stage });
-
-  if (writePhotoMap(map)) {
-    closeUpload();
-    renderList();
-    Toast.success('照片已上传，H5 端「查看照片」可同步查看');
+  /* 写入统一走 AdoptionStore：编号归一后写入 h5_adoption_photos */
+  if (S && S.addPhoto) {
+    try {
+      S.addPhoto(treeId, { url: url, time: time, stage: stage });
+    } catch (e) {
+      Toast.error(e.message);
+      return;
+    }
+  } else {
+    var map = readPhotoMap();
+    if (!Array.isArray(map[treeId])) map[treeId] = [];
+    map[treeId].push({ url: url, time: time, stage: stage });
+    if (!writePhotoMap(map)) return;
   }
+
+  closeUpload();
+  renderList();
+  Toast.success('照片已上传，H5 端「查看照片」可同步查看');
 }
 
 /* ---------- 初始化 ---------- */

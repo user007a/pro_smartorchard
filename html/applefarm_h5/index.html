@@ -584,6 +584,25 @@
       transition: all var(--transition-fast);
     }
     .buy-btn:active { transform: scale(0.96); }
+
+    /* 首页装修：后台配置的轮播图 */
+    .home-banner-wrap { padding: 12px 16px 0; }
+    .home-banner {
+      position: relative; border-radius: 14px; overflow: hidden; height: 132px;
+      background: linear-gradient(135deg, #ffd8a8, #ffa94d);
+      box-shadow: 0 6px 16px rgba(31,138,76,0.12);
+    }
+    .home-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .home-banner-text {
+      position: absolute; left: 14px; bottom: 12px; color: #fff;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.45);
+    }
+    .home-banner-text b { font-size: 16px; display: block; }
+    .home-banner-text span { font-size: 12px; opacity: 0.95; }
+    .home-banner-empty {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; color: #fff; font-size: 13px;
+    }
   </style>
 </head>
 <body>
@@ -597,9 +616,14 @@
       </div>
     </header>
 
+    <!-- 首页轮播（后台首页装修配置） -->
+    <div class="home-banner-wrap" id="homeBannerWrap" style="display:none;">
+      <div class="home-banner" id="homeBanner"></div>
+    </div>
+
     <!-- 快捷入口 -->
     <div class="quick-entry">
-      <div class="quick-grid">
+      <div class="quick-grid" id="quickGrid">
         <div class="quick-item" onclick="navigateTo('h5_store.html')">
           <div class="quick-icon store">
             <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -787,6 +811,7 @@
     </div>
   </div>
 
+  <script src="../applefarm_backhand/js/shared/mall-store.js"></script>
   <script src="js/mall-products.js"></script>
   <script src="js/mall-coupons.js"></script>
   <script src="js/mall-promotions.js"></script>
@@ -1038,6 +1063,76 @@
         ? '您好，' + H5Auth.displayName()
         : '您好，游客（登录后可下单与认养）';
     })();
+
+    /* ========== 首页装修：轮播图与快捷入口读取后台配置 ========== */
+    var QUICK_SVG = {
+      store: '<path d="M5.5 8h13l-1.2 11.2a1.8 1.8 0 0 1-1.8 1.6H8.5a1.8 1.8 0 0 1-1.8-1.6L5.5 8z"/><path d="M9 8V6.2a3 3 0 0 1 6 0V8"/>',
+      adopt: '<path d="M12 3.5c-3.6 0-6.5 2.8-6.5 6.2 0 1 .2 1.9.7 2.7"/><path d="M12 3.5c3.6 0 6.5 2.8 6.5 6.2 0 1-.2 1.9-.7 2.7"/><path d="M12 17.5v3.5"/><circle cx="9.8" cy="11.6" r="1.7" fill="#fff" stroke="none"/><circle cx="14.2" cy="11.6" r="1.7" fill="#fff" stroke="none"/>',
+      trace: '<path d="M4 8.5V6a2 2 0 0 1 2-2h2.5" stroke-width="2.4"/><path d="M20 8.5V6a2 2 0 0 0-2-2h-2.5" stroke-width="2.4"/><path d="M4 15.5V18a2 2 0 0 0 2 2h2.5" stroke-width="2.4"/><path d="M20 15.5V18a2 2 0 0 1-2 2h-2.5" stroke-width="2.4"/>',
+      activity: '<rect x="4" y="10.5" width="16" height="9.5" rx="1.4"/><rect x="3" y="7.5" width="18" height="3.6" rx="1"/><line x1="12" y1="7.5" x2="12" y2="20"/>'
+    };
+    var QUICK_LINK = {
+      '商城': 'h5_store.html', '认养': 'h5_store.html#adopt',
+      '溯源': 'trace_h5.html', '活动': 'h5_store.html#activity', '我的': 'h5_member.html'
+    };
+
+    function normQuick(q, i) {
+      if (typeof q === 'string') {
+        var icon = 'store';
+        if (q.indexOf('认养') >= 0) icon = 'adopt';
+        else if (q.indexOf('溯源') >= 0) icon = 'trace';
+        else if (q.indexOf('活动') >= 0 || q.indexOf('礼') >= 0) icon = 'activity';
+        return { name: q, link: QUICK_LINK[q] || 'h5_store.html', icon: icon, badge: '', sort: i + 1, status: 'on' };
+      }
+      return {
+        name: q.name || '入口',
+        link: q.link || QUICK_LINK[q.name] || 'h5_store.html',
+        icon: q.icon || 'store',
+        badge: q.badge || '',
+        sort: Number(q.sort) || (i + 1),
+        status: q.status === 'off' ? 'off' : 'on'
+      };
+    }
+
+    function renderHomeConfig() {
+      if (typeof MallStore === 'undefined') return;
+      var home = MallStore.settings().home || {};
+
+      // 轮播图：仅启用项，按排序号取首张
+      var banners = (home.banners || []).filter(function (b) { return b.status !== 'off'; })
+        .sort(function (a, b) { return (Number(a.sort) || 0) - (Number(b.sort) || 0); });
+      var wrap = document.getElementById('homeBannerWrap');
+      var box = document.getElementById('homeBanner');
+      if (wrap && box) {
+        if (banners.length) {
+          var b = banners[0];
+          wrap.style.display = 'block';
+          box.innerHTML = (b.img ? '<img src="' + MallProducts.esc(b.img) + '" alt="" onerror="this.style.display=\'none\'">' : '') +
+            '<div class="home-banner-text"><b>' + MallProducts.esc(b.title || '') + '</b><span>' + MallProducts.esc(b.subtitle || '') + '</span></div>';
+          box.onclick = function () { navigateTo(b.link || 'h5_store.html'); };
+        } else {
+          wrap.style.display = 'none';
+        }
+      }
+
+      // 快捷入口：替换静态项，保留原有渐变图标样式
+      var entries = (home.quickEntries || []).map(normQuick)
+        .filter(function (q) { return q.status !== 'off'; })
+        .sort(function (a, b) { return a.sort - b.sort; });
+      var grid = document.getElementById('quickGrid');
+      if (grid && entries.length) {
+        grid.innerHTML = entries.map(function (q) {
+          return '<div class="quick-item" onclick="navigateTo(\'' + MallProducts.esc(q.link) + '\')">' +
+            '<div class="quick-icon ' + MallProducts.esc(q.icon) + '">' +
+              (q.badge ? '<span class="quick-badge">' + MallProducts.esc(q.badge) + '</span>' : '') +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                (QUICK_SVG[q.icon] || QUICK_SVG.store) + '</svg>' +
+            '</div>' +
+            '<span class="quick-name">' + MallProducts.esc(q.name) + '</span></div>';
+        }).join('');
+      }
+    }
+    renderHomeConfig();
   </script>
 </body>
 </html>

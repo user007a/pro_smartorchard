@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 发货与物流</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/sales-module.css">
+<style>
+  .tab-switch { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab-switch button {
+    padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border-default, #d9e2d9);
+    background: #fff; color: var(--text-secondary, #4a5a4a); font-size: 13px; cursor: pointer;
+  }
+  .tab-switch button.active { background: #1890ff; border-color: #1890ff; color: #fff; font-weight: 600; }
+  .tab-switch .count { display: inline-block; margin-left: 6px; font-size: 12px; opacity: .85; }
+  .timeline { margin-top: 4px; }
+  .addr-cell { max-width: 260px; white-space: normal; line-height: 1.4; color: var(--text-secondary, #4a5a4a); font-size: 12px; }
+</style>
+<style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
+</head>
+<body data-active-menu="sales" data-active-submenu="sales-shipment">
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3L11 11M11 3L3 11"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <div class="page-header">
+          <h1 class="page-title">发货与物流</h1>
+          <p class="page-subtitle">待发货订单集中处理、运单在途跟踪与签收确认；H5 商城订单的发货仍在「商城管理 › C端订单」完成，本页只读展示。</p>
+        </div>
+
+        <div class="sales-stats" id="shipStats"></div>
+
+        <div class="page-section search-section">
+          <div class="search-bar filter-bar">
+            <input type="text" class="search-input" id="sKeyword" placeholder="搜索订单号 / 客户 / 收货人 / 运单号">
+            <select class="search-select" id="sChannel">
+              <option value="all">全部渠道</option>
+              <option value="wholesale">批发渠道</option>
+              <option value="retail">零售渠道</option>
+              <option value="adoption">认养渠道</option>
+              <option value="tour">观光采摘</option>
+            </select>
+            <select class="search-select" id="sCompany">
+              <option value="all">全部快递公司</option>
+            </select>
+            <select class="search-select" id="sStatus">
+              <option value="all">全部物流状态</option>
+              <option value="shipped">在途</option>
+              <option value="signed">已签收</option>
+            </select>
+            <span class="filter-label">日期</span>
+            <input type="date" class="search-input" id="sStart" style="min-width:140px;max-width:160px;">
+            <span class="filter-label">至</span>
+            <input type="date" class="search-input" id="sEnd" style="min-width:140px;max-width:160px;">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="applyFilter()">查询</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+              <button class="jg-btn" onclick="exportShipments()">导出 CSV</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-switch">
+          <button id="tabPending" class="active" onclick="switchTab('pending')">待发货订单<span class="count" id="pendingCount"></span></button>
+          <button id="tabShipment" onclick="switchTab('shipment')">发货单 / 物流<span class="count" id="shipmentCount"></span></button>
+        </div>
+
+        <div class="page-section data-section">
+          <div class="data-table-wrapper" id="pendingWrap">
+            <table class="data-table" style="min-width:1500px;">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:170px;">订单编号</th>
+                  <th style="width:90px;">来源</th>
+                  <th style="width:150px;">客户</th>
+                  <th style="width:130px;">收货人 / 电话</th>
+                  <th style="width:250px;">收货地址</th>
+                  <th style="width:220px;">商品明细</th>
+                  <th style="width:70px;" class="text-right">数量</th>
+                  <th style="width:110px;" class="text-right">订单金额</th>
+                  <th style="width:130px;">下单时间</th>
+                  <th style="width:120px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="pendingBody"></tbody>
+            </table>
+          </div>
+
+          <div class="data-table-wrapper" id="shipmentWrap" style="display:none;">
+            <table class="data-table" style="min-width:1600px;">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:160px;">发货单号</th>
+                  <th style="width:160px;">订单编号</th>
+                  <th style="width:140px;">客户</th>
+                  <th style="width:120px;">收货人</th>
+                  <th style="width:210px;">收货地址</th>
+                  <th style="width:100px;">快递公司</th>
+                  <th style="width:150px;">运单号</th>
+                  <th style="width:130px;">发货时间</th>
+                  <th style="width:130px;">签收时间</th>
+                  <th style="width:90px;">状态</th>
+                  <th style="width:170px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="shipBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container" style="display:flex;justify-content:flex-end;margin-top:14px;"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 发货 -->
+<div class="modal-overlay" id="shipModal" style="display:none;">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">订单发货</h3>
+      <button class="modal-close" onclick="closeModal('shipModal')">×</button>
+    </div>
+    <div class="modal-body" id="shipModalBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('shipModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitShip()">确认发货</button>
+    </div>
+  </div>
+</div>
+
+<!-- 物流详情 -->
+<div class="modal-overlay" id="detailModal" style="display:none;">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title">物流详情</h3>
+      <button class="modal-close" onclick="closeModal('detailModal')">×</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/shared/sales-store.js"></script>
+<script src="js/common-functions.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+<script>
+(function () {
+  'use strict';
+  var S = window.SalesStore;
+  var PAGE_SIZE = 10;
+  var TAB = 'pending';
+  var shipOrderId = '';
+  var F = { keyword: '', channel: 'all', company: 'all', status: 'all', startDate: '', endDate: '' };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function toast(msg, type) {
+    if (window.LegacyToast) window.LegacyToast.show(msg, type || 'success');
+  }
+  function wanText(n) { return (Number(n) || 0) >= 10000 ? S.fmtWan(n) : S.fmtMoney(n); }
+  function qtyOf(o) {
+    return (o.items || []).reduce(function (s, x) { return s + (Number(x.qty) || 0); }, 0);
+  }
+  function itemsText(o) {
+    return (o.items || []).map(function (x) { return x.name + ' ×' + x.qty; }).join('；');
+  }
+
+  window.closeModal = function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.classList.remove('show');
+    el.style.display = 'none';
+  };
+  function openModal(id) {
+    var el = $(id);
+    el.style.display = 'flex';
+    el.classList.add('show');
+  }
+
+  /* ---------------- 数据 ---------------- */
+  function pendingOrders() {
+    return S.orders().filter(function (o) {
+      if (o.status !== 'paid') return false;
+      if (F.channel !== 'all' && o.channel !== F.channel) return false;
+      var d = String(o.createdAt || '').slice(0, 10);
+      if (F.startDate && d < F.startDate) return false;
+      if (F.endDate && d > F.endDate) return false;
+      if (F.keyword) {
+        var hay = (o.no + ' ' + o.customerName + ' ' + (o.receiver || '') + ' ' + (o.receiverPhone || '')).toLowerCase();
+        if (hay.indexOf(F.keyword.toLowerCase()) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function shipList() {
+    return S.shipments().filter(function (s) {
+      if (F.company !== 'all' && s.company !== F.company) return false;
+      if (F.status !== 'all' && s.status !== F.status) return false;
+      var d = String(s.shippedAt || '').slice(0, 10);
+      if (F.startDate && d < F.startDate) return false;
+      if (F.endDate && d > F.endDate) return false;
+      if (F.channel !== 'all') {
+        var o = S.order(s.orderId);
+        if (!o || o.channel !== F.channel) return false;
+      }
+      if (F.keyword) {
+        var hay = (s.orderNo + ' ' + s.customerName + ' ' + (s.receiver || '') + ' ' + (s.trackingNo || '')).toLowerCase();
+        if (hay.indexOf(F.keyword.toLowerCase()) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  /* ---------------- 统计 ---------------- */
+  function renderStats() {
+    var orders = S.orders();
+    var pending = orders.filter(function (o) { return o.status === 'paid'; });
+    var ships = S.shipments();
+    var inTransit = ships.filter(function (s) { return s.status === 'shipped'; });
+    var now = new Date();
+    var ym = now.getFullYear() + '-' + (now.getMonth() + 1 < 10 ? '0' : '') + (now.getMonth() + 1);
+    var signedThisMonth = ships.filter(function (s) { return s.status === 'signed' && String(s.signedAt || '').slice(0, 7) === ym; });
+    var h5Pending = pending.filter(function (o) { return o.isMirror; });
+    var pendingAmount = pending.reduce(function (s, o) { return s + (Number(o.payableAmount) || 0); }, 0);
+    var signedRate = ships.length ? ships.filter(function (s) { return s.status === 'signed'; }).length / ships.length : 0;
+
+    function card(label, value, sub, cls) {
+      return '<div class="sales-stat-card ' + (cls || '') + '">' +
+        '<div class="stat-label">' + label + '</div>' +
+        '<div class="stat-value">' + value + '</div>' +
+        '<div class="stat-sub">' + sub + '</div></div>';
+    }
+    $('shipStats').innerHTML =
+      card('待发货订单', pending.length + ' 笔', '待发货金额 ' + wanText(pendingAmount), pending.length ? 'is-warning' : 'is-success') +
+      card('在途运单', inTransit.length + ' 单', '已发货未签收', 'is-primary') +
+      card('本月签收', signedThisMonth.length + ' 单', '签收率 ' + (signedRate * 100).toFixed(1) + '%', 'is-success') +
+      card('累计发货单', ships.length + ' 单', '含历史运单', '') +
+      card('H5 待发货', h5Pending.length + ' 笔', '商城管理 › C端订单处理', h5Pending.length ? 'is-warning' : '') +
+      card('合作快递', S.SHIP_COMPANIES.length + ' 家', S.SHIP_COMPANIES.slice(0, 2).join(' / ') + ' 等', '');
+
+    $('pendingCount').textContent = '(' + pending.length + ')';
+    $('shipmentCount').textContent = '(' + ships.length + ')';
+  }
+
+  /* ---------------- 待发货表格 ---------------- */
+  function pendingRow(o, index) {
+    return '<tr class="' + (o.isMirror ? 'row-warn' : '') + '">' +
+      '<td>' + (index + 1) + '</td>' +
+      '<td><strong>' + esc(o.no) + '</strong></td>' +
+      '<td><span class="source-chip ' + (o.isMirror ? 'h5' : '') + '">' + (o.isMirror ? 'H5 商城' : '后台录入') + '</span></td>' +
+      '<td>' + esc(o.customerName) + '</td>' +
+      '<td>' + esc(o.receiver || '—') + '<div class="muted">' + esc(o.receiverPhone || '') + '</div></td>' +
+      '<td><div class="addr-cell">' + esc(o.receiverAddress || '—') + '</div></td>' +
+      '<td><span class="order-items-cell">' + esc(itemsText(o)) + '</span></td>' +
+      '<td class="num text-right">' + qtyOf(o) + '</td>' +
+      '<td class="num money text-right">' + S.fmtMoney(o.payableAmount) + '</td>' +
+      '<td class="muted">' + S.fmtTime(o.createdAt) + '</td>' +
+      '<td>' + (o.isMirror
+        ? '<button class="action-btn" disabled title="请在商城管理发货">去商城发货</button>'
+        : '<button class="action-btn view" onclick="openShip(\'' + o.id + '\')">发货</button>') + '</td>' +
+    '</tr>';
+  }
+
+  /* ---------------- 发货单表格 ---------------- */
+  function shipRow(s, index) {
+    var signed = s.status === 'signed';
+    return '<tr>' +
+      '<td>' + (index + 1) + '</td>' +
+      '<td><strong>' + esc(s.no || s.id) + '</strong></td>' +
+      '<td>' + esc(s.orderNo) + '</td>' +
+      '<td>' + esc(s.customerName) + '</td>' +
+      '<td>' + esc(s.receiver || '—') + '<div class="muted">' + esc(s.receiverPhone || '') + '</div></td>' +
+      '<td><div class="addr-cell">' + esc(s.address || '—') + '</div></td>' +
+      '<td>' + esc(s.company) + '</td>' +
+      '<td><span class="num">' + esc(s.trackingNo) + '</span></td>' +
+      '<td class="muted">' + S.fmtTime(s.shippedAt) + '</td>' +
+      '<td class="muted">' + (signed ? S.fmtTime(s.signedAt) : '—') + '</td>' +
+      '<td><span class="status-tag ' + (signed ? 'st-completed' : 'st-shipped') + '">' + (signed ? '已签收' : '在途') + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn view" onclick="viewShipment(\'' + s.id + '\')">详情</button>' +
+        (signed ? '' : '<button class="action-btn edit" onclick="signShipment(\'' + s.id + '\')">签收</button>') +
+        '<button class="action-btn" onclick="copyTracking(\'' + esc(s.trackingNo) + '\')">复制单号</button>' +
+      '</div></td>' +
+    '</tr>';
+  }
+
+  /* ---------------- 渲染 ---------------- */
+  function renderTable() {
+    var isPending = TAB === 'pending';
+    $('pendingWrap').style.display = isPending ? '' : 'none';
+    $('shipmentWrap').style.display = isPending ? 'none' : '';
+    var data = isPending ? pendingOrders() : shipList();
+    var tbodyId = isPending ? 'pendingBody' : 'shipBody';
+
+    if (!data.length) {
+      $(tbodyId).innerHTML = '<tr class="empty-row"><td colspan="' + (isPending ? 11 : 12) + '" style="text-align:center;color:var(--text-tertiary);padding:36px 0;">' +
+        (isPending ? '当前没有待发货订单' : '暂无符合条件的发货单') + '</td></tr>';
+      $('pagination-container').innerHTML = '';
+      return;
+    }
+    Pagination.init({
+      data: data,
+      pageSize: PAGE_SIZE,
+      containerId: 'pagination-container',
+      tbodyId: tbodyId,
+      renderRow: isPending ? pendingRow : shipRow
+    });
+  }
+
+  function refresh() {
+    renderStats();
+    renderTable();
+  }
+
+  window.switchTab = function (tab) {
+    TAB = tab;
+    $('tabPending').classList.toggle('active', tab === 'pending');
+    $('tabShipment').classList.toggle('active', tab === 'shipment');
+    renderTable();
+  };
+
+  window.applyFilter = function () {
+    F.keyword = $('sKeyword').value.trim();
+    F.channel = $('sChannel').value;
+    F.company = $('sCompany').value;
+    F.status = $('sStatus').value;
+    F.startDate = $('sStart').value;
+    F.endDate = $('sEnd').value;
+    if (F.startDate && F.endDate && F.startDate > F.endDate) {
+      toast('开始日期不能晚于结束日期', 'warning');
+      return;
+    }
+    refresh();
+    toast('筛选已生效');
+  };
+
+  window.resetFilter = function () {
+    $('sKeyword').value = '';
+    $('sChannel').value = 'all';
+    $('sCompany').value = 'all';
+    $('sStatus').value = 'all';
+    $('sStart').value = '';
+    $('sEnd').value = '';
+    F = { keyword: '', channel: 'all', company: 'all', status: 'all', startDate: '', endDate: '' };
+    refresh();
+  };
+
+  /* ---------------- 发货 ---------------- */
+  window.openShip = function (orderId) {
+    var o = S.order(orderId);
+    if (!o) return toast('订单不存在', 'error');
+    if (o.isMirror) return toast('H5 商城订单请在「商城管理 › C端订单」发货', 'warning');
+    if (o.status !== 'paid') return toast('只有待发货订单可以发货', 'warning');
+    shipOrderId = orderId;
+    var opts = S.SHIP_COMPANIES.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+    $('shipModalBody').innerHTML =
+      '<div class="detail-section"><div class="detail-section-title">订单信息</div>' +
+        '<div class="detail-grid">' +
+          '<div class="detail-item"><span class="detail-label">订单编号</span><span class="detail-value">' + esc(o.no) + '</span></div>' +
+          '<div class="detail-item"><span class="detail-label">客户</span><span class="detail-value">' + esc(o.customerName) + '</span></div>' +
+          '<div class="detail-item"><span class="detail-label">收货人</span><span class="detail-value">' + esc(o.receiver || '—') + ' ' + esc(o.receiverPhone || '') + '</span></div>' +
+          '<div class="detail-item"><span class="detail-label">订单金额</span><span class="detail-value">' + S.fmtMoney(o.payableAmount) + '</span></div>' +
+          '<div class="detail-item full"><span class="detail-label">收货地址</span><span class="detail-value">' + esc(o.receiverAddress || '—') + '</span></div>' +
+          '<div class="detail-item full"><span class="detail-label">商品明细</span><span class="detail-value">' + esc(itemsText(o)) + '（共 ' + qtyOf(o) + ' 件）</span></div>' +
+        '</div></div>' +
+      '<div class="detail-section"><div class="detail-section-title">物流信息</div><div class="form-grid">' +
+        '<div class="form-group"><label><span class="required"></span>快递公司</label><select id="shipCompany">' + opts + '</select></div>' +
+        '<div class="form-group"><label><span class="required"></span>运单号</label><input type="text" id="shipNo" placeholder="请输入或扫描运单号"></div>' +
+        '<div class="form-group"><label>发货时间</label><input type="datetime-local" id="shipAt"></div>' +
+        '<div class="form-group"><label>备注</label><input type="text" id="shipRemark" placeholder="如：冷链专线、分两批发货"></div>' +
+      '</div></div>';
+    var now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    $('shipAt').value = now.toISOString().slice(0, 16);
+    openModal('shipModal');
+  };
+
+  window.submitShip = function () {
+    var company = $('shipCompany').value;
+    var trackingNo = $('shipNo').value.trim();
+    var shippedAt = $('shipAt').value;
+    var remark = $('shipRemark').value;
+    if (!trackingNo) return toast('请填写运单号', 'warning');
+    var r = S.createShipment(shipOrderId, {
+      company: company,
+      trackingNo: trackingNo,
+      shippedAt: shippedAt ? shippedAt.replace('T', ' ') : '',
+      remark: remark
+    });
+    if (!r.ok) return toast(r.message, 'error');
+    closeModal('shipModal');
+    toast('发货成功：' + trackingNo);
+    refresh();
+  };
+
+  /* ---------------- 签收 / 详情 ---------------- */
+  window.signShipment = function (id) {
+    var r = S.signShipment(id);
+    if (!r.ok) return toast(r.message, 'error');
+    toast('已确认签收，订单状态同步更新');
+    refresh();
+  };
+
+  window.copyTracking = function (no) {
+    try {
+      if (navigator.clipboard) navigator.clipboard.writeText(no);
+      toast('运单号已复制：' + no);
+    } catch (e) { toast('复制失败，请手动选择运单号', 'error'); }
+  };
+
+  window.viewShipment = function (id) {
+    var s = S.shipments().filter(function (x) { return x.id === id; })[0];
+    if (!s) return toast('发货单不存在', 'error');
+    var o = S.order(s.orderId);
+    var pays = S.paymentsOf(s.orderId);
+    var items = o ? o.items : [];
+
+    var html = '<div class="detail-section"><div class="detail-section-title">发货信息</div><div class="detail-grid cols-3">' +
+      '<div class="detail-item"><span class="detail-label">发货单号</span><span class="detail-value">' + esc(s.no || s.id) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">订单编号</span><span class="detail-value">' + esc(s.orderNo) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">物流状态</span><span class="detail-value">' + (s.status === 'signed' ? '已签收' : '在途') + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">快递公司</span><span class="detail-value">' + esc(s.company) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">运单号</span><span class="detail-value">' + esc(s.trackingNo) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">来源</span><span class="detail-value">' + (s.source === 'manual' ? '后台发货' : esc(s.source)) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">收货人</span><span class="detail-value">' + esc(s.receiver || '—') + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">联系电话</span><span class="detail-value">' + esc(s.receiverPhone || '—') + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">发货时间</span><span class="detail-value">' + S.fmtTime(s.shippedAt) + '</span></div>' +
+      '<div class="detail-item full"><span class="detail-label">收货地址</span><span class="detail-value">' + esc(s.address || '—') + '</span></div>' +
+      '<div class="detail-item full"><span class="detail-label">备注</span><span class="detail-value">' + esc(s.remark || '—') + '</span></div>' +
+    '</div></div>';
+
+    if (items.length) {
+      html += '<div class="detail-section"><div class="detail-section-title">商品明细</div>' +
+        '<table class="detail-table"><thead><tr><th>商品</th><th>规格</th><th class="num">数量</th><th class="num">单价</th><th class="num">小计</th></tr></thead><tbody>' +
+        items.map(function (x) {
+          return '<tr><td>' + esc(x.name) + '</td><td>' + esc(x.spec || '—') + '</td>' +
+            '<td class="num">' + x.qty + ' ' + esc(x.unit || '') + '</td>' +
+            '<td class="num">' + S.fmtMoney(x.price) + '</td>' +
+            '<td class="num">' + S.fmtMoney(x.amount) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+
+    html += '<div class="detail-section"><div class="detail-section-title">物流轨迹</div><div class="timeline">' +
+      (o ? '<div class="timeline-item"><div class="tl-time">' + S.fmtTime(o.createdAt) + '</div><div class="tl-title">订单创建</div><div class="tl-desc">' + esc(o.customerName) + ' · ' + S.fmtMoney(o.payableAmount) + '</div></div>' : '') +
+      (pays.length ? '<div class="timeline-item"><div class="tl-time">' + S.fmtTime(pays[0].paidAt) + '</div><div class="tl-title">收款确认</div><div class="tl-desc">' + S.fmtMoney(pays[0].amount) + ' · ' + esc(S.PAY_METHOD_TEXT[pays[0].method] || pays[0].method) + '</div></div>' : '') +
+      '<div class="timeline-item"><div class="tl-time">' + S.fmtTime(s.shippedAt) + '</div><div class="tl-title">已发货 · ' + esc(s.company) + '</div><div class="tl-desc">运单号 ' + esc(s.trackingNo) + '</div></div>' +
+      (s.status === 'signed'
+        ? '<div class="timeline-item"><div class="tl-time">' + S.fmtTime(s.signedAt) + '</div><div class="tl-title">已签收</div><div class="tl-desc">订单自动流转为已完成</div></div>'
+        : '<div class="timeline-item"><div class="tl-time">待更新</div><div class="tl-title">运输中</div><div class="tl-desc">签收后自动回写订单状态</div></div>') +
+    '</div></div>';
+
+    $('detailBody').innerHTML = html;
+    openModal('detailModal');
+  };
+
+  /* ---------------- 导出 ---------------- */
+  window.exportShipments = function () {
+    var list = shipList();
+    if (!list.length) return toast('当前没有可导出的发货单', 'warning');
+    var headers = ['发货单号', '订单编号', '客户', '收货人', '联系电话', '收货地址', '快递公司', '运单号', '发货时间', '签收时间', '状态'];
+    var rows = list.map(function (s) {
+      return [s.no || s.id, s.orderNo, s.customerName, s.receiver || '', s.receiverPhone || '', s.address || '',
+        s.company, s.trackingNo, S.fmtTime(s.shippedAt), s.status === 'signed' ? S.fmtTime(s.signedAt) : '', s.status === 'signed' ? '已签收' : '在途'];
+    });
+    if (S.downloadCsv('发货单_' + new Date().toISOString().slice(0, 10) + '.csv', headers, rows)) toast('已导出 ' + list.length + ' 条发货单');
+    else toast('导出失败', 'error');
+  };
+
+  /* ---------------- 初始化 ---------------- */
+  function init() {
+    if (!S) {
+      document.querySelector('.content-wrapper').innerHTML = '<div class="empty-state"><strong>销售数据层加载失败</strong>请刷新页面后重试</div>';
+      return;
+    }
+    $('sCompany').innerHTML = '<option value="all">全部快递公司</option>' +
+      S.SHIP_COMPANIES.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
+    refresh();
+    S.subscribe(refresh);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

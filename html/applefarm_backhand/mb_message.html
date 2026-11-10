@@ -160,6 +160,10 @@
   </div>
 
   <main class="main-content">
+    <nav class="device-tabs" aria-label="移动端运营·消息与同步">
+      <a href="mb_message.html" class="active">消息推送</a>
+      <a href="mb_sync_queue.html">同步队列</a>
+    </nav>
     <div class="page-header">
       <div>
         <div class="page-title">消息推送与公告</div>
@@ -222,6 +226,7 @@
               <th style="width:100px;">分类</th>
               <th>标题与内容</th>
               <th style="width:100px;">状态</th>
+              <th style="width:110px;">发布人</th>
               <th style="width:190px;">操作</th>
             </tr>
           </thead>
@@ -282,17 +287,20 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-ops-store.js"></script>
 <script>
 /* ============================================================
- * 消息推送与公告（T17）
- * 数据源：localStorage['mb_messages']
- *   结构：[{ id, category, title, content, time, target, enabled }]
+ * 消息推送与公告（移动端运营 · 消息与同步）
+ * 数据源：MobileOpsStore / localStorage['mb_messages']
+ *   结构：[{ id, category, title, content, time, target, enabled,
+ *            publisher, source, createdAt }]
  *   category：ai AI / alert 预警 / farming 农事 / device 设备 / notice 通知
  *   target  ：mobile 移动端作业人员 / all 全部用户
- *   读取方  ：applefarm_mobile/mb_home.html 首页滚动消息栏（仅取 enabled:true）
+ *   publisher：发布人（后台账号姓名，留痕展示）
+ *   读取方  ：applefarm_mobile/mb_home.html 首页滚动消息栏
+ *             （仅取 enabled:true 且 target 为 mobile/all）
  *   首次访问时沿用移动端原有 8 条硬编码消息初始化
  * ============================================================ */
-var MSG_KEY = 'mb_messages';
 
 /* 当前编辑中的消息 id（null = 新增） */
 var currentEditId = null;
@@ -317,32 +325,19 @@ var SEED_MESSAGES = [
   { category: 'alert', title: '本周末有雷阵雨，请做好防涝排水准备', content: '气象预报显示本周末（周六、周日）将有雷阵雨天气，预计累计降雨量30-50mm。请提前检查果园排水沟渠，确保排水畅通。低洼地块需特别注意防涝，避免积水影响果树根系。', time: '2026-09-20 18:00', target: 'mobile' }
 ];
 
-/* ---------- 数据读写（全部容错） ---------- */
-function readAll() {
-  try {
-    var raw = localStorage.getItem(MSG_KEY);
-    if (!raw) return null;
-    var v = JSON.parse(raw);
-    return Array.isArray(v) ? v.filter(function (m) { return m && typeof m === 'object'; }) : null;
-  } catch (e) {
-    return null;
-  }
-}
-
+/* ---------- 数据读写（统一走 MobileOpsStore） ---------- */
 function writeAll(list) {
-  try {
-    localStorage.setItem(MSG_KEY, JSON.stringify(list));
-    return true;
-  } catch (e) {
+  if (!MobileOpsStore.writeList(MobileOpsStore.KEYS.messages, list)) {
     Toast.error('本地存储写入失败，消息未能保存');
     return false;
   }
+  return true;
 }
 
 /* 首次访问：沿用移动端原有 8 条消息并回写，保持两端一致 */
 function readList() {
-  var list = readAll();
-  if (!list || !list.length) {
+  var list = MobileOpsStore.list('messages');
+  if (!list.length) {
     list = SEED_MESSAGES.map(function (m, i) {
       return {
         id: i + 1,
@@ -351,7 +346,10 @@ function readList() {
         content: m.content,
         time: m.time,
         target: m.target || 'mobile',
-        enabled: true
+        enabled: true,
+        publisher: '系统管理员',
+        source: 'pc',
+        createdAt: m.time
       };
     });
     writeAll(list);
@@ -438,6 +436,8 @@ function renderTable() {
           '<div class="cell-sub">' + esc(m.content) + '</div></td>' +
       '<td><span class="status-tag ' + (on ? 'on' : 'off') + '">' + (on ? '启用中' : '已停用') + '</span>' +
           '<span class="target-tag">' + esc(target) + '</span></td>' +
+      '<td>' + esc(m.publisher || '系统管理员') +
+          '<div class="cell-sub" style="font-size:11px;">' + esc(MobileOpsStore.SOURCE_TEXT[m.source || 'pc']) + '</div></td>' +
       '<td><div class="action-btns">' +
         '<button class="action-btn edit" data-act="edit" data-id="' + esc(m.id) + '">编辑</button>' +
         '<button class="action-btn detail" data-act="toggle" data-id="' + esc(m.id) + '">' + (on ? '停用' : '启用') + '</button>' +
@@ -466,6 +466,7 @@ function toggleMsg(id) {
   if (!target) { Toast.error('未找到该消息'); return; }
   target.enabled = target.enabled === false;
   if (writeAll(list)) {
+    MobileOpsStore.audit(target.enabled ? '启用消息' : '停用消息', 'messages', target.id, target.title);
     renderTable();
     Toast.success(target.enabled ? '消息已启用，移动端可展示' : '消息已停用，移动端不再展示');
   }
@@ -485,6 +486,7 @@ function deleteMsg(id) {
     onConfirm: function () {
       var cur = readList().filter(function (m) { return String(m.id) !== String(id); });
       if (writeAll(cur)) {
+        MobileOpsStore.audit('删除消息', 'messages', id, target.title);
         renderTable();
         Toast.success('消息已删除');
       }
@@ -573,6 +575,7 @@ function submitEdit() {
     hit.target = target;
     hit.time = time;
     hit.enabled = enabled;
+    hit.updatedAt = MobileOpsStore.now();
   } else {
     var maxId = 0;
     list.forEach(function (m) {
@@ -586,12 +589,16 @@ function submitEdit() {
       content: content,
       time: time,
       target: target,
-      enabled: enabled
+      enabled: enabled,
+      publisher: MobileOpsStore.operatorName(),
+      source: 'pc',
+      createdAt: MobileOpsStore.now()
     });
   }
 
   var isEdit = currentEditId != null;
   if (writeAll(list)) {
+    MobileOpsStore.audit(isEdit ? '编辑消息' : '发布消息', 'messages', isEdit ? currentEditId : maxId, title);
     closeEdit();
     renderTable();
     Toast.success(isEdit ? '消息已更新，移动端实时生效' : '消息已发布，移动端首页可见');
@@ -600,6 +607,10 @@ function submitEdit() {
 
 /* ---------- 初始化 ---------- */
 document.addEventListener('DOMContentLoaded', function () {
+  MobileOpsStore.ready();
+  MobileOpsStore.subscribe(function (key) {
+    if (key === MobileOpsStore.KEYS.messages) renderTable();
+  });
   var catSelect = document.getElementById('catSelect');
   var editCat = document.getElementById('editCat');
   Object.keys(CATEGORY_TEXT).forEach(function (k) {

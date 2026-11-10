@@ -6,6 +6,7 @@
   <title>移动商城 - 订单管理</title>
   <script src="js/h5-auth.js"></script>
   <script>H5Auth.require();</script>
+  <script src="../applefarm_backhand/js/shared/adoption-store.js"></script>
   <link rel="stylesheet" href="../applefarm_mobile/css/mobile-design-system.css">
   <style>
     /* ========== 页面专属样式 ========== */
@@ -246,8 +247,23 @@
       var o = list.find(function(x){ return x.no === no; });
       if (o) { o.status = '待发货'; o.statusCode = 'paid'; }
       if (!writeOrders(list)) return;
+
+      /* 认养订单激活：待支付 → 已支付，果树转已认养并写入 H5 认养记录 */
+      var activated = 0;
+      if (o && Array.isArray(o.adoptionOrders) && typeof AdoptionStore !== 'undefined') {
+        o.adoptionOrders.forEach(function (adoptNo) {
+          try {
+            AdoptionStore.activateOrder(adoptNo, { payMethod: 'wechat', payTxnNo: 'H5-' + Date.now() });
+            activated++;
+          } catch (e) {
+            console.warn('[H5] 认养订单激活失败', adoptNo, e && e.message);
+          }
+        });
+      }
       renderOrders();
-      showOrderToast('支付成功，等待商家发货');
+      showOrderToast(activated
+        ? '支付成功，已激活 ' + activated + ' 棵果树认养'
+        : '支付成功，等待商家发货');
     }
 
     function confirmReceipt(no) {

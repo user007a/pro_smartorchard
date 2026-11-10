@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 销售目标</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/sales-module.css">
+<style>
+  .rate-cell { min-width: 130px; }
+  .rate-text { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-tertiary, #8c9a8c); margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .rate-text strong { color: var(--text-primary, #1f2d1f); }
+</style>
+<style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
+</head>
+<body data-active-menu="sales" data-active-submenu="sales-target">
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3L11 11M11 3L3 11"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <div class="page-header">
+          <h1 class="page-title">销售目标</h1>
+          <p class="page-subtitle">按年度 / 月度、公司或个人设置销售目标，实际完成额由销售订单实时统计（不含已取消订单）。</p>
+        </div>
+
+        <div class="sales-stats" id="targetStats"></div>
+
+        <div class="page-section search-section">
+          <div class="search-bar filter-bar">
+            <span class="filter-label">年份</span>
+            <select class="search-select" id="tYear"></select>
+            <span class="filter-label">负责人</span>
+            <select class="search-select" id="tOwner">
+              <option value="all">全部负责人</option>
+              <option value="">全公司</option>
+            </select>
+            <select class="search-select" id="tKind">
+              <option value="all">全部期间</option>
+              <option value="year">年度目标</option>
+              <option value="month">月度目标</option>
+            </select>
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="applyFilter()">查询</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+              <button class="jg-btn" onclick="exportTargets()">导出 CSV</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-section action-bar">
+          <div class="action-left">
+            <button class="jg-btn jg-btn-primary" onclick="openTarget('')">+ 新建销售目标</button>
+          </div>
+          <div class="action-right" style="margin-left:auto;">
+            <span class="selected-info" id="targetCountInfo"></span>
+          </div>
+        </div>
+
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table" style="min-width:1250px;">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:130px;">目标期间</th>
+                  <th style="width:120px;">负责人</th>
+                  <th style="width:130px;" class="text-right">目标金额</th>
+                  <th style="width:100px;" class="text-right">目标订单</th>
+                  <th style="width:130px;" class="text-right">实际金额</th>
+                  <th style="width:100px;" class="text-right">实际订单</th>
+                  <th style="width:180px;">金额达成率</th>
+                  <th style="width:180px;">订单达成率</th>
+                  <th style="width:100px;">状态</th>
+                  <th style="width:150px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="targetBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container" style="display:flex;justify-content:flex-end;margin-top:14px;"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 目标维护 -->
+<div class="modal-overlay" id="targetModal" style="display:none;">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title" id="targetTitle">新建销售目标</h3>
+      <button class="modal-close" onclick="closeModal('targetModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>期间类型</label>
+          <select id="tgKind" onchange="syncKind()">
+            <option value="year">年度目标</option>
+            <option value="month">月度目标</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label><span class="required"></span>年份</label>
+          <select id="tgYear"></select>
+        </div>
+        <div class="form-group" id="tgMonthGroup" style="display:none;">
+          <label><span class="required"></span>月份</label>
+          <select id="tgMonth">
+            <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+            <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+            <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+            <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>负责人</label>
+          <select id="tgOwner" onchange="syncActual()">
+            <option value="">全公司</option>
+          </select>
+          <div class="form-hint">同一期间 + 同一负责人只能存在一条目标</div>
+        </div>
+        <div class="form-group">
+          <label><span class="required"></span>目标金额（元）</label>
+          <input type="number" id="tgAmount" min="0" step="10000" value="0">
+        </div>
+        <div class="form-group">
+          <label>目标订单数</label>
+          <input type="number" id="tgOrders" min="0" step="1" value="0">
+        </div>
+        <div class="form-group full">
+          <label>备注</label>
+          <input type="text" id="tgRemark" placeholder="如：包含双十一预售目标">
+        </div>
+        <div class="form-group full">
+          <div class="readonly-value" id="tgActual">当前期间实际完成：—</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('targetModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitTarget()">保存目标</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/shared/sales-store.js"></script>
+<script src="js/common-functions.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+<script>
+(function () {
+  'use strict';
+  var S = window.SalesStore;
+  var PAGE_SIZE = 10;
+  var editId = '';
+  var F = { year: String(new Date().getFullYear()), owner: 'all', kind: 'all' };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function toast(msg, type) {
+    if (window.LegacyToast) window.LegacyToast.show(msg, type || 'success');
+  }
+  function pad(n) { return n < 10 ? '0' + n : String(n); }
+  function wanText(n) { return (Number(n) || 0) >= 10000 ? S.fmtWan(n) : S.fmtMoney(n); }
+  function periodText(p) {
+    return String(p).length === 4 ? p + ' 年' : p.replace('-', ' 年 ') + ' 月';
+  }
+
+  window.closeModal = function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.classList.remove('show');
+    el.style.display = 'none';
+  };
+  function openModal(id) {
+    var el = $(id);
+    el.style.display = 'flex';
+    el.classList.add('show');
+  }
+
+  /* ---------------- 统计 ---------------- */
+  function renderStats() {
+    var all = S.targets();
+    var yearTargets = all.filter(function (t) { return String(t.period).indexOf(F.year) === 0; });
+    var annual = yearTargets.filter(function (t) { return String(t.period).length === 4 && !t.owner; })[0];
+    var annualActual = S.targetProgress(F.year, '');
+    var months = yearTargets.filter(function (t) { return String(t.period).indexOf('-') > 0; });
+    var current = String(new Date().getFullYear()) + '-' + pad(new Date().getMonth() + 1);
+    var lagging = months.filter(function (t) {
+      if (t.period > current) return false;
+      return S.targetProgress(t.period, t.owner).amountRate < 0.8;
+    });
+    var owners = {};
+    yearTargets.forEach(function (t) { if (t.owner) owners[t.owner] = true; });
+
+    function card(label, value, sub, cls) {
+      return '<div class="sales-stat-card ' + (cls || '') + '">' +
+        '<div class="stat-label">' + label + '</div>' +
+        '<div class="stat-value">' + value + '</div>' +
+        '<div class="stat-sub">' + sub + '</div></div>';
+    }
+    $('targetStats').innerHTML =
+      card('年度目标', annual ? wanText(annual.targetAmount) : '未设置', F.year + ' 年公司整体', '') +
+      card('年度已完成', wanText(annualActual.actualAmount), annualActual.actualOrders + ' 笔订单', 'is-primary') +
+      card('年度达成率', annual ? (annualActual.amountRate * 100).toFixed(1) + '%' : '—', '实时按订单累计',
+        annual ? (annualActual.amountRate >= 1 ? 'is-success' : 'is-warning') : 'is-danger') +
+      card('月度目标', months.length + ' 条', '覆盖负责人 ' + Object.keys(owners).length + ' 人', '') +
+      card('落后月份', lagging.length + ' 个', '达成率低于 80%', lagging.length ? 'is-danger' : 'is-success') +
+      card('目标差额', annual ? wanText(Math.max(0, annual.targetAmount - annualActual.actualAmount)) : '—', '距离年度目标', '');
+  }
+
+  /* ---------------- 列表 ---------------- */
+  function list() {
+    return S.targets().filter(function (t) {
+      if (String(t.period).indexOf(F.year) !== 0) return false;
+      if (F.owner !== 'all' && (t.owner || '') !== F.owner) return false;
+      if (F.kind === 'year' && String(t.period).length !== 4) return false;
+      if (F.kind === 'month' && String(t.period).indexOf('-') === -1) return false;
+      return true;
+    }).sort(function (a, b) {
+      if (String(a.period) !== String(b.period)) return String(a.period) < String(b.period) ? 1 : -1;
+      return (a.owner || '').localeCompare(b.owner || '');
+    });
+  }
+
+  function statusOf(t, p) {
+    var today = new Date();
+    var cur = today.getFullYear() + '-' + pad(today.getMonth() + 1);
+    if (p.amountRate >= 1) return 'done';
+    if (String(t.period).length === 4) {
+      return Number(F.year) < today.getFullYear() ? 'missed' : 'ongoing';
+    }
+    if (t.period > cur) return 'pending';
+    if (t.period === cur) return 'ongoing';
+    return 'missed';
+  }
+
+  function statusClass(s) {
+    if (s === 'done') return 'st-completed';
+    if (s === 'ongoing') return 'st-paid';
+    if (s === 'missed') return 'st-refunded';
+    return 'st-inactive';
+  }
+
+  function rateBar(rate, actual, target, unit) {
+    var cls = rate >= 1 ? '' : (rate >= 0.8 ? 'warn' : 'danger');
+    return '<div class="rate-cell">' +
+      '<div class="rate-text"><strong>' + (rate * 100).toFixed(1) + '%</strong><span>' +
+        (unit === 'money' ? wanText(actual) + ' / ' + wanText(target) : actual + ' / ' + target) + '</span></div>' +
+      '<div class="progress-track"><div class="progress-fill ' + cls + '" style="width:' + Math.min(100, Math.round(rate * 100)) + '%;"></div></div>' +
+    '</div>';
+  }
+
+  function row(t, index) {
+    var p = S.targetProgress(t.period, t.owner || '');
+    var st = statusOf(t, p);
+    return '<tr>' +
+      '<td>' + (index + 1) + '</td>' +
+      '<td><strong>' + esc(periodText(t.period)) + '</strong></td>' +
+      '<td>' + esc(t.owner || '全公司') + '</td>' +
+      '<td class="num money text-right">' + wanText(t.targetAmount) + '</td>' +
+      '<td class="num text-right">' + (p.targetOrders || '—') + '</td>' +
+      '<td class="num money text-right">' + wanText(p.actualAmount) + '</td>' +
+      '<td class="num text-right">' + p.actualOrders + '</td>' +
+      '<td>' + rateBar(p.amountRate, p.actualAmount, p.targetAmount, 'money') + '</td>' +
+      '<td>' + (p.targetOrders ? rateBar(p.orderRate, p.actualOrders, p.targetOrders, 'count') : '<span class="muted">未设置</span>') + '</td>' +
+      '<td><span class="status-tag ' + statusClass(st) + '">' + (S.TARGET_STATUS_TEXT[st] || st) + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn edit" onclick="openTarget(\'' + t.id + '\')">编辑</button>' +
+        '<button class="action-btn delete" onclick="removeTarget(\'' + t.id + '\')">删除</button>' +
+      '</div></td>' +
+    '</tr>';
+  }
+
+  function refreshTable() {
+    var data = list();
+    $('targetCountInfo').textContent = '共 ' + data.length + ' 条目标';
+    if (!data.length) {
+      $('targetBody').innerHTML = '<tr class="empty-row"><td colspan="11" style="text-align:center;color:var(--text-tertiary);padding:36px 0;">当前条件下暂无销售目标</td></tr>';
+      $('pagination-container').innerHTML = '';
+      return;
+    }
+    Pagination.init({
+      data: data,
+      pageSize: PAGE_SIZE,
+      containerId: 'pagination-container',
+      tbodyId: 'targetBody',
+      renderRow: row
+    });
+  }
+
+  function refresh() {
+    renderStats();
+    refreshTable();
+  }
+
+  window.applyFilter = function () {
+    F.year = $('tYear').value;
+    F.owner = $('tOwner').value;
+    F.kind = $('tKind').value;
+    refresh();
+  };
+
+  window.resetFilter = function () {
+    $('tYear').value = String(new Date().getFullYear());
+    $('tOwner').value = 'all';
+    $('tKind').value = 'all';
+    F = { year: String(new Date().getFullYear()), owner: 'all', kind: 'all' };
+    refresh();
+  };
+
+  /* ---------------- 维护 ---------------- */
+  window.syncKind = function () {
+    $('tgMonthGroup').style.display = $('tgKind').value === 'month' ? '' : 'none';
+    syncActual();
+  };
+
+  window.syncActual = function () {
+    var period = $('tgKind').value === 'year' ? $('tgYear').value : ($('tgYear').value + '-' + pad(Number($('tgMonth').value)));
+    var p = S.targetProgress(period, $('tgOwner').value);
+    $('tgActual').textContent = '当前期间实际完成：' + wanText(p.actualAmount) + ' / ' + p.actualOrders + ' 笔订单';
+  };
+
+  window.openTarget = function (id) {
+    editId = id || '';
+    var t = null;
+    if (id) t = S.targets().filter(function (x) { return x.id === id; })[0];
+    if (id && !t) return toast('销售目标不存在', 'error');
+    $('targetTitle').textContent = id ? '编辑销售目标' : '新建销售目标';
+
+    var years = {};
+    S.targets().forEach(function (x) { years[String(x.period).slice(0, 4)] = true; });
+    years[String(new Date().getFullYear())] = true;
+    years[F.year] = true;
+    $('tgYear').innerHTML = Object.keys(years).sort().reverse().map(function (y) {
+      return '<option value="' + y + '">' + y + ' 年</option>';
+    }).join('');
+
+    var owners = {};
+    S.targets().forEach(function (x) { if (x.owner) owners[x.owner] = true; });
+    S.orders().forEach(function (o) { if (o.owner && o.owner !== '线上自营') owners[o.owner] = true; });
+    $('tgOwner').innerHTML = '<option value="">全公司</option>' + Object.keys(owners).sort().map(function (n) {
+      return '<option value="' + esc(n) + '">' + esc(n) + '</option>';
+    }).join('');
+
+    if (t) {
+      var isMonth = String(t.period).indexOf('-') > 0;
+      $('tgKind').value = isMonth ? 'month' : 'year';
+      $('tgYear').value = String(t.period).slice(0, 4);
+      if (isMonth) $('tgMonth').value = String(Number(String(t.period).slice(5, 7)));
+      $('tgOwner').value = t.owner || '';
+      $('tgAmount').value = t.targetAmount;
+      $('tgOrders').value = t.targetOrders;
+      $('tgRemark').value = t.remark || '';
+    } else {
+      $('tgKind').value = 'year';
+      $('tgYear').value = F.year;
+      $('tgMonth').value = String(new Date().getMonth() + 1);
+      $('tgOwner').value = '';
+      $('tgAmount').value = 0;
+      $('tgOrders').value = 0;
+      $('tgRemark').value = '';
+    }
+    syncKind();
+    openModal('targetModal');
+  };
+
+  window.submitTarget = function () {
+    var isMonth = $('tgKind').value === 'month';
+    var period = isMonth ? ($('tgYear').value + '-' + pad(Number($('tgMonth').value))) : $('tgYear').value;
+    var r = S.saveTarget({
+      id: editId || undefined,
+      period: period,
+      owner: $('tgOwner').value,
+      targetAmount: Number($('tgAmount').value) || 0,
+      targetOrders: Number($('tgOrders').value) || 0,
+      remark: $('tgRemark').value
+    });
+    if (!r.ok) return toast(r.message, 'error');
+    closeModal('targetModal');
+    toast(editId ? '销售目标已更新' : '销售目标已创建');
+    F.year = period.slice(0, 4);
+    $('tYear').value = F.year;
+    refresh();
+  };
+
+  window.removeTarget = function (id) {
+    if (!confirm('确认删除该销售目标？')) return;
+    var r = S.removeTarget(id);
+    if (!r.ok) return toast(r.message, 'error');
+    toast('销售目标已删除');
+    refresh();
+  };
+
+  window.exportTargets = function () {
+    var data = list();
+    if (!data.length) return toast('当前没有可导出的目标', 'warning');
+    var headers = ['目标期间', '负责人', '目标金额', '目标订单数', '实际金额', '实际订单数', '金额达成率(%)', '订单达成率(%)', '状态'];
+    var rows = data.map(function (t) {
+      var p = S.targetProgress(t.period, t.owner || '');
+      var st = statusOf(t, p);
+      return [periodText(t.period), t.owner || '全公司', t.targetAmount, p.targetOrders || 0, p.actualAmount, p.actualOrders,
+        (p.amountRate * 100).toFixed(1), p.targetOrders ? (p.orderRate * 100).toFixed(1) : '',
+        S.TARGET_STATUS_TEXT[st] || st];
+    });
+    if (S.downloadCsv('销售目标_' + F.year + '.csv', headers, rows)) toast('已导出 ' + data.length + ' 条目标');
+    else toast('导出失败', 'error');
+  };
+
+  /* ---------------- 初始化 ---------------- */
+  function init() {
+    if (!S) {
+      document.querySelector('.content-wrapper').innerHTML = '<div class="empty-state"><strong>销售数据层加载失败</strong>请刷新页面后重试</div>';
+      return;
+    }
+    var years = {};
+    S.targets().forEach(function (t) { years[String(t.period).slice(0, 4)] = true; });
+    years[String(new Date().getFullYear())] = true;
+    var yearList = Object.keys(years).sort().reverse();
+    $('tYear').innerHTML = yearList.map(function (y) { return '<option value="' + y + '">' + y + ' 年</option>'; }).join('');
+    $('tYear').value = yearList.indexOf(F.year) >= 0 ? F.year : yearList[0];
+    F.year = $('tYear').value;
+
+    var owners = {};
+    S.targets().forEach(function (t) { if (t.owner) owners[t.owner] = true; });
+    $('tOwner').innerHTML = '<option value="all">全部负责人</option><option value="">全公司</option>' +
+      Object.keys(owners).sort().map(function (n) { return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join('');
+
+    refresh();
+    S.subscribe(refresh);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

@@ -107,6 +107,19 @@
     align-items:center;
     gap:var(--space-lg);
   }
+  /* 表格多选列 */
+  .col-check { width:44px; text-align:center; }
+  .col-check input { cursor:pointer; }
+  /* 响应式：窄屏下搜索栏纵向堆叠、操作栏换行 */
+  @media (max-width:1100px) {
+    .search-section { padding:var(--space-xl); }
+    .search-bar { flex-wrap:wrap !important; overflow-x:visible; }
+    .search-actions { margin-left:0; width:100%; }
+    .search-item { flex:1 1 100%; }
+    .search-item .search-input { flex:1; max-width:none; }
+    .action-bar { flex-wrap:wrap; }
+    .action-bar .action-left { flex-wrap:wrap; }
+  }
   .selected-info {
     font-size:var(--font-size-sm);
     color:var(--text-tertiary);
@@ -551,7 +564,21 @@
           </div>
         </div>
         <div class="action-bar">
-          <div class="action-bar-left">
+          <div class="action-left">
+            <button class="jg-btn" id="btnExport">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" x2="12" y1="15" y2="3"/>
+              </svg>
+              批量导出
+            </button>
+            <button class="jg-btn" id="btnDelete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>
+              </svg>
+              批量删除
+            </button>
             <button class="jg-btn jg-btn-primary" id="btnGenerateDaily">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
@@ -597,6 +624,7 @@
               <thead>
                 <tr>
                   <th style="width:60px;">序号</th>
+                  <th class="col-check"><input type="checkbox" id="selectAll" aria-label="全选"></th>
                   <th>报告名称</th>
                   <th style="width:100px;">报告类型</th>
                   <th style="width:140px;">生成时间</th>
@@ -865,6 +893,7 @@
 
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="js/shared/alert-data.js"></script>
 <script>
   const mockData = [
     { id: 'RPT001', title: '2026年9月20日预警日报', type: 'daily', typeText: '日报', time: '2026-09-20 09:00', base: '全部基地汇总', author: '系统自动', statDevice: '12', statFarming: '8', statUrgent: '3', statRate: '95%', overview: '今日共收到20条预警信息，其中设备预警12条，农事预警8条。紧急级别预警3条，重要级别预警7条，提醒级别预警10条。整体处理率达到95%，较昨日提升2%。', deviceDetail: '今日设备预警主要集中在天水麦积区基地和天水秦州基地。其中水肥一体化设备离线预警2条，土壤湿度传感器异常预警3条，气象站设备离线预警1条。相关运维人员已及时响应处理。', farmingDetail: '农事预警方面，红蜘蛛虫害预警为最高优先级，已触发紧急级别。建议各基地密切关注虫害发展趋势，及时采取防治措施。此外，暴雨预警和大风预警也需要重点关注。', suggestion: '1. 针对红蜘蛛虫害预警，建议立即组织喷洒农药进行防治；2. 暴雨来临前做好果园排水准备；3. 大风天气检查加固防风设施；4. 加强设备巡检，确保设备正常运行。' },
@@ -896,6 +925,9 @@
   let currentReportId = null;
 
   document.addEventListener('DOMContentLoaded', function() {
+    // 种子报告统计一律由 AlertStore 实时汇总重算，消除与预警总览的口径差异
+    refreshSeedReportStats();
+
     Pagination.init({
       currentPage: 1,
       pageSize: 10,
@@ -928,10 +960,14 @@
       filteredData = mockData.filter(item => {
         const matchKeyword = !keyword || item.title.toLowerCase().includes(keyword) || item.author.toLowerCase().includes(keyword);
         const matchType = !type || item.type === type;
-        const matchDate = (!startDate && !endDate) || 
-          (startDate && item.time >= startDate) || 
-          (endDate && item.time <= endDate);
-        const matchBase = !base || item.base.includes(base);
+        // 日期范围：起止同时存在时取区间交集
+        let matchDate = true;
+        if (startDate) matchDate = matchDate && item.time >= startDate + ' 00:00';
+        if (endDate) matchDate = matchDate && item.time <= endDate + ' 23:59';
+        // 基地：base 是下拉 value（如 yantai），需转为中文名后比较
+        const baseText = ({ yantai:'天水麦积区基地', weihai:'天水秦州基地', penglai:'天水甘谷基地',
+                            qingdao:'青岛莱西基地', longkou:'龙口南山基地', all:'' })[base];
+        const matchBase = !base || !baseText || item.base.indexOf(baseText) >= 0;
         return matchKeyword && matchType && matchDate && matchBase;
       });
 
@@ -1051,6 +1087,10 @@
       updateSelectedCount();
     });
 
+    document.addEventListener('change', function(e) {
+      if (e.target.classList.contains('row-checkbox')) updateSelectedCount();
+    });
+
     document.querySelectorAll('.btn-cancel').forEach(btn => {
       btn.addEventListener('click', function() {
         document.querySelectorAll('.modal-overlay').forEach(modal => {
@@ -1082,18 +1122,24 @@
   }
 
   // 按弹窗选择生成报告记录（PC-B-072）
+  // 统计数据一律取自 AlertStore 实时汇总，与预警总览 / 设备预警 / 农事预警口径一致
   function buildGeneratedReport(opts) {
     var typeMap = { daily: '日报', weekly: '周报', monthly: '月报', custom: '自定义报告' };
     var baseMap = { all: '全部基地汇总', yantai: '天水麦积区基地', weihai: '天水秦州基地', penglai: '天水甘谷基地', qingdao: '青岛莱西基地', longkou: '龙口南山基地' };
     var typeText = typeMap[opts.type] || '报告';
     var baseText = baseMap[opts.base] || '全部基地汇总';
-    var day = new Date().getDate();
-    var statDevice = String(8 + (day % 6));
-    var statFarming = String(5 + (day % 5));
-    var statUrgent = String(1 + (day % 3));
-    var statRate = (90 + (day % 9)) + '%';
-    var total = (parseInt(statDevice, 10) + parseInt(statFarming, 10));
     var has = function(k){ return !opts.contents || opts.contents.length === 0 || opts.contents.indexOf(k) >= 0; };
+
+    // 取真实预警集合：日报=今日，周报=近7天，月报=近30天，自定义=所选区间
+    var list = collectAlertsForReport(opts.type, opts.base, opts.startDate, opts.endDate);
+    var stats = summarizeAlerts(list);
+
+    var statDevice = String(stats.device);
+    var statFarming = String(stats.farming);
+    var statUrgent = String(stats.urgent);
+    var statRate = stats.rate + '%';
+    var total = stats.total;
+
     var title = opts.name || (todayStr() + '预警' + typeText + (opts.type === 'custom' ? '（' + opts.startDate + ' 至 ' + opts.endDate + '）' : ''));
     return {
       id: nextReportId(),
@@ -1107,11 +1153,95 @@
       statFarming: statFarming,
       statUrgent: statUrgent,
       statRate: statRate,
-      overview: has('overview') ? ('本期共收到' + total + '条预警信息，其中设备预警' + statDevice + '条，农事预警' + statFarming + '条；紧急级别' + statUrgent + '条，整体处理率' + statRate + '。') : '-',
-      deviceDetail: has('device') ? '设备预警主要涉及天水麦积区基地、天水秦州基地等，涵盖离线、数据异常与维护提醒，运维人员已及时响应处理。' : '-',
-      farmingDetail: has('farming') ? '农事预警以病虫害与气象预警为主，重点关注红蜘蛛、蚜虫防治及高温干旱应对。' : '-',
-      suggestion: has('suggestion') ? '1. 加强设备巡检，及时排除离线与数据异常；2. 根据气象预警做好灌溉、防寒与排水准备；3. 密切关注病虫害趋势，及时防治。' : '-'
+      overview: has('overview') ? (
+        '本期共收到' + total + '条预警信息，其中设备预警' + statDevice + '条，农事预警' + statFarming + '条；' +
+        '紧急级别' + statUrgent + '条，已闭环' + stats.closed + '条，闭环率' + statRate + '。'
+      ) : '-',
+      deviceDetail: has('device') ? buildSourceSummary(list, 'device') : '-',
+      farmingDetail: has('farming') ? buildSourceSummary(list, 'farming') : '-',
+      suggestion: has('suggestion') ? buildSuggestion(list, stats) : '-'
     };
+  }
+
+  // 收集报告周期内的真实预警
+  // reportTime：种子报告自带生成时间时，以其为准计算周期（而非当前日期）
+  function collectAlertsForReport(type, base, startDate, endDate, reportTime){
+    var all = (window.AlertStore ? AlertStore.all() : []);
+    var baseText = ({ all:'', yantai:'天水麦积区基地', weihai:'天水秦州基地', penglai:'天水甘谷基地', qingdao:'青岛莱西基地', longkou:'龙口南山基地' })[base] || '';
+    var from = '', to = '';
+    var anchor = new Date();
+    if (reportTime){
+      var rm = String(reportTime).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (rm) anchor = new Date(+rm[1], +rm[2]-1, +rm[3]);
+    }
+    function ymd(d){ return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate()); }
+    if (type === 'daily'){
+      from = ymd(anchor); to = from;
+    } else if (type === 'weekly'){
+      from = ymd(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - 6)); to = ymd(anchor);
+    } else if (type === 'monthly'){
+      from = ymd(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - 29)); to = ymd(anchor);
+    } else {
+      from = startDate || ''; to = endDate || '';
+    }
+    return all.filter(function(a){
+      var d = String(a.time || '').substring(0,10);
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      if (baseText && String(a.base || a.location || '').indexOf(baseText) < 0) return false;
+      return true;
+    });
+  }
+
+  // 汇总统计（与 AlertStore.stats 口径一致）
+  function summarizeAlerts(list){
+    var s = { total: list.length, device:0, farming:0, manual:0, model:0, inventory:0, system:0,
+              urgent:0, important:0, reminder:0, notice:0, closed:0, pending:0, processing:0, ignored:0, transferred:0 };
+    list.forEach(function(a){
+      if (a.type === 'device' || a.source === 'device') s.device++;
+      else if (a.type === 'farming' || a.source === 'manual' || a.source === 'model' || a.source === 'inventory' || a.source === 'system') s.farming++;
+      if (s[a.source] !== undefined) s[a.source]++;
+      if (s[a.level] !== undefined) s[a.level]++;
+      if (s[a.status] !== undefined) s[a.status]++;
+    });
+    s.rate = s.total ? Math.round(s.closed / s.total * 100) : 0;
+    return s;
+  }
+
+  // 按来源生成详情摘要（列出具体条目，不再是固定文案）
+  function buildSourceSummary(list, kind){
+    var rows = list.filter(function(a){
+      if (kind === 'device') return a.type === 'device' || a.source === 'device';
+      return !(a.type === 'device' || a.source === 'device');
+    });
+    if (!rows.length) return '本期无相关预警。';
+    // 按标题前缀归组计数
+    var groups = {};
+    rows.forEach(function(a){
+      var key = String(a.title || '').split('：')[0] || '其他';
+      groups[key] = (groups[key] || 0) + 1;
+    });
+    var parts = Object.keys(groups).map(function(k){ return k + ' ' + groups[k] + ' 条'; });
+    var closed = rows.filter(function(a){ return a.status === 'closed'; }).length;
+    return parts.join('、') + '；合计 ' + rows.length + ' 条，已闭环 ' + closed + ' 条。';
+  }
+
+  // 处理建议：基于未闭环与紧急条目动态生成
+  function buildSuggestion(list, stats){
+    var open = list.filter(function(a){ return a.status === 'pending' || a.status === 'processing'; });
+    var urgent = list.filter(function(a){ return a.level === 'urgent'; });
+    var lines = [];
+    if (urgent.length) lines.push('紧急级别预警 ' + urgent.length + ' 条，建议 15 分钟内响应、2 小时内完成处置');
+    if (open.length) lines.push('仍有 ' + open.length + ' 条未闭环，需指派责任人跟进');
+    var cats = {};
+    list.forEach(function(a){ var c = a.category || ''; if (c) cats[c] = (cats[c]||0)+1; });
+    var topCat = Object.keys(cats).sort(function(x,y){ return cats[y]-cats[x]; })[0];
+    if (topCat){
+      var CAT_TEXT = { pest:'病虫害', weather:'气象', soil:'土壤', growth:'生长', environment:'环境', yield:'产量', inventory:'库存', quality:'质量', device:'设备' };
+      lines.push('本期以' + (CAT_TEXT[topCat]||topCat) + '类问题为主（共 ' + cats[topCat] + ' 条），建议加强该类监测与巡检');
+    }
+    if (!lines.length) lines.push('本期无未闭环与紧急预警，各项指标运行正常');
+    return lines.map(function(t, i){ return (i+1) + '. ' + t; }).join('；') + '。';
   }
 
   // ---------- 真实导出（PC-B-038）----------
@@ -1178,6 +1308,7 @@
     return `
       <tr>
         <td>${index + 1}</td>
+        <td class="col-check"><input type="checkbox" class="row-checkbox" data-id="${item.id}" aria-label="选择该份报告"></td>
         <td><strong>${item.title}</strong></td>
         <td><span class="status-tag ${getTypeClass(item.type)}">${item.typeText}</span></td>
         <td>${item.time}</td>
@@ -1192,6 +1323,32 @@
         </td>
       </tr>
     `;
+  }
+
+  // 依据报告周期从 AlertStore 重算种子报告的统计与摘要（消除与总览口径不一致）
+  function refreshSeedReportStats() {
+    if (!window.AlertStore) return;
+    mockData.forEach(function(rpt){
+      var list = collectAlertsForReport(rpt.type, baseValueOf(rpt.base), rpt.startDate, rpt.endDate, rpt.time);
+      if (!list.length) return;
+      var stats = summarizeAlerts(list);
+      rpt.statDevice = String(stats.device);
+      rpt.statFarming = String(stats.farming);
+      rpt.statUrgent = String(stats.urgent);
+      rpt.statRate = stats.rate + '%';
+      rpt.overview = '本期共收到' + stats.total + '条预警信息，其中设备预警' + stats.device + '条，农事预警' + stats.farming +
+        '条；紧急级别' + stats.urgent + '条，已闭环' + stats.closed + '条，闭环率' + stats.rate + '%。';
+      rpt.deviceDetail = buildSourceSummary(list, 'device');
+      rpt.farmingDetail = buildSourceSummary(list, 'farming');
+      rpt.suggestion = buildSuggestion(list, stats);
+    });
+  }
+
+  // 基地中文名 → 下拉 value
+  function baseValueOf(baseText) {
+    var map = { '天水麦积区基地':'yantai', '天水秦州基地':'weihai', '天水甘谷基地':'penglai',
+                '青岛莱西基地':'qingdao', '龙口南山基地':'longkou', '全部基地汇总':'all' };
+    return map[baseText] || 'all';
   }
 
   function showDetailModal(id) {

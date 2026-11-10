@@ -196,11 +196,21 @@
 
     const FEEDBACK_KEY = 'smartorchard_feedbacks';
     const SEED_FEEDBACKS = [
-      { id: 1, title: '建议增加病虫害识别功能', content: '希望能增加拍照识别病虫害的功能，这样果农可以快速判断果树问题。', type: 'suggestion', status: 'processing', createTime: '2026-09-21 10:30', reply: '感谢您的建议，我们正在开发中，预计下月上线。' },
-      { id: 2, title: '数据同步异常', content: '农事记录同步到云端时经常失败，网络正常的情况下也会出现。', type: 'problem', status: 'pending', createTime: '2026-09-20 15:20' },
-      { id: 3, title: '优化地块绘制', content: '画地块时希望能支持更精确的坐标定位。', type: 'suggestion', status: 'passed', createTime: '2026-09-19 09:15', reply: '已优化，在最新版本中已上线。' },
-      { id: 4, title: '施肥建议不准确', content: '系统给出的施肥建议和实际需求有差异。', type: 'problem', status: 'rejected', createTime: '2026-09-18 14:00', rejectReason: '请提供具体地块信息，我们重新分析。' }
+      { id: 1, title: '建议增加病虫害识别功能', content: '希望能增加拍照识别病虫害的功能，这样果农可以快速判断果树问题。', type: 'suggestion', status: 'processing', createTime: '2026-09-21 10:30', source: 'mobile', operator: '张建国', operatorId: 'zhangjianguo', reply: '感谢您的建议，我们正在开发中，预计下月上线。' },
+      { id: 2, title: '数据同步异常', content: '农事记录同步到云端时经常失败，网络正常的情况下也会出现。', type: 'problem', status: 'pending', createTime: '2026-09-20 15:20', source: 'mobile', operator: '张建国', operatorId: 'zhangjianguo' },
+      { id: 3, title: '优化地块绘制', content: '画地块时希望能支持更精确的坐标定位。', type: 'suggestion', status: 'passed', createTime: '2026-09-19 09:15', source: 'mobile', operator: '李四', operatorId: 'lisi', reply: '已优化，在最新版本中已上线。' },
+      { id: 4, title: '施肥建议不准确', content: '系统给出的施肥建议和实际需求有差异。', type: 'problem', status: 'rejected', createTime: '2026-09-18 14:00', source: 'mobile', operator: '王五', operatorId: 'wangwu', rejectReason: '请提供具体地块信息，我们重新分析。' }
     ];
+
+    /* 当前登录作业人员，用于反馈/提问的来源留痕（后台「来源端 + 提交人」） */
+    function currentOperator() {
+      try {
+        const u = JSON.parse(localStorage.getItem('smartorchard_current_user') || 'null');
+        return { name: (u && u.name) || '移动端用户', id: (u && u.username) || '' };
+      } catch (e) {
+        return { name: '移动端用户', id: '' };
+      }
+    }
 
     // 反馈落库持久化，刷新后不丢失
     const mockFeedbacks = (function() {
@@ -380,13 +390,18 @@
         return;
       }
       
+      const me = currentOperator();
       const newFeedback = {
         id: Date.now(),
         title,
         content,
         type: selectedFeedbackType,
         status: 'pending',
-        createTime: MobileStore.fmtTime(Date.now())
+        createTime: MobileStore.fmtTime(Date.now()),
+        source: 'mobile',
+        operator: me.name,
+        operatorId: me.id,
+        appVersion: '1.0.0'
       };
       
       mockFeedbacks.unshift(newFeedback);
@@ -424,6 +439,7 @@
         feedback.content = content;
         feedback.type = selectedFeedbackType;
         feedback.status = 'pending';
+        feedback.updatedAt = MobileStore.fmtTime(Date.now());
         delete feedback.rejectReason;
         saveFeedbacks();
         

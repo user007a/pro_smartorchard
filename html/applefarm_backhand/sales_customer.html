@@ -4,1326 +4,703 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>智慧果园 - 客户管理</title>
-<!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
 <link rel="stylesheet" href="css/design-system.css">
 <link rel="stylesheet" href="css/sidebar-layout.css">
 <link rel="stylesheet" href="css/page-content.css">
-<style>
-  /* 顶部统计卡：客户总数/成交/回款/应收/平均账龄 共 5 张 */
-  #customerStats {
-    grid-template-columns:repeat(5, 1fr);
-  }
-  @media (max-width:1200px) {
-    #customerStats { grid-template-columns:repeat(3, 1fr); }
-  }
-
-  /* 统计卡片 */
-  .stats-cards {
-    display:grid;
-    grid-template-columns:repeat(4, 1fr);
-    gap:var(--space-lg);
-    margin-bottom:var(--space-xl);
-  }
-
-  .stat-card {
-    background:var(--bg-card);
-    border-radius:var(--radius-lg);
-    padding:var(--space-xl);
-    box-shadow:var(--shadow-card);
-    border:1px solid var(--border-light);
-    position:relative;
-    overflow:hidden;
-    transition:all var(--transition-bounce);
-    cursor:pointer;
-    display:flex;
-    align-items:center;
-    gap:var(--space-lg);
-  }
-
-  .stat-card::before {
-    content:'';
-    position:absolute;
-    top:0;
-    left:0;
-    right:0;
-    height:4px;
-    background:var(--gradient-primary);
-  }
-
-  .stat-card:hover {
-    transform:translateY(-4px);
-    box-shadow:var(--shadow-card-hover);
-  }
-
-  .stat-card.green::before { background:linear-gradient(90deg, var(--primary-500), var(--primary-300)); }
-  .stat-card.blue::before { background:linear-gradient(90deg, var(--info), #40a9ff); }
-  .stat-card.orange::before { background:linear-gradient(90deg, var(--accent-500), #ffc53d); }
-  .stat-card.purple::before { background:linear-gradient(90deg, #722ed1, #9254de); }
-
-  .stat-card .stat-icon {
-    width:48px;
-    height:48px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    border-radius:var(--radius-md);
-    flex-shrink:0;
-  }
-
-  .stat-card .stat-content {
-    flex:1;
-  }
-
-  .stat-card .stat-label {
-    font-size:var(--font-size-sm);
-    color:var(--text-tertiary);
-    margin-bottom:var(--space-xs);
-    font-weight:var(--font-weight-medium);
-  }
-
-  .stat-card .stat-value {
-    font-size:28px;
-    font-weight:var(--font-weight-bold);
-    line-height:1.2;
-    background:linear-gradient(135deg, var(--primary-500), var(--primary-600));
-    -webkit-background-clip:text;
-    -webkit-text-fill-color:transparent;
-    background-clip:text;
-  }
-
-  .stat-card.blue .stat-value {
-    background:linear-gradient(135deg, var(--info), #096dd9);
-    -webkit-background-clip:text;
-    background-clip:text;
-  }
-
-  .stat-card.orange .stat-value {
-    background:linear-gradient(135deg, var(--accent-500), var(--accent-600));
-    -webkit-background-clip:text;
-    background-clip:text;
-  }
-
-  .stat-card.purple .stat-value {
-    background:linear-gradient(135deg, #722ed1, #531dab);
-    -webkit-background-clip:text;
-    background-clip:text;
-  }
-
-  /* 数据表格 */
-  .data-table-wrapper {
-    overflow-x:auto;
-    border-radius:var(--radius-lg);
-    border:1px solid var(--border-light);
-    margin-bottom:var(--space-lg);
-  }
-
-  .data-table th,
-  .data-table td {
-    padding:12px 14px;
-    text-align:left;
-    border-bottom:1px solid var(--border-light);
-    transition:background var(--transition-fast);
-  }
-
-  /* 操作按钮组 */
-  .action-btns {
-    display:flex;
-    gap:6px;
-    flex-wrap:nowrap;
-    white-space:nowrap;
-  }
-
-  .action-btn {
-    padding:5px 10px;
-    font-size:var(--font-size-xs);
-    border-radius:var(--radius-sm);
-    border:1px solid var(--border-default);
-    background:var(--bg-card);
-    color:var(--text-secondary);
-    cursor:pointer;
-    transition:all var(--transition-fast);
-    white-space:nowrap;
-  }
-
-  .action-btn:hover {
-    border-color:var(--primary-500);
-    color:var(--primary-500);
-  }
-
-  .action-btn.detail { color:var(--info); border-color:var(--info-border); }
-  .action-btn.detail:hover { background:var(--info-bg); }
-  .action-btn.edit { color:var(--primary-500); border-color:var(--primary-500); }
-  .action-btn.edit:hover { background:var(--primary-50); }
-
-  /* 客户类型标签 */
-  .type-tag {
-    display:inline-flex;
-    align-items:center;
-    padding:3px 8px;
-    border-radius:var(--radius-full);
-    font-size:var(--font-size-xs);
-    font-weight:var(--font-weight-medium);
-    line-height:1.4;
-    white-space:nowrap;
-    border:1px solid transparent;
-  }
-
-  .type-tag.adoption { background:var(--primary-50); color:var(--success); border-color:var(--success-border); }
-  .type-tag.wholesale { background:var(--info-bg); color:var(--info); border-color:var(--info-border); }
-  .type-tag.retail { background:var(--warning-bg); color:#9a6700; border-color:var(--warning-border); }
-
-  /* 客户等级标签 */
-  .level-badge {
-    display:inline-flex;
-    align-items:center;
-    padding:3px 8px;
-    border-radius:var(--radius-full);
-    font-size:var(--font-size-xs);
-    font-weight:var(--font-weight-medium);
-    line-height:1.4;
-    white-space:nowrap;
-  }
-
-  .level-badge.vip {
-    background:linear-gradient(135deg, #fff7e6, #fff1b8);
-    color:#ad8b00;
-    border:1px solid #ffd666;
-  }
-
-  .level-badge.gold {
-    background:linear-gradient(135deg, #fff7e6, #fff1b8);
-    color:var(--warning);
-    border:1px solid #ffd666;
-  }
-
-  .level-badge.silver {
-    background:linear-gradient(135deg, #f5f5f5, #e8e8e8);
-    color:var(--text-tertiary);
-    border:1px solid var(--border-strong);
-  }
-
-  /* 搜索栏 */
-  .search-section {
-    margin-bottom:var(--space-lg);
-  }
-
-  .search-bar {
-    display:flex;
-    gap:var(--space-lg);
-    align-items:center;
-    flex-wrap:wrap;
-    padding:var(--space-lg);
-    background:var(--bg-card);
-    border-radius:var(--radius-lg);
-    box-shadow:var(--shadow-card);
-    border:1px solid var(--border-light);
-  }
-
-  .search-input {
-    padding:10px 14px;
-    border:1.5px solid var(--border-default);
-    border-radius:var(--radius-md);
-    font-size:var(--font-size-base);
-    width:200px;
-    transition:all var(--transition-fast);
-    background:var(--bg-card);
-    outline:none;
-  }
-
-  .search-select {
-    padding:10px 32px 10px 12px;
-    border:1.5px solid var(--border-default);
-    border-radius:var(--radius-md);
-    font-size:var(--font-size-base);
-    cursor:pointer;
-    background:var(--bg-card);
-    appearance:none;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c8c8c' stroke-width='2'%3E%3Cpath d='m6,9 6,6 6,-6'/%3E%3C/svg%3E");
-    background-repeat:no-repeat;
-    background-position:right 10px center;
-    outline:none;
-    transition:all var(--transition-fast);
-    min-width:120px;
-  }
-
-  /* 操作栏 */
-  .action-bar {
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    padding:var(--space-lg);
-    background:var(--bg-card);
-    border-radius:var(--radius-lg);
-    box-shadow:var(--shadow-card);
-    border:1px solid var(--border-light);
-    margin-bottom:var(--space-lg);
-  }
-
-  .action-left {
-    display:flex;
-    gap:var(--space-md);
-  }
-
-  .action-right {
-    display:flex;
-    gap:var(--space-md);
-  }
-
-  .selected-info {
-    font-size:var(--font-size-sm);
-    color:var(--text-tertiary);
-  }
-
-  .selected-info strong {
-    color:var(--primary-500);
-  }
-
-  /* 分页 */
-  .pagination {
-    display:flex;
-    align-items:center;
-    justify-content:flex-end;
-    gap:4px;
-    margin-top:20px;
-    padding-top:16px;
-    border-top:1px solid #f4f6f4;
-  }
-
-  .page-btn {
-    width:36px;
-    height:36px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    border:1.5px solid var(--border-default);
-    border-radius:var(--radius-md);
-    background:var(--bg-card);
-    font-size:var(--font-size-sm);
-    color:var(--text-secondary);
-    cursor:pointer;
-    transition:all var(--transition-fast);
-  }
-
-  /* 弹窗样式 */
-  .modal-overlay {
-    position:fixed;
-    top:0;
-    left:0;
-    right:0;
-    bottom:0;
-    background:rgba(0, 0, 0, 0.5);
-    display:none;
-    align-items:center;
-    justify-content:center;
-    z-index:1000;
-    backdrop-filter:blur(4px);
-  }
-
-  .modal-overlay.show {
-    display:flex;
-  }
-
-  .modal {
-    background:var(--bg-card);
-    border-radius:var(--radius-lg);
-    box-shadow:var(--shadow-lg);
-    width:90%;
-    max-width:500px;
-    max-height:80vh;
-    overflow:hidden;
-    animation:modalIn 0.2s ease;
-  }
-
-  @keyframes modalIn {
-    from { opacity:0; transform:scale(0.95); }
-    to { opacity:1; transform:scale(1); }
-  }
-
-  .modal-header {
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    padding:var(--space-lg);
-    border-bottom:1px solid var(--border-light);
-    background:linear-gradient(135deg, var(--gray-50), var(--gray-100));
-  }
-
-  .modal-title {
-    font-size:var(--font-size-lg);
-    font-weight:var(--font-weight-semibold);
-    color:var(--text-primary);
-  }
-
-  .modal-close {
-    width:32px;
-    height:32px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    border:none;
-    background:transparent;
-    border-radius:var(--radius-md);
-    cursor:pointer;
-    transition:all var(--transition-fast);
-    color:var(--text-tertiary);
-  }
-
-  .modal-close:hover {
-    background:var(--bg-hover);
-    color:var(--text-secondary);
-  }
-
-  .modal-body {
-    padding:var(--space-lg);
-    overflow-y:auto;
-    max-height:calc(80vh - 140px);
-  }
-
-  .modal-footer {
-    display:flex;
-    justify-content:flex-end;
-    gap:var(--space-md);
-    padding:var(--space-lg);
-    border-top:1px solid var(--border-light);
-  }
-
-  /* 表单样式 */
-  .form-group {
-    margin-bottom:var(--space-lg);
-  }
-
-  .form-label {
-    display:block;
-    font-size:var(--font-size-sm);
-    font-weight:var(--font-weight-medium);
-    color:var(--text-secondary);
-    margin-bottom:var(--space-sm);
-  }
-
-  .form-input {
-    width:100%;
-    padding:10px 14px;
-    border:1.5px solid var(--border-default);
-    border-radius:var(--radius-md);
-    font-size:var(--font-size-base);
-    background:var(--bg-card);
-    outline:none;
-    transition:all var(--transition-fast);
-    box-sizing:border-box;
-  }
-
-  .form-input:focus {
-    border-color:var(--primary-500);
-    box-shadow:0 0 0 3px rgba(24, 144, 255, 0.1);
-  }
-
-  .form-select {
-    width:100%;
-    padding:10px 32px 10px 14px;
-    border:1.5px solid var(--border-default);
-    border-radius:var(--radius-md);
-    font-size:var(--font-size-base);
-    cursor:pointer;
-    background:var(--bg-card);
-    appearance:none;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c8c8c' stroke-width='2'%3E%3Cpath d='m6,9 6,6 6,-6'/%3E%3C/svg%3E");
-    background-repeat:no-repeat;
-    background-position:right 10px center;
-    outline:none;
-    transition:all var(--transition-fast);
-  }
-
-  /* 详情信息 */
-  .detail-row {
-    display:flex;
-    padding:var(--space-md) 0;
-    border-bottom:1px solid var(--border-light);
-  }
-
-  .detail-label {
-    width:100px;
-    font-weight:var(--font-weight-medium);
-    color:var(--text-tertiary);
-    flex-shrink:0;
-  }
-
-  .detail-value {
-    flex:1;
-    color:var(--text-primary);
-  }
-
-  /* 警告提示 */
-  .alert-warning {
-    padding:var(--space-md);
-    background:var(--warning-bg);
-    border-radius:var(--radius-md);
-    color:#9a6700;
-    font-size:var(--font-size-sm);
-    margin-bottom:var(--space-lg);
-  }
-
-  /* 表格行悬停动画 */
-  .data-table tbody tr {
-    transition:transform var(--transition-fast);
-  }
-
-  .data-table tbody tr:hover {
-    transform:scale(1.002);
-  }
-
-  /* 按钮点击效果 */
-  .jg-btn:active {
-    transform:scale(0.98);
-  }
-
-  /* 页面加载动画 */
-  .content-wrapper {
-    animation:pageIn var(--transition-slow) ease;
-  }
-
-  @keyframes pageIn {
-    from { opacity:0; transform:translateY(10px); }
-    to { opacity:1; transform:translateY(0); }
-  }
-
-  /* 等宽字体 */
-  .text-mono {
-    font-family:'SF Mono', Monaco, 'Courier New', monospace;
-  }
-
-  /* 金额列：右对齐 + 等宽数字 */
-  .num-cell {
-    text-align:right;
-    font-variant-numeric:tabular-nums;
-    white-space:nowrap;
-  }
-
-  /* 可排序列头 */
-  .data-table th.sortable {
-    cursor:pointer;
-    user-select:none;
-  }
-  .data-table th.sortable:hover {
-    color:var(--primary-500);
-  }
-  .data-table th.sortable .sort-ico {
-    font-size:10px;
-    margin-left:4px;
-    color:var(--text-disabled);
-  }
-  .data-table th.sortable.sort-asc .sort-ico::after { content:'↑'; }
-  .data-table th.sortable.sort-desc .sort-ico::after { content:'↓'; }
-  .data-table th.sortable.sort-asc .sort-ico,
-  .data-table th.sortable.sort-desc .sort-ico { font-size:0; }
-  .data-table th.sortable.sort-asc,
-  .data-table th.sortable.sort-desc { color:var(--primary-500); }
-  .data-table th.sortable.sort-asc .sort-ico,
-  .data-table th.sortable.sort-desc .sort-ico { color:var(--primary-500); }
-
-  /* 排名徽标 */
-  .rank-badge {
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    min-width:22px;
-    height:22px;
-    padding:0 6px;
-    border-radius:var(--radius-full);
-    font-size:var(--font-size-xs);
-    font-weight:var(--font-weight-semibold);
-    background:var(--gray-100);
-    color:var(--text-tertiary);
-  }
-  .rank-badge.top1 { background:linear-gradient(135deg,#fff7e6,#ffd666); color:#ad8b00; }
-  .rank-badge.top2 { background:linear-gradient(135deg,#f5f5f5,#d9d9d9); color:#595959; }
-  .rank-badge.top3 { background:linear-gradient(135deg,#f6e3d0,#e8b98a); color:#96551b; }
-
-  /* 账龄标签 */
-  .aging-tag {
-    display:inline-flex;
-    align-items:center;
-    padding:3px 8px;
-    border-radius:var(--radius-full);
-    font-size:var(--font-size-xs);
-    font-weight:var(--font-weight-medium);
-    line-height:1.4;
-    white-space:nowrap;
-  }
-  .aging-tag.normal { background:var(--gray-100); color:var(--text-tertiary); }
-  .aging-tag.warning { background:var(--warning-bg); color:#9a6700; border:1px solid var(--warning-border); }
-  .aging-tag.danger { background:var(--error-bg); color:var(--error); border:1px solid var(--error-border); }
-
-  /* 排行金额条 */
-  .rank-bar-cell { min-width:160px; }
-  .rank-bar {
-    display:block;
-    position:relative;
-    height:8px;
-    border-radius:4px;
-    background:var(--gray-100);
-    overflow:hidden;
-  }
-  .rank-bar > i {
-    position:absolute;
-    left:0; top:0; bottom:0;
-    border-radius:4px;
-    background:linear-gradient(90deg, var(--primary-500), var(--primary-300));
-  }
-
-  /* 响应式布局 */
-  @media (max-width:768px) {
-    .stats-cards {
-      grid-template-columns:repeat(2, 1fr);
-    }
-    .search-bar {
-      flex-direction:column;
-      align-items:stretch;
-    }
-    .search-input, .search-select {
-      width:100%;
-    }
-    .action-bar {
-      flex-direction:column;
-      gap:var(--space-md);
-    }
-  }
-</style>
-<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
-  .main-wrapper{margin-left:0!important;width:100%!important;}
-</style>
 <link rel="stylesheet" href="css/unified-theme.css">
 <link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/sales-module.css">
+<style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
 </head>
-<body data-active-menu="销售管理" data-active-submenu="sales-customer">
-
-<!-- ===== 整体布局容器 ===== -->
+<body data-active-menu="sales" data-active-submenu="sales-customer">
 <div class="app-layout">
-
-  <!-- ===== 侧边栏 ===== -->
-  <!-- 移动端遮罩层 -->
-  <!-- ===== 主内容区 ===== -->
   <div class="main-wrapper">
-
-    <!-- 顶栏 -->
-    <!-- Tab 标签栏 -->
     <div class="tab-bar">
-      <!-- Tab 标签由 JS 动态渲染 -->
       <div class="tab-bar-actions">
         <button class="tab-close-all" title="关闭全部标签">
-          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 3L11 11M11 3L3 11"/>
-          </svg>
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3L11 11M11 3L3 11"/></svg>
         </button>
       </div>
     </div>
 
-    <!-- 主内容区 -->
     <main class="main-content">
       <div class="content-wrapper">
-        <!-- ===== 统计卡片区 ===== -->
-        <div class="patrol-stats" id="customerStats"></div>
+        <div class="page-header">
+          <h1 class="page-title">客户管理</h1>
+          <p class="page-subtitle">客户主数据、成交与回款、应收账龄与客户 360 视图；新增编辑实时写入销售数据层。</p>
+        </div>
 
-        <!-- ===== 搜索栏区 ===== -->
+        <div class="sales-stats" id="customerStats"></div>
+
         <div class="page-section search-section">
-          <div class="search-bar">
-            <input type="text" class="search-input" placeholder="搜索客户名称、电话..." id="searchInput">
-            <select class="search-select" id="typeSelect">
-              <option value="">全部类型</option>
-              <option value="adoption">认养用户</option>
+          <div class="search-bar filter-bar">
+            <input type="text" class="search-input" id="cKeyword" placeholder="搜索客户名称 / 联系人 / 电话">
+            <select class="search-select" id="cType">
+              <option value="all">全部类型</option>
               <option value="wholesale">批发客户</option>
               <option value="retail">零售客户</option>
+              <option value="adoption">认养用户</option>
             </select>
-            <select class="search-select" id="levelSelect">
-              <option value="">全部等级</option>
+            <select class="search-select" id="cLevel">
+              <option value="all">全部等级</option>
               <option value="vip">VIP客户</option>
               <option value="gold">黄金客户</option>
               <option value="silver">白银客户</option>
             </select>
-            <select class="search-select" id="statusSelect">
-              <option value="">全部状态</option>
-              <option value="active">活跃</option>
-              <option value="inactive">休眠</option>
+            <select class="search-select" id="cStatus">
+              <option value="all">全部状态</option>
+              <option value="active">合作中</option>
+              <option value="inactive">已停用</option>
             </select>
-            
-          <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="handleSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div>
+            <select class="search-select" id="cRegion">
+              <option value="all">全部区域</option>
+            </select>
+            <select class="search-select" id="cOwner">
+              <option value="all">全部业务员</option>
+            </select>
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="applyFilter()">查询</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+            </div>
           </div>
         </div>
 
-        <!-- ===== 操作按钮区 ===== -->
         <div class="page-section action-bar">
           <div class="action-left">
-            <button class="jg-btn jg-btn-primary" onclick="showAddModal()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
-                <path d="M12 5v14"/>
-                <path d="M5 12h14"/>
-              </svg>
-              新建客户
-            </button>
-            <button class="jg-btn" onclick="showExportModal()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" x2="12" y1="15" y2="3"/>
-              </svg>
-              导出客户
-            </button>
-            <button class="jg-btn" onclick="showImportModal()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="16" x2="8" y1="13" y2="13"/>
-                <line x1="16" x2="8" y1="17" y2="17"/>
-              </svg>
-              批量导入
-            </button>
+            <button class="jg-btn jg-btn-primary" onclick="openAdd()">+ 新建客户</button>
+            <button class="jg-btn" onclick="document.getElementById('importFile').click()">批量导入</button>
+            <button class="jg-btn" onclick="downloadTemplate()">下载模板</button>
+            <button class="jg-btn" onclick="exportCustomers()">导出 CSV</button>
           </div>
-          <div class="action-right">
-</div>
+          <div class="action-right" style="margin-left:auto;">
+            <span class="selected-info" id="customerCountInfo"></span>
+          </div>
         </div>
 
-        <!-- ===== 数据列表区 ===== -->
         <div class="page-section data-section">
           <div class="data-table-wrapper">
-            <table class="data-table">
+            <table class="data-table" style="min-width:2200px;">
               <thead>
                 <tr>
-                  <th style="width:60px;">排名</th>
-                  <th style="width:60px;">序号</th>
-                  <th style="width:100px;">客户编号</th>
-                  <th style="width:140px;">客户名称</th>
-                  <th style="width:100px;">联系人</th>
-                  <th style="width:120px;">电话</th>
-                  <th style="width:100px;">客户类型</th>
-                  <th style="width:80px;">等级</th>
-                  <th style="width:90px;">所属区域</th>
-                  <th style="width:80px;">订单数</th>
-                  <th style="width:120px;text-align:right;" class="sortable" id="thAmount" onclick="toggleSort('amount')">成交金额<span class="sort-ico">↕</span></th>
-                  <th style="width:120px;text-align:right;">回款金额</th>
-                  <th style="width:120px;text-align:right;">应收余额</th>
-                  <th style="width:100px;text-align:right;" class="sortable" id="thAging" onclick="toggleSort('aging')">账龄<span class="sort-ico">↕</span></th>
-                  <th>操作</th>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:84px;">客户编号</th>
+                  <th style="width:160px;">客户名称</th>
+                  <th style="width:90px;">客户类型</th>
+                  <th style="width:90px;">客户等级</th>
+                  <th style="width:84px;">状态</th>
+                  <th style="width:76px;">区域</th>
+                  <th style="width:90px;">联系人</th>
+                  <th style="width:118px;">联系电话</th>
+                  <th style="width:110px;">客户来源</th>
+                  <th style="width:82px;">业务员</th>
+                  <th style="width:70px;" class="text-right">订单数</th>
+                  <th style="width:110px;" class="text-right">成交额</th>
+                  <th style="width:110px;" class="text-right">回款额</th>
+                  <th style="width:110px;" class="text-right">应收余额</th>
+                  <th style="width:90px;" class="text-right">账龄</th>
+                  <th style="width:120px;">最近下单</th>
+                  <th style="width:190px;">操作</th>
                 </tr>
               </thead>
-              <tbody id="customerList">
-              </tbody>
+              <tbody id="customerTableBody"></tbody>
             </table>
           </div>
-          <!-- 分页器 -->
-          <div class="pagination">
-            <button class="page-btn disabled" id="prevPage">‹</button>
-            <button class="page-btn active" onclick="goToPage(1)">1</button>
-            <button class="page-btn" onclick="goToPage(2)">2</button>
-            <button class="page-btn" onclick="goToPage(3)">3</button>
-            <button class="page-btn" id="nextPage" onclick="goToPage(2)">›</button>
-            <span id="paginationInfo" style="margin-left:16px;font-size:13px;color:var(--text-tertiary);">共 23 条记录</span>
-          </div>
+          <div id="pagination-container" style="display:flex;justify-content:flex-end;margin-top:14px;"></div>
         </div>
-
-        <!-- ===== 客户排行（按成交金额降序 Top10） ===== -->
-        <div class="page-section" id="customerRankSection">
-          <h3 class="section-title" style="font-size:16px;font-weight:600;color:var(--text-primary);margin:0 0 12px;">客户排行 TOP10 <span style="font-size:12px;font-weight:normal;color:var(--text-tertiary);margin-left:8px;">按成交金额降序</span></h3>
-          <div class="data-table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th style="width:70px;">排名</th>
-                  <th>客户名称</th>
-                  <th style="width:110px;">客户类型</th>
-                  <th style="width:90px;">所属区域</th>
-                  <th style="width:120px;text-align:right;">成交金额(万元)</th>
-                  <th style="width:200px;">金额占比</th>
-                </tr>
-              </thead>
-              <tbody id="customerTopRank"></tbody>
-            </table>
-          </div>
-        </div>
-
       </div>
     </main>
   </div>
-
 </div>
 
-<!-- 查看弹窗 -->
-<div class="modal-overlay" id="detailModal">
-  <div class="modal">
+<input type="file" id="importFile" accept=".csv" style="display:none;" onchange="importCustomers(this)">
+
+<!-- 客户详情 -->
+<div class="modal-overlay" id="viewModal" style="display:none;">
+  <div class="modal modal-xl">
     <div class="modal-header">
-      <h3 class="modal-title">客户详情</h3>
-      <button class="modal-close" onclick="closeModal('detailModal')">
-        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M1 1l8 8M9 9l8-8M9 9l-8 8M9 9l8 8"/>
-        </svg>
-      </button>
+      <h3 class="modal-title">客户 360 视图</h3>
+      <button class="modal-close" onclick="closeModal('viewModal')">×</button>
     </div>
-    <div class="modal-body" id="detailContent">
-    </div>
-    <div class="modal-footer">
-      <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
-    </div>
+    <div class="modal-body" id="viewBody"></div>
+    <div class="modal-footer" id="viewFooter"></div>
   </div>
 </div>
 
-<!-- 编辑弹窗 -->
-<div class="modal-overlay" id="editModal">
-  <div class="modal">
+<!-- 新增 / 编辑客户 -->
+<div class="modal-overlay" id="editModal" style="display:none;">
+  <div class="modal modal-lg">
     <div class="modal-header">
-      <h3 class="modal-title">编辑客户</h3>
-      <button class="modal-close" onclick="closeModal('editModal')">
-        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M1 1l8 8M9 9l8-8M9 9l-8 8M9 9l8 8"/>
-        </svg>
-      </button>
+      <h3 class="modal-title" id="editTitle">新建客户</h3>
+      <button class="modal-close" onclick="closeModal('editModal')">×</button>
     </div>
     <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">客户编号</label>
-        <input type="text" class="form-input" id="editCode" readonly>
+      <div class="detail-section">
+        <div class="detail-section-title">基础信息</div>
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label><span class="required"></span>客户名称</label>
+            <input type="text" id="eName" placeholder="企业全称或个人姓名">
+          </div>
+          <div class="form-group">
+            <label><span class="required"></span>客户类型</label>
+            <select id="eType">
+              <option value="wholesale">批发客户</option>
+              <option value="retail">零售客户</option>
+              <option value="adoption">认养用户</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>客户等级</label>
+            <select id="eLevel">
+              <option value="vip">VIP客户</option>
+              <option value="gold">黄金客户</option>
+              <option value="silver">白银客户</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>合作状态</label>
+            <select id="eStatus">
+              <option value="active">合作中</option>
+              <option value="inactive">已停用</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>所属区域</label>
+            <input type="text" id="eRegion" placeholder="省 / 市">
+          </div>
+          <div class="form-group">
+            <label>客户来源</label>
+            <input type="text" id="eSource" list="sourceOptions" placeholder="商超直供 / 电商平台 / 认养平台">
+            <datalist id="sourceOptions">
+              <option value="商超直供"><option value="电商平台"><option value="批发市场">
+              <option value="门店零售"><option value="认养平台"><option value="企业团购">
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label>归属业务员</label>
+            <input type="text" id="eOwner" list="ownerOptions" placeholder="选择或输入业务员">
+            <datalist id="ownerOptions"></datalist>
+          </div>
+          <div class="form-group">
+            <label>客户标签</label>
+            <input type="text" id="eTags" placeholder="多个标签用逗号分隔">
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">客户名称</label>
-        <input type="text" class="form-input" id="editName" placeholder="请输入客户名称">
+
+      <div class="detail-section">
+        <div class="detail-section-title">联系方式</div>
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label>联系人</label>
+            <input type="text" id="eContact">
+          </div>
+          <div class="form-group">
+            <label>联系电话</label>
+            <input type="text" id="ePhone" placeholder="11 位手机号">
+          </div>
+          <div class="form-group">
+            <label>微信</label>
+            <input type="text" id="eWechat">
+          </div>
+          <div class="form-group">
+            <label>邮箱</label>
+            <input type="text" id="eEmail">
+          </div>
+          <div class="form-group full">
+            <label>详细地址</label>
+            <input type="text" id="eAddress">
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">联系人</label>
-        <input type="text" class="form-input" id="editContact" placeholder="请输入联系人">
-      </div>
-      <div class="form-group">
-        <label class="form-label">联系电话</label>
-        <input type="text" class="form-input" id="editPhone" placeholder="请输入联系电话">
-      </div>
-      <div class="form-group">
-        <label class="form-label">客户类型</label>
-        <select class="form-select" id="editType">
-          <option value="adoption">认养用户</option>
-          <option value="wholesale">批发客户</option>
-          <option value="retail">零售客户</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">客户等级</label>
-        <select class="form-select" id="editLevel">
-          <option value="vip">VIP客户</option>
-          <option value="gold">黄金客户</option>
-          <option value="silver">白银客户</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">地址</label>
-        <textarea class="form-input form-textarea" id="editAddress" placeholder="请输入地址"></textarea>
+
+      <div class="detail-section">
+        <div class="detail-section-title">信用与开票</div>
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label>信用额度（元）</label>
+            <input type="number" id="eCreditLimit" min="0" step="1000" value="0">
+          </div>
+          <div class="form-group">
+            <label>账期（天）</label>
+            <input type="number" id="eCreditDays" min="0" step="1" value="0">
+          </div>
+          <div class="form-group">
+            <label>发票抬头</label>
+            <input type="text" id="eInvoiceTitle">
+          </div>
+          <div class="form-group">
+            <label>税号</label>
+            <input type="text" id="eTaxNo">
+          </div>
+          <div class="form-group full">
+            <label>开户行及账号</label>
+            <input type="text" id="eBankInfo">
+          </div>
+          <div class="form-group full">
+            <label>备注</label>
+            <textarea id="eRemark" placeholder="合作约定、注意事项等"></textarea>
+          </div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="jg-btn" onclick="closeModal('editModal')">取消</button>
-      <button class="jg-btn jg-btn-primary" onclick="saveEdit()">保存</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitCustomer()">保存客户</button>
     </div>
   </div>
 </div>
 
-<!-- 新增客户弹窗 -->
-<div class="modal-overlay" id="addModal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3 class="modal-title">新建客户</h3>
-      <button class="modal-close" onclick="closeModal('addModal')">
-        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M1 1l8 8M9 9l8-8M9 9l-8 8M9 9l8 8"/>
-        </svg>
-      </button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">客户名称</label>
-        <input type="text" class="form-input" id="addName" placeholder="请输入客户名称">
-      </div>
-      <div class="form-group">
-        <label class="form-label">联系人</label>
-        <input type="text" class="form-input" id="addContact" placeholder="请输入联系人">
-      </div>
-      <div class="form-group">
-        <label class="form-label">联系电话</label>
-        <input type="text" class="form-input" id="addPhone" placeholder="请输入联系电话">
-      </div>
-      <div class="form-group">
-        <label class="form-label">客户类型</label>
-        <select class="form-select" id="addType">
-          <option value="adoption">认养用户</option>
-          <option value="wholesale">批发客户</option>
-          <option value="retail">零售客户</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">客户等级</label>
-        <select class="form-select" id="addLevel">
-          <option value="silver">白银客户</option>
-          <option value="gold">黄金客户</option>
-          <option value="vip">VIP客户</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">地址</label>
-        <textarea class="form-input form-textarea" id="addAddress" placeholder="请输入地址"></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="jg-btn" onclick="closeModal('addModal')">取消</button>
-      <button class="jg-btn jg-btn-primary" onclick="saveAdd()">保存</button>
-    </div>
-  </div>
-</div>
-
-<!-- 导出客户弹窗 -->
-<div class="modal-overlay" id="exportModal">
-  <div class="modal-box" style="max-width:420px;">
-    <div class="modal-header">
-      <h3 class="modal-title">导出客户信息</h3>
-      <button class="modal-close" onclick="closeModal('exportModal')">
-        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M1 1l8 8M9 9l8-8M9 9l-8 8M9 9l8 8"/>
-        </svg>
-      </button>
-    </div>
-    <div class="modal-body">
-      <p style="color:var(--text-secondary); margin-bottom:16px;">请选择导出格式：</p>
-      <div style="display:flex; gap:12px;">
-        <button class="jg-btn jg-btn-primary" onclick="doExport('excel')">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px;">
-            <path d="M10 2H2v16h16V8l-6-6z"/>
-            <path d="M14 2v6h6M13 9H7M13 13H7M13 17H7"/>
-          </svg>
-          Excel格式
-        </button>
-        <button class="jg-btn" onclick="doExport('pdf')">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px;">
-            <path d="M10 2H2v16h16V8l-6-6z"/>
-            <path d="M14 2v6h6M13 9H7M13 13H7M13 17H7"/>
-          </svg>
-          PDF格式
-        </button>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="jg-btn" onclick="closeModal('exportModal')">关闭</button>
-    </div>
-  </div>
-</div>
-
-<!-- 批量导入弹窗 -->
-<div class="modal-overlay" id="importModal">
-  <div class="modal-box" style="max-width:500px;">
-    <div class="modal-header">
-      <h3 class="modal-title">批量导入客户</h3>
-      <button class="modal-close" onclick="closeModal('importModal')">
-        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M1 1l8 8M9 9l8-8M9 9l-8 8M9 9l8 8"/>
-        </svg>
-      </button>
-    </div>
-    <div class="modal-body">
-      <div style="border:2px dashed var(--border-color); border-radius:8px; padding:40px 20px; text-align:center; margin-bottom:16px;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px;margin:0 auto 16px;color:var(--text-secondary);">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="12" x2="12" y1="18" y2="12"/>
-          <line x1="9" x2="15" y1="15" y2="15"/>
-        </svg>
-        <p style="color:var(--text-secondary); margin-bottom:8px;">拖拽文件到此处，或点击下方按钮选择文件</p>
-        <p style="color:var(--text-tertiary); font-size:12px;">支持 .xlsx、.xls、.csv 格式</p>
-      </div>
-      <div style="display:flex; gap:12px; justify-content:center;">
-        <button class="jg-btn jg-btn-primary" onclick="doImport()">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px;">
-            <path d="M10 2H2v16h16V8l-6-6z"/>
-            <path d="M14 2v6h6M13 9H7M13 13H7M13 17H7"/>
-          </svg>
-          选择文件
-        </button>
-        <button class="jg-btn" onclick="downloadTemplate()">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:6px;">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" x2="12" y1="15" y2="3"/>
-          </svg>
-          下载模板
-        </button>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="jg-btn" onclick="closeModal('importModal')">关闭</button>
-    </div>
-  </div>
-</div>
-
-<!-- 引入交互脚本 -->
-<script>
-  // Mock数据（金额单位：万元；region 所属区域；aging 账龄区间：30天内/31-60天/61-90天/90天以上）
-  const mockData = [
-    { id: '1', code: 'C001', name: '北京XX超市', contact: '王经理', phone: '138****8888', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', region: '北京', orders: '28', amount: 86.5, received: 86.5, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-18', address: '北京市朝阳区XX街道XX号', status: 'active' },
-    { id: '2', code: 'C002', name: '上海XX电商', contact: '李总监', phone: '139****6666', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', region: '上海', orders: '45', amount: 92.0, received: 92.0, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-20', address: '上海市浦东新区XX路XX号', status: 'active' },
-    { id: '3', code: 'C003', name: '李女士', contact: '李女士', phone: '137****5555', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', region: '广东', orders: '3', amount: 8.6, received: 8.6, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-16', address: '广州市天河区XX小区XX栋', status: 'active' },
-    { id: '4', code: 'C004', name: '广州XX水果店', contact: '赵老板', phone: '136****3333', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', region: '广东', orders: '15', amount: 34.2, received: 24.9, receivable: 9.3, aging: '31-60天', agingDays: 52, lastOrderDate: '2026-09-02', address: '广州市越秀区XX路XX号', status: 'active' },
-    { id: '5', code: 'C005', name: '张先生', contact: '张先生', phone: '135****2222', type: 'adoption', typeText: '认养用户', level: 'silver', levelText: '白银客户', region: '广东', orders: '2', amount: 5.0, received: 5.0, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-08-28', address: '深圳市南山区XX花园XX号', status: 'inactive' },
-    { id: '6', code: 'C006', name: '成都XX电商', contact: '周经理', phone: '134****1111', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', region: '四川', orders: '32', amount: 61.8, received: 61.8, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-19', address: '成都市高新区XX大道XX号', status: 'active' },
-    { id: '7', code: 'C007', name: '刘女士', contact: '刘女士', phone: '133****0000', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', region: '浙江', orders: '5', amount: 12.4, received: 8.0, receivable: 4.4, aging: '31-60天', agingDays: 41, lastOrderDate: '2026-09-12', address: '杭州市西湖区XX小区XX栋', status: 'active' },
-    { id: '8', code: 'C008', name: '杭州XX水果店', contact: '吴老板', phone: '132****9999', type: 'wholesale', typeText: '批发客户', level: 'silver', levelText: '白银客户', region: '浙江', orders: '8', amount: 18.6, received: 18.6, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-11', address: '杭州市拱墅区XX路XX号', status: 'active' },
-    { id: '9', code: 'C009', name: '王先生', contact: '王先生', phone: '131****8888', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', region: '江苏', orders: '4', amount: 6.8, received: 2.1, receivable: 4.7, aging: '61-90天', agingDays: 88, lastOrderDate: '2026-07-18', address: '南京市鼓楼区XX花园XX号', status: 'inactive' },
-    { id: '10', code: 'C010', name: '武汉XX超市', contact: '郑经理', phone: '130****7777', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', region: '湖北', orders: '56', amount: 78.4, received: 78.4, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-20', address: '武汉市江汉区XX街道XX号', status: 'active' },
-    { id: '11', code: 'C011', name: '陈女士', contact: '陈女士', phone: '129****6666', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', region: '陕西', orders: '6', amount: 15.2, received: 15.2, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-14', address: '西安市雁塔区XX小区XX栋', status: 'active' },
-    { id: '12', code: 'C012', name: '深圳XX电商', contact: '黄总监', phone: '128****5555', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', region: '广东', orders: '78', amount: 89.6, received: 41.2, receivable: 48.4, aging: '90天以上', agingDays: 96, lastOrderDate: '2026-07-10', address: '深圳市福田区XX路XX号', status: 'active' },
-    { id: '13', code: 'C013', name: '赵女士', contact: '赵女士', phone: '127****4444', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', region: '重庆', orders: '1', amount: 5.4, received: 5.4, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-05', address: '重庆市渝北区XX花园XX号', status: 'inactive' },
-    { id: '14', code: 'C014', name: '南京XX水果店', contact: '孙老板', phone: '126****3333', type: 'wholesale', typeText: '批发客户', level: 'silver', levelText: '白银客户', region: '江苏', orders: '12', amount: 24.8, received: 17.6, receivable: 7.2, aging: '31-60天', agingDays: 34, lastOrderDate: '2026-09-20', address: '南京市建邺区XX路XX号', status: 'active' },
-    { id: '15', code: 'C015', name: '周先生', contact: '周先生', phone: '125****2222', type: 'adoption', typeText: '认养用户', level: 'silver', levelText: '白银客户', region: '天津', orders: '2', amount: 7.2, received: 7.2, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-09-28', address: '天津市和平区XX小区XX栋', status: 'active' },
-    { id: '16', code: 'C016', name: '苏州XX电商', contact: '吴经理', phone: '124****1111', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', region: '江苏', orders: '28', amount: 52.6, received: 52.6, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-17', address: '苏州市工业园区XX大道XX号', status: 'active' },
-    { id: '17', code: 'C017', name: '徐女士', contact: '徐女士', phone: '123****0000', type: 'adoption', typeText: '认养用户', level: 'gold', levelText: '黄金客户', region: '湖南', orders: '4', amount: 10.8, received: 10.8, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-09', address: '长沙市岳麓区XX花园XX号', status: 'active' },
-    { id: '18', code: 'C018', name: '青岛XX超市', contact: '马经理', phone: '122****9999', type: 'wholesale', typeText: '批发客户', level: 'gold', levelText: '黄金客户', region: '山东', orders: '35', amount: 45.3, received: 22.6, receivable: 22.7, aging: '61-90天', agingDays: 74, lastOrderDate: '2026-08-02', address: '青岛市市南区XX街道XX号', status: 'active' },
-    { id: '19', code: 'C019', name: '胡先生', contact: '胡先生', phone: '121****8888', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', region: '辽宁', orders: '3', amount: 6.2, received: 6.2, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-09-30', address: '大连市中山区XX小区XX栋', status: 'inactive' },
-    { id: '20', code: 'C020', name: '宁波XX水果店', contact: '林老板', phone: '120****7777', type: 'wholesale', typeText: '批发客户', level: 'silver', levelText: '白银客户', region: '浙江', orders: '10', amount: 20.4, received: 14.9, receivable: 5.5, aging: '30天内', agingDays: 28, lastOrderDate: '2026-09-26', address: '宁波市海曙区XX路XX号', status: 'active' },
-    { id: '21', code: 'C021', name: '郭女士', contact: '郭女士', phone: '119****6666', type: 'adoption', typeText: '认养用户', level: 'vip', levelText: 'VIP客户', region: '福建', orders: '8', amount: 19.6, received: 19.6, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-15', address: '厦门市思明区XX花园XX号', status: 'active' },
-    { id: '22', code: 'C022', name: '无锡XX电商', contact: '何总监', phone: '118****5555', type: 'wholesale', typeText: '批发客户', level: 'vip', levelText: 'VIP客户', region: '江苏', orders: '62', amount: 74.2, received: 74.2, receivable: 0, aging: '30天内', agingDays: 0, lastOrderDate: '2026-10-20', address: '无锡市新吴区XX大道XX号', status: 'active' },
-    { id: '23', code: 'C023', name: '罗先生', contact: '罗先生', phone: '117****4444', type: 'retail', typeText: '零售客户', level: 'silver', levelText: '白银客户', region: '安徽', orders: '2', amount: 5.8, received: 1.4, receivable: 4.4, aging: '90天以上', agingDays: 102, lastOrderDate: '2026-07-04', address: '合肥市包河区XX小区XX栋', status: 'active' },
-  ];
-
-  const pageSize = 8;
-  let currentPage = 1;
-  let filteredData = [...mockData];
-
-  // 排序状态：key = 'amount'（成交金额） | 'aging'（账龄），order = 'desc' | 'asc'
-  let sortKey = 'amount';
-  let sortOrder = 'desc';
-
-  // 金额格式化（万元，保留一位小数）
-  function fmtWan(n) {
-    return (Number(n) || 0).toFixed(1);
-  }
-
-  // 应收余额按账龄分色
-  function receivableClass(item) {
-    if (item.receivable > 0 && item.agingDays > 60) return 'var(--error)';
-    if (item.receivable > 0 && item.agingDays >= 30) return '#9a6700';
-    return 'var(--success)';
-  }
-
-  // 排名徽标
-  function renderRank(rank) {
-    const cls = rank === 1 ? ' top1' : rank === 2 ? ' top2' : rank === 3 ? ' top3' : '';
-    return `<span class="rank-badge${cls}">${rank}</span>`;
-  }
-
-  // 应用排序，返回排好序的副本
-  function applySort(list) {
-    const sorted = list.slice();
-    sorted.sort((a, b) => {
-      const va = sortKey === 'aging' ? (a.agingDays || 0) : (a.amount || 0);
-      const vb = sortKey === 'aging' ? (b.agingDays || 0) : (b.amount || 0);
-      return sortOrder === 'desc' ? vb - va : va - vb;
-    });
-    return sorted;
-  }
-
-  // 更新排序列头样式
-  function updateSortHeader() {
-    const amountTh = document.getElementById('thAmount');
-    const agingTh = document.getElementById('thAging');
-    [amountTh, agingTh].forEach(th => { if (th) th.classList.remove('sort-asc', 'sort-desc'); });
-    const activeTh = sortKey === 'aging' ? agingTh : amountTh;
-    if (activeTh) activeTh.classList.add(sortOrder === 'desc' ? 'sort-desc' : 'sort-asc');
-  }
-
-  // 点击金额列头：在「成交金额」与「账龄」间切换排序，同项升/降切换
-  function toggleSort(key) {
-    if (sortKey === key) {
-      sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
-    } else {
-      sortKey = key;
-      sortOrder = 'desc';
-    }
-    updateSortHeader();
-    currentPage = 1;
-    goToPage(1);
-  }
-
-  // 账龄区间分色：90天以上 error / 61-90 warning / 其余默认
-  function agingTag(item) {
-    const a = item.aging || '30天内';
-    const cls = a === '90天以上' ? 'danger' : a === '61-90天' ? 'warning' : 'normal';
-    return `<span class="aging-tag ${cls}">${a}</span>`;
-  }
-
-  // 顶部统计卡：客户总数 / 成交总额 / 回款总额 / 应收总额 / 平均账龄
-  function renderStats() {
-    const box = document.getElementById('customerStats');
-    if (!box) return;
-    const total = mockData.length;
-    const sum = key => mockData.reduce((s, i) => s + (Number(i[key]) || 0), 0);
-    const amount = sum('amount');
-    const received = sum('received');
-    const receivable = sum('receivable');
-    const withReceivable = mockData.filter(i => i.receivable > 0);
-    const avgAging = withReceivable.length
-      ? Math.round(withReceivable.reduce((s, i) => s + (Number(i.agingDays) || 0), 0) / withReceivable.length)
-      : 0;
-    box.innerHTML = `
-      <div class="patrol-stat-card">
-        <div class="stat-value">${total}</div>
-        <div class="stat-label">客户总数</div>
-      </div>
-      <div class="patrol-stat-card">
-        <div class="stat-value">${fmtWan(amount)}</div>
-        <div class="stat-label">成交总额（万元）</div>
-      </div>
-      <div class="patrol-stat-card">
-        <div class="stat-value">${fmtWan(received)}</div>
-        <div class="stat-label">回款总额（万元）</div>
-      </div>
-      <div class="patrol-stat-card">
-        <div class="stat-value">${fmtWan(receivable)}</div>
-        <div class="stat-label">应收总额（万元）</div>
-      </div>
-      <div class="patrol-stat-card">
-        <div class="stat-value">${avgAging}</div>
-        <div class="stat-label">平均账龄（天）</div>
-      </div>
-    `;
-  }
-
-  // 客户排行：按成交金额降序取 Top10，数据从 mockData 动态计算
-  function renderTopRank() {
-    const box = document.getElementById('customerTopRank');
-    if (!box) return;
-    const top = mockData.slice()
-      .sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0))
-      .slice(0, 10);
-    const max = top.length ? (Number(top[0].amount) || 0) : 0;
-    box.innerHTML = top.map((item, i) => {
-      const pct = max > 0 ? Math.max(2, Math.round(item.amount / max * 100)) : 0;
-      return `<tr>
-        <td>${renderRank(i + 1)}</td>
-        <td style="font-weight:var(--font-weight-medium);">${item.name}</td>
-        <td><span class="type-tag ${item.type}">${item.typeText}</span></td>
-        <td>${item.region || '-'}</td>
-        <td class="num-cell">${fmtWan(item.amount)}</td>
-        <td class="rank-bar-cell">
-          <span class="rank-bar"><i style="width:${pct}%"></i></span>
-        </td>
-      </tr>`;
-    }).join('');
-  }
-
-  // 渲染表格
-  function renderTable(data) {
-    const tbody = document.getElementById('customerList');
-    tbody.innerHTML = '';
-
-    // 排名按当前排序结果（全量）计算，与分页无关
-    const rankMap = new Map();
-    applySort(filteredData).forEach((item, i) => rankMap.set(item.id, i + 1));
-
-    data.forEach((item, __seq) => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${renderRank(rankMap.get(item.id) || __seq + 1)}</td>
-        <td>${__seq + 1}</td>
-        <td class="text-mono"><strong>${item.code}</strong></td>
-        <td style="font-weight:var(--font-weight-medium);">${item.name}</td>
-        <td>${item.contact}</td>
-        <td>${item.phone}</td>
-        <td><span class="type-tag ${item.type}">${item.typeText}</span></td>
-        <td><span class="level-badge ${item.level}">${item.levelText}</span></td>
-        <td>${item.region || '-'}</td>
-        <td style="font-weight:var(--font-weight-semibold);">${item.orders}</td>
-        <td class="num-cell">${fmtWan(item.amount)}</td>
-        <td class="num-cell">${fmtWan(item.received)}</td>
-        <td class="num-cell" style="color:${item.receivable > 0 ? 'var(--warning)' : 'var(--success)'};font-weight:var(--font-weight-semibold);">${fmtWan(item.receivable)}</td>
-        <td class="num-cell">${agingTag(item)}</td>
-        <td>
-          <div class="action-btns">
-            <button class="action-btn detail" onclick="showDetail('${item.id}')">查看</button>
-            <button class="action-btn edit" onclick="showEdit('${item.id}')">编辑</button>
-          </div>
-        </td>
-      `;
-      tbody.appendChild(row);
-    });
-
-    // 绑定复选框事件
-    document.querySelectorAll('.customer-checkbox').forEach(checkbox => {
-      checkbox.addEventListener('change', updateSelectedCount);
-    });
-  }
-
-  // 分页
-  function goToPage(page) {
-    currentPage = page;
-    const sorted = applySort(filteredData);
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    const pageData = sorted.slice(start, end);
-
-    renderTable(pageData);
-    updatePagination();
-  }
-
-  // 更新分页状态
-  function updatePagination() {
-    const totalPages = Math.ceil(filteredData.length / pageSize);
-    document.getElementById('paginationInfo').textContent = `共 ${filteredData.length} 条记录`;
-    
-    const prevBtn = document.getElementById('prevPage');
-    const nextBtn = document.getElementById('nextPage');
-    
-    prevBtn.classList.toggle('disabled', currentPage === 1);
-    nextBtn.classList.toggle('disabled', currentPage === totalPages);
-    
-    prevBtn.onclick = currentPage > 1 ? () => goToPage(currentPage - 1) : null;
-    nextBtn.onclick = currentPage < totalPages ? () => goToPage(currentPage + 1) : null;
-    
-    document.querySelectorAll('.page-btn').forEach(btn => {
-      btn.classList.remove('active');
-    });
-    document.querySelector(`.page-btn[onclick="goToPage(${currentPage})"]`)?.classList.add('active');
-  }
-
-  // 全选功能
-  function toggleSelectAll() {
-    const checkboxes = document.querySelectorAll('.customer-checkbox');
-    const selectAll = document.getElementById('selectAll');
-    checkboxes.forEach(checkbox => {
-      checkbox.checked = selectAll.checked;
-    });
-    updateSelectedCount();
-  }
-
-  // 更新选中数量
-  function updateSelectedCount() {
-    const checkboxes = document.querySelectorAll('.customer-checkbox:checked');
-    const __sc = document.getElementById('selectedCount'); if (__sc) __sc.textContent = checkboxes.length;
-  }
-
-  // 搜索功能
-  function handleSearch() {
-    const keyword = document.getElementById('searchInput').value.toLowerCase();
-    const type = document.getElementById('typeSelect').value;
-    const level = document.getElementById('levelSelect').value;
-    const status = document.getElementById('statusSelect').value;
-    
-    filteredData = mockData.filter(item => {
-      const matchKeyword = !keyword || item.name.toLowerCase().includes(keyword) || item.contact.toLowerCase().includes(keyword) || item.phone.includes(keyword);
-      const matchType = !type || item.type === type;
-      const matchLevel = !level || item.level === level;
-      const matchStatus = !status || item.status === status;
-      return matchKeyword && matchType && matchLevel && matchStatus;
-    });
-
-    currentPage = 1;
-    renderTable(applySort(filteredData));
-    updatePagination();
-  }
-
-  // 弹窗操作
-  function showModal(modalId) {
-    document.getElementById(modalId).classList.add('show');
-  }
-
-  function closeModal(modalId) {
-    document.getElementById(modalId).classList.remove('show');
-  }
-
-  // 详情弹窗
-  function showDetail(id) {
-    const item = mockData.find(d => d.id === id);
-    if (item) {
-      document.getElementById('detailContent').innerHTML = `
-        <div class="detail-row"><div class="detail-label">客户编号</div><div class="detail-value text-mono">${item.code}</div></div>
-        <div class="detail-row"><div class="detail-label">客户名称</div><div class="detail-value">${item.name}</div></div>
-        <div class="detail-row"><div class="detail-label">联系人</div><div class="detail-value">${item.contact}</div></div>
-        <div class="detail-row"><div class="detail-label">联系电话</div><div class="detail-value">${item.phone}</div></div>
-        <div class="detail-row"><div class="detail-label">客户类型</div><div class="detail-value"><span class="type-tag ${item.type}">${item.typeText}</span></div></div>
-        <div class="detail-row"><div class="detail-label">客户等级</div><div class="detail-value"><span class="level-badge ${item.level}">${item.levelText}</span></div></div>
-        <div class="detail-row"><div class="detail-label">所属区域</div><div class="detail-value">${item.region || '-'}</div></div>
-        <div class="detail-row"><div class="detail-label">订单数量</div><div class="detail-value">${item.orders} 单</div></div>
-        <div class="detail-row"><div class="detail-label">成交金额</div><div class="detail-value">${fmtWan(item.amount)} 万元</div></div>
-        <div class="detail-row"><div class="detail-label">已回款</div><div class="detail-value">${fmtWan(item.received)} 万元</div></div>
-        <div class="detail-row"><div class="detail-label">应收余额</div><div class="detail-value" style="color:${receivableClass(item)};">${fmtWan(item.receivable)} 万元</div></div>
-        <div class="detail-row"><div class="detail-label">账龄</div><div class="detail-value">${item.aging || '30天内'}（${item.agingDays || 0} 天）</div></div>
-        <div class="detail-row"><div class="detail-label">最近下单</div><div class="detail-value">${item.lastOrderDate || '-'}</div></div>
-        <div class="detail-row"><div class="detail-label">地址</div><div class="detail-value">${item.address}</div></div>
-      `;
-      showModal('detailModal');
-    }
-  }
-
-  // 编辑弹窗
-  function showEdit(id) {
-    const item = mockData.find(d => d.id === id);
-    if (item) {
-      document.getElementById('editCode').value = item.code;
-      document.getElementById('editName').value = item.name;
-      document.getElementById('editContact').value = item.contact;
-      document.getElementById('editPhone').value = item.phone;
-      document.getElementById('editType').value = item.type;
-      document.getElementById('editLevel').value = item.level;
-      document.getElementById('editAddress').value = item.address;
-      showModal('editModal');
-    }
-  }
-
-  function saveEdit() {
-    alert('编辑成功！');
-    closeModal('editModal');
-  }
-
-  // 新增弹窗
-  function showAddModal() {
-    document.getElementById('addName').value = '';
-    document.getElementById('addContact').value = '';
-    document.getElementById('addPhone').value = '';
-    document.getElementById('addType').value = 'retail';
-    document.getElementById('addLevel').value = 'silver';
-    document.getElementById('addAddress').value = '';
-    showModal('addModal');
-  }
-
-  function saveAdd() {
-    alert('新增客户成功！');
-    closeModal('addModal');
-  }
-
-  // 导出功能
-  function showExportModal() {
-    showModal('exportModal');
-  }
-
-  function doExport(format) {
-    closeModal('exportModal');
-    alert(`已导出全部 ${filteredData.length} 条客户记录（${format.toUpperCase()}格式）`);
-  }
-
-  // 导入功能
-  function showImportModal() {
-    showModal('importModal');
-  }
-
-  function doImport() {
-    closeModal('importModal');
-    alert('批量导入功能即将上线');
-  }
-
-  function downloadTemplate() {
-    alert('正在下载客户导入模板...');
-  }
-
-  // 初始化
-  renderStats();
-  renderTopRank();
-  updateSortHeader();
-  goToPage(1);
-</script>
-
-<!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
-  <script src="js/search-helper.js"></script>
-  <script src="js/typography.js"></script>
+<script src="js/search-helper.js"></script>
+<script src="js/typography.js"></script>
+<script src="js/shared/sales-store.js"></script>
+<script>
+var PAGE_SIZE = 10;
+var filtered = [];
+var editingId = null;
+var viewCustomerId = null;
+
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+function toast(msg, type) {
+  if (window.LegacyToast) LegacyToast.show(msg, type || 'success'); else alert(msg);
+}
+function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+function typeText(t) { return SalesStore.CUSTOMER_TYPE_TEXT[t] || t; }
+function levelText(l) { return SalesStore.LEVEL_TEXT[l] || l; }
+function statusText(s) { return s === 'active' ? '合作中' : '已停用'; }
+function statusClass(s) { return s === 'active' ? 'st-active' : 'st-inactive'; }
+
+/* ---------------- 筛选与统计 ---------------- */
+function getFilters() {
+  return {
+    keyword: val('cKeyword').trim().toLowerCase(),
+    type: val('cType') || 'all',
+    level: val('cLevel') || 'all',
+    status: val('cStatus') || 'all',
+    region: val('cRegion') || 'all',
+    owner: val('cOwner') || 'all'
+  };
+}
+
+function filterCustomers() {
+  var f = getFilters();
+  return SalesStore.customers().filter(function (c) {
+    if (f.type !== 'all' && c.type !== f.type) return false;
+    if (f.level !== 'all' && c.level !== f.level) return false;
+    if (f.status !== 'all' && c.status !== f.status) return false;
+    if (f.region !== 'all' && c.region !== f.region) return false;
+    if (f.owner !== 'all' && c.owner !== f.owner) return false;
+    if (f.keyword) {
+      var hay = (c.code + ' ' + c.name + ' ' + c.contact + ' ' + c.phone + ' ' + c.address).toLowerCase();
+      if (hay.indexOf(f.keyword) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function applyFilter() { refreshAll(); }
+function resetFilter() {
+  document.getElementById('cKeyword').value = '';
+  ['cType', 'cLevel', 'cStatus', 'cRegion', 'cOwner'].forEach(function (id) { document.getElementById(id).value = 'all'; });
+  refreshAll();
+}
+
+function aggregate() {
+  var list = SalesStore.customers();
+  var active = 0;
+  var amount = 0;
+  var paid = 0;
+  var balance = 0;
+  var days = 0;
+  var daysCount = 0;
+  list.forEach(function (c) {
+    if (c.status === 'active') active++;
+    var st = SalesStore.customerStats(c.id);
+    amount += st.amount;
+    paid += st.paid;
+    balance += st.balance;
+    var unpaid = st.orders.filter(function (o) { return Number(o.payableAmount) - Number(o.paidAmount) > 0.01; });
+    if (unpaid.length) {
+      var oldest = unpaid[unpaid.length - 1];
+      var d = new Date((oldest.createdAt || '').replace(' ', 'T'));
+      if (!isNaN(d.getTime())) {
+        days += Math.max(0, Math.floor((new Date() - d) / 86400000));
+        daysCount++;
+      }
+    }
+  });
+  return {
+    total: list.length,
+    active: active,
+    amount: amount,
+    paid: paid,
+    balance: balance,
+    avgDays: daysCount ? Math.round(days / daysCount) : 0
+  };
+}
+
+function renderStats() {
+  var a = aggregate();
+  var cards = [
+    { label: '客户总数', value: String(a.total), sub: '覆盖 ' + newSet(SalesStore.customers().map(function (c) { return c.region; })).length + ' 个区域', cls: '' },
+    { label: '活跃客户', value: String(a.active), sub: '合作中占比 ' + (a.total ? Math.round(a.active / a.total * 100) : 0) + '%', cls: 'is-success' },
+    { label: '累计成交额', value: SalesStore.fmtWan(a.amount), sub: '全部销售订单合计', cls: '' },
+    { label: '累计回款', value: SalesStore.fmtWan(a.paid), sub: '回款率 ' + (a.amount ? Math.round(a.paid / a.amount * 100) : 0) + '%', cls: 'is-success' },
+    { label: '应收余额', value: SalesStore.fmtWan(a.balance), sub: '未收金额合计', cls: 'is-danger' },
+    { label: '平均账龄', value: a.avgDays + ' 天', sub: '存在应收的客户平均', cls: a.avgDays > 60 ? 'is-warning' : '' }
+  ];
+  document.getElementById('customerStats').innerHTML = cards.map(function (c) {
+    return '<div class="sales-stat-card ' + c.cls + '"><div class="stat-label">' + c.label + '</div><div class="stat-value">' + c.value + '</div><div class="stat-sub">' + c.sub + '</div></div>';
+  }).join('');
+}
+
+function newSet(arr) {
+  var s = {}; arr.forEach(function (v) { if (v) s[v] = true; }); return Object.keys(s);
+}
+
+/* ---------------- 表格 ---------------- */
+function agingOf(c) {
+  var st = SalesStore.customerStats(c.id);
+  var unpaid = st.orders.filter(function (o) { return Number(o.payableAmount) - Number(o.paidAmount) > 0.01; });
+  if (!unpaid.length) return '—';
+  var oldest = unpaid[unpaid.length - 1];
+  var d = new Date((oldest.createdAt || '').replace(' ', 'T'));
+  if (isNaN(d.getTime())) return '—';
+  var days = Math.max(0, Math.floor((new Date() - d) / 86400000));
+  var cls = days > 90 ? 'text-danger' : (days > 60 ? 'text-warning' : '');
+  return '<span class="' + cls + '">' + days + ' 天</span>';
+}
+
+function renderRow(c, index) {
+  var st = SalesStore.customerStats(c.id);
+  return '<tr>' +
+    '<td>' + (index + 1) + '</td>' +
+    '<td><strong>' + esc(c.code) + '</strong></td>' +
+    '<td>' + esc(c.name) + '<div class="muted">' + esc(c.tags && c.tags.length ? c.tags.join(' · ') : '') + '</div></td>' +
+    '<td>' + typeText(c.type) + '</td>' +
+    '<td><span class="level-badge ' + esc(c.level) + '">' + levelText(c.level) + '</span></td>' +
+    '<td><span class="status-tag ' + statusClass(c.status) + '">' + statusText(c.status) + '</span></td>' +
+    '<td>' + esc(c.region || '—') + '</td>' +
+    '<td>' + esc(c.contact || '—') + '</td>' +
+    '<td>' + esc(c.phone || '—') + '</td>' +
+    '<td>' + esc(c.source || '—') + '</td>' +
+    '<td>' + esc(c.owner || '—') + '</td>' +
+    '<td class="num">' + st.orderCount + '</td>' +
+    '<td class="num money">' + SalesStore.fmtWan(st.amount) + '</td>' +
+    '<td class="num money text-success">' + SalesStore.fmtWan(st.paid) + '</td>' +
+    '<td class="num money ' + (st.balance > 0 ? 'text-danger' : '') + '">' + SalesStore.fmtWan(st.balance) + '</td>' +
+    '<td class="num">' + agingOf(c) + '</td>' +
+    '<td class="muted">' + (st.lastOrderAt ? SalesStore.fmtDate(st.lastOrderAt) : '—') + '</td>' +
+    '<td><div class="action-btns">' +
+    '<button class="action-btn view" onclick="viewCustomer(\'' + c.id + '\')">查看</button>' +
+    '<button class="action-btn edit" onclick="openEdit(\'' + c.id + '\')">编辑</button>' +
+    '<button class="action-btn" onclick="toggleStatus(\'' + c.id + '\')">' + (c.status === 'active' ? '停用' : '启用') + '</button>' +
+    '<button class="action-btn delete" onclick="removeCustomer(\'' + c.id + '\')">删除</button>' +
+    '</div></td></tr>';
+}
+
+function refreshTable() {
+  filtered = filterCustomers();
+  Pagination.init({
+    data: filtered,
+    pageSize: PAGE_SIZE,
+    containerId: 'pagination-container',
+    tbodyId: 'customerTableBody',
+    renderRow: renderRow
+  });
+  document.getElementById('customerCountInfo').textContent = '共 ' + filtered.length + ' 户客户';
+}
+
+function refreshAll() {
+  renderStats();
+  refreshTable();
+  populateRegionOptions();
+  populateOwnerOptions();
+}
+
+/* ---------------- 客户 360 ---------------- */
+function viewCustomer(id) {
+  var c = SalesStore.customer(id);
+  if (!c) return toast('客户不存在', 'danger');
+  viewCustomerId = id;
+  var st = SalesStore.customerStats(id);
+  var pays = SalesStore.payments().filter(function (p) { return p.customerId === id; });
+  var asList = SalesStore.afterSales().filter(function (a) { return a.customerId === id; });
+
+  var html = '<div class="detail-section"><div class="detail-section-title">客户档案</div><div class="detail-grid cols-3">' +
+    item('客户编号', c.code) + item('客户名称', c.name) + item('客户类型', typeText(c.type)) +
+    item('客户等级', levelText(c.level)) + item('合作状态', statusText(c.status)) + item('所属区域', c.region) +
+    item('联系人', c.contact) + item('联系电话', c.phone) + item('微信', c.wechat) +
+    item('邮箱', c.email) + item('客户来源', c.source) + item('归属业务员', c.owner) +
+    item('信用额度', SalesStore.fmtMoney(c.creditLimit)) + item('账期', (c.creditDays || 0) + ' 天') + item('发票抬头', c.invoiceTitle) +
+    item('税号', c.taxNo) + item('开户行及账号', c.bankInfo) + item('客户标签', c.tags && c.tags.length ? c.tags.join('、') : '—') +
+    '<div class="detail-item full"><span class="detail-label">详细地址</span><span class="detail-value">' + esc(c.address || '—') + '</span></div>' +
+    '<div class="detail-item full"><span class="detail-label">备注</span><span class="detail-value">' + esc(c.remark || '—') + '</span></div>' +
+    '</div></div>';
+
+  html += '<div class="detail-section"><div class="detail-section-title">经营概况</div><div class="detail-grid cols-3">' +
+    item('累计成交额', SalesStore.fmtWan(st.amount)) + item('累计回款', SalesStore.fmtWan(st.paid)) + item('应收余额', SalesStore.fmtWan(st.balance)) +
+    item('订单数', st.orderCount + ' 笔') + item('客单价', SalesStore.fmtMoney(st.avgOrder)) + item('最近下单', st.lastOrderAt ? SalesStore.fmtTime(st.lastOrderAt) : '—') +
+    '</div></div>';
+
+  html += '<div class="detail-section"><div class="detail-section-title">最近订单</div>';
+  if (st.orders.length) {
+    html += '<table class="detail-table"><thead><tr><th>订单编号</th><th>渠道</th><th class="num">金额</th><th class="num">已收</th><th>状态</th><th>下单时间</th></tr></thead><tbody>' +
+      st.orders.slice(0, 10).map(function (o) {
+        return '<tr><td>' + esc(o.no) + '</td><td>' + (SalesStore.TYPE_TEXT[o.type] || o.type) + '</td><td class="num">' + SalesStore.fmtMoney(o.payableAmount) + '</td><td class="num">' + SalesStore.fmtMoney(o.paidAmount) + '</td><td>' + (SalesStore.ORDER_STATUS_TEXT[o.status] || o.status) + '</td><td>' + SalesStore.fmtTime(o.createdAt) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  } else {
+    html += '<div class="empty-state">该客户暂无销售订单</div>';
+  }
+  html += '</div>';
+
+  html += '<div class="detail-section"><div class="detail-section-title">收款记录</div>';
+  if (pays.length) {
+    html += '<table class="detail-table"><thead><tr><th>收款单号</th><th>关联订单</th><th class="num">金额</th><th>方式</th><th>收款时间</th></tr></thead><tbody>' +
+      pays.slice(0, 10).map(function (p) {
+        return '<tr><td>' + esc(p.id) + '</td><td>' + esc(p.orderNo || '—') + '</td><td class="num ' + (p.type === 'refund' ? 'text-danger' : 'text-success') + '">' + SalesStore.fmtMoney(p.amount) + '</td><td>' + (SalesStore.PAY_METHOD_TEXT[p.method] || p.method) + '</td><td>' + SalesStore.fmtTime(p.paidAt) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  } else {
+    html += '<div class="empty-state">暂无收款记录</div>';
+  }
+  html += '</div>';
+
+  html += '<div class="detail-section"><div class="detail-section-title">售后记录</div>';
+  if (asList.length) {
+    html += '<table class="detail-table"><thead><tr><th>售后单号</th><th>类型</th><th>原因</th><th class="num">金额</th><th>状态</th></tr></thead><tbody>' +
+      asList.map(function (a) {
+        return '<tr><td>' + esc(a.no) + '</td><td>' + (SalesStore.AS_TYPE_TEXT[a.type] || a.type) + '</td><td>' + esc(a.reason) + '</td><td class="num">' + SalesStore.fmtMoney(a.amount) + '</td><td>' + (SalesStore.AS_STATUS_TEXT[a.status] || a.status) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  } else {
+    html += '<div class="empty-state">暂无售后记录</div>';
+  }
+  html += '</div>';
+
+  document.getElementById('viewBody').innerHTML = html;
+  document.getElementById('viewFooter').innerHTML =
+    '<button class="jg-btn" onclick="openEdit(\'' + c.id + '\')">编辑客户</button>' +
+    '<button class="jg-btn" onclick="closeModal(\'viewModal\')">关闭</button>';
+  openModal('viewModal');
+}
+
+function item(label, value) {
+  return '<div class="detail-item"><span class="detail-label">' + label + '</span><span class="detail-value">' + esc(value == null || value === '' ? '—' : value) + '</span></div>';
+}
+
+/* ---------------- 新增 / 编辑 ---------------- */
+function clearForm() {
+  ['eName', 'eRegion', 'eSource', 'eOwner', 'eTags', 'eContact', 'ePhone', 'eWechat', 'eEmail', 'eAddress', 'eInvoiceTitle', 'eTaxNo', 'eBankInfo', 'eRemark'].forEach(function (id) {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('eType').value = 'wholesale';
+  document.getElementById('eLevel').value = 'gold';
+  document.getElementById('eStatus').value = 'active';
+  document.getElementById('eCreditLimit').value = '0';
+  document.getElementById('eCreditDays').value = '0';
+}
+
+function openAdd() {
+  editingId = null;
+  document.getElementById('editTitle').textContent = '新建客户';
+  clearForm();
+  openModal('editModal');
+}
+
+function openEdit(id) {
+  var c = SalesStore.customer(id);
+  if (!c) return toast('客户不存在', 'danger');
+  editingId = id;
+  closeModal('viewModal');
+  document.getElementById('editTitle').textContent = '编辑客户 · ' + c.code;
+  document.getElementById('eName').value = c.name || '';
+  document.getElementById('eType').value = c.type || 'retail';
+  document.getElementById('eLevel').value = c.level || 'silver';
+  document.getElementById('eStatus').value = c.status || 'active';
+  document.getElementById('eRegion').value = c.region || '';
+  document.getElementById('eSource').value = c.source || '';
+  document.getElementById('eOwner').value = c.owner || '';
+  document.getElementById('eTags').value = (c.tags || []).join('，');
+  document.getElementById('eContact').value = c.contact || '';
+  document.getElementById('ePhone').value = c.phone || '';
+  document.getElementById('eWechat').value = c.wechat || '';
+  document.getElementById('eEmail').value = c.email || '';
+  document.getElementById('eAddress').value = c.address || '';
+  document.getElementById('eCreditLimit').value = c.creditLimit || 0;
+  document.getElementById('eCreditDays').value = c.creditDays || 0;
+  document.getElementById('eInvoiceTitle').value = c.invoiceTitle || '';
+  document.getElementById('eTaxNo').value = c.taxNo || '';
+  document.getElementById('eBankInfo').value = c.bankInfo || '';
+  document.getElementById('eRemark').value = c.remark || '';
+  openModal('editModal');
+}
+
+function submitCustomer() {
+  var payload = {
+    id: editingId || undefined,
+    name: val('eName'),
+    type: val('eType'),
+    level: val('eLevel'),
+    status: val('eStatus'),
+    region: val('eRegion'),
+    source: val('eSource'),
+    owner: val('eOwner'),
+    tags: val('eTags'),
+    contact: val('eContact'),
+    phone: val('ePhone'),
+    wechat: val('eWechat'),
+    email: val('eEmail'),
+    address: val('eAddress'),
+    creditLimit: val('eCreditLimit'),
+    creditDays: val('eCreditDays'),
+    invoiceTitle: val('eInvoiceTitle'),
+    taxNo: val('eTaxNo'),
+    bankInfo: val('eBankInfo'),
+    remark: val('eRemark')
+  };
+  var res = SalesStore.saveCustomer(payload);
+  if (!res.ok) return toast(res.message, 'danger');
+  closeModal('editModal');
+  toast(editingId ? '客户资料已更新' : '客户已创建');
+  editingId = null;
+  refreshAll();
+}
+
+function toggleStatus(id) {
+  var c = SalesStore.customer(id);
+  if (!c) return;
+  var res = SalesStore.setCustomerStatus(id, c.status === 'active' ? 'inactive' : 'active');
+  if (!res.ok) return toast(res.message, 'danger');
+  toast(c.status === 'active' ? '客户已停用' : '客户已启用');
+  refreshAll();
+}
+
+function removeCustomer(id) {
+  if (!confirm('确定删除该客户？已有订单或对账单的客户不可删除。')) return;
+  var res = SalesStore.removeCustomer(id);
+  if (!res.ok) return toast(res.message, 'danger');
+  toast('客户已删除');
+  refreshAll();
+}
+
+/* ---------------- 导入导出 ---------------- */
+function csvCell(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+
+function downloadTemplate() {
+  var headers = ['客户名称', '联系人', '联系电话', '客户类型(批发/零售/认养)', '客户等级(vip/gold/silver)', '所属区域', '详细地址', '客户来源', '归属业务员'];
+  var rows = [['示例客户', '张三', '13800000000', 'wholesale', 'gold', '江西', '南丰县XX路', '商超直供', '张伟']];
+  SalesStore.downloadCsv('客户导入模板.csv', headers, rows);
+  toast('客户导入模板已下载');
+}
+
+function importCustomers(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    var text = String(e.target.result || '').replace(/^\ufeff/, '');
+    var lines = text.split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (lines.length <= 1) { toast('文件没有可导入的数据', 'warning'); input.value = ''; return; }
+    var ok = 0;
+    var fail = 0;
+    var firstError = '';
+    for (var i = 1; i < lines.length; i++) {
+      var cols = parseCsvLine(lines[i]);
+      var res = SalesStore.saveCustomer({
+        name: cols[0], contact: cols[1], phone: cols[2],
+        type: mapType(cols[3]), level: cols[4] || 'silver',
+        region: cols[5], address: cols[6], source: cols[7], owner: cols[8]
+      });
+      if (res.ok) ok++;
+      else { fail++; if (!firstError) firstError = cols[0] + '：' + res.message; }
+    }
+    toast('导入完成：成功 ' + ok + ' 条，失败 ' + fail + ' 条' + (firstError ? '；' + firstError : ''), fail ? 'warning' : 'success');
+    input.value = '';
+    refreshAll();
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCsvLine(line) {
+  var out = [];
+  var cur = '';
+  var quoted = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (ch === '"') {
+      if (quoted && line[i + 1] === '"') { cur += '"'; i++; }
+      else quoted = !quoted;
+    } else if (ch === ',' && !quoted) {
+      out.push(cur.trim()); cur = '';
+    } else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function mapType(v) {
+  if (v === '批发' || v === 'wholesale') return 'wholesale';
+  if (v === '认养' || v === 'adoption') return 'adoption';
+  if (v === '零售' || v === 'retail') return 'retail';
+  return 'retail';
+}
+
+function exportCustomers() {
+  var rows = filtered.length ? filtered : filterCustomers();
+  if (!rows.length) return toast('当前筛选结果为空，无法导出', 'warning');
+  var headers = ['客户编号', '客户名称', '客户类型', '客户等级', '状态', '区域', '联系人', '联系电话', '微信', '邮箱', '地址', '客户来源', '业务员', '信用额度', '账期', '发票抬头', '税号', '累计成交', '累计回款', '应收余额', '订单数', '最近下单', '创建时间'];
+  var data = rows.map(function (c) {
+    var st = SalesStore.customerStats(c.id);
+    return [c.code, c.name, typeText(c.type), levelText(c.level), statusText(c.status), c.region, c.contact, c.phone, c.wechat, c.email, c.address, c.source, c.owner, c.creditLimit, c.creditDays, c.invoiceTitle, c.taxNo, st.amount, st.paid, st.balance, st.orderCount, st.lastOrderAt ? SalesStore.fmtDate(st.lastOrderAt) : '', c.createdAt];
+  });
+  SalesStore.downloadCsv('客户档案_' + new Date().toISOString().slice(0, 10) + '.csv', headers, data);
+  toast('已导出 ' + rows.length + ' 户客户');
+}
+
+/* ---------------- 初始化 ---------------- */
+function populateRegionOptions() {
+  var regions = newSet(SalesStore.customers().map(function (c) { return c.region; })).sort();
+  var sel = document.getElementById('cRegion');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="all">全部区域</option>' + regions.map(function (r) {
+    return '<option value="' + esc(r) + '">' + esc(r) + '</option>';
+  }).join('');
+  if (cur && regions.indexOf(cur) >= 0) sel.value = cur;
+}
+
+function populateOwnerOptions() {
+  var owners = newSet(SalesStore.customers().map(function (c) { return c.owner; })).sort();
+  var sel = document.getElementById('cOwner');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="all">全部业务员</option>' + owners.map(function (o) {
+    return '<option value="' + esc(o) + '">' + esc(o) + '</option>';
+  }).join('');
+  if (cur && owners.indexOf(cur) >= 0) sel.value = cur;
+  document.getElementById('ownerOptions').innerHTML = owners.map(function (o) {
+    return '<option value="' + esc(o) + '">';
+  }).join('');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  populateRegionOptions();
+  populateOwnerOptions();
+  refreshAll();
+});
+
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  populateRegionOptions();
+  populateOwnerOptions();
+  refreshAll();
+}
+</script>
 </body>
 </html>

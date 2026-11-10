@@ -113,6 +113,9 @@
     border-collapse:separate;
     border-spacing:0;
   }
+  /* 表格多选列 */
+  .col-check { width:44px; text-align:center; }
+  .col-check input { cursor:pointer; }
   .action-btns {
     display:flex;
     gap:6px;
@@ -639,31 +642,70 @@
               预警源类型
             </h3>
             <div class="source-list" id="alertSourceList"></div>
-            <div class="silence-status" style="margin-top:var(--space-lg);">共享数据源 AlertStore 当前仅支持 device（设备类）与 farming（农事类），环境类 / 灾害类 / 质量类待接入。</div>
+            <div class="silence-status" style="margin-top:var(--space-lg);">共享数据源 AlertStore 统一管理 设备 / 人工上报 / 模型 / 库存 / 系统 五类来源，规则与预警同源；状态按规则与预警的真实接入情况动态判定。</div>
           </div>
         </div>
                 <div class="search-section">
           <div class="search-bar">
             <select class="search-select" id="typeSelect">
-              <option value="">全部类型</option>
-              <option value="farming">农事预警</option>
+              <option value="">全部来源</option>
               <option value="device">设备预警</option>
+              <option value="manual">人工上报</option>
+              <option value="model">模型预警</option>
               <option value="inventory">库存预警</option>
-              <option value="weather">气象预警</option>
+              <option value="system">系统预警</option>
+              <option value="cert">资质到期预警</option>
+            </select>
+            <select class="search-select" id="categorySelect">
+              <option value="">全部分类</option>
+              <option value="device">设备</option>
+              <option value="pest">病虫害</option>
+              <option value="weather">气象</option>
+              <option value="soil">土壤</option>
+              <option value="growth">生长</option>
+              <option value="environment">环境</option>
+              <option value="yield">产量</option>
+              <option value="inventory">库存</option>
+              <option value="quality">质量</option>
+            </select>
+            <select class="search-select" id="levelSelect">
+              <option value="">全部级别</option>
+              <option value="urgent">紧急</option>
+              <option value="important">重要</option>
+              <option value="reminder">提醒</option>
+              <option value="notice">通知</option>
             </select>
             <select class="search-select" id="statusSelect">
               <option value="">全部状态</option>
               <option value="active">启用</option>
               <option value="inactive">停用</option>
             </select>
-            <input type="text" class="search-input" placeholder="搜索规则名称..." id="searchInput">
+            <input type="text" class="search-input" placeholder="搜索规则名称、编号..." id="searchInput">
 
           <div class="search-actions"><button class="jg-btn jg-btn-primary" id="btnSearch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" id="btnReset">重置</button></div>
           </div>
         </div>
         <div class="action-bar">
           <div class="action-left">
-                                  </div>
+            <button class="jg-btn" id="btnBatchEnable">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+              批量启用
+            </button>
+            <button class="jg-btn" id="btnBatchDisable">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                <circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/>
+              </svg>
+              批量停用
+            </button>
+            <button class="jg-btn" id="btnBatchDelete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/>
+              </svg>
+              批量删除
+            </button>
+          </div>
           <div class="action-right">
             <button class="jg-btn jg-btn-primary" id="btnAddRule">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;">
@@ -696,14 +738,18 @@
               <thead>
                 <tr>
                   <th style="width:60px;">序号</th>
+                  <th class="col-check"><input type="checkbox" id="selectAll" aria-label="全选"></th>
                   <th>规则编号</th>
                   <th>规则名称</th>
-                  <th style="width:120px;">预警类型</th>
-                  <th style="width:140px;">阈值设置</th>
-                  <th style="width:100px;">响应时限</th>
-                  <th style="width:100px;">处置时限</th>
-                  <th style="width:140px;">通知方式</th>
-                  <th style="width:100px;">启用状态</th>
+                  <th style="width:110px;">预警来源</th>
+                  <th style="width:100px;">业务分类</th>
+                  <th style="width:90px;">预警级别</th>
+                  <th style="width:160px;">阈值设置</th>
+                  <th style="width:100px;">作用范围</th>
+                  <th style="width:90px;">响应时限</th>
+                  <th style="width:90px;">处置时限</th>
+                  <th style="width:130px;">通知方式</th>
+                  <th style="width:90px;">启用状态</th>
                   <th style="width:160px;">操作</th>
                 </tr>
               </thead>
@@ -738,12 +784,20 @@
         <div class="detail-value" id="detailName">-</div>
       </div>
       <div class="detail-row">
-        <div class="detail-label">预警类型</div>
-        <div class="detail-value" id="detailType">-</div>
+        <div class="detail-label">预警来源</div>
+        <div class="detail-value" id="detailSource">-</div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">业务分类</div>
+        <div class="detail-value" id="detailCategory">-</div>
       </div>
       <div class="detail-row">
         <div class="detail-label">阈值设置</div>
         <div class="detail-value" id="detailThreshold">-</div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">作用范围</div>
+        <div class="detail-value" id="detailScope">-</div>
       </div>
       <div class="detail-row">
         <div class="detail-label">响应时限</div>
@@ -803,19 +857,31 @@
           <input type="text" class="form-input" id="editName" placeholder="请输入规则名称">
         </div>
         <div class="form-group">
-          <label>预警类型</label>
-          <select class="form-select" id="editType">
-            <option value="farming">农事预警</option>
+          <label>预警来源</label>
+          <select class="form-select" id="editSource">
             <option value="device">设备预警</option>
+            <option value="manual">人工上报</option>
+            <option value="model">模型预警</option>
             <option value="inventory">库存预警</option>
-            <option value="weather">气象预警</option>
+            <option value="system">系统预警</option>
+            <option value="cert">资质到期预警</option>
           </select>
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>阈值条件（自动生成，可微调）</label>
-          <input type="text" class="form-input" id="editThreshold" placeholder="例如：温度 &lt; 5°C">
+          <label>业务分类</label>
+          <select class="form-select" id="editCategory">
+            <option value="device">设备</option>
+            <option value="pest">病虫害</option>
+            <option value="weather">气象</option>
+            <option value="soil">土壤</option>
+            <option value="growth">生长</option>
+            <option value="environment">环境</option>
+            <option value="yield">产量</option>
+            <option value="inventory">库存</option>
+            <option value="quality">质量</option>
+          </select>
         </div>
         <div class="form-group">
           <label>预警级别</label>
@@ -827,22 +893,81 @@
           </select>
         </div>
       </div>
-      <div class="form-group">
-        <label>阈值区间（可视化设置）</label>
-        <div class="range-comp">
-          <div class="range-track">
-            <div class="range-fill" id="rangeFill"></div>
-            <div class="range-thumb">
-              <input type="range" id="editRangeMin" min="0" max="100" value="20" aria-label="阈值下限">
-              <input type="range" id="editRangeMax" min="0" max="100" value="80" aria-label="阈值上限">
-            </div>
-          </div>
-          <div class="range-vals">
-            <span>下限 <input type="number" class="form-input range-num" id="editNumMin" value="20"></span>
-            <span>上限 <input type="number" class="form-input range-num" id="editNumMax" value="80"></span>
-            <span>单位 <input type="text" class="form-input range-num" id="editUnit" value="°C"></span>
-          </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>监测指标</label>
+          <select class="form-select" id="editMetric">
+            <option value="">（不限，仅按来源/分类匹配）</option>
+            <option value="temperature">温度</option>
+            <option value="humidity">空气湿度</option>
+            <option value="soilMoisture">土壤湿度</option>
+            <option value="soilPh">土壤 pH</option>
+            <option value="soilEc">土壤电导率</option>
+            <option value="rainfall">降雨量</option>
+            <option value="windSpeed">风速</option>
+            <option value="pestCount">虫口密度</option>
+            <option value="riskIndex">风险指数</option>
+            <option value="deviationRate">产量偏差率</option>
+            <option value="stock">库存数量</option>
+            <option value="expireDays">剩余效期天数</option>
+            <option value="offlineMinutes">设备离线时长</option>
+            <option value="runtimeHours">运行时长</option>
+            <option value="faultCode">故障码</option>
+            <option value="flowDeviation">流量偏差</option>
+            <option value="soilNutrient">土壤养分</option>
+            <option value="maturity">成熟度</option>
+            <option value="phenologyStage">物候期</option>
+            <option value="birdCount">鸟害数量</option>
+            <option value="lightning">雷电次数</option>
+            <option value="radarEcho">雷达回波强度</option>
+            <option value="tempHumidity">温湿度异常</option>
+            <option value="overdueHours">逾期时长</option>
+          </select>
         </div>
+        <div class="form-group">
+          <label>比较方式</label>
+          <select class="form-select" id="editOp">
+            <option value="gt">大于</option>
+            <option value="gte">大于等于</option>
+            <option value="lt">小于</option>
+            <option value="lte">小于等于</option>
+            <option value="between">介于两值之间</option>
+            <option value="eq">等于</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>阈值数值</label>
+          <input type="number" class="form-input" id="editValue" placeholder="例如：5" step="any">
+        </div>
+        <div class="form-group">
+          <label>第二阈值（介于时使用）</label>
+          <input type="number" class="form-input" id="editValue2" placeholder="例如：35" step="any">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>单位</label>
+          <input type="text" class="form-input" id="editUnit" placeholder="例如：°C、mm、头/叶、kg">
+        </div>
+        <div class="form-group">
+          <label>作用范围</label>
+          <select class="form-select" id="editScopeType">
+            <option value="all">全部（全局生效）</option>
+            <option value="base">指定基地</option>
+            <option value="plot">指定地块</option>
+            <option value="device">指定设备</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" id="editScopeIdsGroup" style="display:none;">
+        <label>作用对象（多个用逗号分隔）</label>
+        <input type="text" class="form-input" id="editScopeIds" placeholder="例如：天水麦积区基地, 天水秦州基地">
+      </div>
+      <div class="form-group">
+        <label>阈值条件（自动生成，可微调）</label>
+        <input type="text" class="form-input" id="editThreshold" placeholder="例如：温度 &lt; 5°C" readonly>
       </div>
       <div class="form-group">
         <label>通知方式</label>
@@ -861,6 +986,16 @@
       <div class="form-group">
         <label>通知人员</label>
         <input type="text" class="form-input" id="editUsers" placeholder="请输入通知人员，多个用逗号分隔">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>响应时限</label>
+          <input type="text" class="form-input" id="editRespondSla" placeholder="默认取级别 SLA">
+        </div>
+        <div class="form-group">
+          <label>处置时限</label>
+          <input type="text" class="form-input" id="editHandleSla" placeholder="默认取级别 SLA">
+        </div>
       </div>
       <div class="form-group">
         <label>规则描述</label>
@@ -994,55 +1129,147 @@
 
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="js/shared/alert-data.js"></script>
 <script>
-  // SLA 分级默认时限（紧急 / 重要 / 提醒 / 通知）
-  const SLA_DEFAULT = {
-    critical: { respondSla: '15 分钟', handleSla: '2 小时' },
-    high:     { respondSla: '30 分钟', handleSla: '4 小时' },
-    medium:   { respondSla: '2 小时',  handleSla: '24 小时' },
-    reminder: { respondSla: '2 小时',  handleSla: '24 小时' },
-    notice:   { respondSla: '4 小时',  handleSla: '无时限' },
-    low:      { respondSla: '4 小时',  handleSla: '无时限' }
+  // ================================================================
+  // 预警规则设置（数据源统一为 AlertStore，规则与预警同源）
+  // ================================================================
+  const METRIC_LABELS = {
+    temperature: '温度', humidity: '空气湿度', soilMoisture: '土壤湿度', soilPh: '土壤 pH',
+    soilEc: '土壤电导率', soilNutrient: '土壤养分', rainfall: '降雨量', windSpeed: '风速',
+    pestCount: '虫口密度', riskIndex: '风险指数', deviationRate: '产量偏差率', stock: '库存数量',
+    expireDays: '剩余效期天数', offlineMinutes: '设备离线时长', runtimeHours: '运行时长',
+    faultCode: '故障码', flowDeviation: '流量偏差', maturity: '成熟度', phenologyStage: '物候期',
+    birdCount: '鸟害数量', lightning: '雷电次数', radarEcho: '雷达回波强度',
+    tempHumidity: '温湿度异常', overdueHours: '逾期时长'
   };
+  const OP_LABELS = { gt: '大于', gte: '大于等于', lt: '小于', lte: '小于等于', between: '介于', eq: '等于' };
+  const OP_SYMBOLS = { gt: '>', gte: '≥', lt: '<', lte: '≤', between: '~', eq: '=' };
+  const SCOPE_TYPE_LABELS = { all: '全部', base: '基地', plot: '地块', device: '设备' };
+  const LEVEL_LABELS = { urgent: '紧急', important: '重要', reminder: '提醒', notice: '通知' };
+  const NOTIFY_LABELS = { internal: '站内', sms: '短信', push: '推送' };
+  const SCOPE_TEXT = { all: '全部预警', notice: '仅通知', reminder: '仅提醒' };
 
-  const mockData = [
-    { id: 'W001', code: 'W001', name: '低温霜冻预警', type: 'weather', typeText: '气象预警', threshold: '温度 < 5°C', notify: '站内+短信', level: 'high', levelText: '高', respondSla: '30 分钟', handleSla: '4 小时', users: '惠加宁, 黄忠坚', status: 'active', statusText: '启用', createTime: '2026-09-15 10:30', desc: '当温度低于5°C时触发预警，提醒做好防寒措施。' },
-    { id: 'W002', code: 'W002', name: '设备离线预警', type: 'device', typeText: '设备预警', threshold: '离线 > 10分钟', notify: '站内+推送', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '运维组', status: 'active', statusText: '启用', createTime: '2026-09-16 14:20', desc: '设备离线超过10分钟自动触发预警通知。' },
-    { id: 'W003', code: 'W003', name: '农资库存告急', type: 'inventory', typeText: '库存预警', threshold: '库存 < 安全线', notify: '站内', level: 'reminder', levelText: '提醒', respondSla: '2 小时', handleSla: '24 小时', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-18 09:10', desc: '农资库存低于安全线时自动预警。' },
-    { id: 'W004', code: 'W004', name: '农事任务逾期', type: 'farming', typeText: '农事预警', threshold: '超时 > 24小时', notify: '站内+短信', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '任务负责人', status: 'inactive', statusText: '停用', createTime: '2026-09-20 11:30', desc: '农事任务逾期超过24小时触发预警。' },
-    { id: 'W005', code: 'W005', name: '病虫害风险预警', type: 'farming', typeText: '农事预警', threshold: '虫情数量 > 阈值', notify: '站内+推送', level: 'high', levelText: '高', respondSla: '30 分钟', handleSla: '4 小时', users: '植保组', status: 'active', statusText: '启用', createTime: '2026-09-22 16:45', desc: '病虫害监测数据超过阈值时触发预警。' },
-    { id: 'W006', code: 'W006', name: '土壤湿度异常', type: 'device', typeText: '设备预警', threshold: '湿度 < 20%', notify: '站内', level: 'notice', levelText: '通知', respondSla: '4 小时', handleSla: '无时限', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-25 10:00', desc: '土壤湿度低于20%时触发预警。' },
-    { id: 'W007', code: 'W007', name: '高温预警', type: 'weather', typeText: '气象预警', threshold: '温度 > 35°C', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-01 08:30', desc: '温度超过35°C时触发高温预警。' },
-    { id: 'W008', code: 'W008', name: '设备故障预警', type: 'device', typeText: '设备预警', threshold: '故障码触发', notify: '站内+短信', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '运维组', status: 'active', statusText: '启用', createTime: '2026-09-05 13:20', desc: '设备检测到故障码时自动触发预警。' },
-    { id: 'W009', code: 'W009', name: '肥料库存预警', type: 'inventory', typeText: '库存预警', threshold: '库存 < 50kg', notify: '站内', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-10 15:00', desc: '肥料库存低于50kg时触发预警。' },
-    { id: 'W010', code: 'W010', name: '暴雨预警', type: 'weather', typeText: '气象预警', threshold: '降雨量 > 50mm', notify: '站内+短信', level: 'high', levelText: '高', respondSla: '30 分钟', handleSla: '4 小时', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-15 09:45', desc: '预计降雨量超过50mm时触发暴雨预警。' },
-    { id: 'W011', code: 'W011', name: '灌溉异常预警', type: 'device', typeText: '设备预警', threshold: '流量异常', notify: '站内+推送', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '技术员', status: 'inactive', statusText: '停用', createTime: '2026-09-20 14:10', desc: '灌溉系统流量异常时触发预警。' },
-    { id: 'W012', code: 'W012', name: '农药库存预警', type: 'inventory', typeText: '库存预警', threshold: '库存 < 安全线', notify: '站内', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-25 11:20', desc: '农药库存低于安全线时触发预警。' },
-    { id: 'W013', code: 'W013', name: '大风预警', type: 'weather', typeText: '气象预警', threshold: '风速 > 15m/s', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-01 16:30', desc: '风速超过15m/s时触发大风预警。' },
-    { id: 'W014', code: 'W014', name: '设备维护提醒', type: 'device', typeText: '设备预警', threshold: '运行时长 > 5000h', notify: '站内', level: 'low', levelText: '低', respondSla: '4 小时', handleSla: '无时限', users: '运维组', status: 'active', statusText: '启用', createTime: '2026-09-05 10:00', desc: '设备运行时长超过5000小时提醒维护。' },
-    { id: 'W015', code: 'W015', name: '授粉期提醒', type: 'farming', typeText: '农事预警', threshold: '花期时间触发', notify: '站内+短信', level: 'low', levelText: '低', respondSla: '4 小时', handleSla: '无时限', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-10 08:15', desc: '苹果花期自动提醒授粉。' },
-    { id: 'W016', code: 'W016', name: '收获期提醒', type: 'farming', typeText: '农事预警', threshold: '成熟度 > 90%', notify: '站内+短信', level: 'low', levelText: '低', respondSla: '4 小时', handleSla: '无时限', users: '采摘组', status: 'active', statusText: '启用', createTime: '2026-09-15 13:40', desc: '果实成熟度超过90%时提醒收获。' },
-    { id: 'W017', code: 'W017', name: '土壤肥力预警', type: 'device', typeText: '设备预警', threshold: 'N/P/K < 阈值', notify: '站内', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-20 15:20', desc: '土壤N/P/K含量低于阈值时预警。' },
-    { id: 'W018', code: 'W018', name: '冰雹预警', type: 'weather', typeText: '气象预警', threshold: '雷达回波触发', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-25 09:30', desc: '雷达检测到冰雹回波时触发预警。' },
-    { id: 'W019', code: 'W019', name: '包装箱库存预警', type: 'inventory', typeText: '库存预警', threshold: '库存 < 1000个', notify: '站内', level: 'low', levelText: '低', respondSla: '4 小时', handleSla: '无时限', users: '仓库管理员', status: 'inactive', statusText: '停用', createTime: '2026-09-01 11:00', desc: '包装箱库存低于1000个时预警。' },
-    { id: 'W020', code: 'W020', name: '温湿度异常预警', type: 'device', typeText: '设备预警', threshold: '超出正常范围', notify: '站内+推送', level: 'medium', levelText: '中', respondSla: '2 小时', handleSla: '24 小时', users: '技术员', status: 'active', statusText: '启用', createTime: '2026-09-05 14:30', desc: '温湿度超出正常范围时预警。' },
-    { id: 'W021', code: 'W021', name: '鸟害预警', type: 'farming', typeText: '农事预警', threshold: '监测设备触发', notify: '站内', level: 'low', levelText: '低', respondSla: '4 小时', handleSla: '无时限', users: '植保组', status: 'active', statusText: '启用', createTime: '2026-09-10 10:15', desc: '鸟害监测设备触发时预警。' },
-    { id: 'W022', code: 'W022', name: '雷电预警', type: 'weather', typeText: '气象预警', threshold: '雷电活动检测', notify: '站内+短信+推送', level: 'critical', levelText: '紧急', respondSla: '15 分钟', handleSla: '2 小时', users: '全体员工', status: 'active', statusText: '启用', createTime: '2026-09-15 16:00', desc: '检测到雷电活动时触发预警。' },
-    { id: 'W023', code: 'W023', name: '仓储温度预警', type: 'device', typeText: '设备预警', threshold: '温度 > 25°C', notify: '站内+短信', level: 'high', levelText: '高', respondSla: '30 分钟', handleSla: '4 小时', users: '仓库管理员', status: 'active', statusText: '启用', createTime: '2026-09-20 08:45', desc: '仓储温度超过25°C时预警。' }
+  // SLA 默认值（与 AlertStore.DEFAULT_SLA 保持一致，用于「恢复默认」）
+  const SLA_DEFAULTS = {
+    urgent:    { respond: '15 分钟', handle: '2 小时',  escalate: '技术总监' },
+    important: { respond: '30 分钟', handle: '4 小时',  escalate: '园区主任' },
+    reminder:  { respond: '2 小时',  handle: '24 小时', escalate: '值班长' },
+    notice:    { respond: '4 小时',  handle: '无时限', escalate: '不升级' }
+  };
+  const SLA_LEVELS = [
+    { key: 'urgent', label: '紧急' },
+    { key: 'important', label: '重要' },
+    { key: 'reminder', label: '提醒' },
+    { key: 'notice', label: '通知' }
   ];
+  const SLA_ESCALATE_OPTIONS = ['值班长', '园区主任', '技术总监', '不升级'];
 
-  let filteredData = [...mockData];
+  let slaConfig = null;
+  let filteredData = [];
   let currentAction = null;
   let currentRuleId = null;
   let currentDetailId = null;
+  let pendingBatchIds = [];
+
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function metricText(metric) {
+    if (!metric) return '';
+    return METRIC_LABELS[metric] || metric;
+  }
+
+  function sourceText(source) {
+    const found = (AlertStore.SOURCES || []).find(function(s) { return s.key === source; });
+    return found ? found.text : '系统预警';
+  }
+
+  function categoryText(category) {
+    const found = (AlertStore.CATEGORIES || []).find(function(c) { return c.key === category; });
+    return found ? found.text : (category || '—');
+  }
+
+  function levelText(level) {
+    return LEVEL_LABELS[level] || '通知';
+  }
+
+  function notifyText(notify) {
+    if (!notify || typeof notify !== 'object') return String(notify || '站内');
+    const parts = [];
+    ['internal', 'sms', 'push'].forEach(function(k) {
+      if (notify[k]) parts.push(NOTIFY_LABELS[k]);
+    });
+    return parts.length ? parts.join('+') : '站内';
+  }
+
+  // 结构化阈值 → 人类可读文本
+  function formatThreshold(th) {
+    const t = th || {};
+    const name = metricText(t.metric);
+    const unit = t.unit || '';
+    const v1 = (t.value === null || t.value === undefined || t.value === '') ? null : t.value;
+    const v2 = (t.value2 === null || t.value2 === undefined || t.value2 === '') ? null : t.value2;
+    if (!name) return '不限（按来源/分类匹配）';
+    if (t.op === 'between' && v1 !== null && v2 !== null) {
+      return name + ' ' + v1 + unit + ' ~ ' + v2 + unit;
+    }
+    if (v1 === null) {
+      return name + (t.op === 'gt' || t.op === 'gte' ? ' 超出阈值' : ' 低于安全线');
+    }
+    return name + ' ' + (OP_SYMBOLS[t.op] || '=') + ' ' + v1 + unit;
+  }
+
+  function formatScope(scope) {
+    const s = scope || { type: 'all', ids: [] };
+    if (!s.type || s.type === 'all') return '全部';
+    const label = SCOPE_TYPE_LABELS[s.type] || s.type;
+    const ids = (s.ids || []).slice();
+    if (!ids.length) return label + '（未指定）';
+    return label + '：' + ids.join('、');
+  }
+
+  function reloadRules() {
+    filteredData = AlertStore.rules();
+    Pagination.updateData(filteredData);
+    const selAll = document.getElementById('selectAll');
+    if (selAll) selAll.checked = false;
+    updateSelectedCount();
+    renderAlertSources();
+  }
+
+  function applyFilter() {
+    const keyword = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+    const source = document.getElementById('typeSelect').value;
+    const category = document.getElementById('categorySelect').value;
+    const level = document.getElementById('levelSelect').value;
+    const status = document.getElementById('statusSelect').value;
+
+    const all = AlertStore.rules();
+    filteredData = all.filter(function(item) {
+      const matchKeyword = !keyword
+        || String(item.name || '').toLowerCase().indexOf(keyword) >= 0
+        || String(item.code || '').toLowerCase().indexOf(keyword) >= 0;
+      const matchSource = !source || item.source === source;
+      const matchCategory = !category || item.category === category;
+      const matchLevel = !level || item.level === level;
+      const matchStatus = !status || item.status === status;
+      return matchKeyword && matchSource && matchCategory && matchLevel && matchStatus;
+    });
+    Pagination.updateData(filteredData);
+  }
 
   document.addEventListener('DOMContentLoaded', function() {
+    slaConfig = readSlaConfig();
+
     renderSlaConfig();
     renderAlertSources();
-    applySlaToRules();
-    document.getElementById('btnSaveSla').addEventListener('click', saveSlaConfig);
-    document.getElementById('btnResetSla').addEventListener('click', resetSlaConfig);
+    initSilence();
 
+    filteredData = AlertStore.rules();
     Pagination.init({
       currentPage: 1,
       pageSize: 10,
@@ -1050,6 +1277,13 @@
       containerId: 'pagination-container',
       tbodyId: 'dataTableBody',
       renderRow: renderRow
+    });
+
+    document.getElementById('btnSaveSla').addEventListener('click', saveSlaConfig);
+    document.getElementById('btnResetSla').addEventListener('click', resetSlaConfig);
+    document.getElementById('btnSaveSilence').addEventListener('click', saveSilence);
+    document.querySelectorAll('#silenceStart, #silenceEnd, #silenceScope').forEach(function(el) {
+      el.addEventListener('change', renderSilenceStatus);
     });
 
     document.addEventListener('click', function(e) {
@@ -1067,73 +1301,70 @@
     });
 
     document.getElementById('btnSearch').addEventListener('click', function() {
-      const keyword = document.getElementById('searchInput').value.toLowerCase();
-      const type = document.getElementById('typeSelect').value;
-      const status = document.getElementById('statusSelect').value;
+      applyFilter();
+      showToast('搜索完成，共找到 ' + filteredData.length + ' 条规则');
+    });
 
-      filteredData = mockData.filter(item => {
-        const matchKeyword = !keyword || item.name.toLowerCase().includes(keyword) || item.code.toLowerCase().includes(keyword);
-        const matchType = !type || item.type === type;
-        const matchStatus = !status || item.status === status;
-        return matchKeyword && matchType && matchStatus;
-      });
-
-      Pagination.updateData(filteredData);
-      showToast('搜索完成，共找到 ' + filteredData.length + ' 条记录');
+    document.getElementById('searchInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        applyFilter();
+        showToast('搜索完成，共找到 ' + filteredData.length + ' 条规则');
+      }
     });
 
     document.getElementById('btnReset').addEventListener('click', function() {
       document.getElementById('typeSelect').value = '';
+      document.getElementById('categorySelect').value = '';
+      document.getElementById('levelSelect').value = '';
       document.getElementById('statusSelect').value = '';
       document.getElementById('searchInput').value = '';
-      filteredData = [...mockData];
+      filteredData = AlertStore.rules();
       Pagination.updateData(filteredData);
     });
 
-    document.getElementById('btnBatchEnable')?.addEventListener('click', function() {
-      const count = document.querySelectorAll('.row-checkbox:checked').length;
-      if (count === 0) {
-        showToast('请先选择要启用的规则', 'warning');
-        return;
-      }
+    document.getElementById('btnBatchEnable').addEventListener('click', function() {
+      const ids = collectSelectedIds();
+      if (!ids.length) { showToast('请先选择要启用的规则', 'warning'); return; }
+      pendingBatchIds = ids;
       currentAction = 'enable';
-      showConfirmModal('确认启用', `确定要启用选中的 ${count} 条规则吗？`, 'warning');
+      showConfirmModal('确认启用', '确定要启用选中的 ' + ids.length + ' 条规则吗？', 'warning');
     });
 
-    document.getElementById('btnBatchDisable')?.addEventListener('click', function() {
-      const count = document.querySelectorAll('.row-checkbox:checked').length;
-      if (count === 0) {
-        showToast('请先选择要停用的规则', 'warning');
-        return;
-      }
+    document.getElementById('btnBatchDisable').addEventListener('click', function() {
+      const ids = collectSelectedIds();
+      if (!ids.length) { showToast('请先选择要停用的规则', 'warning'); return; }
+      pendingBatchIds = ids;
       currentAction = 'disable';
-      showConfirmModal('确认停用', `确定要停用选中的 ${count} 条规则吗？`, 'warning');
+      showConfirmModal('确认停用', '确定要停用选中的 ' + ids.length + ' 条规则吗？', 'warning');
     });
 
-    document.getElementById('btnBatchDelete')?.addEventListener('click', function() {
-      const count = document.querySelectorAll('.row-checkbox:checked').length;
-      if (count === 0) {
-        showToast('请先选择要删除的规则', 'warning');
-        return;
-      }
+    document.getElementById('btnBatchDelete').addEventListener('click', function() {
+      const ids = collectSelectedIds();
+      if (!ids.length) { showToast('请先选择要删除的规则', 'warning'); return; }
+      pendingBatchIds = ids;
       currentAction = 'batchDelete';
-      showConfirmModal('确认删除', `确定要删除选中的 ${count} 条规则吗？此操作不可撤销。`, 'error');
+      showConfirmModal('确认删除', '确定要删除选中的 ' + ids.length + ' 条规则吗？此操作不可撤销。', 'error');
+    });
+
+    document.getElementById('selectAll').addEventListener('change', function() {
+      const checked = this.checked;
+      document.querySelectorAll('.row-checkbox').forEach(function(cb) { cb.checked = checked; });
+      updateSelectedCount();
+    });
+
+    document.addEventListener('change', function(e) {
+      if (e.target && e.target.classList.contains('row-checkbox')) updateSelectedCount();
     });
 
     document.getElementById('btnAddRule').addEventListener('click', function() {
-      document.getElementById('editModalTitle').textContent = '新建预警规则';
-      document.getElementById('editId').value = '';
-      document.getElementById('editName').value = '';
-      document.getElementById('editType').value = 'farming';
-      resetRangeForNew();
-      document.getElementById('editLevel').value = 'reminder';
-      document.getElementById('notifyInternal').checked = true;
-      document.getElementById('notifySms').checked = false;
-      document.getElementById('notifyPush').checked = false;
-      document.getElementById('editUsers').value = '';
-      document.getElementById('editDesc').value = '';
-      document.getElementById('editStatus').value = 'active';
-      document.getElementById('editModal').classList.add('show');
+      openCreateModal();
+    });
+
+    document.getElementById('btnSaveRule').addEventListener('click', saveRule);
+
+    document.getElementById('btnEditFromDetail').addEventListener('click', function() {
+      document.getElementById('detailModal').classList.remove('show');
+      if (currentDetailId) showEditModal(currentDetailId);
     });
 
     document.getElementById('btnImportRule').addEventListener('click', function() {
@@ -1144,112 +1375,6 @@
 
     document.getElementById('btnExportRule').addEventListener('click', function() {
       document.getElementById('exportModal').classList.add('show');
-    });
-
-    document.getElementById('btnSaveRule').addEventListener('click', function() {
-      const name = document.getElementById('editName').value;
-      const threshold = document.getElementById('editThreshold').value;
-      const type = document.getElementById('editType').value;
-      const typeText = { farming: '农事预警', device: '设备预警', inventory: '库存预警', weather: '气象预警' }[type];
-      const level = document.getElementById('editLevel').value;
-      const levelText = { notice: '通知', reminder: '提醒', important: '重要', urgent: '紧急' }[level];
-      const levelStoredMap = { notice: 'low', reminder: 'medium', important: 'high', urgent: 'critical' };
-      const levelStored = levelStoredMap[level] || level;
-      const desc = document.getElementById('editDesc').value;
-      const users = document.getElementById('editUsers').value;
-      const status = document.getElementById('editStatus').value;
-      const statusText = status === 'active' ? '启用' : '停用';
-      const notifyParts = [];
-      if (document.getElementById('notifyInternal').checked) notifyParts.push('站内');
-      if (document.getElementById('notifySms').checked) notifyParts.push('短信');
-      if (document.getElementById('notifyPush').checked) notifyParts.push('推送');
-      const notify = notifyParts.join('+') || '站内';
-      // 时限跟随所选级别（SLA 分级配置）
-      const levelCfg = slaConfig[SLA_LEVEL_KEY_MAP[levelStored] || 'notice'];
-      const respondSla = levelCfg ? levelCfg.respond : '4 小时';
-      const handleSla = levelCfg ? levelCfg.handle : '无时限';
-
-      if (!name || !threshold) {
-        showToast('请填写规则名称和阈值条件', 'warning');
-        return;
-      }
-
-      const id = document.getElementById('editId').value;
-      if (id) {
-        const item = filteredData.find(d => d.id === id);
-        if (item) {
-          item.name = name;
-          item.type = type;
-          item.typeText = typeText;
-          item.threshold = threshold;
-          item.level = levelStored;
-          item.levelText = levelText;
-          item.respondSla = respondSla;
-          item.handleSla = handleSla;
-          item.notify = notify;
-          item.users = users;
-          item.desc = desc;
-          item.status = status;
-          item.statusText = statusText;
-        }
-        showToast('规则编辑成功', 'success');
-      } else {
-        const newId = 'W' + String(filteredData.length + 1).padStart(3, '0');
-        const now = new Date();
-        const pad = n => n < 10 ? '0' + n : n;
-        const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-        filteredData.unshift({
-          id: newId, code: newId, name, type, typeText, threshold, level: levelStored, levelText, respondSla, handleSla, notify, users, status, statusText, createTime: timeStr, desc
-        });
-        showToast('规则创建成功', 'success');
-      }
-      document.getElementById('editModal').classList.remove('show');
-      Pagination.updateData(filteredData);
-    });
-
-    document.getElementById('btnImport').addEventListener('click', function() {
-      const file = document.getElementById('importFile').files[0];
-      if (!file) {
-        showToast('请先选择要导入的文件', 'warning');
-        return;
-      }
-      document.getElementById('importModal').classList.remove('show');
-      showToast('规则导入成功', 'success');
-    });
-
-    document.getElementById('btnExport').addEventListener('click', function() {
-      document.getElementById('exportModal').classList.remove('show');
-      showToast('规则导出成功', 'success');
-    });
-
-    document.getElementById('confirmAction').addEventListener('click', function() {
-      const modal = document.getElementById('confirmModal');
-      modal.classList.remove('show');
-      
-      if (currentAction === 'enable') {
-        document.querySelectorAll('.row-checkbox:checked').forEach(checkbox => {
-          const id = checkbox.dataset.id;
-          const item = filteredData.find(d => d.id === id);
-          if (item) item.status = 'active';
-        });
-        showToast('批量启用成功', 'success');
-      } else if (currentAction === 'disable') {
-        document.querySelectorAll('.row-checkbox:checked').forEach(checkbox => {
-          const id = checkbox.dataset.id;
-          const item = filteredData.find(d => d.id === id);
-          if (item) item.status = 'inactive';
-        });
-        showToast('批量停用成功', 'success');
-      } else if (currentAction === 'batchDelete') {
-        const ids = Array.from(document.querySelectorAll('.row-checkbox:checked')).map(cb => cb.dataset.id);
-        filteredData = filteredData.filter(d => !ids.includes(d.id));
-        showToast('批量删除成功', 'success');
-      } else if (currentAction === 'delete') {
-        filteredData = filteredData.filter(d => d.id !== currentRuleId);
-        showToast('删除成功', 'success');
-      }
-      
-      Pagination.updateData(filteredData);
     });
 
     document.getElementById('uploadArea').addEventListener('click', function() {
@@ -1269,56 +1394,72 @@
       document.getElementById('fileInfo').style.display = 'none';
     });
 
-    document.getElementById('selectAll')?.addEventListener('change', function() {
-      document.querySelectorAll('.row-checkbox').forEach(cb => {
-        cb.checked = this.checked;
-      });
-      updateSelectedCount();
+    document.getElementById('btnImport').addEventListener('click', doImport);
+
+    document.getElementById('btnExport').addEventListener('click', function() {
+      const format = document.getElementById('exportFormat').value;
+      const selectedOnly = document.getElementById('exportSelected').checked;
+      const ok = doExport(format, selectedOnly);
+      document.getElementById('exportModal').classList.remove('show');
+      if (ok) showToast('规则导出成功', 'success');
     });
 
-    document.getElementById('btnEditFromDetail').addEventListener('click', function() {
-      document.getElementById('detailModal').classList.remove('show');
-      if (currentDetailId) {
-        showEditModal(currentDetailId);
+    document.getElementById('confirmAction').addEventListener('click', function() {
+      document.getElementById('confirmModal').classList.remove('show');
+      const ids = currentAction === 'enable' || currentAction === 'disable' || currentAction === 'batchDelete'
+        ? pendingBatchIds
+        : (currentRuleId ? [currentRuleId] : []);
+
+      if (currentAction === 'enable' || currentAction === 'disable') {
+        const status = currentAction === 'enable' ? 'active' : 'inactive';
+        ids.forEach(function(id) { AlertStore.toggleRule(id, status); });
+        showToast(currentAction === 'enable' ? '批量启用成功' : '批量停用成功', 'success');
+      } else if (currentAction === 'batchDelete' || currentAction === 'delete') {
+        ids.forEach(function(id) { AlertStore.removeRule(id); });
+        showToast(currentAction === 'delete' ? '删除成功' : '批量删除成功', 'success');
       }
+      pendingBatchIds = [];
+      currentRuleId = null;
+      currentAction = null;
+      reloadRules();
     });
 
-    // F-092 静默时段设置（PC-B-036）
-    initSilence();
-    document.getElementById('btnSaveSilence').addEventListener('click', saveSilence);
-    document.querySelectorAll('#silenceStart, #silenceEnd, #silenceScope').forEach(function(el){
-      el.addEventListener('change', renderSilenceStatus);
+    // 编辑弹窗：阈值预览与作用对象联动
+    ['editMetric', 'editOp', 'editValue', 'editValue2', 'editUnit'].forEach(function(id) {
+      const el = document.getElementById(id);
+      el.addEventListener('input', refreshThresholdText);
+      el.addEventListener('change', refreshThresholdText);
     });
+    document.getElementById('editOp').addEventListener('change', toggleValue2);
+    document.getElementById('editLevel').addEventListener('change', function() {
+      syncEditSlaFromLevel(false);
+    });
+    document.getElementById('editScopeType').addEventListener('change', toggleScopeIds);
 
-    // 阈值可视化上下限区间组件（PC-B-037）
-    initRangeComponent();
-
-    document.querySelectorAll('.btn-cancel').forEach(btn => {
+    document.querySelectorAll('.btn-cancel').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        document.querySelectorAll('.modal-overlay').forEach(modal => {
+        document.querySelectorAll('.modal-overlay').forEach(function(modal) {
           modal.classList.remove('show');
         });
       });
     });
   });
 
-  // ---------- 静默时段设置（localStorage: snzg_alert_silence）----------
-  const SILENCE_KEY = 'snzg_alert_silence';
-  const SCOPE_TEXT = { all: '全部预警', notice: '仅通知', reminder: '仅提醒' };
+  function collectSelectedIds() {
+    return Array.from(document.querySelectorAll('.row-checkbox:checked')).map(function(cb) { return cb.dataset.id; });
+  }
 
+  // ---------- 静默时段设置（AlertStore.config.silence）----------
   function readSilence() {
-    var def = { start: '22:00', end: '07:00', scope: 'all' };
-    try {
-      var raw = localStorage.getItem(SILENCE_KEY);
-      if (!raw) return def;
-      var o = JSON.parse(raw);
-      if (!o || !o.start || !o.end) return def;
-      return { start: o.start, end: o.end, scope: o.scope || 'all' };
-    } catch (e) { return def; }
+    const def = { start: '22:00', end: '07:00', scope: 'all' };
+    const cfg = AlertStore.config();
+    const s = cfg && cfg.silence;
+    if (!s || !s.start || !s.end) return def;
+    return { start: s.start, end: s.end, scope: s.scope || 'all' };
   }
 
   function initSilence() {
-    var s = readSilence();
+    const s = readSilence();
     document.getElementById('silenceStart').value = s.start;
     document.getElementById('silenceEnd').value = s.end;
     document.getElementById('silenceScope').value = s.scope;
@@ -1326,310 +1467,579 @@
   }
 
   function isInSilence(start, end) {
-    var now = new Date();
-    var cur = now.getHours() * 60 + now.getMinutes();
-    var toMin = function (t) { var p = String(t).split(':'); return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0); };
-    var s = toMin(start), e = toMin(end);
+    const now = new Date();
+    const cur = now.getHours() * 60 + now.getMinutes();
+    const toMin = function(t) {
+      const p = String(t).split(':');
+      return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+    };
+    const s = toMin(start), e = toMin(end);
     if (s === e) return false;
     if (s < e) return cur >= s && cur < e;
-    return cur >= s || cur < e; // 跨天
+    return cur >= s || cur < e;
   }
 
   function renderSilenceStatus() {
-    var start = document.getElementById('silenceStart').value || '22:00';
-    var end = document.getElementById('silenceEnd').value || '07:00';
-    var scope = document.getElementById('silenceScope').value || 'all';
-    var on = isInSilence(start, end);
-    var el = document.getElementById('silenceStatus');
+    const start = document.getElementById('silenceStart').value || '22:00';
+    const end = document.getElementById('silenceEnd').value || '07:00';
+    const scope = document.getElementById('silenceScope').value || 'all';
+    const on = isInSilence(start, end);
+    const el = document.getElementById('silenceStatus');
     el.className = 'silence-status ' + (on ? 'on' : 'off');
     el.textContent = '静默时段：' + start + ' - ' + end + ' · 生效范围：' + (SCOPE_TEXT[scope] || scope)
       + ' · 当前状态：' + (on ? '静默生效中（预警暂缓推送）' : '非静默时段（正常推送）');
   }
 
   function saveSilence() {
-    var start = document.getElementById('silenceStart').value;
-    var end = document.getElementById('silenceEnd').value;
-    var scope = document.getElementById('silenceScope').value;
-    if (!start || !end) {
-      showToast('请选择静默开始与结束时间', 'warning');
-      return;
-    }
-    if (start === end) {
-      showToast('静默开始与结束时间不能相同', 'warning');
-      return;
-    }
-    try { localStorage.setItem(SILENCE_KEY, JSON.stringify({ start: start, end: end, scope: scope })); } catch (e) {}
+    const start = document.getElementById('silenceStart').value;
+    const end = document.getElementById('silenceEnd').value;
+    const scope = document.getElementById('silenceScope').value;
+    if (!start || !end) { showToast('请选择静默开始与结束时间', 'warning'); return; }
+    if (start === end) { showToast('静默开始与结束时间不能相同', 'warning'); return; }
+    AlertStore.saveConfig({ silence: { start: start, end: end, scope: scope } });
     renderSilenceStatus();
     showToast('静默时段设置已保存', 'success');
   }
 
-  // ---------- SLA 分级配置（localStorage: snzg_alert_sla_config）----------
-  const SLA_KEY = 'snzg_alert_sla_config';
-  const SLA_LEVELS = [
-    { key: 'urgent', label: '紧急', respond: '15 分钟', handle: '2 小时', escalate: '技术总监' },
-    { key: 'important', label: '重要', respond: '30 分钟', handle: '4 小时', escalate: '园区主任' },
-    { key: 'reminder', label: '提醒', respond: '2 小时', handle: '24 小时', escalate: '值班长' },
-    { key: 'notice', label: '通知', respond: '4 小时', handle: '无时限', escalate: '不升级' }
-  ];
-  const SLA_ESCALATE_OPTIONS = ['值班长', '园区主任', '技术总监', '不升级'];
-
-  function defaultSlaConfig() {
-    const cfg = {};
-    SLA_LEVELS.forEach(l => { cfg[l.key] = { respond: l.respond, handle: l.handle, escalate: l.escalate }; });
-    return cfg;
-  }
-
+  // ---------- SLA 分级配置（AlertStore.config.sla）----------
   function readSlaConfig() {
-    const def = defaultSlaConfig();
-    try {
-      const raw = localStorage.getItem(SLA_KEY);
-      if (!raw) return def;
-      const saved = JSON.parse(raw);
-      SLA_LEVELS.forEach(l => {
-        if (saved && saved[l.key]) {
-          def[l.key].respond = saved[l.key].respond || l.respond;
-          def[l.key].handle = saved[l.key].handle || l.handle;
-          def[l.key].escalate = saved[l.key].escalate || l.escalate;
-        }
-      });
-    } catch (e) { /* 本地存储不可用时使用默认值 */ }
-    return def;
+    const cfg = AlertStore.config();
+    const stored = (cfg && cfg.sla) || {};
+    const out = {};
+    SLA_LEVELS.forEach(function(l) {
+      const base = SLA_DEFAULTS[l.key];
+      out[l.key] = {
+        respond: (stored[l.key] && stored[l.key].respond) || base.respond,
+        handle: (stored[l.key] && stored[l.key].handle) || base.handle,
+        escalate: (stored[l.key] && stored[l.key].escalate) || base.escalate
+      };
+    });
+    return out;
   }
-
-  let slaConfig = readSlaConfig();
 
   function renderSlaConfig() {
     const grid = document.getElementById('slaGrid');
     if (!grid) return;
-    grid.innerHTML = SLA_LEVELS.map(l => `
-      <div class="sla-row">
-        <div class="sla-row-head"><span class="sla-level">${l.label}</span></div>
-        <div class="form-group">
-          <label>响应时限</label>
-          <input type="text" class="form-input" id="slaRespond-${l.key}" value="${slaConfig[l.key].respond}">
-        </div>
-        <div class="form-group">
-          <label>处置时限</label>
-          <input type="text" class="form-input" id="slaHandle-${l.key}" value="${slaConfig[l.key].handle}">
-        </div>
-        <div class="form-group">
-          <label>升级至</label>
-          <select class="form-select" id="slaEscalate-${l.key}">
-            ${SLA_ESCALATE_OPTIONS.map(o => `<option value="${o}"${slaConfig[l.key].escalate === o ? ' selected' : ''}>${o}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-    `).join('');
+    grid.innerHTML = SLA_LEVELS.map(function(l) {
+      const cfg = slaConfig[l.key];
+      return '<div class="sla-row">'
+        + '<div class="sla-row-head"><span class="sla-level">' + l.label + '</span></div>'
+        + '<div class="form-group"><label>响应时限</label>'
+        + '<input type="text" class="form-input" id="slaRespond-' + l.key + '" value="' + esc(cfg.respond) + '"></div>'
+        + '<div class="form-group"><label>处置时限</label>'
+        + '<input type="text" class="form-input" id="slaHandle-' + l.key + '" value="' + esc(cfg.handle) + '"></div>'
+        + '<div class="form-group"><label>升级至</label>'
+        + '<select class="form-select" id="slaEscalate-' + l.key + '">'
+        + SLA_ESCALATE_OPTIONS.map(function(o) {
+            return '<option value="' + o + '"' + (cfg.escalate === o ? ' selected' : '') + '>' + o + '</option>';
+          }).join('')
+        + '</select></div></div>';
+    }).join('');
   }
 
   function collectSlaConfig() {
-    const next = defaultSlaConfig();
-    SLA_LEVELS.forEach(l => {
+    const next = {};
+    SLA_LEVELS.forEach(function(l) {
+      const base = SLA_DEFAULTS[l.key];
       const respond = document.getElementById('slaRespond-' + l.key);
       const handle = document.getElementById('slaHandle-' + l.key);
       const escalate = document.getElementById('slaEscalate-' + l.key);
-      if (respond && respond.value) next[l.key].respond = respond.value;
-      if (handle && handle.value) next[l.key].handle = handle.value;
-      if (escalate && escalate.value) next[l.key].escalate = escalate.value;
+      next[l.key] = {
+        respond: (respond && respond.value.trim()) || base.respond,
+        handle: (handle && handle.value.trim()) || base.handle,
+        escalate: (escalate && escalate.value) || base.escalate
+      };
     });
     return next;
   }
 
-  // 级别 → SLA 分级键
-  const SLA_LEVEL_KEY_MAP = { critical: 'urgent', high: 'important', medium: 'reminder', reminder: 'reminder', notice: 'notice', low: 'notice' };
-
-  // 按级别把 SLA 时限回写到规则表
+  // 按级别把 SLA 时限回写到规则（规则表展示口径与 SLA 配置一致）
   function applySlaToRules() {
-    mockData.forEach(item => {
-      const cfg = slaConfig[SLA_LEVEL_KEY_MAP[item.level] || 'notice'];
+    AlertStore.rules().forEach(function(item) {
+      const cfg = slaConfig[item.level];
       if (!cfg) return;
-      item.respondSla = cfg.respond;
-      item.handleSla = cfg.handle;
+      if (item.respondSla === cfg.respond && item.handleSla === cfg.handle && item.escalateTo === cfg.escalate) return;
+      const payload = Object.assign({}, item, {
+        respondSla: cfg.respond,
+        handleSla: cfg.handle,
+        escalateTo: cfg.escalate
+      });
+      AlertStore.saveRule(payload);
     });
   }
 
-  // 保存 SLA：写回存储并按级别刷新规则表的响应/处置时限
   function saveSlaConfig() {
     slaConfig = collectSlaConfig();
-    try { localStorage.setItem(SLA_KEY, JSON.stringify(slaConfig)); } catch (e) { /* 忽略存储异常 */ }
+    AlertStore.saveConfig({ sla: slaConfig });
     applySlaToRules();
-    Pagination.updateData(filteredData);
+    reloadRules();
     showToast('SLA 分级配置已保存', 'success');
   }
 
   function resetSlaConfig() {
-    slaConfig = defaultSlaConfig();
-    try { localStorage.removeItem(SLA_KEY); } catch (e) { /* 忽略存储异常 */ }
+    slaConfig = JSON.parse(JSON.stringify(SLA_DEFAULTS));
+    AlertStore.saveConfig({ sla: slaConfig });
     renderSlaConfig();
     applySlaToRules();
-    Pagination.updateData(filteredData);
+    reloadRules();
     showToast('已恢复默认 SLA 配置', 'success');
   }
 
   // ---------- 预警源类型与共享数据源接入状态 ----------
-  const ALERT_SOURCES = [
-    { name: '设备类', storeType: 'device', connected: true, desc: '设备离线 / 故障 / 环境指标越限' },
-    { name: '农事类', storeType: 'farming', connected: true, desc: '农事任务逾期 / 病虫害风险 / 采收提醒' },
-    { name: '环境类', storeType: 'environment', connected: false, desc: '气象预警（温雨风）' },
-    { name: '灾害类', storeType: 'disaster', connected: false, desc: '冰雹 / 雷电 / 暴雨等灾害性天气' },
-    { name: '质量类', storeType: 'quality', connected: false, desc: '检测报告 / 溯源批次质量异常' }
-  ];
-
   function renderAlertSources() {
     const box = document.getElementById('alertSourceList');
     if (!box) return;
-    box.innerHTML = ALERT_SOURCES.map(s => `
-      <div class="source-item">
-        <div>
-          <div class="source-name">${s.name}</div>
-          <div class="source-desc">${s.desc} · AlertStore 类型：${s.storeType}</div>
-        </div>
-        <span class="source-badge ${s.connected ? 'connected' : 'pending'}">${s.connected ? '已接入' : '待接入'}</span>
-      </div>
-    `).join('');
+    const rules = AlertStore.rules();
+    box.innerHTML = (AlertStore.SOURCES || []).map(function(s) {
+      const ruleCount = rules.filter(function(r) { return r.source === s.key; }).length;
+      const alertCount = AlertStore.bySource(s.key).length;
+      const connected = ruleCount > 0 || alertCount > 0;
+      return '<div class="source-item">'
+        + '<div><div class="source-name">' + esc(s.text) + '</div>'
+        + '<div class="source-desc">' + esc(s.desc) + ' · 规则 ' + ruleCount + ' 条 · 预警 ' + alertCount + ' 条</div></div>'
+        + '<span class="source-badge ' + (connected ? 'connected' : 'pending') + '">'
+        + (connected ? '已接入' : '待接入') + '</span></div>';
+    }).join('');
   }
 
-  // ---------- 阈值可视化上下限区间组件 ----------
-  function initRangeComponent() {
-    var rMin = document.getElementById('editRangeMin');
-    var rMax = document.getElementById('editRangeMax');
-    var nMin = document.getElementById('editNumMin');
-    var nMax = document.getElementById('editNumMax');
-    var unit = document.getElementById('editUnit');
-    if (!rMin) return;
-
-    function onSlider() {
-      var a = Number(rMin.value), b = Number(rMax.value);
-      if (a > b) { var t = a; a = b; b = t; rMin.value = a; rMax.value = b; }
-      nMin.value = a; nMax.value = b;
-      updateRangeVisual();
-    }
-    rMin.addEventListener('input', onSlider);
-    rMax.addEventListener('input', onSlider);
-    nMin.addEventListener('input', updateRangeVisual);
-    nMax.addEventListener('input', updateRangeVisual);
-    unit.addEventListener('input', updateRangeVisual);
-    updateRangeVisual();
-  }
-
-  function updateRangeVisual() {
-    var nMin = document.getElementById('editNumMin');
-    var nMax = document.getElementById('editNumMax');
-    var unit = document.getElementById('editUnit').value || '';
-    if (!nMin || !nMax) return;
-    var lo = Number(nMin.value) || 0;
-    var hi = Number(nMax.value) || 0;
-    if (lo > hi) { var t = lo; lo = hi; hi = t; nMin.value = lo; nMax.value = hi; }
-    var l = Math.max(0, Math.min(100, lo));
-    var r = Math.max(0, Math.min(100, hi));
-    var fill = document.getElementById('rangeFill');
-    if (fill) {
-      fill.style.left = l + '%';
-      fill.style.width = Math.max(0, r - l) + '%';
-    }
-    var sr = document.getElementById('editRangeMin');
-    var srMax = document.getElementById('editRangeMax');
-    if (sr) sr.value = l;
-    if (srMax) srMax.value = r;
-    document.getElementById('editThreshold').value = lo + unit + ' ~ ' + hi + unit;
-  }
-
-  function resetRangeForNew() {
-    var nMin = document.getElementById('editNumMin');
-    if (!nMin) return;
-    nMin.value = 20;
-    document.getElementById('editNumMax').value = 80;
-    document.getElementById('editUnit').value = '°C';
-    updateRangeVisual();
-  }
-
-  function syncRangeFromThreshold(text) {
-    var nMin = document.getElementById('editNumMin');
-    if (!nMin) return;
-    if (text) {
-      document.getElementById('editThreshold').value = text;
-    }
-    var nums = String(text || '').match(/\d+(?:\.\d+)?/g);
-    if (nums && nums.length >= 1) {
-      nMin.value = nums[0];
-      document.getElementById('editNumMax').value = nums[1] !== undefined ? nums[1] : nums[0];
-    }
-    var unit = String(text || '').replace(/[0-9./\s~约<>=≤≥]/g, '');
-    if (unit) document.getElementById('editUnit').value = unit;
-    updateRangeVisual();
-  }
-
+  // ---------- 表格 ----------
   function renderRow(item, index) {
-    return `
-      <tr>
-        <td>${index + 1}</td>
-        <td>${item.code}</td>
-        <td><strong>${item.name}</strong></td>
-        <td><span class="status-tag ${getTypeClass(item.type)}">${item.typeText}</span></td>
-        <td>${item.threshold}</td>
-        <td>${item.respondSla || '—'}</td>
-        <td>${item.handleSla || '无时限'}</td>
-        <td>${item.notify}</td>
-        <td><span class="status-tag ${item.status}">${item.statusText}</span></td>
-        <td>
-          <div class="action-btns">
-            <button class="action-btn detail" data-id="${item.id}">详情</button>
-            <button class="action-btn edit" data-id="${item.id}">编辑</button>
-            <button class="action-btn delete" data-id="${item.id}">删除</button>
-          </div>
-        </td>
-      </tr>
-    `;
+    const isActive = item.status === 'active';
+    return '<tr>'
+      + '<td>' + (index + 1) + '</td>'
+      + '<td class="col-check"><input type="checkbox" class="row-checkbox" data-id="' + esc(item.id) + '" aria-label="选择该规则"></td>'
+      + '<td>' + esc(item.code) + '</td>'
+      + '<td><strong>' + esc(item.name) + '</strong></td>'
+      + '<td><span class="source-tag src-' + esc(item.source) + '">' + esc(sourceText(item.source)) + '</span></td>'
+      + '<td><span class="category-tag cat-' + esc(item.category) + '">' + esc(categoryText(item.category)) + '</span></td>'
+      + '<td><span class="level-tag level-' + esc(item.level) + '">' + esc(levelText(item.level)) + '</span></td>'
+      + '<td>' + esc(formatThreshold(item.threshold)) + '</td>'
+      + '<td>' + esc(formatScope(item.scope)) + '</td>'
+      + '<td>' + esc(item.respondSla || '—') + '</td>'
+      + '<td>' + esc(item.handleSla || '无时限') + '</td>'
+      + '<td>' + esc(notifyText(item.notify)) + '</td>'
+      + '<td><span class="status-tag ' + (isActive ? 'st-closed' : 'st-ignored') + '">' + (isActive ? '启用' : '停用') + '</span></td>'
+      + '<td><div class="action-btns">'
+      + '<button class="action-btn detail" data-id="' + esc(item.id) + '">详情</button>'
+      + '<button class="action-btn edit" data-id="' + esc(item.id) + '">编辑</button>'
+      + '<button class="action-btn delete" data-id="' + esc(item.id) + '">删除</button>'
+      + '</div></td>'
+      + '</tr>';
+  }
+
+  function renderTag(cls, text) {
+    return '<span class="' + cls + '">' + esc(text) + '</span>';
   }
 
   function showDetailModal(id) {
-    const item = filteredData.find(d => d.id === id);
+    const item = AlertStore.rule(id);
     if (!item) return;
-    
-    currentDetailId = id;
+    currentDetailId = item.id;
     document.getElementById('detailCode').textContent = item.code;
     document.getElementById('detailName').textContent = item.name;
-    document.getElementById('detailType').textContent = item.typeText;
-    document.getElementById('detailThreshold').textContent = item.threshold;
+    document.getElementById('detailSource').innerHTML = renderTag('source-tag src-' + item.source, sourceText(item.source));
+    document.getElementById('detailCategory').innerHTML = renderTag('category-tag cat-' + item.category, categoryText(item.category));
+    document.getElementById('detailThreshold').textContent = formatThreshold(item.threshold);
+    document.getElementById('detailScope').textContent = formatScope(item.scope);
     document.getElementById('detailRespondSla').textContent = item.respondSla || '—';
     document.getElementById('detailHandleSla').textContent = item.handleSla || '无时限';
-    document.getElementById('detailNotify').textContent = item.notify;
-    document.getElementById('detailLevel').textContent = item.levelText;
-    document.getElementById('detailUsers').textContent = item.users;
-    document.getElementById('detailStatus').textContent = item.statusText;
-    document.getElementById('detailCreateTime').textContent = item.createTime;
-    document.getElementById('detailDesc').textContent = item.desc;
-    
+    document.getElementById('detailNotify').textContent = notifyText(item.notify);
+    document.getElementById('detailLevel').innerHTML = renderTag('level-tag level-' + item.level, levelText(item.level));
+    document.getElementById('detailUsers').textContent = (item.assignees && item.assignees.length) ? item.assignees.join('、') : '—';
+    document.getElementById('detailStatus').innerHTML = renderTag(
+      'status-tag ' + (item.status === 'active' ? 'st-closed' : 'st-ignored'),
+      item.status === 'active' ? '启用' : '停用'
+    );
+    document.getElementById('detailCreateTime').textContent = item.createTime || '—';
+    document.getElementById('detailDesc').textContent = item.desc || '—';
     document.getElementById('detailModal').classList.add('show');
   }
 
-  function showEditModal(id) {
-    const item = filteredData.find(d => d.id === id);
-    if (!item) return;
-    
-    const levelMap = { low: 'notice', medium: 'reminder', high: 'important', critical: 'urgent' };
-    
-    document.getElementById('editModalTitle').textContent = '编辑预警规则';
-    document.getElementById('editId').value = item.id;
-    document.getElementById('editName').value = item.name;
-    document.getElementById('editType').value = item.type;
-    syncRangeFromThreshold(item.threshold);
-    document.getElementById('editLevel').value = levelMap[item.level] || item.level;
-    document.getElementById('notifyInternal').checked = item.notify.includes('站内');
-    document.getElementById('notifySms').checked = item.notify.includes('短信');
-    document.getElementById('notifyPush').checked = item.notify.includes('推送');
-    document.getElementById('editUsers').value = item.users;
-    document.getElementById('editDesc').value = item.desc;
-    document.getElementById('editStatus').value = item.status;
-    
+  function openCreateModal() {
+    document.getElementById('editModalTitle').textContent = '新建预警规则';
+    document.getElementById('editId').value = '';
+    document.getElementById('editName').value = '';
+    document.getElementById('editSource').value = 'device';
+    document.getElementById('editCategory').value = 'device';
+    document.getElementById('editLevel').value = 'reminder';
+    document.getElementById('editMetric').value = '';
+    document.getElementById('editOp').value = 'gt';
+    document.getElementById('editValue').value = '';
+    document.getElementById('editValue2').value = '';
+    document.getElementById('editUnit').value = '';
+    document.getElementById('editScopeType').value = 'all';
+    document.getElementById('editScopeIds').value = '';
+    document.getElementById('editRespondSla').value = slaConfig.reminder.respond;
+    document.getElementById('editHandleSla').value = slaConfig.reminder.handle;
+    document.getElementById('notifyInternal').checked = true;
+    document.getElementById('notifySms').checked = false;
+    document.getElementById('notifyPush').checked = false;
+    document.getElementById('editUsers').value = '';
+    document.getElementById('editDesc').value = '';
+    document.getElementById('editStatus').value = 'active';
+    toggleValue2();
+    toggleScopeIds();
+    refreshThresholdText();
     document.getElementById('editModal').classList.add('show');
   }
 
-  function showConfirmModal(title, message, type = 'warning') {
+  function showEditModal(id) {
+    const item = AlertStore.rule(id);
+    if (!item) return;
+    const th = item.threshold || {};
+    const scope = item.scope || { type: 'all', ids: [] };
+
+    document.getElementById('editModalTitle').textContent = '编辑预警规则';
+    document.getElementById('editId').value = item.id;
+    document.getElementById('editName').value = item.name || '';
+    document.getElementById('editSource').value = item.source || 'system';
+    document.getElementById('editCategory').value = item.category || 'growth';
+    document.getElementById('editLevel').value = item.level || 'notice';
+    document.getElementById('editMetric').value = th.metric || '';
+    document.getElementById('editOp').value = th.op || 'gt';
+    document.getElementById('editValue').value = (th.value === null || th.value === undefined) ? '' : th.value;
+    document.getElementById('editValue2').value = (th.value2 === null || th.value2 === undefined) ? '' : th.value2;
+    document.getElementById('editUnit').value = th.unit || '';
+    document.getElementById('editScopeType').value = scope.type || 'all';
+    document.getElementById('editScopeIds').value = (scope.ids || []).join(', ');
+
+    const cfg = slaConfig[item.level] || SLA_DEFAULTS.notice;
+    document.getElementById('editRespondSla').value = item.respondSla || cfg.respond;
+    document.getElementById('editHandleSla').value = item.handleSla || cfg.handle;
+
+    const notify = item.notify || {};
+    document.getElementById('notifyInternal').checked = !!notify.internal;
+    document.getElementById('notifySms').checked = !!notify.sms;
+    document.getElementById('notifyPush').checked = !!notify.push;
+    document.getElementById('editUsers').value = (item.assignees || []).join(', ');
+    document.getElementById('editDesc').value = item.desc || '';
+    document.getElementById('editStatus').value = item.status || 'active';
+
+    toggleValue2();
+    toggleScopeIds();
+    refreshThresholdText();
+    document.getElementById('editModal').classList.add('show');
+  }
+
+  function toggleValue2() {
+    const op = document.getElementById('editOp').value;
+    const input = document.getElementById('editValue2');
+    const between = op === 'between';
+    input.disabled = !between;
+    if (!between) input.value = '';
+  }
+
+  function toggleScopeIds() {
+    const type = document.getElementById('editScopeType').value;
+    const group = document.getElementById('editScopeIdsGroup');
+    group.style.display = type === 'all' ? 'none' : 'block';
+  }
+
+  function syncEditSlaFromLevel(force) {
+    const level = document.getElementById('editLevel').value;
+    const cfg = slaConfig[level] || SLA_DEFAULTS.notice;
+    const respondEl = document.getElementById('editRespondSla');
+    const handleEl = document.getElementById('editHandleSla');
+    const isDefault = !respondEl.value || SLA_LEVELS.some(function(l) {
+      return respondEl.value === slaConfig[l.key].respond;
+    });
+    if (force || isDefault) {
+      respondEl.value = cfg.respond;
+      handleEl.value = cfg.handle;
+    }
+  }
+
+  // 结构化阈值 → 只读阈值文本
+  function refreshThresholdText() {
+    const metric = document.getElementById('editMetric').value;
+    const op = document.getElementById('editOp').value;
+    const v1raw = document.getElementById('editValue').value;
+    const v2raw = document.getElementById('editValue2').value;
+    const unit = document.getElementById('editUnit').value.trim();
+    const v1 = v1raw === '' ? null : Number(v1raw);
+    const v2 = v2raw === '' ? null : Number(v2raw);
+
+    let text = '';
+    if (!metric) {
+      text = '不限（仅按来源/分类匹配）';
+    } else if (op === 'between' && v1 !== null && v2 !== null) {
+      text = metricText(metric) + ' ' + v1 + unit + ' ~ ' + v2 + unit;
+    } else if (v1 === null) {
+      text = metricText(metric) + ' ' + (OP_LABELS[op] || '') + ' 阈值';
+    } else {
+      text = metricText(metric) + ' ' + (OP_SYMBOLS[op] || '=') + ' ' + v1 + unit;
+    }
+    document.getElementById('editThreshold').value = text;
+  }
+
+  function saveRule() {
+    const name = document.getElementById('editName').value.trim();
+    if (!name) { showToast('请填写规则名称', 'warning'); return; }
+
+    const metric = document.getElementById('editMetric').value;
+    const op = document.getElementById('editOp').value;
+    const v1raw = document.getElementById('editValue').value;
+    const v2raw = document.getElementById('editValue2').value;
+    const value = v1raw === '' ? null : Number(v1raw);
+    const value2 = v2raw === '' ? null : Number(v2raw);
+
+    if (metric && value === null) { showToast('请填写阈值数值', 'warning'); return; }
+    if (metric && op === 'between' && value2 === null) { showToast('「介于」需填写第二阈值', 'warning'); return; }
+
+    const level = document.getElementById('editLevel').value;
+    const cfg = slaConfig[level] || SLA_DEFAULTS.notice;
+    const scopeType = document.getElementById('editScopeType').value;
+    const scopeIds = scopeType === 'all'
+      ? []
+      : String(document.getElementById('editScopeIds').value).split(/[,，]/).map(function(s) {
+          return s.trim();
+        }).filter(Boolean);
+
+    if (scopeType !== 'all' && !scopeIds.length) {
+      showToast('请填写作用对象', 'warning');
+      return;
+    }
+
+    const payload = {
+      id: document.getElementById('editId').value || undefined,
+      name: name,
+      source: document.getElementById('editSource').value,
+      category: document.getElementById('editCategory').value,
+      level: level,
+      threshold: {
+        metric: metric,
+        op: op,
+        value: value,
+        value2: value2,
+        unit: document.getElementById('editUnit').value.trim()
+      },
+      scope: { type: scopeType, ids: scopeIds },
+      notify: {
+        internal: document.getElementById('notifyInternal').checked,
+        sms: document.getElementById('notifySms').checked,
+        push: document.getElementById('notifyPush').checked
+      },
+      assignees: String(document.getElementById('editUsers').value).split(/[,，]/).map(function(s) {
+        return s.trim();
+      }).filter(Boolean),
+      respondSla: document.getElementById('editRespondSla').value.trim() || cfg.respond,
+      handleSla: document.getElementById('editHandleSla').value.trim() || cfg.handle,
+      escalateTo: cfg.escalate,
+      status: document.getElementById('editStatus').value,
+      desc: document.getElementById('editDesc').value.trim()
+    };
+
+    const res = AlertStore.saveRule(payload);
+    if (!res || !res.ok) {
+      showToast((res && res.message) || '规则保存失败', 'error');
+      return;
+    }
+    document.getElementById('editModal').classList.remove('show');
+    reloadRules();
+    showToast(res.message, 'success');
+  }
+
+  // ---------- 导入 / 导出 ----------
+  function doExport(format, selectedOnly) {
+    const ids = collectSelectedIds();
+    let list = AlertStore.rules();
+    if (selectedOnly && ids.length) {
+      list = list.filter(function(r) { return ids.indexOf(r.id) >= 0; });
+    }
+    if (!list.length) { showToast('暂无可导出的规则', 'warning'); return false; }
+
+    const stamp = formatStamp(new Date());
+    if (format === 'xml') {
+      const body = list.map(function(r) {
+        const th = r.threshold || {};
+        const scope = r.scope || { type: 'all', ids: [] };
+        const notify = r.notify || {};
+        return '  <rule>'
+          + '<code>' + xmlEsc(r.code) + '</code>'
+          + '<name>' + xmlEsc(r.name) + '</name>'
+          + '<source>' + xmlEsc(r.source) + '</source>'
+          + '<category>' + xmlEsc(r.category) + '</category>'
+          + '<level>' + xmlEsc(r.level) + '</level>'
+          + '<metric>' + xmlEsc(th.metric) + '</metric>'
+          + '<op>' + xmlEsc(th.op) + '</op>'
+          + '<value>' + xmlEsc(th.value) + '</value>'
+          + '<value2>' + xmlEsc(th.value2) + '</value2>'
+          + '<unit>' + xmlEsc(th.unit) + '</unit>'
+          + '<scopeType>' + xmlEsc(scope.type) + '</scopeType>'
+          + '<scopeIds>' + xmlEsc((scope.ids || []).join(',')) + '</scopeIds>'
+          + '<notifyInternal>' + (!!notify.internal) + '</notifyInternal>'
+          + '<notifySms>' + (!!notify.sms) + '</notifySms>'
+          + '<notifyPush>' + (!!notify.push) + '</notifyPush>'
+          + '<assignees>' + xmlEsc((r.assignees || []).join(',')) + '</assignees>'
+          + '<respondSla>' + xmlEsc(r.respondSla) + '</respondSla>'
+          + '<handleSla>' + xmlEsc(r.handleSla) + '</handleSla>'
+          + '<status>' + xmlEsc(r.status) + '</status>'
+          + '<desc>' + xmlEsc(r.desc) + '</desc>'
+          + '</rule>';
+      }).join('\n');
+      downloadText('<?xml version="1.0" encoding="UTF-8"?>\n<rules>\n' + body + '\n</rules>\n',
+        'alert-rules-' + stamp + '.xml', 'application/xml;charset=utf-8;');
+      return true;
+    }
+
+    downloadText(JSON.stringify({ version: 2, exportTime: nowStamp(), rules: list }, null, 2),
+      'alert-rules-' + stamp + '.json', 'application/json;charset=utf-8;');
+    return true;
+  }
+
+  function doImport() {
+    const file = document.getElementById('importFile').files[0];
+    if (!file) { showToast('请先选择要导入的文件', 'warning'); return; }
+    const override = document.getElementById('importOverride').checked;
+
+    const reader = new FileReader();
+    reader.onload = function() {
+      let list;
+      try {
+        list = parseRulesText(String(reader.result || ''), file.name);
+      } catch (e) {
+        showToast('文件解析失败：' + e.message, 'error');
+        return;
+      }
+      if (!Array.isArray(list) || !list.length) {
+        showToast('文件中未解析到规则', 'warning');
+        return;
+      }
+
+      let created = 0, updated = 0, skipped = 0;
+      list.forEach(function(raw) {
+        const rule = normalizeImportedRule(raw);
+        if (!rule || !rule.name) { skipped++; return; }
+        const exist = rule.code ? AlertStore.rule(rule.code) : null;
+        if (exist && !override) { skipped++; return; }
+        const payload = exist
+          ? Object.assign({}, exist, rule, { id: exist.id, code: exist.code })
+          : rule;
+        const res = AlertStore.saveRule(payload);
+        if (res && res.ok) { exist ? updated++ : created++; } else { skipped++; }
+      });
+
+      document.getElementById('importModal').classList.remove('show');
+      reloadRules();
+      showToast('导入完成：新增 ' + created + ' 条，覆盖 ' + updated + ' 条，跳过 ' + skipped + ' 条', 'success');
+    };
+    reader.onerror = function() { showToast('文件读取失败', 'error'); };
+    reader.readAsText(file, 'utf-8');
+  }
+
+  function parseRulesText(text, filename) {
+    if (/^\s*</.test(text)) {
+      const doc = new DOMParser().parseFromString(text, 'application/xml');
+      if (doc.querySelector('parsererror')) throw new Error('XML 格式不正确');
+      const nodes = Array.from(doc.querySelectorAll('rule'));
+      return nodes.map(function(node) {
+        const get = function(tag) {
+          const el = node.querySelector(tag);
+          return el ? el.textContent.trim() : '';
+        };
+        return {
+          code: get('code'),
+          name: get('name'),
+          source: get('source'),
+          category: get('category'),
+          level: get('level'),
+          threshold: {
+            metric: get('metric'),
+            op: get('op') || 'gt',
+            value: get('value') === '' ? null : Number(get('value')),
+            value2: get('value2') === '' ? null : Number(get('value2')),
+            unit: get('unit')
+          },
+          scope: {
+            type: get('scopeType') || 'all',
+            ids: get('scopeIds') ? get('scopeIds').split(',').map(function(s) { return s.trim(); }).filter(Boolean) : []
+          },
+          notify: {
+            internal: get('notifyInternal') !== 'false',
+            sms: get('notifySms') === 'true',
+            push: get('notifyPush') === 'true'
+          },
+          assignees: get('assignees') ? get('assignees').split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [],
+          respondSla: get('respondSla'),
+          handleSla: get('handleSla'),
+          status: get('status') || 'active',
+          desc: get('desc')
+        };
+      });
+    }
+
+    const data = JSON.parse(text);
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.rules)) return data.rules;
+    throw new Error('文件中未找到 rules 数组（' + filename + '）');
+  }
+
+  function normalizeImportedRule(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const rule = Object.assign({}, raw);
+    if (!rule.name) return null;
+    if (!rule.threshold || typeof rule.threshold !== 'object') {
+      rule.threshold = { metric: '', op: 'gt', value: null, value2: null, unit: '' };
+    }
+    if (!rule.scope || typeof rule.scope !== 'object') rule.scope = { type: 'all', ids: [] };
+    if (!rule.notify || typeof rule.notify !== 'object') {
+      const parts = String(rule.notify || '').split('+');
+      rule.notify = {
+        internal: parts.indexOf('站内') >= 0,
+        sms: parts.indexOf('短信') >= 0,
+        push: parts.indexOf('推送') >= 0
+      };
+    }
+    if (!Array.isArray(rule.assignees)) {
+      rule.assignees = rule.users
+        ? String(rule.users).split(/[,，]/).map(function(s) { return s.trim(); }).filter(Boolean)
+        : [];
+    }
+    return rule;
+  }
+
+  function xmlEsc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  }
+
+  function formatStamp(d) {
+    const pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+    return '' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes());
+  }
+
+  function nowStamp() {
+    const d = new Date();
+    const pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+      + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function downloadText(content, filename, mime) {
+    try {
+      const blob = new Blob([content], { type: mime || 'text/plain;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+      return true;
+    } catch (e) {
+      showToast('导出失败', 'error');
+      return false;
+    }
+  }
+
+  // ---------- 通用 ----------
+  function showConfirmModal(title, message, type) {
     document.getElementById('confirmTitle').textContent = title;
     document.getElementById('confirmMessage').textContent = message;
-    document.getElementById('confirmIcon').className = `confirm-icon ${type}`;
-    
+    document.getElementById('confirmIcon').className = 'confirm-icon ' + (type || 'warning');
+
     const iconHtml = type === 'error' ? `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;">
         <circle cx="12" cy="12" r="10"/>
@@ -1641,40 +2051,29 @@
         <path d="M12 16v-4M12 8h.01"/>
       </svg>
     `;
-    
     document.getElementById('confirmIcon').innerHTML = iconHtml;
     document.getElementById('confirmModal').classList.add('show');
   }
 
-  function showToast(message, type = 'success') {
+  function showToast(message, type) {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
+    toast.className = 'toast ' + (type || 'success');
     toast.textContent = message;
     container.appendChild(toast);
-    
-    setTimeout(() => {
+
+    setTimeout(function() {
       toast.style.animation = 'slideOut 0.3s ease forwards';
-      setTimeout(() => {
-        toast.remove();
-      }, 300);
+      setTimeout(function() { toast.remove(); }, 300);
     }, 3000);
   }
 
   function updateSelectedCount() {
     const count = document.querySelectorAll('.row-checkbox:checked').length;
-    const __sc = document.getElementById('selectedCount'); if (__sc) __sc.textContent = count;
+    const el = document.getElementById('selectedCount');
+    if (el) el.textContent = count;
   }
-
-  function getTypeClass(type) {
-  const classes = {
-    farming: 'active',
-    device: 'active',
-    inventory: 'active',
-    weather: 'active'
-  };
-  return classes[type] || 'active';
-}
+</script>
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>

@@ -153,6 +153,10 @@
         <div class="stat-value" id="statEnd">0</div>
       </div>
       <div class="stat-card">
+        <div class="stat-label">未开始</div>
+        <div class="stat-value" id="statReady">0</div>
+      </div>
+      <div class="stat-card">
         <div class="stat-label">首页活动位</div>
         <div class="stat-value" id="statOrder">0</div>
       </div>
@@ -167,7 +171,8 @@
         </select>
         <select class="search-select" id="statusSelect">
           <option value="">全部状态</option>
-          <option value="on">启用中</option>
+          <option value="on">进行中</option>
+          <option value="ready">未开始</option>
           <option value="off">已停用</option>
           <option value="end">已结束</option>
         </select>
@@ -186,10 +191,11 @@
             <tr>
               <th class="checkbox-col" style="width:60px;">序号</th>
               <th>活动</th>
-              <th style="width:90px;">角标</th>
-              <th style="width:130px;">价格区间</th>
+              <th style="width:90px;">类型</th>
+              <th style="width:150px;">关联商品 / 范围</th>
+              <th style="width:120px;">价格区间</th>
               <th style="width:120px;">展示位置</th>
-              <th style="width:180px;">起止日期</th>
+              <th style="width:160px;">起止日期</th>
               <th style="width:90px;">状态</th>
               <th style="width:150px;">操作</th>
             </tr>
@@ -261,12 +267,69 @@
           </select>
         </div>
         <div class="form-field">
+          <label>活动类型</label>
+          <select id="editType">
+            <option value="discount">折扣</option>
+            <option value="cash">满减</option>
+            <option value="group">拼团</option>
+            <option value="seckill">秒杀</option>
+            <option value="adopt">认养特惠</option>
+            <option value="gift">赠品</option>
+          </select>
+        </div>
+        <div class="form-field">
           <label>状态</label>
           <select id="editStatus">
             <option value="on">启用中</option>
             <option value="off">已停用</option>
           </select>
         </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>适用范围</label>
+          <select id="editScope" onchange="syncScopeFields()">
+            <option value="all">全场商品</option>
+            <option value="sku">指定商品</option>
+            <option value="category">指定分类</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>投放渠道</label>
+          <select id="editChannel">
+            <option value="h5">H5 商城</option>
+            <option value="all">全渠道</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>每人限购</label>
+          <input type="number" id="editLimitPerUser" min="0" step="1" placeholder="0 表示不限">
+        </div>
+      </div>
+      <div class="form-field" id="skuField" style="margin-bottom:var(--space-lg);display:none;">
+        <label>关联商品（可多选）</label>
+        <select id="editSkuIds" multiple size="4" style="min-height:96px;"></select>
+        <div class="promo-sub" style="margin-top:4px;">选中后 H5 商品页活动位将按该商品展示活动价与详情</div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>活动库存</label>
+          <input type="number" id="editTotalStock" min="0" step="1" placeholder="1000">
+        </div>
+        <div class="form-field">
+          <label>已用库存</label>
+          <input type="number" id="editUsedStock" min="0" step="1" placeholder="0">
+        </div>
+        <div class="form-field">
+          <label>优先级</label>
+          <input type="number" id="editPriority" min="1" step="1" placeholder="10，数值越大越靠前">
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="editMemberOnly" style="width:auto;">
+          仅会员可参与
+        </label>
       </div>
     </div>
     <div class="modal-footer">
@@ -279,6 +342,7 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mall-store.js"></script>
 <script>
 /* ============================================================
  * 促销活动管理（商城管理）
@@ -290,6 +354,8 @@
 var PROMOTION_KEY = 'mall_promotions';
 
 var TARGET_TEXT = { order: '首页最新活动', goods: '商品页活动' };
+var TYPE_TEXT = { discount: '折扣', cash: '满减', group: '拼团', seckill: '秒杀', adopt: '认养特惠', gift: '赠品' };
+var SCOPE_TEXT = { all: '全场', sku: '指定商品', category: '指定分类' };
 
 /* 与 H5 js/mall-promotions.js 的 DEFAULT_PROMOTIONS 保持一致 */
 var DEFAULT_PROMOTIONS = [
@@ -321,7 +387,7 @@ function readPromotions() {
     list = DEFAULT_PROMOTIONS.map(function (p) { return Object.assign({}, p); });
     writeList(list);
   }
-  return list || [];
+  return typeof MallStore !== 'undefined' ? MallStore.promotions() : (list || []);
 }
 
 function keyExists() {
@@ -333,10 +399,20 @@ function keyExists() {
 }
 
 function writeList(list) {
+  if (typeof MallStore !== 'undefined') {
+    var ok = true;
+    list.forEach(function (p) {
+      var r = MallStore.savePromotion(p);
+      if (!r.ok) { Toast.error(r.error || '活动保存失败'); ok = false; }
+    });
+    return ok;
+  }
   try {
     localStorage.setItem(PROMOTION_KEY, JSON.stringify(list));
+    return true;
   } catch (e) {
     Toast.error('本地存储写入失败，活动未能保存');
+    return false;
   }
 }
 
@@ -365,16 +441,18 @@ var STATE_TEXT = { on: '进行中', off: '已停用', end: '已结束', ready: '
 
 function renderStats() {
   var list = readPromotions();
-  var on = 0, end = 0, order = 0;
+  var on = 0, end = 0, ready = 0, order = 0;
   list.forEach(function (p) {
     var s = stateOf(p);
     if (s === 'on') on++;
-    if (s === 'end' || s === 'ready') end++;
+    if (s === 'end') end++;
+    if (s === 'ready') ready++;
     if ((p.target || 'order') === 'order') order++;
   });
   document.getElementById('statTotal').textContent = list.length;
   document.getElementById('statOn').textContent = on;
   document.getElementById('statEnd').textContent = end;
+  document.getElementById('statReady').textContent = ready;
   document.getElementById('statOrder').textContent = order;
 }
 
@@ -385,11 +463,7 @@ function filteredList() {
 
   return readPromotions().filter(function (p) {
     if (target && (p.target || 'order') !== target) return false;
-    if (status) {
-      var s = stateOf(p);
-      if (status === 'end') { if (s !== 'end' && s !== 'ready') return false; }
-      else if (s !== status) return false;
-    }
+    if (status && stateOf(p) !== status) return false;
     if (kw) {
       var hay = ((p.title || '') + ' ' + (p.id || '')).toLowerCase();
       if (hay.indexOf(kw) === -1) return false;
@@ -415,17 +489,23 @@ function renderTable() {
   body.innerHTML = list.map(function (p, i) {
     var original = Number(p.original) > 0 ? '<span class="price-original">¥' + p.original + '</span>' : '';
     var st = stateOf(p);
-    var tag = p.tag ? '<span class="tag-badge">' + esc(p.tag) + '</span>' : '<span class="promo-sub">—</span>';
     var dateText = (p.startDate || '不限') + ' ~ ' + (p.endDate || '不限');
+    var skuNames = (p.skuIds || []).map(function (sid) {
+      var hit = productsCache.filter(function (x) { return x.id === sid; })[0];
+      return hit ? hit.name : sid;
+    });
+    var scopeText = p.scope === 'sku' ? (skuNames.length ? skuNames.join('、') : '未绑定商品') : (SCOPE_TEXT[p.scope] || '全场');
     return '<tr>' +
       '<td class="checkbox-col">' + (i + 1) + '</td>' +
       '<td><div class="promo-cell">' +
           '<img class="promo-img" src="../applefarm_h5/' + esc(p.img) + '" alt="" onerror="this.style.visibility=\'hidden\'">' +
           '<div><div class="promo-name">' + esc(p.title) + '</div>' +
           '<div class="promo-sub">' + esc(p.subTitle || '') + '</div>' +
-          '<div class="promo-id">' + esc(p.id) + '</div></div>' +
+          '<div class="promo-id">' + esc(p.id) + (p.tag ? ' · ' + esc(p.tag) : '') + '</div></div>' +
         '</div></td>' +
-      '<td>' + tag + '</td>' +
+      '<td><span class="tag-badge">' + (TYPE_TEXT[p.type] || p.type || '折扣') + '</span></td>' +
+      '<td><div style="font-size:var(--font-size-sm);">' + esc(scopeText) + '</div>' +
+        '<div class="promo-sub">剩余 ' + Math.max(0, Number(p.totalStock) - Number(p.usedStock)) + ' / ' + Number(p.totalStock) + '</div></td>' +
       '<td class="price-cell">¥' + p.price + original + '</td>' +
       '<td><span class="target-tag ' + esc(p.target || 'order') + '">' + (TARGET_TEXT[p.target || 'order'] || p.target) + '</span></td>' +
       '<td class="text-mono" style="font-size:var(--font-size-xs);">' + esc(dateText) + '</td>' +
@@ -438,6 +518,22 @@ function renderTable() {
       '</div></td>' +
     '</tr>';
   }).join('');
+}
+
+var productsCache = [];
+
+function loadProducts() {
+  productsCache = typeof MallStore !== 'undefined' ? MallStore.products() : [];
+  var sel = document.getElementById('editSkuIds');
+  if (!sel) return;
+  sel.innerHTML = productsCache.map(function (p) {
+    return '<option value="' + esc(p.id) + '">' + esc(p.name) + '（' + esc(p.spec || '标准装') + '）</option>';
+  }).join('');
+}
+
+function syncScopeFields() {
+  var scope = document.getElementById('editScope').value;
+  document.getElementById('skuField').style.display = scope === 'sku' ? 'block' : 'none';
 }
 
 function resetFilter() {
@@ -470,7 +566,22 @@ function openEdit(id) {
   document.getElementById('editStartDate').value = p ? (p.startDate || '') : '';
   document.getElementById('editEndDate').value = p ? (p.endDate || '') : '';
   document.getElementById('editTarget').value = p ? (p.target || 'order') : 'order';
+  document.getElementById('editType').value = p ? (p.type || 'discount') : 'discount';
   document.getElementById('editStatus').value = p ? (p.status || 'on') : 'on';
+  document.getElementById('editScope').value = p ? (p.scope || 'all') : 'all';
+  document.getElementById('editChannel').value = p ? (p.channel || 'h5') : 'h5';
+  document.getElementById('editLimitPerUser').value = p ? (p.limitPerUser || 0) : 0;
+  document.getElementById('editTotalStock').value = p ? (p.totalStock == null ? 1000 : p.totalStock) : 1000;
+  document.getElementById('editUsedStock').value = p ? (p.usedStock || 0) : 0;
+  document.getElementById('editPriority').value = p ? (p.priority || 10) : 10;
+  document.getElementById('editMemberOnly').checked = !!(p && p.memberOnly);
+
+  loadProducts();
+  var selected = p && Array.isArray(p.skuIds) ? p.skuIds : [];
+  Array.prototype.forEach.call(document.getElementById('editSkuIds').options, function (opt) {
+    opt.selected = selected.indexOf(opt.value) >= 0;
+  });
+  syncScopeFields();
 
   document.getElementById('editModal').classList.add('show');
 }
@@ -499,6 +610,9 @@ function submitEdit() {
     }
   }
 
+  var skuSelect = document.getElementById('editSkuIds');
+  var skuIds = Array.prototype.filter.call(skuSelect.options, function (o) { return o.selected; }).map(function (o) { return o.value; });
+
   var payload = {
     id: pid,
     title: title,
@@ -507,21 +621,37 @@ function submitEdit() {
     original: Number(document.getElementById('editOriginal').value) || 0,
     img: document.getElementById('editImg').value.trim(),
     tag: document.getElementById('editTag').value.trim(),
+    type: document.getElementById('editType').value,
+    scope: document.getElementById('editScope').value,
+    skuIds: skuIds,
+    channel: document.getElementById('editChannel').value,
+    limitPerUser: Number(document.getElementById('editLimitPerUser').value) || 0,
+    totalStock: Number(document.getElementById('editTotalStock').value) || 0,
+    usedStock: Number(document.getElementById('editUsedStock').value) || 0,
+    priority: Number(document.getElementById('editPriority').value) || 10,
+    memberOnly: document.getElementById('editMemberOnly').checked,
     startDate: startDate,
     endDate: endDate,
     status: document.getElementById('editStatus').value,
     target: document.getElementById('editTarget').value
   };
 
-  if (editingId) {
-    for (var k = 0; k < list.length; k++) {
-      if (list[k].id === editingId) { list[k] = payload; break; }
-    }
+  if (payload.scope === 'sku' && !skuIds.length) { Toast.warning('请选择至少一个关联商品'); return; }
+
+  if (typeof MallStore !== 'undefined') {
+    var result = MallStore.savePromotion(payload);
+    if (!result.ok) { Toast.warning(result.error || '活动保存失败'); return; }
   } else {
-    list.push(payload);
+    if (editingId) {
+      for (var k = 0; k < list.length; k++) {
+        if (list[k].id === editingId) { list[k] = payload; break; }
+      }
+    } else {
+      list.push(payload);
+    }
+    if (!writeList(list)) return;
   }
 
-  writeList(list);
   closeEditModal();
   renderTable();
   Toast.success(editingId ? '活动已更新' : '活动已新增');
@@ -545,8 +675,12 @@ function removePromotion(id) {
     title: '删除活动',
     message: '确定删除活动「' + id + '」吗？删除后 H5 端首页将不再展示该活动，此操作不可撤销。',
     onConfirm: function () {
-      var list = readPromotions().filter(function (p) { return p.id !== id; });
-      writeList(list);
+      if (typeof MallStore !== 'undefined') {
+        var r = MallStore.removePromotion(id);
+        if (!r.ok) { Toast.error(r.error || '删除失败'); return; }
+      } else {
+        writeList(readPromotions().filter(function (p) { return p.id !== id; }));
+      }
       renderTable();
       Toast.success('活动已删除');
     }
@@ -566,6 +700,7 @@ function resetToH5Default() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+  loadProducts();
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });

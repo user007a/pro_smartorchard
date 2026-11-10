@@ -612,6 +612,7 @@
                   <th style="width:120px;">认养期限</th>
                   <th style="width:100px;">续费标记</th>
                   <th style="width:90px;text-align:right;">续费次数</th>
+                  <th style="width:130px;">合同编号</th>
                   <th style="width:100px;">合同状态</th>
                   <th style="width:80px;">订单状态</th>
                   <th style="width:120px;">下单时间</th>
@@ -653,6 +654,63 @@
     </div>
     <div class="modal-footer">
       <button class="jg-btn" onclick="closeModal('detailModal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 合同查看 / 签署弹窗 -->
+<div class="modal-overlay" id="contractModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <h3 class="modal-title">认养合同</h3>
+      <button class="modal-close" onclick="closeModal('contractModal')">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 1l8 8M9 9l8-8M9 9l-8 8M9 9l8 8"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body" id="contractBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('contractModal')">关闭</button>
+      <button class="jg-btn jg-btn-primary" id="contractSignBtn" style="display:none;" onclick="submitSign()">确认签署</button>
+    </div>
+  </div>
+</div>
+
+<!-- 续费弹窗 -->
+<div class="modal-overlay" id="renewModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <h3 class="modal-title">认养续费</h3>
+      <button class="modal-close" onclick="closeModal('renewModal')">
+        <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 1l8 8M9 9l8-8M9 9l-8 8M9 9l8 8"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p id="renewInfo" style="color:var(--text-secondary);font-size:var(--font-size-sm);margin-bottom:var(--space-md);"></p>
+      <div class="form-group">
+        <label class="form-label">续费年限</label>
+        <select class="form-select" id="renewDuration" onchange="syncRenewAmount()">
+          <option value="1">1年</option>
+          <option value="2">2年</option>
+          <option value="3">3年</option>
+          <option value="5">5年</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">续费金额（元）</label>
+        <input type="number" class="form-input" id="renewAmount" placeholder="请输入续费金额">
+      </div>
+      <div class="form-group">
+        <label class="form-label">新周期</label>
+        <input type="text" class="form-input" id="renewPeriod" readonly>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('renewModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="confirmRenew()">生成续费订单</button>
     </div>
   </div>
 </div>
@@ -723,17 +781,12 @@
         <input type="text" class="form-input" id="addPhone" placeholder="请输入联系电话">
       </div>
       <div class="form-group">
-        <label class="form-label">认养果树</label>
-        <select class="form-select" id="addTree">
-          <option value="A001">花牛苹果 #A001 - 麦积区基地</option>
-          <option value="A002">花牛苹果 #A002 - 麦积区基地</option>
-          <option value="B001">花牛苹果 #B001 - 麦积区基地</option>
-          <option value="B004">花牛苹果 #B004 - 麦积区基地</option>
-          <option value="C003">秦冠 #C003 - 麦积区基地</option>
-        </select>
+        <label class="form-label">认养果树 <span style="color:var(--danger-500);">*</span></label>
+        <select class="form-select" id="addTree" onchange="syncAddAmount()"></select>
+        <div style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:4px;" id="addTreeHint">仅展示可认养果树</div>
       </div>
       <div class="form-group">
-        <label class="form-label">认养金额</label>
+        <label class="form-label">认养金额（元）<span style="color:var(--danger-500);">*</span></label>
         <input type="number" class="form-input" id="addAmount" placeholder="请输入认养金额">
       </div>
       <div class="form-group">
@@ -744,6 +797,20 @@
           <option value="3">3年</option>
           <option value="5">5年</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">支付方式</label>
+        <select class="form-select" id="addPayMethod">
+          <option value="">未支付（生成待支付订单）</option>
+          <option value="wechat">微信支付</option>
+          <option value="alipay">支付宝</option>
+          <option value="bank">银行卡</option>
+          <option value="offline">线下转账</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">合同编号</label>
+        <input type="text" class="form-input" id="addContractNo" readonly placeholder="保存时按 HT-年份-序号 自动生成">
       </div>
     </div>
     <div class="modal-footer">
@@ -790,44 +857,88 @@
 </div>
 
 <!-- 引入交互脚本 -->
+<script src="js/shared/adoption-store.js"></script>
 <script>
-  /* Mock数据（renew 续费标记 / renewCycle 续费次数 / prevOrderNo 原订单号 / contractStatus 合同状态；base 所属基地） */
-  const mockData = [
-    { id: '1', code: 'AD20260615001', name: '惠加宁', phone: '13307912585', treeName: '花牛苹果 #A025', base: '麦积区基地', amount: '399', startDate: '2026-09-15', endDate: '2027-09-14', status: 'paid', renew: true, renewCycle: 1, prevOrderNo: 'AD20250614008', contractStatus: '履约中', createTime: '2026-09-15 14:32' },
-    { id: '2', code: 'AD20260614102', name: '黄忠坚', phone: '13979412180', treeName: '花牛苹果 #B012', base: '麦积区基地', amount: '299', startDate: '2026-09-14', endDate: '2027-09-13', status: 'paid', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '履约中', createTime: '2026-09-14 09:15' },
-    { id: '3', code: 'AD20260613103', name: '徐水应', phone: '13879418637', treeName: '秦冠 #C008', base: '麦积区基地', amount: '599', startDate: '2026-09-13', endDate: '2027-09-12', status: 'pending', renew: true, renewCycle: 2, prevOrderNo: 'AD20240613002', contractStatus: '履约中', createTime: '2026-09-13 16:45' },
-    { id: '4', code: 'AD20260612104', name: '朱泉龙', phone: '18296452648', treeName: '花牛苹果 #A018', base: '麦积区基地', amount: '499', startDate: '2026-09-12', endDate: '2027-09-11', status: 'refunded', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '已终止', createTime: '2026-09-12 11:20' },
-    { id: '5', code: 'AD20260611105', name: '陈小忠', phone: '18779417899', treeName: '花牛苹果 #B015', base: '麦积区基地', amount: '259', startDate: '2026-09-11', endDate: '2027-09-10', status: 'completed', renew: true, renewCycle: 1, prevOrderNo: 'AD20250610021', contractStatus: '已完成', createTime: '2026-09-11 15:08' },
-    { id: '6', code: 'AD20260610106', name: '廖春亮', phone: '13767679075', treeName: '金帅 #D002', base: '白水基地', amount: '349', startDate: '2026-09-10', endDate: '2027-09-09', status: 'paid', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '履约中', createTime: '2026-09-10 10:30' },
-    { id: '7', code: 'AD20260609107', name: '李建明', phone: '13970432567', treeName: '花牛苹果 #E001', base: '宜川基地', amount: '499', startDate: '2026-09-09', endDate: '2027-09-08', status: 'cancelled', renew: true, renewCycle: 1, prevOrderNo: 'AD20250608015', contractStatus: '已终止', createTime: '2026-09-09 14:20' },
-    { id: '8', code: 'AD20260608108', name: '李根', phone: '13030587809', treeName: '花牛苹果 #E004', base: '宜川基地', amount: '399', startDate: '2026-09-08', endDate: '2027-09-07', status: 'completed', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '已完成', createTime: '2026-09-08 09:45' },
-    { id: '9', code: 'AD20260607109', name: '张才孙', phone: '15079427679', treeName: '花牛苹果 #F003', base: '宜川基地', amount: '299', startDate: '2026-09-07', endDate: '2027-09-06', status: 'paid', renew: true, renewCycle: 2, prevOrderNo: 'AD20240606011', contractStatus: '履约中', createTime: '2026-09-07 13:15' },
-    { id: '10', code: 'AD20260606110', name: '刘全国', phone: '13870409283', treeName: '花牛苹果 #A001', base: '麦积区基地', amount: '599', startDate: '2026-09-06', endDate: '2027-09-05', status: 'completed', renew: true, renewCycle: 1, prevOrderNo: 'AD20250605003', contractStatus: '已完成', createTime: '2026-09-06 16:30' },
-    { id: '11', code: 'AD20260605111', name: '毛定卫', phone: '15979580151', treeName: '花牛苹果 #A002', base: '麦积区基地', amount: '399', startDate: '2026-09-05', endDate: '2027-09-04', status: 'pending', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '履约中', createTime: '2026-09-05 11:00' },
-    { id: '12', code: 'AD20260604112', name: '叶三东', phone: '13307946219', treeName: '花牛苹果 #B001', base: '麦积区基地', amount: '449', startDate: '2026-09-04', endDate: '2027-09-03', status: 'paid', renew: true, renewCycle: 2, prevOrderNo: 'AD20240603019', contractStatus: '履约中', createTime: '2026-09-04 14:45' },
-    { id: '13', code: 'AD20260603113', name: '周才贵', phone: '13307043277', treeName: '花牛苹果 #B004', base: '麦积区基地', amount: '299', startDate: '2026-09-03', endDate: '2027-09-02', status: 'completed', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '已完成', createTime: '2026-09-03 09:20' },
-    { id: '14', code: 'AD20260602114', name: '程名高', phone: '13879411631', treeName: '秦冠 #C003', base: '麦积区基地', amount: '399', startDate: '2026-09-02', endDate: '2027-09-01', status: 'paid', renew: true, renewCycle: 1, prevOrderNo: 'AD20250601006', contractStatus: '履约中', createTime: '2026-09-02 15:30' },
-    { id: '15', code: 'AD20260601115', name: '邓小华', phone: '15179450918', treeName: '金帅 #D002', base: '白水基地', amount: '499', startDate: '2026-09-01', endDate: '2027-09-30', status: 'pending', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '履约中', createTime: '2026-09-01 10:15' },
-    { id: '16', code: 'AD20260531116', name: '周成友', phone: '13407945529', treeName: '花牛苹果 #E001', base: '宜川基地', amount: '349', startDate: '2026-09-30', endDate: '2027-09-30', status: 'completed', renew: true, renewCycle: 1, prevOrderNo: 'AD20250530012', contractStatus: '已完成', createTime: '2026-09-30 14:00' },
-    { id: '17', code: 'AD20260530117', name: '危红卫', phone: '13870456916', treeName: '花牛苹果 #E004', base: '宜川基地', amount: '599', startDate: '2026-09-30', endDate: '2027-09-29', status: 'paid', renew: true, renewCycle: 2, prevOrderNo: 'AD20240529009', contractStatus: '履约中', createTime: '2026-09-30 09:30' },
-    { id: '18', code: 'AD20260529118', name: '方超', phone: '13437942227', treeName: '花牛苹果 #F003', base: '宜川基地', amount: '299', startDate: '2026-09-29', endDate: '2027-09-28', status: 'completed', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '已完成', createTime: '2026-09-29 16:20' },
-    { id: '19', code: 'AD20260528119', name: '曹红英', phone: '15179480005', treeName: '花牛苹果 #A001', base: '麦积区基地', amount: '399', startDate: '2026-09-28', endDate: '2027-09-27', status: 'refunded', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '已终止', createTime: '2026-09-28 11:45' },
-    { id: '20', code: 'AD20260527120', name: '崔新根', phone: '13970402086', treeName: '花牛苹果 #A002', base: '麦积区基地', amount: '449', startDate: '2026-09-27', endDate: '2027-09-26', status: 'paid', renew: true, renewCycle: 1, prevOrderNo: 'AD20250526014', contractStatus: '履约中', createTime: '2026-09-27 13:00' },
-    { id: '21', code: 'AD20260526121', name: '惠加宁', phone: '13307912585', treeName: '花牛苹果 #B001', base: '麦积区基地', amount: '299', startDate: '2026-09-26', endDate: '2027-09-25', status: 'pending', renew: false, renewCycle: 0, prevOrderNo: '', contractStatus: '履约中', createTime: '2026-09-26 15:30' },
-    { id: '22', code: 'AD20260525122', name: '黄忠坚', phone: '13979412180', treeName: '花牛苹果 #B004', base: '麦积区基地', amount: '399', startDate: '2026-09-25', endDate: '2027-09-24', status: 'completed', renew: true, renewCycle: 2, prevOrderNo: 'AD20240524007', contractStatus: '已完成', createTime: '2026-09-25 10:15' },
-    { id: '23', code: 'AD20260524123', name: '徐水应', phone: '13879418637', treeName: '秦冠 #C003', base: '麦积区基地', amount: '599', startDate: '2026-09-24', endDate: '2027-09-23', status: 'paid', renew: true, renewCycle: 1, prevOrderNo: 'AD20250523018', contractStatus: '履约中', createTime: '2026-09-24 14:20' },
-  ];
+  /* ============================================================
+   * 数据来源：统一数据层 AdoptionStore（禁止页面内维护 mock）
+   * ============================================================ */
 
+  const S = window.AdoptionStore;
+  const STATUS_TEXT_MAP = {
+    pending: '待支付', paid: '已支付', completed: '已完成',
+    refunding: '退款审核中', refunded: '已退款', cancelled: '已取消'
+  };
+  const CONTRACT_TEXT_MAP = {
+    pending: '待签署', active: '履约中', expired: '已完成', terminated: '已终止'
+  };
+  const REFUND_STATUS_TEXT = { pending: '待审核', approved: '已通过', rejected: '已驳回' };
+  const REFUND_REASON_TEXT = {
+    user_request: '用户主动申请', quality_issue: '品质问题',
+    delivery_delay: '配送延迟', other: '其他原因'
+  };
+
+  function displayBase(name) {
+    const s = String(name || '');
+    if (!s) return '-';
+    return /基地$/.test(s) ? s : s + '基地';
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
+  /* 订单实体 → 页面行模型 */
+  function toRow(o) {
+    return {
+      id: o.orderNo,
+      code: o.orderNo,
+      name: o.adopter,
+      phone: o.phone || '-',
+      treeName: o.treeName,
+      treeCode: o.treeCode,
+      base: displayBase(o.baseName),
+      amount: o.amount,
+      startDate: o.startDate,
+      endDate: o.endDate,
+      status: o.status,
+      renew: !!o.renew || Number(o.renewCount) > 0,
+      renewCycle: Number(o.renewCount) || 0,
+      prevOrderNo: o.prevOrderNo || '',
+      contractNo: o.contractNo || '-',
+      contractStatus: CONTRACT_TEXT_MAP[o.contractStatus] || o.contractStatus,
+      payMethod: S.PAY_METHODS[o.payMethod] || o.payMethod || '-',
+      payTxnNo: o.payTxnNo || '-',
+      invoiceNo: o.invoiceNo || '-',
+      seekInvoice: o.invoiceStatus === 'issued' ? '已开票' : '未开票',
+      refund: o.refund || null,
+      createTime: fmtTime(o.createdAt),
+      raw: o
+    };
+  }
+
+  function allRows() {
+    return S.orders().map(toRow).sort((a, b) => {
+      return String(b.raw.createdAt).localeCompare(String(a.raw.createdAt));
+    });
+  }
+
+  let orderRows = allRows();
   const pageSize = 8;
   let currentPage = 1;
-  let filteredData = [...mockData];
+  let filteredData = [...orderRows];
 
-  // 顶部统计卡：认养订单总数 / 续费订单数 / 续费率 / 续费金额
+  // 顶部统计卡：认养订单总数 / 续费订单数 / 续费率 / 续费金额（全部取自数据层实时统计）
   function renderStats() {
     const box = document.getElementById('orderStats');
     if (!box) return;
-    const total = mockData.length;
-    const renewList = mockData.filter(i => i.renew);
+    const rows = allRows();
+    const st = S.stats();
+    const total = rows.length;
+    const renewList = rows.filter(i => i.renew);
     const renewCount = renewList.length;
     const renewRate = total ? Math.round(renewCount / total * 1000) / 10 : 0;
     const renewAmount = renewList.reduce((s, i) => s + (Number(i.amount) || 0), 0);
@@ -848,8 +959,26 @@
         <div class="stat-value">¥${renewAmount.toLocaleString()}</div>
         <div class="stat-label">续费金额</div>
       </div>
+      <div class="patrol-stat-card">
+        <div class="stat-value">¥${Number(st.revenue).toLocaleString()}</div>
+        <div class="stat-label">认养收入</div>
+      </div>
+      <div class="patrol-stat-card">
+        <div class="stat-value">${st.orderRefunding}</div>
+        <div class="stat-label">待审退款</div>
+      </div>
     `;
   }
+
+  // 数据变更后刷新（含跨标签页 storage 同步）
+  function reloadData() {
+    orderRows = allRows();
+    filteredData = [...orderRows];
+    renderStats();
+    currentPage = 1;
+    goToPage(1);
+  }
+  if (S && S.onChange) S.onChange(reloadData);
 
   // 续费标记 badge：续费订单 / 首单
   function renderRenewTag(item) {
@@ -869,9 +998,14 @@
     const tbody = document.getElementById('orderList');
     tbody.innerHTML = '';
 
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:32px;color:var(--text-tertiary);">暂无符合条件的认养订单</td></tr>';
+      return;
+    }
+
     data.forEach((item, __seq) => {
-      const statusText = item.status === 'paid' ? '已支付' : item.status === 'pending' ? '待支付' : item.status === 'completed' ? '已完成' : item.status === 'refunded' ? '已退款' : '已取消';
-      const statusClass = item.status;
+      const statusText = STATUS_TEXT_MAP[item.status] || item.status;
+      const statusClass = item.status === 'refunding' ? 'refunded' : item.status;
 
       const row = document.createElement('tr');
       // 续费订单整行浅色高亮
@@ -892,13 +1026,19 @@
         </td>
         <td>${renderRenewTag(item)}</td>
         <td class="text-right">${item.renewCycle || '-'}</td>
+        <td class="text-mono" style="font-size:var(--font-size-xs);">${item.contractNo}</td>
         <td>${renderContractTag(item.contractStatus)}</td>
         <td><span class="status-tag ${statusClass}">${statusText}</span></td>
         <td style="font-size:var(--font-size-sm);color:var(--text-tertiary);">${item.createTime}</td>
         <td>
           <div class="action-btns">
             <button class="action-btn detail" onclick="showDetail('${item.id}')">详情</button>
-            ${item.status === 'paid' ? `<button class="action-btn refund" onclick="showRefund('${item.id}')">退款</button>` : ''}
+            <button class="action-btn" onclick="showContract('${item.id}')">合同</button>
+            ${item.status === 'pending' ? `<button class="action-btn detail" onclick="collectPayment('${item.id}')">收款</button>` : ''}
+            ${(item.status === 'paid' || item.status === 'completed') ? `<button class="action-btn" onclick="showRenew('${item.id}')">续费</button>` : ''}
+            ${(item.status === 'paid' || item.status === 'completed') ? `<button class="action-btn refund" onclick="showRefund('${item.id}')">退款</button>` : ''}
+            ${item.status === 'paid' ? `<button class="action-btn detail" onclick="completeOrder('${item.id}')">完成</button>` : ''}
+            ${item.status === 'refunding' ? `<button class="action-btn refund" onclick="showReview('${item.id}')">审核退款</button>` : ''}
           </div>
         </td>
       `;
@@ -958,20 +1098,34 @@
     const __sc = document.getElementById('selectedCount'); if (__sc) __sc.textContent = checkboxes.length;
   }
 
-  // 搜索功能
+  // 搜索功能（关键词 / 状态 / 时间 / 基地 / 续费，全部真实生效）
   function handleSearch() {
-    const keyword = document.getElementById('searchInput').value.toLowerCase();
+    const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
     const status = document.getElementById('statusSelect').value;
     const time = document.getElementById('timeSelect').value;
     const base = document.getElementById('baseSelect').value;
     const renew = document.getElementById('renewSelect').value;
 
-    filteredData = mockData.filter(item => {
-      const matchKeyword = !keyword || item.code.toLowerCase().includes(keyword) || item.name.toLowerCase().includes(keyword);
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(startOfDay);
+    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    filteredData = orderRows.filter(item => {
+      const created = new Date(String(item.createTime).replace(/-/g, '/'));
+      const matchKeyword = !keyword ||
+        item.code.toLowerCase().includes(keyword) ||
+        item.name.toLowerCase().includes(keyword) ||
+        item.treeCode.toLowerCase().includes(keyword);
       const matchStatus = !status || item.status === status;
       const matchBase = !base || item.base === base;
       const matchRenew = !renew || (renew === 'renew' ? item.renew : !item.renew);
-      return matchKeyword && matchStatus && matchBase && matchRenew;
+      let matchTime = true;
+      if (time === 'today') matchTime = created >= startOfDay;
+      else if (time === 'week') matchTime = created >= weekStart;
+      else if (time === 'month') matchTime = created >= monthStart;
+      return matchKeyword && matchStatus && matchBase && matchRenew && matchTime;
     });
 
     currentPage = 1;
@@ -990,9 +1144,11 @@
 
   // 详情弹窗
   function showDetail(id) {
-    const item = mockData.find(d => d.id === id);
+    const item = orderRows.find(d => d.id === id);
     if (item) {
-      const statusText = item.status === 'paid' ? '已支付' : item.status === 'pending' ? '待支付' : item.status === 'completed' ? '已完成' : item.status === 'refunded' ? '已退款' : '已取消';
+      const statusText = STATUS_TEXT_MAP[item.status] || item.status;
+      const rfd = item.refund || {};
+      const bnf = (item.raw && item.raw.benefits) || {};
       document.getElementById('detailContent').innerHTML = `
         <div class="detail-row"><div class="detail-label">订单编号</div><div class="detail-value text-mono">${item.code}</div></div>
         <div class="detail-row"><div class="detail-label">认养人</div><div class="detail-value">${item.name}</div></div>
@@ -1000,12 +1156,18 @@
         <div class="detail-row"><div class="detail-label">认养果树</div><div class="detail-value">${item.treeName}</div></div>
         <div class="detail-row"><div class="detail-label">所属基地</div><div class="detail-value">${item.base}</div></div>
         <div class="detail-row"><div class="detail-label">认养金额</div><div class="detail-value">¥${item.amount}</div></div>
+        <div class="detail-row"><div class="detail-label">合同编号</div><div class="detail-value text-mono">${item.contractNo}</div></div>
+        <div class="detail-row"><div class="detail-label">支付方式</div><div class="detail-value">${item.payMethod}</div></div>
+        <div class="detail-row"><div class="detail-label">支付流水号</div><div class="detail-value text-mono">${item.payTxnNo}</div></div>
+        <div class="detail-row"><div class="detail-label">发票信息</div><div class="detail-value">${item.seekInvoice}${item.invoiceNo !== '-' ? ' · ' + item.invoiceNo : ''}</div></div>
+        <div class="detail-row"><div class="detail-label">认养权益</div><div class="detail-value">预计产量 ${bnf.expectedYield || '-'} 斤 · 免费采摘 ${bnf.freePickupTimes || 0} 次 · ${bnf.deliveryIncluded ? '含冷链配送' : '不含配送'}</div></div>
         <div class="detail-row"><div class="detail-label">认养期限</div><div class="detail-value">${item.startDate} 至 ${item.endDate}</div></div>
         <div class="detail-row"><div class="detail-label">续费标记</div><div class="detail-value">${renderRenewTag(item)}</div></div>
         <div class="detail-row"><div class="detail-label">续费次数</div><div class="detail-value">${item.renew ? item.renewCycle + ' 次' : '首单'}</div></div>
         <div class="detail-row"><div class="detail-label">原订单号</div><div class="detail-value text-mono">${item.prevOrderNo || '-'}</div></div>
         <div class="detail-row"><div class="detail-label">合同状态</div><div class="detail-value">${renderContractTag(item.contractStatus)}</div></div>
-        <div class="detail-row"><div class="detail-label">订单状态</div><div class="detail-value"><span class="status-tag ${item.status}">${statusText}</span></div></div>
+        <div class="detail-row"><div class="detail-label">订单状态</div><div class="detail-value"><span class="status-tag ${item.status === 'refunding' ? 'refunded' : item.status}">${statusText}</span></div></div>
+        ${rfd && rfd.status ? `<div class="detail-row"><div class="detail-label">退款信息</div><div class="detail-value">¥${rfd.amount} · ${REFUND_REASON_TEXT[rfd.reason] || rfd.reason} · ${REFUND_STATUS_TEXT[rfd.status] || rfd.status}${rfd.remark ? ' · ' + rfd.remark : ''}</div></div>` : ''}
         <div class="detail-row"><div class="detail-label">下单时间</div><div class="detail-value">${item.createTime}</div></div>
       `;
       showModal('detailModal');
@@ -1013,48 +1175,287 @@
   }
 
   // 退款弹窗
+  let refundTarget = '';
   function showRefund(id) {
-    const item = mockData.find(d => d.id === id);
-    document.getElementById('refundInfo').textContent = `订单号：${item?.code} - 金额：¥${item?.amount}`;
-    document.getElementById('refundAmount').value = item?.amount || '';
+    const item = orderRows.find(d => d.id === id);
+    if (!item) return;
+    refundTarget = id;
+    document.getElementById('refundInfo').textContent = `订单号：${item.code} - 已付金额：¥${item.amount}`;
+    document.getElementById('refundAmount').value = item.amount;
     document.getElementById('refundReason').value = 'user_request';
     document.getElementById('refundRemark').value = '';
     showModal('refundModal');
   }
 
   function confirmRefund() {
-    alert('退款申请已提交！');
-    closeModal('refundModal');
+    try {
+      const amount = Number(document.getElementById('refundAmount').value);
+      const reason = document.getElementById('refundReason').value;
+      const remark = document.getElementById('refundRemark').value;
+      S.requestRefund(refundTarget, { amount, reason, remark });
+      closeModal('refundModal');
+      toast('退款申请已提交，等待财务审核');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  // 退款审核弹窗（动态创建）
+  let reviewTarget = '';
+  function ensureReviewModal() {
+    let el = document.getElementById('reviewModal');
+    if (el) return el;
+    el = document.createElement('div');
+    el.className = 'modal-overlay';
+    el.id = 'reviewModal';
+    el.innerHTML = `
+      <div class="modal" style="max-width:450px;">
+        <div class="modal-header">
+          <h3 class="modal-title">退款审核</h3>
+          <button class="modal-close" onclick="closeModal('reviewModal')">
+            <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l8 8M9 9l8-8M9 9l-8 8M9 9l8 8"/></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p id="reviewInfo" style="color:var(--text-secondary);font-size:var(--font-size-sm);margin-bottom:var(--space-md);"></p>
+          <div class="form-group">
+            <label class="form-label">审核人</label>
+            <input type="text" class="form-input" id="reviewOperator" value="园区管理员">
+          </div>
+          <div class="form-group">
+            <label class="form-label">审核备注</label>
+            <textarea class="form-input form-textarea" id="reviewRemark" placeholder="请输入审核意见"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="jg-btn" onclick="closeModal('reviewModal')">取消</button>
+          <button class="jg-btn" onclick="submitReview(false)">驳回</button>
+          <button class="jg-btn jg-btn-primary" onclick="submitReview(true)">通过退款</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    return el;
+  }
+
+  function showReview(id) {
+    const item = orderRows.find(d => d.id === id);
+    if (!item || !item.refund) return;
+    reviewTarget = id;
+    ensureReviewModal();
+    document.getElementById('reviewInfo').textContent =
+      `订单 ${item.code} · 申请退款 ¥${item.refund.amount} · 原因：${REFUND_REASON_TEXT[item.refund.reason] || item.refund.reason}`;
+    document.getElementById('reviewRemark').value = item.refund.remark || '';
+    showModal('reviewModal');
+  }
+
+  function submitReview(approve) {
+    try {
+      S.reviewRefund(reviewTarget, approve,
+        document.getElementById('reviewOperator').value,
+        document.getElementById('reviewRemark').value);
+      closeModal('reviewModal');
+      toast(approve ? '退款已通过，认养果树已释放' : '退款已驳回，订单恢复为已支付');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  function completeOrder(id) {
+    if (!confirm('确认该认养订单已完成履约？完成后合同转为已完成、果树释放为可认养。')) return;
+    try {
+      S.completeOrder(id);
+      toast('订单已完成');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  // 待支付订单收款：激活订单，合同转为待签署
+  function collectPayment(id) {
+    if (!confirm('确认已收到该订单款项？收款后订单生效，合同进入待签署。')) return;
+    try {
+      S.activateOrder(id, { payMethod: 'offline' });
+      toast('收款成功，订单已生效');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  // 合同查看 / 签署
+  let contractTarget = '';
+  function showContract(id) {
+    const item = orderRows.find(d => d.id === id);
+    const c = S.contractOf(id);
+    if (!item || !c) { toast('订单不存在', 'error'); return; }
+    contractTarget = id;
+    const canSign = c.contractStatus === 'pending' && (item.status === 'paid' || item.status === 'completed');
+    const statusText = CONTRACT_TEXT_MAP[c.contractStatus] || c.contractStatus;
+    const methodText = c.signMethod === 'paper' ? '纸质回签' : c.signMethod === 'esign' ? '电子签署' : (c.signMethod || '-');
+    document.getElementById('contractBody').innerHTML = `
+      <div class="detail-row"><div class="detail-label">合同编号</div><div class="detail-value text-mono">${c.contractNo || '-'}</div></div>
+      <div class="detail-row"><div class="detail-label">合同状态</div><div class="detail-value">${renderContractTag(statusText)}</div></div>
+      <div class="detail-row"><div class="detail-label">认养人</div><div class="detail-value">${c.adopter} · ${c.phone || '-'}</div></div>
+      <div class="detail-row"><div class="detail-label">认养果树</div><div class="detail-value">${c.treeName}</div></div>
+      <div class="detail-row"><div class="detail-label">合同期限</div><div class="detail-value">${c.startDate} 至 ${c.endDate}</div></div>
+      <div class="detail-row"><div class="detail-label">合同金额</div><div class="detail-value">¥${c.amount}</div></div>
+      <div class="detail-row"><div class="detail-label">签署时间</div><div class="detail-value">${c.signedAt ? fmtTime(c.signedAt) : '未签署'}</div></div>
+      <div class="detail-row"><div class="detail-label">签署人 / 方式</div><div class="detail-value">${c.signer || '-'} / ${methodText}</div></div>
+      <div class="detail-row"><div class="detail-label">合同摘要</div><div class="detail-value text-mono" style="font-size:var(--font-size-xs);word-break:break-all;">${c.digest || '-'}</div></div>
+      ${canSign ? `
+        <div style="margin-top:var(--space-md);padding-top:var(--space-md);border-top:1px solid var(--border-light);">
+          <div class="form-group">
+            <label class="form-label">签署人</label>
+            <input class="form-input" id="signerName" value="${c.adopter || ''}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">签署方式</label>
+            <select class="form-select" id="signMethod">
+              <option value="esign">电子签署</option>
+              <option value="paper">纸质回签</option>
+            </select>
+          </div>
+        </div>` : ''}
+    `;
+    document.getElementById('contractSignBtn').style.display = canSign ? '' : 'none';
+    showModal('contractModal');
+  }
+
+  function submitSign() {
+    try {
+      S.signContract(contractTarget, {
+        signer: document.getElementById('signerName').value,
+        method: document.getElementById('signMethod').value
+      });
+      closeModal('contractModal');
+      toast('合同已签署生效');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  // 在线续费：生成下一周期待支付订单
+  let renewTarget = '';
+  function showRenew(id) {
+    const item = orderRows.find(d => d.id === id);
+    const o = S.findOrder(id);
+    if (!item || !o) { toast('订单不存在', 'error'); return; }
+    renewTarget = id;
+    document.getElementById('renewInfo').textContent = `订单 ${item.code} · ${item.treeName} · 原周期至 ${item.endDate}`;
+    document.getElementById('renewDuration').value = '1';
+    syncRenewAmount();
+    showModal('renewModal');
+  }
+
+  function syncRenewAmount() {
+    const o = S.findOrder(renewTarget);
+    if (!o) return;
+    const years = Number(document.getElementById('renewDuration').value || 1);
+    const annual = Number(o.amount) / (Number(o.duration) || 1);
+    if (annual > 0) document.getElementById('renewAmount').value = Math.round(annual * years);
+    document.getElementById('renewPeriod').value = `${o.endDate} 至 ${S.addYears(o.endDate, years)}`;
+  }
+
+  function confirmRenew() {
+    try {
+      const duration = Number(document.getElementById('renewDuration').value || 1);
+      const amount = Number(document.getElementById('renewAmount').value || 0);
+      const rec = S.renewOrder(renewTarget, { duration, amount });
+      closeModal('renewModal');
+      toast(`续费订单 ${rec.orderNo} 已生成，待收款后生效`);
+    } catch (e) {
+      toast(e.message, 'error');
+    }
   }
 
   // 新增弹窗
   function showAddModal() {
     document.getElementById('addName').value = '';
     document.getElementById('addPhone').value = '';
-    document.getElementById('addTree').value = 'A001';
     document.getElementById('addAmount').value = '';
     document.getElementById('addDuration').value = '1';
+    document.getElementById('addPayMethod').value = '';
+    document.getElementById('addContractNo').value = S.nextContractNo();
+
+    const sel = document.getElementById('addTree');
+    const avail = S.trees().filter(t => t.status === S.TREE_STATUS.AVAILABLE);
+    sel.innerHTML = avail.length
+      ? avail.map(t => `<option value="${t.treeCode}" data-price="${t.price}">${t.treeCode} · ${t.variety} · ${displayBase(t.baseName)} · ¥${t.price}/年</option>`).join('')
+      : '<option value="">暂无可认养果树</option>';
+    document.getElementById('addTreeHint').textContent = avail.length
+      ? `共 ${avail.length} 棵可认养果树`
+      : '暂无可认养果树，请先在「认养果树」中新增或释放';
+    syncAddAmount();
     showModal('addModal');
   }
 
-  function saveAdd() {
-    alert('新增订单成功！');
-    closeModal('addModal');
+  function syncAddAmount() {
+    const sel = document.getElementById('addTree');
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt) return;
+    const price = Number(opt.dataset.price || 0);
+    const years = Number(document.getElementById('addDuration').value || 1);
+    if (price > 0) document.getElementById('addAmount').value = price * years;
   }
 
-  // 导出功能
+  function saveAdd() {
+    try {
+      const treeCode = document.getElementById('addTree').value;
+      if (!treeCode) throw new Error('请先选择认养果树');
+      const tree = S.findTree(treeCode);
+      const payMethod = document.getElementById('addPayMethod').value;
+      const duration = Number(document.getElementById('addDuration').value);
+      const startDate = new Date().toISOString().slice(0, 10);
+      S.saveOrder({
+        treeCode: treeCode,
+        adopter: document.getElementById('addName').value,
+        phone: document.getElementById('addPhone').value,
+        amount: Number(document.getElementById('addAmount').value),
+        duration: duration,
+        startDate: startDate,
+        endDate: S.addYears(startDate, duration),
+        payMethod: payMethod || '',
+        payTxnNo: payMethod ? 'TXN' + Date.now() : '',
+        status: payMethod ? S.ORDER_STATUS.PAID : S.ORDER_STATUS.PENDING,
+        level: tree ? tree.level : 'single'
+      });
+      closeModal('addModal');
+      toast(payMethod ? '认养订单已创建并完成收款' : '认养订单已创建，等待支付');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  // 导出功能（真实生成 CSV）
   function showExportModal() {
     showModal('exportModal');
   }
 
   function doExport(format) {
+    const rows = filteredData.length ? filteredData : orderRows;
+    const header = ['订单编号', '合同编号', '认养人', '联系电话', '认养果树', '所属基地', '认养金额',
+      '支付方式', '支付流水号', '开始日期', '结束日期', '合同状态', '订单状态', '续费', '下单时间'];
+    const lines = [header.join(',')];
+    rows.forEach(r => {
+      lines.push([
+        r.code, r.contractNo, r.name, r.phone, r.treeName, r.base, r.amount,
+        r.payMethod, r.payTxnNo, r.startDate, r.endDate, r.contractStatus,
+        STATUS_TEXT_MAP[r.status] || r.status, r.renew ? '是' : '否', r.createTime
+      ].map(v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`).join(','));
+    });
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `认养订单_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     closeModal('exportModal');
-    alert(`已导出全部 ${filteredData.length} 条认养订单（${format.toUpperCase()}格式）`);
+    toast(`已导出 ${rows.length} 条认养订单`);
   }
 
   // 初始化
-  renderStats();
-  goToPage(1);
+  reloadData();
 </script>
 
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->

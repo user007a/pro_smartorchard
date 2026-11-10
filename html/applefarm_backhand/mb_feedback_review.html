@@ -200,6 +200,11 @@
   </div>
 
   <main class="main-content">
+    <nav class="device-tabs" aria-label="移动端运营·用户服务">
+      <a href="mb_staff_account.html">作业人员账号</a>
+      <a href="mb_feedback_review.html" class="active">意见反馈审核</a>
+      <a href="mb_expert_reply.html">专家咨询回复</a>
+    </nav>
     <div class="page-header">
       <div>
         <div class="page-title">意见反馈审核</div>
@@ -233,6 +238,11 @@
     <!-- 搜索栏区 -->
     <div class="page-section search-section">
       <div class="search-bar">
+        <select class="search-select" id="sourceSelect">
+          <option value="">全部来源端</option>
+          <option value="mobile">移动端</option>
+          <option value="h5">H5消费者端</option>
+        </select>
         <select class="search-select" id="statusSelect">
           <option value="">全部状态</option>
           <option value="pending">待审核</option>
@@ -263,6 +273,7 @@
               <th class="checkbox-col" style="width:60px;">序号</th>
               <th>反馈标题</th>
               <th style="width:90px;">类型</th>
+              <th style="width:100px;">来源端</th>
               <th style="width:110px;">状态</th>
               <th style="width:130px;">提交人</th>
               <th style="width:140px;">提交时间</th>
@@ -292,6 +303,10 @@
       <div class="detail-row">
         <div class="detail-label">反馈内容</div>
         <div class="detail-value" id="replyFbContent"></div>
+      </div>
+      <div class="detail-row">
+        <div class="detail-label">提交信息</div>
+        <div class="detail-value" id="replyFbSource"></div>
       </div>
       <div class="detail-row">
         <div class="detail-label">当前状态</div>
@@ -328,15 +343,17 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-ops-store.js"></script>
 <script>
 /* ============================================================
  * 意见反馈审核
- * 数据源：localStorage['smartorchard_feedbacks']
- *   写入方 = 移动端 mb_feedback.html
- *   字段：{ id, title, content, type, status, createTime, reply?, rejectReason? }
+ * 数据源：MobileOpsStore / localStorage['smartorchard_feedbacks']
+ *   写入方 = 移动端 mb_feedback.html（source=mobile）
+ *            H5 端 h5_settings.html（source=h5）
+ *   字段：{ id, title, content, type, status, createTime, source,
+ *           operator, operatorId, contact, reply?, rejectReason?, handledBy?, reviewTime? }
  *   status 枚举：pending 待审核 / processing 处理中 / passed 已通过 / rejected 已驳回
  * ============================================================ */
-var FEEDBACK_KEY = 'smartorchard_feedbacks';
 
 var STATUS_TEXT = {
   pending: '待审核',
@@ -355,28 +372,17 @@ var currentId = null;
 
 /* 移动端播种的种子数据：后台首次打开时保持一致，避免空列表 */
 var SEED_FEEDBACKS = [
-  { id: 1, title: '建议增加病虫害识别功能', content: '希望能增加拍照识别病虫害的功能，这样果农可以快速判断果树问题。', type: 'suggestion', status: 'processing', createTime: '2026-09-21 10:30', reply: '感谢您的建议，我们正在开发中，预计下月上线。' },
-  { id: 2, title: '数据同步异常', content: '农事记录同步到云端时经常失败，网络正常的情况下也会出现。', type: 'problem', status: 'pending', createTime: '2026-09-20 15:20' },
-  { id: 3, title: '优化地块绘制', content: '画地块时希望能支持更精确的坐标定位。', type: 'suggestion', status: 'passed', createTime: '2026-09-19 09:15', reply: '已优化，在最新版本中已上线。' },
-  { id: 4, title: '施肥建议不准确', content: '系统给出的施肥建议和实际需求有差异。', type: 'problem', status: 'rejected', createTime: '2026-09-18 14:00', rejectReason: '请提供具体地块信息，我们重新分析。' }
+  { id: 1, title: '建议增加病虫害识别功能', content: '希望能增加拍照识别病虫害的功能，这样果农可以快速判断果树问题。', type: 'suggestion', status: 'processing', createTime: '2026-09-21 10:30', source: 'mobile', operator: '张建国', operatorId: 'zhangjianguo', reply: '感谢您的建议，我们正在开发中，预计下月上线。' },
+  { id: 2, title: '数据同步异常', content: '农事记录同步到云端时经常失败，网络正常的情况下也会出现。', type: 'problem', status: 'pending', createTime: '2026-09-20 15:20', source: 'mobile', operator: '张建国', operatorId: 'zhangjianguo' },
+  { id: 3, title: '优化地块绘制', content: '画地块时希望能支持更精确的坐标定位。', type: 'suggestion', status: 'passed', createTime: '2026-09-19 09:15', source: 'mobile', operator: '李四', operatorId: 'lisi', reply: '已优化，在最新版本中已上线。' },
+  { id: 4, title: '施肥建议不准确', content: '系统给出的施肥建议和实际需求有差异。', type: 'problem', status: 'rejected', createTime: '2026-09-18 14:00', source: 'mobile', operator: '王五', operatorId: 'wangwu', rejectReason: '请提供具体地块信息，我们重新分析。' }
 ];
 
-function readAll() {
-  try {
-    var raw = localStorage.getItem(FEEDBACK_KEY);
-    if (!raw) return null;
-    var v = JSON.parse(raw);
-    return Array.isArray(v) ? v : null;
-  } catch (e) {
-    return null;
-  }
-}
-
 function readList() {
-  var list = readAll();
-  if (!list || !list.length) {
+  var list = MobileOpsStore.list('feedbacks');
+  if (!list.length) {
     // 首次访问：沿用移动端种子数据，并回写以保持两端一致
-    list = SEED_FEEDBACKS.slice();
+    list = SEED_FEEDBACKS.map(function (f) { return Object.assign({}, f); });
     writeList(list);
     return list;
   }
@@ -384,9 +390,7 @@ function readList() {
 }
 
 function writeList(list) {
-  try {
-    localStorage.setItem(FEEDBACK_KEY, JSON.stringify(list));
-  } catch (e) {
+  if (!MobileOpsStore.writeList(MobileOpsStore.KEYS.feedbacks, list)) {
     Toast.error('本地存储写入失败，处理结果未能保存');
   }
 }
@@ -413,13 +417,15 @@ function renderStats(list) {
 function filteredList() {
   var status = document.getElementById('statusSelect').value;
   var type = document.getElementById('typeSelect').value;
+  var source = document.getElementById('sourceSelect').value;
   var kw = document.getElementById('searchInput').value.trim().toLowerCase();
 
   return readList().filter(function (f) {
     if (status && f.status !== status) return false;
     if (type && f.type !== type) return false;
+    if (source && (f.source || 'mobile') !== source) return false;
     if (kw) {
-      var hay = ((f.title || '') + ' ' + (f.content || '')).toLowerCase();
+      var hay = ((f.title || '') + ' ' + (f.content || '') + ' ' + (f.operator || '')).toLowerCase();
       if (hay.indexOf(kw) === -1) return false;
     }
     return true;
@@ -452,6 +458,8 @@ function renderTable() {
       '<td><div class="cell-title">' + esc(f.title) + '</div>' +
           '<div class="cell-sub">' + esc(f.content) + '</div>' + extra + '</td>' +
       '<td><span class="type-tag ' + esc(f.type) + '">' + (TYPE_TEXT[f.type] || f.type) + '</span></td>' +
+      '<td><span class="status-tag ' + (f.source === 'h5' ? 'processing' : 'passed') + '">' +
+          esc(MobileOpsStore.SOURCE_TEXT[f.source || 'mobile']) + '</span></td>' +
       '<td><span class="status-tag ' + esc(f.status) + '">' + (STATUS_TEXT[f.status] || f.status) + '</span></td>' +
       '<td>' + esc(f.operator || '移动端用户') + '</td>' +
       '<td class="text-mono">' + esc(f.createTime || '') + '</td>' +
@@ -469,6 +477,7 @@ function refreshList() {
 function resetFilter() {
   document.getElementById('statusSelect').value = '';
   document.getElementById('typeSelect').value = '';
+  document.getElementById('sourceSelect').value = '';
   document.getElementById('searchInput').value = '';
   renderTable();
 }
@@ -487,6 +496,9 @@ function openReply(id) {
   document.getElementById('replyFbContent').textContent = f.content || '';
   document.getElementById('replyFbStatus').innerHTML =
     '<span class="status-tag ' + esc(f.status) + '">' + (STATUS_TEXT[f.status] || f.status) + '</span>';
+  document.getElementById('replyFbSource').textContent =
+    MobileOpsStore.SOURCE_TEXT[f.source || 'mobile'] + ' · ' +
+    (f.operator || '移动端用户') + ' · ' + (f.createTime || '');
 
   var rejectWrap = document.getElementById('replyFbRejectWrap');
   if (f.rejectReason) {
@@ -543,15 +555,22 @@ function submitReply() {
   } else {
     delete target.rejectReason;
   }
-  target.reviewTime = new Date().toLocaleString('zh-CN', { hour12: false });
+  target.reviewTime = MobileOpsStore.now();
+  target.handledBy = MobileOpsStore.operatorName();
 
   writeList(list);
+  MobileOpsStore.audit('处理意见反馈', 'feedbacks', target.id,
+    STATUS_TEXT[decision] + (rejectReason ? '：' + rejectReason : ''));
   closeReplyModal();
   renderTable();
   Toast.success('处理结果已保存，移动端可查看');
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+  MobileOpsStore.ready();
+  MobileOpsStore.subscribe(function (key) {
+    if (key === MobileOpsStore.KEYS.feedbacks) renderTable();
+  });
   document.getElementById('replyDecision').addEventListener('change', syncDecisionUI);
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();

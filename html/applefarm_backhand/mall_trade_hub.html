@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>交易履约 - 商城管理</title>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg-secondary, #f5f7f9); font-family: var(--font-family, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif); }
+  .hub { display: flex; flex-direction: column; height: 100vh; }
+  .hub-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 20px; background: #fff; border-bottom: 1px solid var(--border-light, #eef0f2); }
+  .hub-title { display: flex; align-items: baseline; gap: 10px; }
+  .hub-title h1 { font-size: 18px; font-weight: 700; margin: 0; color: #1f2329; }
+  .hub-title span { font-size: 12px; color: #8a9199; }
+  .hub-tabs { display: flex; gap: 6px; padding: 10px 20px 0; background: #fff; border-bottom: 1px solid var(--border-light, #eef0f2); overflow-x: auto; }
+  .hub-tab { position: relative; padding: 9px 18px; border: none; background: transparent; color: #5c636a; font-size: 14px; cursor: pointer; border-radius: 8px 8px 0 0; white-space: nowrap; }
+  .hub-tab:hover { color: #1f8a4c; background: #f3faf6; }
+  .hub-tab.active { color: #1f8a4c; font-weight: 600; background: #eef9f2; }
+  .hub-tab.active::after { content: ""; position: absolute; left: 18px; right: 18px; bottom: 0; height: 2px; background: #1f8a4c; border-radius: 2px; }
+  .hub-body { flex: 1; min-height: 0; background: #fff; }
+  .hub-body iframe { width: 100%; height: 100%; border: none; display: block; }
+  .hub-tip { font-size: 12px; color: #8a9199; }
+  @media (max-width: 768px) {
+    .hub-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+    .hub-tabs { padding-left: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="hub">
+  <div class="hub-head">
+    <div class="hub-title">
+      <h1>交易履约</h1>
+      <span>订单 · 售后 · 发票 · 运费</span>
+    </div>
+    <div class="hub-tip">C端订单与 H5 实时互通，发货后 H5 自动进入待收货</div>
+  </div>
+  <div class="hub-tabs" id="tabs"></div>
+  <div class="hub-body">
+    <iframe id="frame" title="交易履约内容"></iframe>
+  </div>
+</div>
+<script>
+var TABS = [
+  { key: 'order', text: 'C端订单', src: 'mall_order.html' },
+  { key: 'aftersale', text: '售后与退款', src: 'mall_aftersale.html' },
+  { key: 'invoice', text: '发票管理', src: 'mall_invoice.html' },
+  { key: 'freight', text: '运费模板', src: 'mall_freight.html' }
+];
+var current = 'order';
+
+function renderTabs() {
+  document.getElementById('tabs').innerHTML = TABS.map(function (t) {
+    return '<button class="hub-tab' + (t.key === current ? ' active' : '') + '" data-key="' + t.key + '">' + t.text + '</button>';
+  }).join('');
+}
+
+function openTab(key) {
+  var tab = TABS.filter(function (t) { return t.key === key; })[0] || TABS[0];
+  current = tab.key;
+  renderTabs();
+  document.getElementById('frame').src = tab.src + '?embed=1';
+  try {
+    var url = new URL(location.href);
+    url.searchParams.set('tab', tab.key);
+    history.replaceState(null, '', url.toString());
+  } catch (e) {}
+}
+
+document.getElementById('tabs').addEventListener('click', function (e) {
+  var btn = e.target.closest('.hub-tab');
+  if (btn) openTab(btn.getAttribute('data-key'));
+});
+
+document.getElementById('frame').addEventListener('load', function () {
+  try {
+    var doc = this.contentDocument;
+    if (!doc) return;
+    var style = doc.createElement('style');
+    style.textContent = '.tab-bar{display:none!important}body{background:#fff!important}.main-wrapper{margin-left:0!important}';
+    doc.head.appendChild(style);
+  } catch (e) {}
+});
+
+var initial = 'order';
+try { initial = new URL(location.href).searchParams.get('tab') || 'order'; } catch (e) {}
+openTab(initial);
+</script>
+</body>
+</html>

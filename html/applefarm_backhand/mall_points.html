@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>积分与权益</title>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/mall-subpage.css">
+</head>
+<body>
+<div class="mall-page">
+  <div class="mall-head">
+    <div>
+      <h2>积分与会员权益</h2>
+      <p>等级门槛、积分获取与抵扣规则统一配置；H5 会员中心按此口径计算等级。</p>
+    </div>
+    <div class="mall-actions">
+      <button class="mall-btn primary" onclick="saveRules()">保存规则</button>
+    </div>
+  </div>
+
+  <div class="mall-kpis">
+    <div class="mall-kpi"><div class="k">会员总数</div><div class="v" id="kpiMembers">0</div></div>
+    <div class="mall-kpi"><div class="k">积分总量</div><div class="v" id="kpiPoints">0</div></div>
+    <div class="mall-kpi"><div class="k">VIP 会员</div><div class="v" id="kpiVip">0</div></div>
+    <div class="mall-kpi"><div class="k">积分抵扣比例</div><div class="v" id="kpiDeduct">0</div></div>
+  </div>
+
+  <div class="mall-card">
+    <div class="mall-card-head"><span>会员等级规则</span><span class="mall-sub">按累计消费金额自动升级</span></div>
+    <div class="mall-form">
+      <div class="mall-form-row">
+        <div class="mall-field"><label>VIP 门槛（元）</label><input id="vipMin" type="number" min="0"></div>
+        <div class="mall-field"><label>金卡门槛（元）</label><input id="goldMin" type="number" min="0"></div>
+        <div class="mall-field"><label>普通会员门槛（元）</label><input id="normalMin" type="number" min="0" value="0"></div>
+      </div>
+      <div class="mall-form-row">
+        <div class="mall-field"><label>消费积分比例（1 元 = ? 积分）</label><input id="pointsRate" type="number" min="0" step="0.1"></div>
+        <div class="mall-field"><label>积分抵扣（? 积分 = 1 元）</label><input id="deductRate" type="number" min="0"></div>
+      </div>
+      <div class="mall-note">积分抵扣仅影响 H5 结算展示，实际支付仍为模拟支付。调整单个会员积分请在下方会员列表操作。</div>
+    </div>
+  </div>
+
+  <div class="mall-card">
+    <div class="mall-card-head"><span>会员积分账户</span><button class="mall-btn" onclick="render()">刷新</button></div>
+    <table class="mall-table">
+      <thead><tr>
+        <th style="width:60px;">序号</th><th>会员</th><th>等级</th><th>累计消费</th>
+        <th>订单数</th><th>当前积分</th><th style="width:150px;">操作</th>
+      </tr></thead>
+      <tbody id="body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="js/shared/mall-store.js"></script>
+<script>
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+var LEVEL = { vip: 'VIP会员', gold: '金卡会员', normal: '普通会员' };
+
+function autoLevel(amount, rules) {
+  var sorted = rules.slice().sort(function (a, b) { return b.min - a.min; });
+  for (var i = 0; i < sorted.length; i++) { if (amount >= sorted[i].min) return sorted[i].level; }
+  return 'normal';
+}
+
+function render() {
+  var s = MallStore.settings();
+  var rules = s.levelRules || [];
+  var pts = s.points || {};
+  var vip = rules.filter(function (r) { return r.level === 'vip'; })[0] || { min: 3000 };
+  var gold = rules.filter(function (r) { return r.level === 'gold'; })[0] || { min: 1000 };
+
+  document.getElementById('vipMin').value = vip.min;
+  document.getElementById('goldMin').value = gold.min;
+  document.getElementById('normalMin').value = 0;
+  document.getElementById('pointsRate').value = pts.rate == null ? 1 : pts.rate;
+  document.getElementById('deductRate').value = pts.deductRate == null ? 100 : pts.deductRate;
+
+  var members = MallStore.members();
+  var rows = members.map(function (m) {
+    var st = MallStore.memberStats(m);
+    var level = m.level === 'vip' || m.level === 'gold' ? m.level : autoLevel(st.totalSpend, rules);
+    return { id: m.id, name: m.nickname, phone: m.phone, level: level, amount: st.totalSpend, orders: st.orderCount, points: m.points || 0 };
+  });
+
+  document.getElementById('kpiMembers').textContent = rows.length;
+  document.getElementById('kpiPoints').textContent = rows.reduce(function (s, r) { return s + r.points; }, 0);
+  document.getElementById('kpiVip').textContent = rows.filter(function (r) { return r.level === 'vip'; }).length;
+  document.getElementById('kpiDeduct').textContent = (pts.deductRate || 100) + ' 积分 = 1 元';
+
+  document.getElementById('body').innerHTML = rows.map(function (r, i) {
+    return '<tr><td>' + (i + 1) + '</td>' +
+      '<td><strong>' + esc(r.name) + '</strong><div class="mall-sub">' + esc(r.id) + ' · ' + esc(r.phone || '') + '</div></td>' +
+      '<td><span class="mall-tag">' + (LEVEL[r.level] || r.level) + '</span></td>' +
+      '<td>¥' + r.amount.toLocaleString('zh-CN') + '</td>' +
+      '<td>' + r.orders + ' 单</td>' +
+      '<td><strong>' + r.points + '</strong> 分</td>' +
+      '<td><button class="mall-link" onclick="adjustPoints(\'' + esc(r.id) + '\')">调整积分</button></td></tr>';
+  }).join('') || '<tr><td colspan="7" class="mall-empty">暂无会员数据</td></tr>';
+}
+
+function saveRules() {
+  var vipMin = Number(document.getElementById('vipMin').value) || 0;
+  var goldMin = Number(document.getElementById('goldMin').value) || 0;
+  if (vipMin <= goldMin) { alert('VIP 门槛必须高于金卡门槛'); return; }
+  var rules = [
+    { level: 'vip', name: 'VIP会员', min: vipMin },
+    { level: 'gold', name: '金卡会员', min: goldMin },
+    { level: 'normal', name: '普通会员', min: 0 }
+  ];
+  var points = {
+    rate: Number(document.getElementById('pointsRate').value) || 0,
+    deductRate: Number(document.getElementById('deductRate').value) || 100
+  };
+  var r = MallStore.saveSettings({ levelRules: rules, points: points });
+  if (!r.ok) { alert(r.error || '保存失败'); return; }
+  alert('规则已保存，H5 会员中心将按新规则展示');
+  render();
+}
+
+function adjustPoints(id) {
+  var members = MallStore.members();
+  var m = members.filter(function (x) { return x.id === id; })[0];
+  if (!m) return;
+  var input = prompt('当前积分 ' + (m.points || 0) + '，请输入调整数量（正数增加，负数扣减）', '0');
+  if (input === null) return;
+  var delta = Number(input);
+  if (!delta || isNaN(delta)) { alert('请输入有效数字'); return; }
+  m.points = Math.max(0, (Number(m.points) || 0) + delta);
+  var r = MallStore.saveMember(m);
+  if (!r.ok) { alert(r.error || '积分调整失败'); return; }
+  render();
+}
+
+document.addEventListener('DOMContentLoaded', render);
+</script>
+</body>
+</html>

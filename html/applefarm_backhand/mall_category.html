@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分类与规格</title>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/mall-subpage.css">
+</head>
+<body>
+<div class="mall-page">
+  <div class="mall-head">
+    <div>
+      <h2>分类与规格字典</h2>
+      <p>商品分类、品种下拉统一引用此处配置，H5 商城筛选与后台表单同步生效。</p>
+    </div>
+    <div class="mall-actions">
+      <button class="mall-btn" onclick="resetDict()">恢复默认</button>
+    </div>
+  </div>
+
+  <div class="mall-kpis">
+    <div class="mall-kpi"><div class="k">商品分类</div><div class="v" id="kpiCat">0</div></div>
+    <div class="mall-kpi"><div class="k">苹果品种</div><div class="v" id="kpiVar">0</div></div>
+    <div class="mall-kpi"><div class="k">启用分类</div><div class="v" id="kpiCatOn">0</div></div>
+    <div class="mall-kpi"><div class="k">已关联商品</div><div class="v" id="kpiSku">0</div></div>
+  </div>
+
+  <div class="mall-card">
+    <div class="mall-card-head">
+      <span>商品分类</span>
+      <button class="mall-btn primary" onclick="addItem('categories')">新增分类</button>
+    </div>
+    <div class="mall-form" id="catForm" style="display:none;">
+      <div class="mall-form-row">
+        <div class="mall-field"><label>分类编码</label><input id="catCode" placeholder="如 dried"></div>
+        <div class="mall-field"><label>分类名称</label><input id="catName" placeholder="如 果干"></div>
+        <div class="mall-field"><label>排序号</label><input id="catSort" type="number" value="10"></div>
+      </div>
+      <button class="mall-btn primary" onclick="saveItem('categories')">保存分类</button>
+      <button class="mall-btn" onclick="hideForm('catForm')">取消</button>
+    </div>
+    <table class="mall-table">
+      <thead><tr><th style="width:60px;">序号</th><th>分类</th><th>编码</th><th>商品数</th><th>状态</th><th style="width:150px;">操作</th></tr></thead>
+      <tbody id="catBody"></tbody>
+    </table>
+  </div>
+
+  <div class="mall-card">
+    <div class="mall-card-head">
+      <span>苹果品种</span>
+      <button class="mall-btn primary" onclick="addItem('varieties')">新增品种</button>
+    </div>
+    <div class="mall-form" id="varForm" style="display:none;">
+      <div class="mall-form-row">
+        <div class="mall-field"><label>品种编码</label><input id="varCode" placeholder="如 ruili"></div>
+        <div class="mall-field"><label>品种名称</label><input id="varName" placeholder="如 瑞丽苹果"></div>
+        <div class="mall-field"><label>排序号</label><input id="varSort" type="number" value="10"></div>
+      </div>
+      <button class="mall-btn primary" onclick="saveItem('varieties')">保存品种</button>
+      <button class="mall-btn" onclick="hideForm('varForm')">取消</button>
+    </div>
+    <table class="mall-table">
+      <thead><tr><th style="width:60px;">序号</th><th>品种</th><th>编码</th><th>商品数</th><th>状态</th><th style="width:150px;">操作</th></tr></thead>
+      <tbody id="varBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="js/shared/mall-store.js"></script>
+<script>
+var editingKey = null;
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function getSettings() { return MallStore.settings(); }
+function products() { return MallStore.products(); }
+
+function render() {
+  var s = getSettings();
+  var list = products();
+  var cats = (s.categories || []).slice().sort(function (a, b) { return a.sort - b.sort; });
+  var vars = (s.varieties || []).slice().sort(function (a, b) { return a.sort - b.sort; });
+
+  document.getElementById('kpiCat').textContent = cats.length;
+  document.getElementById('kpiVar').textContent = vars.length;
+  document.getElementById('kpiCatOn').textContent = cats.filter(function (c) { return c.status !== 'off'; }).length;
+  document.getElementById('kpiSku').textContent = list.length;
+
+  document.getElementById('catBody').innerHTML = cats.map(function (c, i) {
+    var count = list.filter(function (p) { return p.cat === c.code; }).length;
+    return '<tr><td>' + (i + 1) + '</td>' +
+      '<td><strong>' + esc(c.name) + '</strong></td>' +
+      '<td class="mall-sub">' + esc(c.code) + '</td>' +
+      '<td>' + count + ' 个</td>' +
+      '<td><span class="mall-tag ' + (c.status === 'off' ? 'off' : '') + '">' + (c.status === 'off' ? '已停用' : '启用中') + '</span></td>' +
+      '<td><div class="mall-row-actions">' +
+        '<button class="mall-link" onclick="editItem(\'categories\',\'' + esc(c.code) + '\')">编辑</button>' +
+        '<button class="mall-link" onclick="toggleItem(\'categories\',\'' + esc(c.code) + '\')">' + (c.status === 'off' ? '启用' : '停用') + '</button>' +
+        '<button class="mall-link danger" onclick="removeItem(\'categories\',\'' + esc(c.code) + '\')">删除</button>' +
+      '</div></td></tr>';
+  }).join('') || '<tr><td colspan="6" class="mall-empty">暂无分类</td></tr>';
+
+  document.getElementById('varBody').innerHTML = vars.map(function (v, i) {
+    var count = list.filter(function (p) { return p.variety === v.code; }).length;
+    return '<tr><td>' + (i + 1) + '</td>' +
+      '<td><strong>' + esc(v.name) + '</strong></td>' +
+      '<td class="mall-sub">' + esc(v.code) + '</td>' +
+      '<td>' + count + ' 个</td>' +
+      '<td><span class="mall-tag ' + (v.status === 'off' ? 'off' : '') + '">' + (v.status === 'off' ? '已停用' : '启用中') + '</span></td>' +
+      '<td><div class="mall-row-actions">' +
+        '<button class="mall-link" onclick="editItem(\'varieties\',\'' + esc(v.code) + '\')">编辑</button>' +
+        '<button class="mall-link" onclick="toggleItem(\'varieties\',\'' + esc(v.code) + '\')">' + (v.status === 'off' ? '启用' : '停用') + '</button>' +
+        '<button class="mall-link danger" onclick="removeItem(\'varieties\',\'' + esc(v.code) + '\')">删除</button>' +
+      '</div></td></tr>';
+  }).join('') || '<tr><td colspan="6" class="mall-empty">暂无品种</td></tr>';
+}
+
+function addItem(type) {
+  editingKey = null;
+  showForm(type);
+  var isCat = type === 'categories';
+  document.getElementById(isCat ? 'catCode' : 'varCode').value = '';
+  document.getElementById(isCat ? 'catName' : 'varName').value = '';
+  document.getElementById(isCat ? 'catSort' : 'varSort').value = 10;
+  document.getElementById(isCat ? 'catForm' : 'varForm').style.display = 'block';
+}
+
+function editItem(type, code) {
+  var s = getSettings();
+  var list = type === 'categories' ? (s.categories || []) : (s.varieties || []);
+  var hit = list.filter(function (x) { return x.code === code; })[0];
+  if (!hit) return;
+  editingKey = code;
+  showForm(type);
+  var isCat = type === 'categories';
+  document.getElementById(isCat ? 'catCode' : 'varCode').value = hit.code;
+  document.getElementById(isCat ? 'catName' : 'varName').value = hit.name;
+  document.getElementById(isCat ? 'catSort' : 'varSort').value = hit.sort || 10;
+  document.getElementById(isCat ? 'catForm' : 'varForm').style.display = 'block';
+}
+
+function showForm(type) {
+  document.getElementById('catForm').style.display = type === 'categories' ? 'block' : 'none';
+  document.getElementById('varForm').style.display = type === 'varieties' ? 'block' : 'none';
+}
+
+function hideForm(id) { document.getElementById(id).style.display = 'none'; }
+
+function saveItem(type) {
+  var isCat = type === 'categories';
+  var code = document.getElementById(isCat ? 'catCode' : 'varCode').value.trim();
+  var name = document.getElementById(isCat ? 'catName' : 'varName').value.trim();
+  var sort = Number(document.getElementById(isCat ? 'catSort' : 'varSort').value) || 10;
+  if (!code || !name) { alert('编码和名称不能为空'); return; }
+  var s = getSettings();
+  var list = (isCat ? s.categories : s.varieties) || [];
+  var exists = list.filter(function (x) { return x.code === code; })[0];
+  if (exists && editingKey !== code) { alert('编码已存在'); return; }
+  if (exists) { exists.name = name; exists.sort = sort; }
+  else list.push({ code: code, name: name, sort: sort, status: 'on' });
+  var patch = {};
+  patch[type] = list;
+  var r = MallStore.saveSettings(patch);
+  if (!r.ok) { alert(r.error || '保存失败'); return; }
+  hideForm(isCat ? 'catForm' : 'varForm');
+  editingKey = null;
+  render();
+}
+
+function toggleItem(type, code) {
+  var s = getSettings();
+  var list = (type === 'categories' ? s.categories : s.varieties) || [];
+  var hit = list.filter(function (x) { return x.code === code; })[0];
+  if (!hit) return;
+  hit.status = hit.status === 'off' ? 'on' : 'off';
+  var patch = {}; patch[type] = list;
+  MallStore.saveSettings(patch);
+  render();
+}
+
+function removeItem(type, code) {
+  var list = products();
+  var used = type === 'categories'
+    ? list.filter(function (p) { return p.cat === code; }).length
+    : list.filter(function (p) { return p.variety === code; }).length;
+  if (used) { alert('该字典已被 ' + used + ' 个商品引用，请先调整商品后再删除'); return; }
+  if (!confirm('确定删除该字典项吗？')) return;
+  var s = getSettings();
+  var arr = (type === 'categories' ? s.categories : s.varieties) || [];
+  var patch = {};
+  patch[type] = arr.filter(function (x) { return x.code !== code; });
+  MallStore.saveSettings(patch);
+  render();
+}
+
+function resetDict() {
+  if (!confirm('恢复默认分类与品种？已自定义的字典项将被覆盖。')) return;
+  var defaults = {
+    categories: [
+      { code: 'fruit', name: '水果', sort: 1, status: 'on' },
+      { code: 'gift', name: '礼盒', sort: 2, status: 'on' },
+      { code: 'adopt', name: '认养', sort: 3, status: 'on' }
+    ],
+    varieties: [
+      { code: 'huaniu', name: '花牛苹果', sort: 1, status: 'on' },
+      { code: 'redfuji', name: '红富士', sort: 2, status: 'on' },
+      { code: 'gala', name: '嘎啦', sort: 3, status: 'on' },
+      { code: 'qinguan', name: '秦冠', sort: 4, status: 'on' },
+      { code: 'jinshuai', name: '金帅', sort: 5, status: 'on' },
+      { code: 'hongxing', name: '红星', sort: 6, status: 'on' },
+      { code: 'guoguang', name: '国光', sort: 7, status: 'on' },
+      { code: 'mixed', name: '混合装', sort: 8, status: 'on' }
+    ]
+  };
+  MallStore.saveSettings(defaults);
+  render();
+}
+
+document.addEventListener('DOMContentLoaded', render);
+</script>
+</body>
+</html>

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 设备运行统计</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .stat-card-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:16px; }
+  @media (max-width:1280px){ .stat-card-row{ grid-template-columns:repeat(2,1fr);} }
+  .stat-card { background:#fff; border:1px solid #eef0ee; border-radius:12px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.04); position:relative; overflow:hidden; }
+  .stat-card::after { content:''; position:absolute; right:-18px; top:-18px; width:64px; height:64px; border-radius:50%;
+    background:linear-gradient(135deg, rgba(24,144,255,.08), rgba(24,144,255,0)); }
+  .stat-label { font-size:12.5px; color:var(--text-tertiary); margin-bottom:8px; }
+  .stat-value { font-size:27px; font-weight:700; color:var(--text-primary); font-variant-numeric:tabular-nums; line-height:1.1; }
+  .stat-value .unit { font-size:13px; font-weight:500; color:var(--text-tertiary); margin-left:4px; }
+  .stat-sub { margin-top:8px; font-size:12px; color:var(--text-tertiary); }
+  .stat-sub.err { color:var(--error); }
+  .stat-sub.warn { color:var(--warning); }
+  .stat-sub.ok { color:var(--success); }
+
+  .chart-card { background:#fff; border:1px solid #eef0ee; border-radius:12px; padding:16px;
+    box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .chart-title { font-weight:600; font-size:14px; color:#1f2e1f; margin-bottom:10px;
+    display:flex; justify-content:space-between; align-items:center; }
+  .chart-title span.hint { font-size:11.5px; font-weight:400; color:var(--text-tertiary); }
+
+  .tab-switch { display:flex; gap:8px; margin-bottom:14px; }
+  .tab-switch button { padding:7px 16px; font-size:13px; border-radius:8px; border:1px solid var(--border-default);
+    background:#fff; color:var(--text-secondary); cursor:pointer; transition:all .2s; }
+  .tab-switch button.active { background:var(--primary-500); border-color:var(--primary-500); color:#fff; font-weight:500; }
+
+  .status-tag { display:inline-flex; align-items:center; padding:3px 10px; font-size:11.5px;
+    font-weight:500; border-radius:20px; white-space:nowrap; }
+  .status-tag.online { background:#d9f7be; color:#3a8618; border:1px solid #b7eb8f; }
+  .status-tag.warning { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .status-tag.offline { background:var(--error-bg); color:#cf1322; border:1px solid #ffccc7; }
+  .rate-bar { height:6px; border-radius:3px; background:var(--gray-100); overflow:hidden; width:88px; display:inline-block; vertical-align:middle; }
+  .rate-bar i { display:block; height:100%; border-radius:3px; background:var(--primary-500); }
+  .data-table { min-width:1080px; }
+  .data-table th { white-space:nowrap; }
+  .empty-row td { text-align:center; color:var(--text-tertiary); padding:40px 0; }
+  #pagination-container { padding:12px 16px; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="device" data-active-submenu="device-stats">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <nav class="device-tabs" aria-label="运行分析">
+        <a href="device_stats.html" class="active">运行统计</a>
+        <a href="device_log.html">设备日志</a>
+        <a href="device_audit.html">操作审计</a>
+      </nav>
+
+      <div class="stat-card-row" id="statCards"></div>
+
+      <section style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin:0 0 16px;">
+        <div class="chart-card">
+          <div class="chart-title">各基地在线率 <span class="hint">实时在线设备 / 该基地设备总数</span></div>
+          <div id="device_stats-c1" style="width:100%;height:280px;"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">设备状态分布</div>
+          <div id="device_stats-c2" style="width:100%;height:280px;"></div>
+        </div>
+      </section>
+
+      <section style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:0 0 20px;">
+        <div class="chart-card">
+          <div class="chart-title">各类型设备完好率 <span class="hint">无未闭环故障工单占比</span></div>
+          <div id="device_stats-c3" style="width:100%;height:300px;"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">故障次数 TOP 8 <span class="hint">累计故障次数</span></div>
+          <div id="device_stats-c4" style="width:100%;height:300px;"></div>
+        </div>
+      </section>
+
+      <div class="content-wrapper">
+        <div class="page-section data-section">
+          <div class="tab-switch">
+            <button class="active" id="tabType" onclick="switchTab('type')">按设备类型</button>
+            <button id="tabBase" onclick="switchTab('base')">按所属基地</button>
+          </div>
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead id="statsHead"></thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/shared/device-store.js"></script>
+<script src="js/shared/device-ui.js"></script>
+<script>
+/* ============================================================
+ * 设备运行统计
+ * 数据源：js/shared/device-store.js → stats() / healthOf()
+ *
+ * 指标口径：
+ *   在线率   = 在线设备 / 设备总数
+ *   完好率   = 无未闭环故障工单的设备 / 设备总数
+ *   可用率   = 累计运行时长 /（累计运行时长 + 累计停机时长）
+ *   MTBF     = 累计运行时长 / 故障维修次数（平均无故障时间）
+ *   MTTR     = 故障维修累计停机时长 / 故障维修次数（平均修复时间）
+ * ============================================================ */
+
+var currentTab = 'type';
+
+function pct(v) { return (Number(v) || 0).toFixed(1); }
+
+/* ---------- KPI ---------- */
+function renderStats() {
+  var s = DeviceStore.stats();
+  var overdue = DeviceStore.devices().filter(function (d) {
+    if (!d.nextMaintainDate) return false;
+    return d.nextMaintainDate < DeviceStore.todayStr();
+  }).length;
+  document.getElementById('statCards').innerHTML =
+    '<div class="stat-card"><div class="stat-label">设备总数</div>' +
+      '<div class="stat-value">' + s.total + '<span class="unit">台</span></div>' +
+      '<div class="stat-sub">在用 ' + s.inuse + ' 台 · 资产原值 ' + (s.totalAmount / 10000).toFixed(1) + ' 万元</div></div>' +
+    '<div class="stat-card"><div class="stat-label">实时在线率</div>' +
+      '<div class="stat-value">' + pct(s.onlineRate) + '<span class="unit">%</span></div>' +
+      '<div class="stat-sub ' + (s.onlineRate < 90 ? 'err' : 'ok') + '">在线 ' + s.online + ' · 离线 ' + s.offline + ' · 维护 ' + s.maintain + '</div></div>' +
+    '<div class="stat-card"><div class="stat-label">设备完好率</div>' +
+      '<div class="stat-value">' + pct(s.intactRate) + '<span class="unit">%</span></div>' +
+      '<div class="stat-sub">排除存在未闭环故障工单的设备</div></div>' +
+    '<div class="stat-card"><div class="stat-label">平均可用率</div>' +
+      '<div class="stat-value">' + pct(s.availability) + '<span class="unit">%</span></div>' +
+      '<div class="stat-sub">累计运行 / （运行 + 停机）</div></div>' +
+    '<div class="stat-card"><div class="stat-label">MTBF 平均无故障</div>' +
+      '<div class="stat-value">' + (s.mtbf >= 1000 ? (s.mtbf / 1000).toFixed(1) : s.mtbf) +
+        '<span class="unit">' + (s.mtbf >= 1000 ? 'k h' : 'h') + '</span></div>' +
+      '<div class="stat-sub">累计运行时长 / 故障维修次数</div></div>' +
+    '<div class="stat-card"><div class="stat-label">MTTR 平均修复</div>' +
+      '<div class="stat-value">' + pct(s.mttr) + '<span class="unit">h</span></div>' +
+      '<div class="stat-sub ' + (s.mttr > 8 ? 'warn' : 'ok') + '">停机时长 / 故障维修次数</div></div>' +
+    '<div class="stat-card"><div class="stat-label">累计停机</div>' +
+      '<div class="stat-value">' + pct(s.totalDowntime) + '<span class="unit">h</span></div>' +
+      '<div class="stat-sub">维护工单累计停机时长</div></div>' +
+    '<div class="stat-card"><div class="stat-label">超期未保养</div>' +
+      '<div class="stat-value" style="color:' + (overdue ? 'var(--error)' : 'var(--text-primary)') + ';">' + overdue +
+        '<span class="unit">台</span></div>' +
+      '<div class="stat-sub err">下次保养日期已逾期</div></div>';
+}
+
+/* ---------- 表格 ---------- */
+function renderHead() {
+  var head = currentTab === 'type'
+    ? '<tr><th style="width:52px;">序号</th><th style="width:170px;">设备类型</th><th style="width:80px;">设备数</th>' +
+      '<th style="width:80px;">在线数</th><th style="width:130px;">在线率</th><th style="width:120px;">故障次数</th>' +
+      '<th style="width:150px;">累计运行时长</th><th>运维提示</th></tr>'
+    : '<tr><th style="width:52px;">序号</th><th style="width:200px;">所属基地</th><th style="width:80px;">设备数</th>' +
+      '<th style="width:80px;">在线数</th><th style="width:130px;">在线率</th><th style="width:120px;">故障次数</th>' +
+      '<th style="width:150px;">资产原值</th><th>运维提示</th></tr>';
+  document.getElementById('statsHead').innerHTML = head;
+}
+
+function rateCell(rate) {
+  var v = Math.max(0, Math.min(100, Number(rate) || 0));
+  return '<div style="display:flex;align-items:center;gap:8px;">' +
+    '<span class="rate-bar"><i style="width:' + v + '%;background:' +
+      (v >= 95 ? 'var(--success)' : v >= 85 ? 'var(--warning)' : 'var(--error)') + ';"></i></span>' +
+    '<span style="font-variant-numeric:tabular-nums;">' + v.toFixed(1) + '%</span></div>';
+}
+
+function renderRow(item, index) {
+  var rate = item.total ? item.online / item.total * 100 : 0;
+  var hint = rate >= 95 ? '运行良好' : (rate >= 85 ? '存在离线设备，需关注' : '在线率偏低，建议排查');
+  if (currentTab === 'type') {
+    return '<tr>' +
+      '<td>' + index + '</td>' +
+      '<td><strong>' + DeviceUI.esc(item.name) + '</strong></td>' +
+      '<td style="font-variant-numeric:tabular-nums;">' + item.total + '</td>' +
+      '<td style="font-variant-numeric:tabular-nums;">' + item.online + '</td>' +
+      '<td>' + rateCell(rate) + '</td>' +
+      '<td style="font-variant-numeric:tabular-nums;">' + item.fault + ' 次</td>' +
+      '<td style="font-variant-numeric:tabular-nums;">' + Math.round(item.hours).toLocaleString() + ' h</td>' +
+      '<td style="color:var(--text-tertiary);font-size:12px;">' + hint + '</td>' +
+    '</tr>';
+  }
+  return '<tr>' +
+    '<td>' + index + '</td>' +
+    '<td><strong>' + DeviceUI.esc(item.base) + '</strong></td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + item.total + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + item.online + '</td>' +
+    '<td>' + rateCell(rate) + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + item.fault + ' 次</td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + (item.amount / 10000).toFixed(1) + ' 万元</td>' +
+    '<td style="color:var(--text-tertiary);font-size:12px;">' + hint + '</td>' +
+  '</tr>';
+}
+
+function currentData() {
+  var s = DeviceStore.stats();
+  return currentTab === 'type' ? s.byType : s.byBase;
+}
+
+var page = null;
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tabType').className = tab === 'type' ? 'active' : '';
+  document.getElementById('tabBase').className = tab === 'base' ? 'active' : '';
+  renderHead();
+  page.updateData(currentData());
+}
+
+/* ---------- 图表 ---------- */
+function renderCharts() {
+  var s = DeviceStore.stats();
+
+  Chart.bar('#device_stats-c1', {
+    categories: s.byBase.map(function (b) { return b.base.replace('基地', ''); }),
+    series: [{
+      name: '在线率(%)',
+      data: s.byBase.map(function (b) { return b.total ? Math.round(b.online / b.total * 1000) / 10 : 0; })
+    }]
+  }, {
+    yAxis: { max: 100, axisLabel: { formatter: '{value}%' } },
+    series: [{ barWidth: '46%', itemStyle: { borderRadius: [6, 6, 0, 0] } }]
+  });
+
+  Chart.donut('#device_stats-c2', {
+    series: [
+      { name: '在线', value: s.online, color: '#52c41a' },
+      { name: '维护中', value: s.maintain, color: '#1890ff' },
+      { name: '离线', value: s.offline, color: '#ff4d4f' }
+    ]
+  });
+
+  var intactSeries = s.byType.map(function (t) {
+    var devices = DeviceStore.devices().filter(function (d) { return d.type === t.type; });
+    var maintains = DeviceStore.maintains();
+    var bad = devices.filter(function (d) {
+      return maintains.some(function (m) {
+        return m.deviceId === d.id && m.type === '故障维修' &&
+          (m.status === 'pending' || m.status === 'processing');
+      });
+    }).length;
+    return { name: t.name, value: t.total ? Math.round((t.total - bad) / t.total * 1000) / 10 : 0 };
+  }).sort(function (a, b) { return b.value - a.value; });
+
+  Chart.bar('#device_stats-c3', {
+    categories: intactSeries.map(function (x) { return x.name; }),
+    series: [{ name: '完好率(%)', data: intactSeries.map(function (x) { return x.value; }) }]
+  }, {
+    xAxis: { axisLabel: { rotate: 32, fontSize: 10.5 } },
+    yAxis: { max: 100, axisLabel: { formatter: '{value}%' } },
+    series: [{ barWidth: '52%', itemStyle: { borderRadius: [6, 6, 0, 0], color: '#52c41a' } }]
+  });
+
+  var faults = s.byType.slice().sort(function (a, b) { return b.fault - a.fault; }).slice(0, 8);
+  Chart.bar('#device_stats-c4', {
+    categories: faults.map(function (x) { return x.name; }),
+    series: [{ name: '故障次数', data: faults.map(function (x) { return x.fault; }) }]
+  }, {
+    xAxis: { axisLabel: { rotate: 32, fontSize: 10.5 } },
+    series: [{ barWidth: '52%', itemStyle: { borderRadius: [6, 6, 0, 0], color: '#ff7a45' } }]
+  });
+}
+
+/* 图表初始化：chart.js 在本页脚本之后同步加载，load 阶段再兜底一次 */
+function initCharts() {
+  if (!window.Chart) {
+    window.addEventListener('load', initCharts);
+    return;
+  }
+  Chart.loadECharts().then(renderCharts).catch(function (e) {
+    console.error('[device_stats] 图表加载失败', e);
+    ['device_stats-c1', 'device_stats-c2', 'device_stats-c3', 'device_stats-c4'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = '<div style="height:100%;display:flex;align-items:center;justify-content:center;' +
+        'color:var(--text-tertiary);font-size:13px;">图表组件加载失败，请检查网络后刷新</div>';
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  page = DeviceUI.pagination({
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow,
+    emptyCols: 8,
+    pageSize: 10
+  });
+  renderHead();
+  page.init({ data: [] });
+  renderStats();
+  page.updateData(currentData());
+
+  initCharts();
+
+  DeviceStore.subscribe(function (reason) {
+    if (reason === 'init') return;
+    renderStats();
+    page.updateData(currentData());
+  });
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+<script src="js/components/chart.js"></script>
+</body>
+</html>

@@ -101,6 +101,17 @@
   .form-field input:focus, .form-field select:focus {
     border-color: var(--primary-500); box-shadow: 0 0 0 4px rgba(24,144,255,0.12); outline: none;
   }
+  .checkbox-line {
+    display: flex !important; align-items: center; gap: 8px;
+    font-weight: 400 !important; font-size: var(--font-size-sm) !important;
+    color: var(--text-secondary) !important; cursor: pointer;
+  }
+  .checkbox-line input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary-500); }
+  .expert-tag {
+    display: inline-block; margin-left: 6px; padding: 1px 7px;
+    border-radius: var(--radius-full); font-size: 11px; font-weight: 500;
+    background: var(--primary-50); color: var(--primary-600);
+  }
   .form-hint { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-top: 4px; }
   .empty-state { padding: var(--space-2xl) 0; text-align: center; color: var(--text-tertiary); font-size: var(--font-size-sm); }
 </style>
@@ -119,6 +130,11 @@
   </div>
 
   <main class="main-content">
+    <nav class="device-tabs" aria-label="移动端运营·用户服务">
+      <a href="mb_staff_account.html" class="active">作业人员账号</a>
+      <a href="mb_feedback_review.html">意见反馈审核</a>
+      <a href="mb_expert_reply.html">专家咨询回复</a>
+    </nav>
     <div class="page-header">
       <div>
         <div class="page-title">作业人员账号</div>
@@ -176,6 +192,7 @@
               <th style="width:130px;">登录账号</th>
               <th style="width:100px;">角色</th>
               <th style="width:130px;">手机号</th>
+              <th style="width:150px;">所属基地</th>
               <th style="width:100px;">状态</th>
               <th style="width:200px;">操作</th>
             </tr>
@@ -223,7 +240,7 @@
       <div class="form-row">
         <div class="form-field">
           <label>登录密码<span id="pwdRequired" style="color:var(--error);">*</span></label>
-          <input type="text" id="editPwd" placeholder="如 123456">
+          <input type="password" id="editPwd" autocomplete="new-password" placeholder="如 123456">
         </div>
         <div class="form-field">
           <label>账号状态</label>
@@ -231,6 +248,24 @@
             <option value="active">启用中</option>
             <option value="disabled">已停用</option>
           </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label class="checkbox-line">
+            <input type="checkbox" id="editIsExpert">
+            <span>农技专家（可在「专家咨询回复」中指派，并展示到移动端专家名录）</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>专家专长</label>
+          <input type="text" id="editExpertTitle" placeholder="如 苹果栽培 / 病虫害防治（仅专家填写）">
+        </div>
+        <div class="form-field">
+          <label>所属基地</label>
+          <input type="text" id="editBase" placeholder="如 天水麦积区基地">
         </div>
       </div>
     </div>
@@ -244,41 +279,32 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-ops-store.js"></script>
 <script>
 /* ============================================================
- * 作业人员账号（移动端运营）
- * 数据源：localStorage['mb_staff_accounts']
+ * 作业人员账号（移动端运营 · 用户服务）
+ * 数据源：MobileOpsStore / localStorage['mb_staff_accounts']
  *   消费方 = 移动端 mb_login.html（登录校验 / 微信登录手机号匹配）
- *   字段：{ username, pwd, name, role, phone, status }
- *   status 枚举：active 启用中 / disabled 已停用
+ *            后台 mb_expert_reply.html（专家名录与指派下拉）
+ *   字段：{ username, pwdHash, name, role, phone, base, status,
+ *           isExpert, expertTitle, createdAt?, lastLoginAt? }
+ *   密码只保存 SHA-256 摘要，不落明文。
  * ============================================================ */
-var STAFF_KEY = 'mb_staff_accounts';
 
-/* 与移动端 mb_login.html 内置 ACCOUNTS 保持一致 */
+/* 与移动端 mb_login.html 内置演示账号保持一致（仅存摘要） */
 var DEFAULT_STAFF = [
-  { username: 'demo',         pwd: 'demo123',  name: '演示用户',   role: '访客',   phone: '13800000001', status: 'active' },
-  { username: 'zhangjianguo', pwd: '123456',   name: '张建国',     role: '果农',   phone: '13800000002', status: 'active' },
-  { username: 'admin',        pwd: 'admin123', name: '系统管理员', role: '管理员', phone: '13800000000', status: 'active' }
+  { username: 'demo',         pwdHash: MobileOpsStore.hashPwd('demo123'),  name: '演示用户',   role: '访客',   phone: '13800000001', base: '天水麦积区基地', status: 'active',   isExpert: false },
+  { username: 'zhangjianguo', pwdHash: MobileOpsStore.hashPwd('123456'),   name: '张建国',     role: '果农',   phone: '13800000002', base: '天水麦积区基地', status: 'active',   isExpert: false },
+  { username: 'admin',        pwdHash: MobileOpsStore.hashPwd('admin123'), name: '系统管理员', role: '管理员', phone: '13800000000', base: '天水麦积区基地', status: 'active',   isExpert: true, expertTitle: '苹果栽培 / 病虫害防治' }
 ];
 
 var ROLE_CLASS = { 管理员: 'admin', 果农: 'farmer', 访客: 'guest' };
 
 var editingUsername = null;
 
-function readAll() {
-  try {
-    var raw = localStorage.getItem(STAFF_KEY);
-    if (!raw) return null;
-    var v = JSON.parse(raw);
-    return Array.isArray(v) && v.length ? v : null;
-  } catch (e) {
-    return null;
-  }
-}
-
 function readStaff() {
-  var list = readAll();
-  if (!list) {
+  var list = MobileOpsStore.list('staff');
+  if (!list.length) {
     list = DEFAULT_STAFF.map(function (s) { return Object.assign({}, s); });
     writeList(list);
   }
@@ -286,9 +312,7 @@ function readStaff() {
 }
 
 function writeList(list) {
-  try {
-    localStorage.setItem(STAFF_KEY, JSON.stringify(list));
-  } catch (e) {
+  if (!MobileOpsStore.writeList(MobileOpsStore.KEYS.staff, list)) {
     Toast.error('本地存储写入失败，账号未能保存');
   }
 }
@@ -342,11 +366,13 @@ function renderTable() {
     var disabled = s.status === 'disabled';
     return '<tr>' +
       '<td class="checkbox-col">' + (i + 1) + '</td>' +
-      '<td><div class="cell-name">' + esc(s.name) + '</div>' +
+      '<td><div class="cell-name">' + esc(s.name) +
+          (s.isExpert ? '<span class="expert-tag">专家</span>' : '') + '</div>' +
           '<div class="cell-sub">' + (disabled ? '已停用，无法登录' : '可正常登录作业端') + '</div></td>' +
       '<td class="text-mono">' + esc(s.username) + '</td>' +
       '<td><span class="role-tag ' + (ROLE_CLASS[s.role] || 'worker') + '">' + esc(s.role) + '</span></td>' +
       '<td class="text-mono">' + esc(s.phone) + '</td>' +
+      '<td>' + esc(s.base || '—') + '</td>' +
       '<td><span class="status-tag ' + (disabled ? 'disabled' : 'active') + '">' + (disabled ? '已停用' : '启用中') + '</span></td>' +
       '<td><div class="action-btns">' +
         '<button class="action-btn detail" onclick="openEdit(\'' + esc(s.username) + '\')">编辑</button>' +
@@ -381,9 +407,13 @@ function openEdit(username) {
   document.getElementById('editUsername').disabled = !!s;
   document.getElementById('editName').value = s ? s.name : '';
   document.getElementById('editPhone').value = s ? s.phone : '';
-  document.getElementById('editPwd').value = s ? s.pwd : '';
+  document.getElementById('editPwd').value = '';
+  document.getElementById('editPwd').placeholder = s ? '留空表示不修改密码' : '如 123456';
   document.getElementById('editRole').value = s ? s.role : '果农';
   document.getElementById('editStatus').value = s ? (s.status || 'active') : 'active';
+  document.getElementById('editIsExpert').checked = !!(s && s.isExpert);
+  document.getElementById('editExpertTitle').value = s ? (s.expertTitle || '') : '';
+  document.getElementById('editBase').value = s ? (s.base || '天水麦积区基地') : '天水麦积区基地';
   document.getElementById('pwdRequired').style.display = s ? 'none' : '';
 
   document.getElementById('editModal').classList.add('show');
@@ -399,6 +429,7 @@ function submitEdit() {
   var name = document.getElementById('editName').value.trim();
   var phone = document.getElementById('editPhone').value.trim();
   var pwd = document.getElementById('editPwd').value.trim();
+  var old = null;
 
   if (!username) { Toast.warning('请填写登录账号'); return; }
   if (!name) { Toast.warning('请填写姓名'); return; }
@@ -417,15 +448,23 @@ function submitEdit() {
       Toast.warning('该手机号已被其他账号占用');
       return;
     }
+    if (editingUsername && list[i].username === editingUsername) old = list[i];
   }
 
+  var isExpert = document.getElementById('editIsExpert').checked;
   var payload = {
     username: username,
-    pwd: pwd || (readStaff().filter(function (x) { return x.username === editingUsername; })[0] || {}).pwd || '',
     name: name,
     role: document.getElementById('editRole').value,
     phone: phone,
-    status: document.getElementById('editStatus').value
+    base: document.getElementById('editBase').value.trim(),
+    status: document.getElementById('editStatus').value,
+    isExpert: isExpert,
+    expertTitle: isExpert ? document.getElementById('editExpertTitle').value.trim() : '',
+    pwdHash: pwd ? MobileOpsStore.hashPwd(pwd) : (old ? old.pwdHash : ''),
+    createdAt: old ? old.createdAt : MobileOpsStore.now(),
+    lastLoginAt: old ? (old.lastLoginAt || '') : '',
+    updatedAt: MobileOpsStore.now()
   };
 
   if (editingUsername) {
@@ -440,6 +479,8 @@ function submitEdit() {
   }
 
   writeList(list);
+  MobileOpsStore.audit(editingUsername ? '编辑账号' : '新增账号', 'staff', username,
+    name + ' / ' + payload.role + (isExpert ? ' / 农技专家' : ''));
   closeEditModal();
   renderTable();
   Toast.success(editingUsername ? '账号已更新' : '账号已新增');
@@ -450,7 +491,9 @@ function toggleStatus(username) {
   for (var i = 0; i < list.length; i++) {
     if (list[i].username === username) {
       list[i].status = list[i].status === 'disabled' ? 'active' : 'disabled';
+      list[i].updatedAt = MobileOpsStore.now();
       writeList(list);
+      MobileOpsStore.audit(list[i].status === 'active' ? '启用账号' : '停用账号', 'staff', username);
       renderTable();
       Toast.success(list[i].status === 'active' ? '账号已启用' : '账号已停用');
       return;
@@ -465,6 +508,7 @@ function removeStaff(username) {
     onConfirm: function () {
       var list = readStaff().filter(function (s) { return s.username !== username; });
       writeList(list);
+      MobileOpsStore.audit('删除账号', 'staff', username);
       renderTable();
       Toast.success('账号已删除');
     }
@@ -476,7 +520,8 @@ function resetToMobileDefault() {
     title: '恢复默认',
     message: '将丢弃后台所有改动，恢复为移动端内置的 3 个演示账号。是否继续？',
     onConfirm: function () {
-      localStorage.removeItem(STAFF_KEY);
+      MobileOpsStore.writeList(MobileOpsStore.KEYS.staff, []);
+      MobileOpsStore.audit('恢复默认账号', 'staff', '');
       renderTable();
       Toast.success('已恢复默认账号');
     }
@@ -484,6 +529,10 @@ function resetToMobileDefault() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+  MobileOpsStore.ready();
+  MobileOpsStore.subscribe(function (key) {
+    if (key === MobileOpsStore.KEYS.staff) renderTable();
+  });
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });

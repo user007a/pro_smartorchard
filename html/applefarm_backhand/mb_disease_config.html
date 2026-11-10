@@ -229,6 +229,11 @@
   </div>
 
   <main class="main-content">
+    <nav class="device-tabs" aria-label="移动端运营·智能与知识">
+      <a href="mb_ai_config.html">AI助手配置</a>
+      <a href="mb_disease_config.html" class="active">识别规则配置</a>
+      <a href="mb_fault_knowledge.html">故障知识库</a>
+    </nav>
     <div class="page-header">
       <div>
         <div class="page-title">病害识别规则配置</div>
@@ -337,6 +342,7 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-ops-store.js"></script>
 <script>
 /* ============================================================
  * 病害识别规则配置（T13）
@@ -447,22 +453,16 @@
   var RISK_TEXT = { high: '高风险', medium: '中风险', low: '低风险' };
 
   function readAll() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      var v = JSON.parse(raw);
-      if (!Array.isArray(v)) return null;
-      var cleaned = [];
-      v.forEach(function (r) {
-        if (!r || !r.disease) return;
-        if (!Array.isArray(r.keyword)) return;
-        if (!Array.isArray(r.prevent)) return;
-        cleaned.push(normalizeRule(r));
-      });
-      return cleaned;
-    } catch (e) {
-      return null;
-    }
+    var v = MobileOpsStore.readList('diseaseRules');
+    if (!v.length) return null;
+    var cleaned = [];
+    v.forEach(function (r) {
+      if (!r || !r.disease) return;
+      if (!Array.isArray(r.keyword)) return;
+      if (!Array.isArray(r.prevent)) return;
+      cleaned.push(normalizeRule(r));
+    });
+    return cleaned;
   }
 
   function ensureSeed() {
@@ -497,14 +497,13 @@
     };
   }
 
-  function writeAll(list) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-      return true;
-    } catch (e) {
+  function writeAll(list, action) {
+    if (!MobileOpsStore.writeList(MobileOpsStore.KEYS.diseaseRules, list)) {
       Toast.error('本地存储写入失败，请稍后重试');
       return false;
     }
+    MobileOpsStore.audit(action || '保存识别规则', 'diseaseRules', '', '共 ' + list.length + ' 条规则');
+    return true;
   }
 
   function esc(s) {
@@ -660,7 +659,7 @@
         }
       });
       if (!hit) { Toast.error('未找到该规则'); return; }
-      if (writeAll(data)) {
+      if (writeAll(data, '编辑识别规则')) {
         closeRuleModal();
         refreshAll();
         Toast.success('规则已更新');
@@ -675,7 +674,7 @@
         prevent: prevent,
         enabled: pendingEnabled
       });
-      if (writeAll(data)) {
+      if (writeAll(data, '新增识别规则')) {
         closeRuleModal();
         refreshAll();
         Toast.success('已新增识别规则');
@@ -689,7 +688,7 @@
     var hit = false, target = null;
     data.forEach(function (r) { if (r.id === id) { r.enabled = !r.enabled; hit = true; target = r; } });
     if (!hit) { Toast.error('未找到该规则'); return; }
-    if (writeAll(data)) {
+    if (writeAll(data, target.enabled ? '启用识别规则' : '停用识别规则')) {
       refreshAll();
       Toast.success('已' + (target.enabled ? '启用' : '停用') + '规则');
     }
@@ -707,7 +706,7 @@
       onConfirm: function () {
         var cur = readAll();
         cur = cur.filter(function (r) { return r.id !== id; });
-        if (writeAll(cur)) {
+        if (writeAll(cur, '删除识别规则')) {
           refreshAll();
           Toast.success('规则已删除');
         }
@@ -722,7 +721,7 @@
       message: '将所有识别规则还原为移动端内置的 7 条默认规则。继续？',
       onConfirm: function () {
         var seed = SEED_RULES.slice().map(normalizeRule);
-        if (writeAll(seed)) {
+        if (writeAll(seed, '恢复默认识别规则')) {
           refreshAll();
           Toast.success('已恢复默认规则');
         }

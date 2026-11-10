@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 设备类型与物模型</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; backdrop-filter:blur(4px); }
+  .modal-overlay.show { display:block; }
+  .modal-box { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:var(--bg-card); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.15);
+    width:760px; max-width:94vw; max-height:86vh; overflow-y:auto; z-index:1000; animation:modalSlideIn .25s ease-out; }
+  .modal-box.show { display:block; }
+  @keyframes modalSlideIn { from{opacity:0;transform:translate(-50%,-50%) scale(.95)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;
+    padding-bottom:16px; border-bottom:1px solid var(--border-light); }
+  .modal-header h3 { font-size:16px; font-weight:600; color:var(--text-primary); margin:0; }
+  .modal-close { width:28px; height:28px; border:none; background:var(--gray-100); border-radius:6px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; }
+  .modal-close:hover { background:var(--error-bg); color:var(--error); }
+  .modal-body { padding:0 4px; }
+  .modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; padding:16px 0 0;
+    border-top:1px solid var(--border-light); }
+
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .form-group { margin-bottom:16px; }
+  .form-group.full { grid-column:1 / -1; }
+  .form-group label { display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:8px; }
+  .form-group input, .form-group select, .form-group textarea { width:100%; padding:10px;
+    border:1px solid var(--border-default); border-radius:8px; font-size:13px; box-sizing:border-box; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline:none; border-color:var(--primary-400); box-shadow:0 0 0 3px rgba(24,144,255,.1); }
+  .form-group textarea { min-height:64px; resize:vertical; }
+  .check-row { display:flex; gap:20px; align-items:center; padding-top:6px; }
+  .check-row label { display:flex; align-items:center; gap:6px; margin:0; font-weight:400;
+    font-size:13px; color:var(--text-primary); cursor:pointer; }
+  .check-row input { width:auto; }
+
+  .stat-card-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:16px; }
+  .stat-card { background:#fff; border:1px solid #eef0ee; border-radius:12px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .stat-label { font-size:12px; color:var(--text-tertiary); margin-bottom:6px; }
+  .stat-value { font-size:26px; font-weight:700; color:var(--text-primary); font-variant-numeric:tabular-nums; }
+  .stat-value .unit { font-size:13px; font-weight:500; color:var(--text-tertiary); margin-left:4px; }
+  .stat-sub { margin-top:6px; font-size:12px; color:var(--text-tertiary); }
+
+  .status-tag { display:inline-flex; align-items:center; padding:3px 10px; font-size:11.5px;
+    font-weight:500; border-radius:20px; white-space:nowrap; }
+  .status-tag.online { background:#d9f7be; color:#3a8618; border:1px solid #b7eb8f; }
+  .status-tag.warning { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .status-tag.offline { background:var(--error-bg); color:#cf1322; border:1px solid #ffccc7; }
+  .type-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-size:11.5px;
+    font-weight:500; background:var(--gray-100); color:var(--text-secondary); border:1px solid var(--border-default); }
+  .code-badge { font-family:Consolas,Monaco,monospace; font-size:11.5px; color:#2b6cb0; background:#f5f8fc;
+    border:1px solid #c5d9f0; border-radius:4px; padding:1px 6px; }
+  .action-btns { display:flex; gap:6px; flex-wrap:nowrap; }
+  .action-btn { padding:4px 10px; font-size:11.5px; font-weight:500; border:1px solid transparent;
+    border-radius:6px; cursor:pointer; white-space:nowrap; background:none; }
+  .action-btn.detail { color:#2b6cb0; background:#f5f8fc; border-color:#c5d9f0; }
+  .action-btn.edit { color:var(--primary-600); background:var(--gray-50); border-color:var(--border-default); }
+  .action-btn.del { color:#cf1322; background:var(--error-bg); border-color:#ffccc7; }
+  .data-table { min-width:1180px; }
+  .data-table th { white-space:nowrap; }
+  .empty-row td { text-align:center; color:var(--text-tertiary); padding:40px 0; }
+  #pagination-container { padding:12px 16px; }
+
+  .point-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  .point-table th, .point-table td { padding:6px 8px; border-bottom:1px solid var(--border-light); text-align:left; }
+  .point-table th { background:var(--gray-50); color:var(--text-secondary); font-weight:500; }
+  .point-table input { width:100%; padding:6px 8px; border:1px solid var(--border-default);
+    border-radius:6px; font-size:12.5px; box-sizing:border-box; }
+  .point-table .p-del { color:#cf1322; background:var(--error-bg); border:1px solid #ffccc7;
+    border-radius:5px; cursor:pointer; padding:3px 8px; font-size:11.5px; }
+  .point-empty { text-align:center; color:var(--text-tertiary); padding:18px 0; font-size:12.5px; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="device" data-active-submenu="device-model">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <nav class="device-tabs" aria-label="设备台账">
+        <a href="device_info.html">设备列表</a>
+        <a href="device_model.html" class="active">类型与物模型</a>
+        <a href="device_asset.html">资产盘点</a>
+      </nav>
+
+      <div class="stat-card-row" id="statCards"></div>
+
+      <div class="content-wrapper">
+
+        <!-- ===== 搜索栏区 ===== -->
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="categorySelect"><option value="">全部分类</option></select>
+            <select class="search-select" id="accessSelect" style="min-width:130px;">
+              <option value="">全部接入属性</option>
+              <option value="1">支持接入</option>
+              <option value="0">不支持接入</option>
+            </select>
+            <select class="search-select" id="enabledSelect" style="min-width:110px;">
+              <option value="">全部状态</option>
+              <option value="1">已启用</option>
+              <option value="0">已停用</option>
+            </select>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索类型名称 / 编码...">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="handleSearch()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 操作按钮区 ===== -->
+        <div class="page-section action-bar">
+          <button class="jg-btn-outline" onclick="openModelModal('')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/>
+            </svg>新增设备类型
+          </button>
+          <button class="jg-btn-outline" onclick="exportModels()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/>
+            </svg>导出物模型
+          </button>
+        </div>
+
+        <!-- ===== 数据表格区 ===== -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:150px;">类型编码</th>
+                  <th style="width:150px;">类型名称</th>
+                  <th style="width:96px;">分类</th>
+                  <th style="width:70px;">可接入</th>
+                  <th style="width:70px;">可控</th>
+                  <th style="width:70px;">资产</th>
+                  <th style="width:86px;">维保周期</th>
+                  <th style="width:86px;">校准周期</th>
+                  <th style="width:80px;">测点数</th>
+                  <th style="width:86px;">在用设备</th>
+                  <th style="width:78px;">状态</th>
+                  <th style="width:170px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ===== 类型编辑弹窗 ===== -->
+<div class="modal-overlay" id="modelOverlay"></div>
+<div class="modal-box" id="modelModal">
+  <div class="modal-header">
+    <h3 id="modelTitle">设备类型</h3>
+    <button class="modal-close" onclick="closeModelModal()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>类型编码 <span style="color:var(--error);">*</span></label>
+        <input type="text" id="mCode" placeholder="如 weather_station" />
+      </div>
+      <div class="form-group">
+        <label>类型名称 <span style="color:var(--error);">*</span></label>
+        <input type="text" id="mName" placeholder="如 气象监测站" />
+      </div>
+      <div class="form-group">
+        <label>所属分类</label>
+        <select id="mCategory"></select>
+      </div>
+      <div class="form-group">
+        <label>维保周期（月）</label>
+        <input type="number" id="mMaintainCycle" min="0" step="1" value="6" />
+      </div>
+      <div class="form-group">
+        <label>校准周期（月）</label>
+        <input type="number" id="mCalibrateCycle" min="0" step="1" value="12" />
+      </div>
+      <div class="form-group">
+        <label>接入方式（逗号分隔）</label>
+        <input type="text" id="mWay" placeholder="MQTT, MQTT Modbus TCP" />
+      </div>
+      <div class="form-group full">
+        <label>能力属性</label>
+        <div class="check-row">
+          <label><input type="checkbox" id="mAccess" checked /> 支持数据接入</label>
+          <label><input type="checkbox" id="mControl" /> 支持远程控制</label>
+          <label><input type="checkbox" id="mAsset" checked /> 纳入资产台账</label>
+          <label><input type="checkbox" id="mEnabled" checked /> 启用该类型</label>
+        </div>
+      </div>
+      <div class="form-group full">
+        <label>类型说明</label>
+        <textarea id="mDesc" placeholder="描述该类型设备适用的场景与监测要素"></textarea>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="jg-btn" onclick="closeModelModal()">取消</button>
+    <button class="jg-btn jg-btn-primary" onclick="saveModel()">保存</button>
+  </div>
+</div>
+
+<!-- ===== 物模型测点弹窗 ===== -->
+<div class="modal-overlay" id="pointOverlay"></div>
+<div class="modal-box" id="pointModal" style="width:900px;">
+  <div class="modal-header">
+    <h3 id="pointTitle">物模型测点</h3>
+    <button class="modal-close" onclick="closePointModal()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-size:12.5px;color:var(--text-tertiary);">测点 key 用于数据接入映射，需与上报报文中的字段名一致</span>
+      <button class="jg-btn jg-btn-primary" onclick="addPointRow()" style="padding:6px 12px;font-size:12.5px;">+ 添加测点</button>
+    </div>
+    <table class="point-table">
+      <thead>
+        <tr>
+          <th style="width:150px;">测点 key</th>
+          <th style="width:140px;">测点名称</th>
+          <th style="width:90px;">单位</th>
+          <th style="width:80px;">精度</th>
+          <th style="width:90px;">下限</th>
+          <th style="width:90px;">上限</th>
+          <th style="width:70px;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="pointBody"></tbody>
+    </table>
+    <div id="pointEmpty" class="point-empty" style="display:none;">该类型尚未定义测点</div>
+  </div>
+  <div class="modal-footer">
+    <button class="jg-btn" onclick="closePointModal()">取消</button>
+    <button class="jg-btn jg-btn-primary" onclick="savePoints()">保存测点</button>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/shared/device-store.js"></script>
+<script src="js/shared/device-ui.js"></script>
+<script>
+/* ============================================================
+ * 设备类型与物模型管理
+ * 数据源：js/shared/device-store.js → models() / typeList() / upsertModel() / removeModel()
+ *
+ * 设备类型是设备台账、接入配置、告警规则、数据解析的共同字典：
+ *   - 类型编码（code）一旦被设备引用不可变更
+ *   - 测点定义决定「实时数据」「接入配置」可选测点范围
+ *   - 维保/校准周期用于自动生成到期提醒
+ * ============================================================ */
+
+var CATEGORY_TEXT = {
+  weather: '气象', soil: '土壤', pest: '虫情', video: '视频',
+  env: '环境', control: '控制', storage: '仓储', drone: '无人机',
+  network: '网络', power: '供电', crop: '作物', other: '其他'
+};
+var currentCode = '';
+var page = null;
+
+/* ---------- 分类下拉 ---------- */
+function initCategorySelect() {
+  var opts = '<option value="">全部分类</option>';
+  Object.keys(CATEGORY_TEXT).forEach(function (k) {
+    opts += '<option value="' + k + '">' + CATEGORY_TEXT[k] + '</option>';
+  });
+  document.getElementById('categorySelect').innerHTML = opts;
+  document.getElementById('mCategory').innerHTML = Object.keys(CATEGORY_TEXT).map(function (k) {
+    return '<option value="' + k + '">' + CATEGORY_TEXT[k] + '（' + k + '）</option>';
+  }).join('');
+}
+
+/* ---------- 统计卡 ---------- */
+function renderStats() {
+  var models = DeviceStore.models();
+  var devices = DeviceStore.devices();
+  var totalPoints = models.reduce(function (s, m) { return s + (m.points || []).length; }, 0);
+  var accessCnt = models.filter(function (m) { return m.access; }).length;
+  var controlCnt = models.filter(function (m) { return m.control; }).length;
+  document.getElementById('statCards').innerHTML =
+    '<div class="stat-card"><div class="stat-label">设备类型</div>' +
+    '<div class="stat-value">' + models.length + '<span class="unit">类</span></div>' +
+    '<div class="stat-sub">覆盖 ' + Object.keys(CATEGORY_TEXT).length + ' 个分类</div></div>' +
+    '<div class="stat-card"><div class="stat-label">物模型测点</div>' +
+    '<div class="stat-value">' + totalPoints + '<span class="unit">个</span></div>' +
+    '<div class="stat-sub">可用于接入映射与告警阈值</div></div>' +
+    '<div class="stat-card"><div class="stat-label">支持接入 / 可控</div>' +
+    '<div class="stat-value">' + accessCnt + '<span class="unit">/ ' + controlCnt + '</span></div>' +
+    '<div class="stat-sub">需接入网关的设备类型</div></div>' +
+    '<div class="stat-card"><div class="stat-label">在册设备</div>' +
+    '<div class="stat-value">' + devices.length + '<span class="unit">台</span></div>' +
+    '<div class="stat-sub">已纳入设备台账</div></div>';
+}
+
+/* ---------- 设备引用数 ---------- */
+function deviceCountOf(code) {
+  return DeviceStore.devices().filter(function (d) { return d.type === code; }).length;
+}
+
+/* ---------- 表格行 ---------- */
+function renderRow(m, index) {
+  var used = deviceCountOf(m.code);
+  return '<tr>' +
+    '<td>' + index + '</td>' +
+    '<td><span class="code-badge">' + DeviceUI.esc(m.code) + '</span></td>' +
+    '<td><strong>' + DeviceUI.esc(m.name) + '</strong></td>' +
+    '<td><span class="type-badge">' + DeviceUI.esc(m.categoryText || CATEGORY_TEXT[m.category] || '其他') + '</span></td>' +
+    '<td>' + (m.access ? DeviceUI.statusTag('online', '支持') : '<span style="color:var(--text-tertiary);">—</span>') + '</td>' +
+    '<td>' + (m.control ? DeviceUI.statusTag('processing', '可控') : '<span style="color:var(--text-tertiary);">—</span>') + '</td>' +
+    '<td>' + (m.asset ? DeviceUI.statusTag('online', '纳入') : '<span style="color:var(--text-tertiary);">—</span>') + '</td>' +
+    '<td>' + (m.maintainCycle > 0 ? m.maintainCycle + ' 月' : '不适用') + '</td>' +
+    '<td>' + (m.calibrateCycle > 0 ? m.calibrateCycle + ' 月' : '不适用') + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + (m.points || []).length + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + used + '</td>' +
+    '<td>' + (m.enabled !== false ? DeviceUI.statusTag('online', '已启用') : DeviceUI.statusTag('offline', '已停用')) + '</td>' +
+    '<td><div class="action-btns">' +
+      '<button class="action-btn detail" onclick="openDetail(\'' + DeviceUI.esc(m.code) + '\')">详情</button>' +
+      '<button class="action-btn edit" onclick="openModelModal(\'' + DeviceUI.esc(m.code) + '\')">编辑</button>' +
+      '<button class="action-btn edit" onclick="openPointModal(\'' + DeviceUI.esc(m.code) + '\')">测点</button>' +
+      '<button class="action-btn del" onclick="deleteModel(\'' + DeviceUI.esc(m.code) + '\')">删除</button>' +
+    '</div></td>' +
+  '</tr>';
+}
+
+/* ---------- 过滤 ---------- */
+function filteredList() {
+  var cat = document.getElementById('categorySelect').value;
+  var access = document.getElementById('accessSelect').value;
+  var enabled = document.getElementById('enabledSelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  return DeviceStore.typeList().filter(function (m) {
+    if (cat && m.category !== cat) return false;
+    if (access === '1' && !m.access) return false;
+    if (access === '0' && m.access) return false;
+    if (enabled === '1' && m.enabled === false) return false;
+    if (enabled === '0' && m.enabled !== false) return false;
+    if (kw) {
+      var hay = (m.name + ' ' + m.code + ' ' + (m.desc || '')).toLowerCase();
+      if (hay.indexOf(kw) < 0) return false;
+    }
+    return true;
+  });
+}
+
+function handleSearch() {
+  var list = filteredList();
+  page.updateData(list);
+  DeviceUI.toast('找到 ' + list.length + ' 个设备类型', 'info');
+}
+
+function resetFilter() {
+  ['categorySelect', 'accessSelect', 'enabledSelect', 'searchInput'].forEach(function (id) {
+    document.getElementById(id).value = '';
+  });
+  page.updateData(filteredList());
+  DeviceUI.toast('已重置搜索条件', 'info');
+}
+
+/* ---------- 详情 ---------- */
+function openDetail(code) {
+  var m = DeviceStore.typeList().filter(function (x) { return x.code === code; })[0];
+  if (!m) return;
+  var points = (m.points || []).map(function (p) {
+    return p.name + '(' + p.key + ')' + (p.unit ? ' / ' + p.unit : '');
+  }).join('、') || '—';
+  var devices = DeviceStore.devices().filter(function (d) { return d.type === code; });
+  DeviceUI.detailModal('设备类型 · ' + m.name, [
+    ['类型编码', m.code],
+    ['类型名称', m.name],
+    ['所属分类', (m.categoryText || CATEGORY_TEXT[m.category] || '其他')],
+    ['接入能力', m.access ? '支持数据接入' : '不接入'],
+    ['控制能力', m.control ? '支持远程控制' : '仅采集'],
+    ['资产属性', m.asset ? '纳入资产台账' : '不纳入资产'],
+    ['维保周期', m.maintainCycle > 0 ? m.maintainCycle + ' 个月' : '不适用'],
+    ['校准周期', m.calibrateCycle > 0 ? m.calibrateCycle + ' 个月' : '不适用'],
+    ['接入方式', (m.way || []).join('、') || '—'],
+    ['测点数量', (m.points || []).length + ' 个'],
+    ['测点清单', points],
+    ['在用设备', devices.length + ' 台' + (devices.length ? '（' + devices.map(function (d) { return d.id; }).join('、') + '）' : '')],
+    ['类型说明', m.desc || '—']
+  ], { editId: m.code, editFn: 'openModelModal' });
+}
+
+/* ---------- 新增 / 编辑 ---------- */
+function openModelModal(code) {
+  currentCode = code || '';
+  var m = code ? DeviceStore.typeList().filter(function (x) { return x.code === code; })[0] : null;
+  document.getElementById('modelTitle').textContent = m ? ('编辑设备类型 · ' + m.name) : '新增设备类型';
+  document.getElementById('mCode').value = m ? m.code : '';
+  document.getElementById('mCode').disabled = !!m;
+  document.getElementById('mName').value = m ? m.name : '';
+  document.getElementById('mCategory').value = m ? m.category : 'env';
+  document.getElementById('mMaintainCycle').value = m ? m.maintainCycle : 6;
+  document.getElementById('mCalibrateCycle').value = m ? m.calibrateCycle : 12;
+  document.getElementById('mWay').value = m ? (m.way || []).join(', ') : 'MQTT';
+  document.getElementById('mAccess').checked = m ? !!m.access : true;
+  document.getElementById('mControl').checked = m ? !!m.control : false;
+  document.getElementById('mAsset').checked = m ? !!m.asset : true;
+  document.getElementById('mEnabled').checked = m ? m.enabled !== false : true;
+  document.getElementById('mDesc').value = m ? (m.desc || '') : '';
+  document.getElementById('modelOverlay').classList.add('show');
+  document.getElementById('modelModal').classList.add('show');
+}
+
+function closeModelModal() {
+  document.getElementById('modelOverlay').classList.remove('show');
+  document.getElementById('modelModal').classList.remove('show');
+  document.getElementById('mCode').disabled = false;
+}
+
+function saveModel() {
+  var code = document.getElementById('mCode').value.trim();
+  var name = document.getElementById('mName').value.trim();
+  if (!code) { DeviceUI.toast('请填写类型编码', 'error'); return; }
+  if (!/^[a-z][a-z0-9_]*$/.test(code)) {
+    DeviceUI.toast('类型编码只允许小写字母、数字与下划线，且以字母开头', 'error'); return;
+  }
+  if (!name) { DeviceUI.toast('请填写类型名称', 'error'); return; }
+  if (!currentCode) {
+    var dup = DeviceStore.typeList().filter(function (x) { return x.code === code; })[0];
+    if (dup) { DeviceUI.toast('类型编码「' + code + '」已存在', 'error'); return; }
+  }
+  var category = document.getElementById('mCategory').value;
+  var way = document.getElementById('mWay').value.split(/[,，]/).map(function (s) { return s.trim(); })
+    .filter(function (s) { return !!s; });
+  var old = currentCode ? DeviceStore.typeList().filter(function (x) { return x.code === currentCode; })[0] : null;
+  var item = {
+    code: currentCode || code,
+    name: name,
+    category: category,
+    categoryText: CATEGORY_TEXT[category] || '其他',
+    access: document.getElementById('mAccess').checked,
+    control: document.getElementById('mControl').checked,
+    asset: document.getElementById('mAsset').checked,
+    maintainCycle: Number(document.getElementById('mMaintainCycle').value) || 0,
+    calibrateCycle: Number(document.getElementById('mCalibrateCycle').value) || 0,
+    way: way,
+    points: old ? (old.points || []) : [],
+    desc: document.getElementById('mDesc').value.trim(),
+    enabled: document.getElementById('mEnabled').checked,
+    updatedAt: DeviceStore.stampNow()
+  };
+  DeviceStore.upsertModel(item);
+  closeModelModal();
+  refreshAll();
+  DeviceUI.toast('设备类型已保存', 'success');
+}
+
+function deleteModel(code) {
+  var used = deviceCountOf(code);
+  if (used > 0) {
+    DeviceUI.toast('该类型已被 ' + used + ' 台设备引用，禁止删除', 'error');
+    return;
+  }
+  DeviceUI.confirmDelete('确定删除设备类型「' + DeviceStore.typeName(code) + '」吗？').then(function (ok) {
+    if (!ok) return;
+    var r = DeviceStore.removeModel(code);
+    if (r && r.ok === false) { DeviceUI.toast(r.message, 'error'); return; }
+    refreshAll();
+    DeviceUI.toast('设备类型已删除', 'success');
+  });
+}
+
+/* ---------- 物模型测点 ---------- */
+function openPointModal(code) {
+  currentCode = code;
+  var m = DeviceStore.typeList().filter(function (x) { return x.code === code; })[0];
+  if (!m) return;
+  document.getElementById('pointTitle').textContent = '物模型测点 · ' + m.name;
+  renderPointRows(m.points || []);
+  document.getElementById('pointOverlay').classList.add('show');
+  document.getElementById('pointModal').classList.add('show');
+}
+
+function closePointModal() {
+  document.getElementById('pointOverlay').classList.remove('show');
+  document.getElementById('pointModal').classList.remove('show');
+}
+
+function renderPointRows(points) {
+  var body = document.getElementById('pointBody');
+  document.getElementById('pointEmpty').style.display = points.length ? 'none' : 'block';
+  body.innerHTML = points.map(function (p) {
+    return '<tr>' +
+      '<td><input type="text" data-f="key" value="' + DeviceUI.esc(p.key) + '" /></td>' +
+      '<td><input type="text" data-f="name" value="' + DeviceUI.esc(p.name) + '" /></td>' +
+      '<td><input type="text" data-f="unit" value="' + DeviceUI.esc(p.unit || '') + '" /></td>' +
+      '<td><input type="text" data-f="step" value="' + DeviceUI.esc(p.step || '') + '" /></td>' +
+      '<td><input type="number" data-f="min" value="' + (p.min == null ? '' : p.min) + '" /></td>' +
+      '<td><input type="number" data-f="max" value="' + (p.max == null ? '' : p.max) + '" /></td>' +
+      '<td><button class="p-del" onclick="this.closest(\'tr\').remove()">删除</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function addPointRow() {
+  document.getElementById('pointEmpty').style.display = 'none';
+  var tr = document.createElement('tr');
+  tr.innerHTML =
+    '<td><input type="text" data-f="key" placeholder="如 soilTemp" /></td>' +
+    '<td><input type="text" data-f="name" placeholder="如 土壤温度" /></td>' +
+    '<td><input type="text" data-f="unit" placeholder="℃" /></td>' +
+    '<td><input type="text" data-f="step" placeholder="0.1" /></td>' +
+    '<td><input type="number" data-f="min" /></td>' +
+    '<td><input type="number" data-f="max" /></td>' +
+    '<td><button class="p-del" onclick="this.closest(\'tr\').remove()">删除</button></td>';
+  document.getElementById('pointBody').appendChild(tr);
+}
+
+function savePoints() {
+  var rows = document.getElementById('pointBody').querySelectorAll('tr');
+  var points = [];
+  var seen = {};
+  var err = '';
+  Array.prototype.forEach.call(rows, function (tr) {
+    var g = function (f) {
+      var el = tr.querySelector('[data-f="' + f + '"]');
+      return el ? el.value.trim() : '';
+    };
+    var key = g('key');
+    if (!key) return;
+    if (seen[key]) { err = '测点 key「' + key + '」重复'; return; }
+    seen[key] = true;
+    points.push({
+      key: key, name: g('name') || key,
+      unit: g('unit'), step: g('step'),
+      min: g('min') === '' ? null : Number(g('min')),
+      max: g('max') === '' ? null : Number(g('max'))
+    });
+  });
+  if (err) { DeviceUI.toast(err, 'error'); return; }
+  var m = DeviceStore.typeList().filter(function (x) { return x.code === currentCode; })[0];
+  if (!m) return;
+  m.points = points;
+  DeviceStore.upsertModel(m);
+  closePointModal();
+  refreshAll();
+  DeviceUI.toast('测点已保存，共 ' + points.length + ' 个', 'success');
+}
+
+/* ---------- 导出 ---------- */
+function exportModels() {
+  var list = filteredList();
+  var headers = ['类型编码', '类型名称', '分类', '可接入', '可控', '资产', '维保周期(月)', '校准周期(月)', '测点数', '在用设备', '状态'];
+  var rows = list.map(function (m) {
+    return [m.code, m.name, m.categoryText, m.access ? '是' : '否', m.control ? '是' : '否',
+      m.asset ? '是' : '否', m.maintainCycle, m.calibrateCycle, (m.points || []).length,
+      deviceCountOf(m.code), m.enabled !== false ? '启用' : '停用'];
+  });
+  DeviceUI.exportCsv('设备类型物模型', headers, rows);
+}
+
+/* ---------- 刷新 ---------- */
+function refreshAll() {
+  renderStats();
+  page.updateData(filteredList());
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  initCategorySelect();
+  page = DeviceUI.pagination({
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow,
+    emptyCols: 13,
+    pageSize: 10
+  });
+  page.init({ data: [] });
+
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') handleSearch();
+  });
+
+  DeviceStore.subscribe(function (reason) {
+    if (reason === 'init') return;
+    refreshAll();
+  });
+
+  refreshAll();
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

@@ -424,14 +424,14 @@ body{display:block;background:
       <div class="card" id="R1">
         <div class="card-h">
           <h3 class="t"><i></i>产量预估 vs 实采</h3>
-          <div class="meta">单位 吨 · 5 基地 · 预估合计 <b>3260</b><span class="stamp" data-stamp>更新 --:--</span></div>
+          <div class="meta">单位 吨 · <span id="yieldBaseCount">-</span> 基地 · 预估合计 <b id="yieldTotal">-</b><span class="stamp" data-stamp>更新 --:--</span></div>
         </div>
         <div class="legend">
           <span><em style="background:#2E8FE8"></em>本季模型预估</span>
           <span><em style="background:#31C9E8"></em>上年度实测</span>
         </div>
         <svg class="bars" id="yieldSvg" viewBox="0 0 436 267" role="img"
-          aria-label="麦积、秦州、秦安、甘谷、武山 5 基地本季模型预估与上年度实测产量分组柱状图，预估合计 3260 吨"></svg>
+          aria-label="产量预估与上年度实测分组柱状图"></svg>
       </div>
 
       <!-- 物候期进度 -->
@@ -496,6 +496,8 @@ body{display:block;background:
   </div>
 </div>
 
+<!-- 统一模型数据层：产量预估与实采读取后台同一份模型数据 -->
+<script src="../applefarm_backhand/js/shared/model-store.js"></script>
 <script>
 /* ---------- 缩放适配（单屏不滚动） ---------- */
 (function(){
@@ -708,10 +710,25 @@ stampAll();
 (function(){
   var NS='http://www.w3.org/2000/svg',svg=document.getElementById('yieldSvg');
   function el(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
-  var DATA=[['麦积',760,745],['秦州',700,706],['秦安',640,597],['甘谷',600,596],['武山',560,572]];
-  var W=436,H=267,ML=44,MR=10,MT=12,MB=46,HI=800;
+  /* 数据源：后台统一模型 store 的 yield.lists.baseYield（base/predict/actual） */
+  var model=window.ModelStore?ModelStore.get('yield'):null;
+  var rows=(model&&model.lists&&model.lists.baseYield)||[];
+  var DATA=rows.map(function(r){return [r.base,r.predict,r.actual];});
+  var total=DATA.reduce(function(s,d){return s+d[1];},0);
+  total=Math.round(total*10)/10;
+  var cntEl=document.getElementById('yieldBaseCount'),totEl=document.getElementById('yieldTotal');
+  if(cntEl) cntEl.textContent=DATA.length;
+  if(totEl) totEl.textContent=fmtNum(total);
+  svg.setAttribute('aria-label',DATA.map(function(d){return d[0];}).join('、')+' '+DATA.length+
+    ' 基地本季模型预估与上年度实测产量分组柱状图，预估合计 '+total+' 吨');
+  if(!DATA.length) return;
+  var W=436,H=267,ML=44,MR=10,MT=12,MB=46;
+  var peak=DATA.reduce(function(m,d){return Math.max(m,d[1],d[2]);},0);
+  var HI=Math.max(100,Math.ceil(peak/100)*100);
   function Y(v){return MT+(H-MT-MB)*(1-v/HI);}
-  [0,200,400,600,800].forEach(function(t){
+  var ticks=[];
+  for(var ti=0;ti<=4;ti++) ticks.push(HI*ti/4);
+  ticks.forEach(function(t){
     var y=(Y(t)).toFixed(1);
     svg.appendChild(el('line',{class:'grid',x1:ML,y1:y,x2:W-MR,y2:y}));
     var tx=el('text',{class:'ax',x:ML-10,y:(+y+4),'text-anchor':'end'});tx.textContent=fmtNum(t);

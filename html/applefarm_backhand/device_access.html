@@ -101,6 +101,12 @@
     </div>
 
     <main class="main-content">
+      <nav class="device-tabs" aria-label="接入与网关">
+        <a href="device_access.html" class="active">接入配置</a>
+        <a href="gateway_config.html">网关与协议</a>
+        <a href="video_monitor.html">视频监控</a>
+      </nav>
+
       <div class="content-wrapper">
 
         <!-- 页面说明 -->
@@ -147,18 +153,20 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="width:100px;">配置编号</th>
-                  <th style="width:150px;">设备名称</th>
-                  <th style="width:110px;">设备类型</th>
-                  <th style="width:140px;">所属基地</th>
-                  <th style="width:110px;">接入方式</th>
-                  <th style="width:90px;">所属网关</th>
+                  <th style="width:92px;">配置编号</th>
+                  <th style="width:140px;">设备名称</th>
+                  <th style="width:116px;">设备类型</th>
+                  <th style="width:82px;">台账编号</th>
+                  <th style="width:126px;">所属基地</th>
+                  <th style="width:96px;">接入方式</th>
+                  <th style="width:82px;">所属网关</th>
                   <th>接入地址</th>
-                  <th style="width:80px;">采集频率</th>
-                  <th style="width:70px;">超时(s)</th>
-                  <th style="width:170px;">采集测点</th>
-                  <th style="width:90px;">状态</th>
-                  <th style="width:150px;">操作</th>
+                  <th style="width:74px;">采集频率</th>
+                  <th style="width:64px;">超时(s)</th>
+                  <th style="width:64px;">方向</th>
+                  <th style="width:160px;">采集测点</th>
+                  <th style="width:84px;">状态</th>
+                  <th style="width:140px;">操作</th>
                 </tr>
               </thead>
               <tbody id="dataTableBody"></tbody>
@@ -202,6 +210,22 @@
 
         <div class="form-row" style="display:flex;gap:16px;margin-bottom:18px;">
           <div class="form-field" style="flex:1;">
+            <label>关联台账设备</label>
+            <select name="deviceId" id="accessDeviceSelect"></select>
+            <div class="form-hint">关联后可在设备台账中查看接入参数</div>
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label>设备型号</label>
+            <input type="text" name="model" placeholder="选填">
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label>SN 序列号</label>
+            <input type="text" name="sn" placeholder="选填">
+          </div>
+        </div>
+
+        <div class="form-row" style="display:flex;gap:16px;margin-bottom:18px;">
+          <div class="form-field" style="flex:1;">
             <label class="required">接入方式</label>
             <select name="accessWay" id="accessWaySelect"></select>
           </div>
@@ -234,6 +258,37 @@
           </div>
         </div>
 
+        <div class="form-row" style="display:flex;gap:16px;margin-bottom:18px;">
+          <div class="form-field" style="flex:1;">
+            <label>数据方向</label>
+            <select name="direction">
+              <option value="上报">单向上报</option>
+              <option value="双向">双向控制</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label>鉴权方式</label>
+            <select name="auth">
+              <option value="QoS 1">MQTT QoS 1</option>
+              <option value="QoS 0">MQTT QoS 0</option>
+              <option value="03 读保持寄存器">Modbus 03 读</option>
+              <option value="06 写单寄存器">Modbus 06 写</option>
+              <option value="ONVIF">ONVIF</option>
+              <option value="RTSP">RTSP</option>
+              <option value="WebSocket">WebSocket</option>
+              <option value="Token">Token 鉴权</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label>Payload 格式</label>
+            <select name="payload">
+              <option value="JSON">JSON</option>
+              <option value="二进制">二进制</option>
+              <option value="自定义">自定义</option>
+            </select>
+          </div>
+        </div>
+
         <div class="form-field" style="margin-bottom:18px;">
           <label class="required">采集测点（物模型）</label>
           <div class="point-picker" id="pointPicker"></div>
@@ -247,6 +302,13 @@
               <option value="online">已接入</option>
               <option value="warning">接入异常</option>
               <option value="offline">未接入</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:1;">
+            <label>启用状态</label>
+            <select name="enabled">
+              <option value="true">启用</option>
+              <option value="false">停用</option>
             </select>
           </div>
           <div class="form-field" style="flex:2;">
@@ -285,6 +347,7 @@
 <script src="js/components/modal.js"></script>
 <script src="js/components/confirm.js"></script>
 <script src="js/shared/device-store.js"></script>
+<script src="js/shared/device-ui.js"></script>
 <script>
 /* ============================================================
  * 设备接入配置
@@ -347,42 +410,46 @@ const Pagination = {
   }
 };
 
-var BASE_OPTIONS = ['麦积区基地 A区', '麦积区基地 B区', '麦积区基地 C区', '白水基地 A区', '宜川基地 A区'];
 var STATUS_TEXT = { online: '已接入', warning: '接入异常', offline: '未接入' };
 var editingId = null;
 var detailId = null;
 
 /* ---------- 筛选下拉初始化 ---------- */
 function initSelects() {
-  var typeSel = document.getElementById('typeSelect');
-  DeviceStore.DEVICE_TYPES.forEach(function (t) {
-    var o = document.createElement('option');
-    o.value = t; o.textContent = t;
-    typeSel.appendChild(o);
-  });
+  var accessTypes = DeviceStore.typeList(true);
+  DeviceUI.fillSelect('typeSelect', accessTypes.map(function (t) {
+    return { value: t.code, label: t.name };
+  }), '全部设备类型');
 
-  var baseSel = document.getElementById('baseSelect');
-  BASE_OPTIONS.forEach(function (b) {
-    var o = document.createElement('option');
-    o.value = b; o.textContent = b;
-    baseSel.appendChild(o);
-  });
+  DeviceUI.fillSelect('baseSelect', DeviceStore.bases(), '全部基地');
 
-  var accType = document.getElementById('accessTypeSelect');
-  DeviceStore.DEVICE_TYPES.forEach(function (t) {
-    var o = document.createElement('option');
-    o.value = t; o.textContent = t;
-    accType.appendChild(o);
-  });
+  DeviceUI.fillSelect('accessTypeSelect', accessTypes.map(function (t) {
+    return { value: t.code, label: t.name };
+  }), null);
 
-  var accBase = document.getElementById('accessBaseSelect');
-  BASE_OPTIONS.forEach(function (b) {
-    var o = document.createElement('option');
-    o.value = b; o.textContent = b;
-    accBase.appendChild(o);
-  });
+  DeviceUI.fillSelect('accessBaseSelect', DeviceStore.bases(), null);
 
   refreshGatewaySelect();
+  refreshDeviceSelect();
+}
+
+/* 关联台账设备下拉：仅列出与所选类型匹配、且未被其他配置占用的设备 */
+function refreshDeviceSelect(selected) {
+  var type = document.getElementById('accessTypeSelect').value;
+  var used = {};
+  DeviceStore.accessConfigs().forEach(function (x) {
+    if (editingId && x.id === editingId) return;
+    if (x.deviceId) used[x.deviceId] = true;
+  });
+  var list = DeviceStore.devices().filter(function (d) {
+    if (used[d.id]) return false;
+    if (type && d.type !== type) return false;
+    return true;
+  });
+  DeviceUI.fillSelect('accessDeviceSelect', list.map(function (d) {
+    return { value: d.id, label: d.id + ' · ' + d.name };
+  }), '不关联台账');
+  if (selected) document.getElementById('accessDeviceSelect').value = selected;
 }
 
 function refreshGatewaySelect() {
@@ -438,20 +505,25 @@ function renderStats() {
 /* ---------- 行渲染 ---------- */
 function renderRow(item, index) {
   var points = (item.points || []).map(function (k) {
-    var p = DeviceStore.DATA_POINTS[item.deviceType];
-    var hit = (p || []).filter(function (x) { return x.key === k; })[0];
+    var p = DeviceStore.dataPointsOf(item.deviceType);
+    var hit = p.filter(function (x) { return x.key === k; })[0];
     return '<span class="point-chip">' + esc(hit ? hit.name : k) + '</span>';
   }).join('');
+  var dev = item.deviceId ? DeviceStore.deviceOf(item.deviceId) : null;
   return '<tr>' +
     '<td><strong>' + esc(item.id) + '</strong></td>' +
     '<td>' + esc(item.deviceName) + '</td>' +
-    '<td>' + esc(item.deviceType) + '</td>' +
+    '<td>' + esc(DeviceStore.typeName(item.deviceType)) + '</td>' +
+    '<td>' + (dev
+      ? '<a href="javascript:;" onclick="gotoLedger(\'' + esc(item.deviceId) + '\')" style="color:var(--primary-500);">' + esc(item.deviceId) + '</a>'
+      : '<span style="color:var(--text-tertiary);">未关联</span>') + '</td>' +
     '<td>' + esc(item.base) + '</td>' +
     '<td><span class="way-badge">' + esc(item.accessWay) + '</span></td>' +
     '<td>' + esc(item.gatewayId || '-') + '</td>' +
     '<td style="font-size:12px;color:var(--text-secondary);">' + esc(item.endpoint || '-') + '</td>' +
     '<td>' + esc(item.freq) + '</td>' +
     '<td>' + esc(item.timeout) + '</td>' +
+    '<td>' + esc(item.direction || '上报') + '</td>' +
     '<td><div class="point-chips">' + points + '</div></td>' +
     '<td><span class="status-tag ' + item.status + '">' + (STATUS_TEXT[item.status] || item.statusText) + '</span></td>' +
     '<td><div class="action-btns">' +
@@ -460,6 +532,14 @@ function renderRow(item, index) {
       '<button class="action-btn delete" data-act="del" data-id="' + item.id + '">删除</button>' +
     '</div></td>' +
   '</tr>';
+}
+
+/** 跳转到设备台账并定位该设备 */
+function gotoLedger(deviceId) {
+  try {
+    window.parent.postMessage({ type: 'openPage', url: 'device_info.html', title: '设备台账', focus: deviceId }, '*');
+  } catch (e) { /* ignore */ }
+  Toast.show('正在打开设备台账：' + deviceId, 'info');
 }
 
 function esc(s) {
@@ -480,7 +560,8 @@ function filteredList() {
     if (base && x.base !== base) return false;
     if (status && x.status !== status) return false;
     if (kw) {
-      var hay = [x.deviceName, x.endpoint, x.id, x.deviceType].join(' ').toLowerCase();
+      var hay = [x.deviceName, x.endpoint, x.id, DeviceStore.typeName(x.deviceType),
+        x.deviceId || '', x.model || '', x.sn || ''].join(' ').toLowerCase();
       if (hay.indexOf(kw) === -1) return false;
     }
     return true;
@@ -509,9 +590,10 @@ function openAccessModal(item) {
   var form = document.getElementById('form-access');
   form.reset();
 
-  var type = item ? item.deviceType : DeviceStore.DEVICE_TYPES[0];
+  var type = item ? item.deviceType : DeviceStore.typeList(true)[0].code;
   document.getElementById('accessTypeSelect').value = type;
   refreshGatewaySelect();
+  refreshDeviceSelect(item ? item.deviceId : '');
 
   if (item) {
     form.deviceName.value = item.deviceName;
@@ -522,25 +604,33 @@ function openAccessModal(item) {
     form.endpoint.value = item.endpoint;
     form.timeout.value = item.timeout;
     form.status.value = item.status;
+    form.direction.value = item.direction || '上报';
+    form.auth.value = item.auth || 'QoS 1';
+    form.payload.value = item.payload || 'JSON';
+    form.enabled.value = item.enabled === false ? 'false' : 'true';
+    form.model.value = item.model || '';
+    form.sn.value = item.sn || '';
     form.remark.value = item.remark || '';
   } else {
-    document.getElementById('accessBaseSelect').value = BASE_OPTIONS[0];
+    document.getElementById('accessBaseSelect').value = DeviceStore.bases()[0] || '';
     form.freq.value = '10分钟';
     form.timeout.value = 90;
     form.status.value = 'online';
-    renderAccessWays(type);
-    renderPointPicker(type, []);
+    form.direction.value = '上报';
+    form.auth.value = 'QoS 1';
+    form.payload.value = 'JSON';
+    form.enabled.value = 'true';
   }
 
   renderAccessWays(type);
-  if (item) renderPointPicker(type, item.points || []);
+  renderPointPicker(type, item ? (item.points || []) : []);
   document.getElementById('modal-access').classList.add('show');
 }
 
 /* 接入方式随设备类型联动 */
 function renderAccessWays(type) {
   var sel = document.getElementById('accessWaySelect');
-  var ways = DeviceStore.ACCESS_WAYS[type] || ['MQTT'];
+  var ways = DeviceStore.accessWaysOf(type);
   var cur = sel.value;
   sel.innerHTML = ways.map(function (w) {
     var o = document.createElement('option');
@@ -553,6 +643,7 @@ function renderAccessWays(type) {
 document.getElementById('accessTypeSelect').addEventListener('change', function (e) {
   renderAccessWays(e.target.value);
   renderPointPicker(e.target.value, []);
+  refreshDeviceSelect('');
 });
 
 function closeAccessModal() { document.getElementById('modal-access').classList.remove('show'); }
@@ -571,22 +662,37 @@ function submitAccess() {
   if (!picked.length) { Toast.show('请至少勾选 1 个采集测点', 'warning'); return; }
 
   var status = form.status.value;
-  DeviceStore.upsertAccess({
+  var item = {
     id: editingId || genId(),
     deviceName: deviceName,
     deviceType: form.deviceType.value,
     base: form.base.value,
+    deviceId: form.deviceId.value || '',
+    model: (form.model.value || '').trim(),
+    sn: (form.sn.value || '').trim(),
     accessWay: form.accessWay.value,
     gatewayId: form.gatewayId.value,
     endpoint: endpoint,
     freq: form.freq.value,
     timeout: Number(form.timeout.value) || 90,
+    direction: form.direction.value,
+    auth: form.auth.value,
+    payload: form.payload.value,
     points: picked,
     status: status,
     statusText: STATUS_TEXT[status],
+    enabled: form.enabled.value === 'true',
     remark: (form.remark.value || '').trim(),
     updatedAt: nowStamp()
-  });
+  };
+
+  var chk = DeviceStore.validate('access', item, editingId);
+  if (!chk.ok) { Toast.show(chk.message, 'warning'); return; }
+
+  var old = editingId ? DeviceStore.accessConfigs().filter(function (x) { return x.id === editingId; })[0] : null;
+  DeviceStore.upsertAccess(old ? Object.assign({}, old, item) : item);
+  DeviceStore.audit(old ? 'update' : 'create', 'access', item.id,
+    (old ? '修改接入配置「' : '新增接入配置「') + item.id + '」', old, item);
 
   closeAccessModal();
   Toast.show(editingId ? '接入配置已更新' : '接入配置已创建', 'success');
@@ -622,22 +728,32 @@ function openDetail(id) {
       '<span class="pi-unit">' + (p ? p.unit : '') + '</span></div>';
   }).join('');
 
+  var dev = item.deviceId ? DeviceStore.deviceOf(item.deviceId) : null;
   var rows = [
     ['配置编号', item.id],
     ['设备名称', item.deviceName],
-    ['设备类型', item.deviceType],
+    ['设备类型', DeviceStore.typeName(item.deviceType)],
+    ['关联台账', item.deviceId
+      ? '<a href="javascript:;" onclick="gotoLedger(\'' + esc(item.deviceId) + '\')" style="color:var(--primary-500);">' + esc(item.deviceId) + '</a>' + (dev ? ' · ' + esc(dev.name) : '')
+      : '未关联'],
     ['所属基地', item.base],
+    ['设备型号', item.model || '-'],
+    ['SN 序列号', item.sn || '-'],
     ['接入方式', item.accessWay],
     ['所属网关', item.gatewayId || '不指定'],
     ['接入地址', item.endpoint],
     ['采集频率', item.freq],
     ['心跳超时', item.timeout + ' 秒'],
+    ['数据方向', item.direction || '上报'],
+    ['鉴权方式', item.auth || '-'],
+    ['Payload', item.payload || '-'],
+    ['启用状态', item.enabled === false ? '停用' : '启用'],
     ['接入状态', '<span class="status-tag ' + item.status + '">' + (STATUS_TEXT[item.status] || item.statusText) + '</span>'],
     ['备注', item.remark || '-'],
     ['更新时间', item.updatedAt]
   ].map(function (r) {
     return '<div class="detail-row"><span class="detail-label">' + r[0] + '</span>' +
-      '<span class="detail-value">' + (r[0] === '接入地址' ? esc(r[1]) : r[1]) + '</span></div>';
+      '<span class="detail-value">' + (r[0] === '接入地址' || r[0] === '关联台账' || r[0] === '接入状态' ? r[1] : esc(r[1])) + '</span></div>';
   }).join('');
 
   document.getElementById('detailBody').innerHTML =
@@ -664,9 +780,11 @@ function editFromDetail() {
 function handleDelete(id) {
   var item = DeviceStore.accessConfigs().filter(function (x) { return x.id === id; })[0];
   if (!item) return;
-  Confirm.delete('确定要删除接入配置「' + item.deviceName + '」吗？此操作不可撤销。').then(function (ok) {
+  var extra = item.deviceId ? '该配置关联台账设备「' + item.deviceId + '」，删除后设备将变为未接入状态。' : '';
+  Confirm.delete('确定要删除接入配置「' + item.deviceName + '」吗？' + extra + '此操作不可撤销。').then(function (ok) {
     if (!ok) return;
     DeviceStore.removeAccess(id);
+    DeviceStore.audit('delete', 'access', id, '删除接入配置「' + item.deviceName + '」', item, null);
     Toast.show('删除成功', 'success');
   });
 }
@@ -674,30 +792,21 @@ function handleDelete(id) {
 /* ---------- 导出 ---------- */
 function exportCsv() {
   var list = filteredList();
-  var headers = ['配置编号', '设备名称', '设备类型', '所属基地', '接入方式', '所属网关',
-    '接入地址', '采集频率', '超时(秒)', '采集测点', '状态', '更新时间'];
+  var headers = ['配置编号', '设备名称', '设备类型', '关联台账', '所属基地', '设备型号', 'SN序列号',
+    '接入方式', '所属网关', '接入地址', '采集频率', '超时(秒)', '数据方向', '鉴权方式',
+    'Payload', '启用状态', '采集测点', '状态', '更新时间'];
   var rows = list.map(function (x) {
     var defs = DeviceStore.dataPointsOf(x.deviceType);
     var pts = (x.points || []).map(function (k) {
       var p = defs.filter(function (y) { return y.key === k; })[0];
       return p ? p.name : k;
     }).join('、');
-    return [x.id, x.deviceName, x.deviceType, x.base, x.accessWay, x.gatewayId || '',
-      x.endpoint, x.freq, x.timeout, pts, STATUS_TEXT[x.status] || x.status, x.updatedAt];
+    return [x.id, x.deviceName, DeviceStore.typeName(x.deviceType), x.deviceId || '', x.base,
+      x.model || '', x.sn || '', x.accessWay, x.gatewayId || '',
+      x.endpoint, x.freq, x.timeout, x.direction || '上报', x.auth || '', x.payload || '',
+      x.enabled === false ? '停用' : '启用', pts, STATUS_TEXT[x.status] || x.status, x.updatedAt];
   });
-  var csv = [headers.join(',')].concat(rows.map(function (r) { return r.join(','); })).join('\n');
-  try {
-    var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    var link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = '设备接入配置_' + nowStamp().split(' ')[0] + '.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    Toast.show('导出成功，共 ' + list.length + ' 条', 'success');
-  } catch (e) {
-    Toast.show('导出失败', 'error');
-  }
+  DeviceUI.exportCsv('设备接入配置', headers, rows);
 }
 
 /* ---------- 事件绑定 ---------- */

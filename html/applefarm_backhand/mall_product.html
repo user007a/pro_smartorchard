@@ -56,6 +56,9 @@
   .cat-tag.fruit { background: var(--primary-50); color: var(--primary-600); }
   .cat-tag.gift { background: var(--warning-bg); color: var(--warning); }
   .cat-tag.adopt { background: var(--success-bg); color: var(--success); }
+  .stock-warn { color: var(--error); font-weight: 600; }
+  .stock-ok { color: var(--text-secondary); }
+  .sub-cell { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-top: 2px; }
   .status-tag {
     display: inline-block; padding: 3px 10px; border-radius: var(--radius-full);
     font-size: var(--font-size-xs); white-space: nowrap;
@@ -155,6 +158,10 @@
         <div class="stat-label">认养类</div>
         <div class="stat-value" id="statAdopt">0</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-label">库存预警</div>
+        <div class="stat-value" id="statWarn" style="color:var(--error);">0</div>
+      </div>
     </div>
 
     <div class="page-section search-section">
@@ -185,7 +192,9 @@
             <tr>
               <th class="checkbox-col" style="width:60px;">序号</th>
               <th>商品</th>
-              <th style="width:100px;">分类</th>
+              <th style="width:90px;">分类</th>
+              <th style="width:90px;">品种</th>
+              <th style="width:100px;">库存</th>
               <th style="width:130px;">售价</th>
               <th style="width:100px;">状态</th>
               <th style="width:150px;">操作</th>
@@ -252,6 +261,65 @@
           </select>
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>品种</label>
+          <select id="editVariety">
+            <option value="huaniu">花牛苹果</option>
+            <option value="redfuji">红富士</option>
+            <option value="gala">嘎啦</option>
+            <option value="qinguan">秦冠</option>
+            <option value="jinshuai">金帅</option>
+            <option value="hongxing">红星</option>
+            <option value="guoguang">国光</option>
+            <option value="mixed">混合装</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>包装规格</label>
+          <input type="text" id="editSpec" placeholder="如 5斤装 / 8斤装 / 3年套餐">
+        </div>
+        <div class="form-field">
+          <label>角标</label>
+          <input type="text" id="editTag" placeholder="热销 / 推荐 / 礼盒，可留空">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>计量单位</label>
+          <input type="text" id="editUnit" placeholder="斤 / 箱 / 棵">
+        </div>
+        <div class="form-field">
+          <label>可售库存</label>
+          <input type="number" id="editStock" min="0" step="1" placeholder="500">
+        </div>
+        <div class="form-field">
+          <label>安全库存</label>
+          <input type="number" id="editSafetyStock" min="0" step="1" placeholder="20">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>成本价（元）</label>
+          <input type="number" id="editCostPrice" min="0" step="0.01" placeholder="0">
+        </div>
+        <div class="form-field">
+          <label>会员价（元）</label>
+          <input type="number" id="editMemberPrice" min="0" step="0.01" placeholder="0 表示不设会员价">
+        </div>
+        <div class="form-field">
+          <label>排序号</label>
+          <input type="number" id="editSort" min="1" step="1" placeholder="越小越靠前">
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>服务标签</label>
+        <input type="text" id="editServiceTags" placeholder="多个标签用逗号分隔，如 冷链直发,坏果包赔">
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>商品详情</label>
+        <textarea id="editDetail" placeholder="H5 商品详情文案，可留空"></textarea>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="jg-btn" onclick="closeEditModal()">取消</button>
@@ -263,6 +331,7 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mall-store.js"></script>
 <script>
 /* ============================================================
  * 商品管理（商城管理）
@@ -273,6 +342,10 @@
 var PRODUCT_KEY = 'mall_products';
 
 var CAT_TEXT = { fruit: '水果', gift: '礼盒', adopt: '认养' };
+var VARIETY_TEXT = {
+  huaniu: '花牛', redfuji: '红富士', gala: '嘎啦', qinguan: '秦冠',
+  jinshuai: '金帅', hongxing: '红星', guoguang: '国光', mixed: '混合'
+};
 
 /* 与 H5 端 js/mall-products.js 的 DEFAULT_PRODUCTS 保持一致
    tag：H5 端商品角标（热销/推荐/礼盒…），缺失会导致 H5 角标消失
@@ -305,14 +378,21 @@ function readAll() {
     list = H5_DEFAULT_PRODUCTS.map(function (p) { return Object.assign({}, p); });
     writeList(list);
   }
-  return list;
+  return typeof MallStore !== 'undefined' ? MallStore.products() : list;
 }
 
 function writeList(list) {
+  if (typeof MallStore !== 'undefined') {
+    var r = MallStore.replaceProducts(list);
+    if (!r.ok) { Toast.error(r.error || '商品保存失败'); return false; }
+    return true;
+  }
   try {
     localStorage.setItem(PRODUCT_KEY, JSON.stringify(list));
+    return true;
   } catch (e) {
     Toast.error('本地存储写入失败，商品未能保存');
+    return false;
   }
 }
 
@@ -324,15 +404,17 @@ function esc(s) {
 
 function renderStats() {
   var list = readAll();
-  var on = 0, off = 0, adopt = 0;
+  var on = 0, off = 0, adopt = 0, warn = 0;
   list.forEach(function (p) {
     if (p.status === 'on') on++; else off++;
     if (p.cat === 'adopt') adopt++;
+    if (Number(p.stock) <= Number(p.safetyStock)) warn++;
   });
   document.getElementById('statTotal').textContent = list.length;
   document.getElementById('statOn').textContent = on;
   document.getElementById('statOff').textContent = off;
   document.getElementById('statAdopt').textContent = adopt;
+  document.getElementById('statWarn').textContent = warn;
 }
 
 function filteredList() {
@@ -374,10 +456,15 @@ function renderTable() {
       '<td><div class="sku-cell">' +
           '<img class="sku-img" src="../applefarm_h5/' + esc(p.img) + '" alt="" onerror="this.style.visibility=\'hidden\'">' +
           '<div><div class="sku-name">' + esc(p.name) + '</div>' +
-          '<div class="sku-sid">' + esc(p.id) + '</div></div>' +
+          '<div class="sku-sid">' + esc(p.id) + (p.tag ? ' · ' + esc(p.tag) : '') + '</div></div>' +
         '</div></td>' +
       '<td><span class="cat-tag ' + esc(p.cat) + '">' + (CAT_TEXT[p.cat] || p.cat) + '</span></td>' +
-      '<td class="price-cell">¥' + p.price + original + '</td>' +
+      '<td><div>' + (VARIETY_TEXT[p.variety] || p.variety || '-') + '</div>' +
+        '<div class="sub-cell">' + esc(p.spec || '标准装') + '</div></td>' +
+      '<td><span class="' + (Number(p.stock) <= Number(p.safetyStock) ? 'stock-warn' : 'stock-ok') + '">' +
+        Number(p.stock) + '</span><div class="sub-cell">安全 ' + Number(p.safetyStock) + ' · 已售 ' + Number(p.soldCount) + '</div></td>' +
+      '<td class="price-cell">¥' + p.price + original +
+        '<div class="sub-cell">成本 ¥' + (Number(p.costPrice) || 0) + ' · 会员 ¥' + (Number(p.memberPrice) || '-') + '</div></td>' +
       '<td><span class="status-tag ' + esc(p.status) + '">' + (p.status === 'on' ? '在售' : '已下架') + '</span></td>' +
       '<td><div class="action-btns">' +
         '<button class="action-btn detail" onclick="openEdit(\'' + esc(p.id) + '\')">编辑</button>' +
@@ -417,6 +504,17 @@ function openEdit(id) {
   document.getElementById('editImg').value = p ? (p.img || '') : '';
   document.getElementById('editCat').value = p ? p.cat : 'fruit';
   document.getElementById('editStatus').value = p ? p.status : 'on';
+  document.getElementById('editVariety').value = p ? (p.variety || 'huaniu') : 'huaniu';
+  document.getElementById('editSpec').value = p ? (p.spec || '') : '';
+  document.getElementById('editTag').value = p ? (p.tag || '') : '';
+  document.getElementById('editUnit').value = p ? (p.unit || '斤') : '斤';
+  document.getElementById('editStock').value = p ? (p.stock == null ? 500 : p.stock) : 500;
+  document.getElementById('editSafetyStock').value = p ? (p.safetyStock == null ? 20 : p.safetyStock) : 20;
+  document.getElementById('editCostPrice').value = p ? (p.costPrice || 0) : 0;
+  document.getElementById('editMemberPrice').value = p ? (p.memberPrice || 0) : 0;
+  document.getElementById('editSort').value = p ? (p.sort || 1) : (readAll().length + 1);
+  document.getElementById('editServiceTags').value = p && Array.isArray(p.serviceTags) ? p.serviceTags.join(',') : '';
+  document.getElementById('editDetail').value = p ? (p.detailHtml || '') : '';
 
   document.getElementById('editModal').classList.add('show');
 }
@@ -445,29 +543,45 @@ function submitEdit() {
     desc: document.getElementById('editDesc').value.trim(),
     price: Number(price),
     original: Number(document.getElementById('editOriginal').value) || 0,
+    costPrice: Number(document.getElementById('editCostPrice').value) || 0,
+    memberPrice: Number(document.getElementById('editMemberPrice').value) || 0,
     img: document.getElementById('editImg').value.trim(),
     cat: document.getElementById('editCat').value,
+    variety: document.getElementById('editVariety').value,
+    spec: document.getElementById('editSpec').value.trim() || '标准装',
+    unit: document.getElementById('editUnit').value.trim() || '斤',
+    tag: document.getElementById('editTag').value.trim(),
+    stock: Number(document.getElementById('editStock').value) || 0,
+    safetyStock: Number(document.getElementById('editSafetyStock').value) || 0,
+    sort: Number(document.getElementById('editSort').value) || (list.length + 1),
+    serviceTags: document.getElementById('editServiceTags').value.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean),
+    detailHtml: document.getElementById('editDetail').value.trim(),
     status: document.getElementById('editStatus').value
   };
 
-  if (editingId) {
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].id === editingId) {
-        list[i] = payload;
-        break;
-      }
-    }
-  } else {
+  if (!editingId) {
     for (var j = 0; j < list.length; j++) {
       if (list[j].id === sid) {
         Toast.warning('SKU 编码已存在');
         return;
       }
     }
-    list.push(payload);
   }
 
-  writeList(list);
+  if (typeof MallStore !== 'undefined') {
+    var result = MallStore.saveProduct(payload);
+    if (!result.ok) { Toast.warning(result.error || '商品保存失败'); return; }
+  } else {
+    if (editingId) {
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === editingId) { payload.createdAt = list[i].createdAt; list[i] = payload; break; }
+      }
+    } else {
+      list.push(payload);
+    }
+    if (!writeList(list)) return;
+  }
+
   closeEditModal();
   renderTable();
   Toast.success(editingId ? '商品已更新' : '商品已新增');

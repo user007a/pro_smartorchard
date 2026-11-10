@@ -180,6 +180,11 @@
   </div>
 
   <main class="main-content">
+    <nav class="device-tabs" aria-label="移动端运营·智能与知识">
+      <a href="mb_ai_config.html">AI助手配置</a>
+      <a href="mb_disease_config.html">识别规则配置</a>
+      <a href="mb_fault_knowledge.html" class="active">故障知识库</a>
+    </nav>
     <div class="page-header">
       <div>
         <div class="page-title">设备故障知识库</div>
@@ -351,6 +356,7 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-ops-store.js"></script>
 <script>
 /* ============================================================
  * 设备故障知识库（移动端 mb_troubleshoot.html 数据源）
@@ -442,16 +448,16 @@ function esc(s) {
   });
 }
 function readJSON(key, fallback) {
-  try {
-    var raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    var v = JSON.parse(raw);
-    return Array.isArray(v) ? v : fallback;
-  } catch (e) { return fallback; }
+  var v = MobileOpsStore.readList(key);
+  return v.length ? v : fallback;
 }
-function writeJSON(key, val) {
-  try { localStorage.setItem(key, JSON.stringify(val)); return true; }
-  catch (e) { Toast.error('本地存储写入失败'); return false; }
+function writeJSON(key, val, action) {
+  if (!MobileOpsStore.writeList(key, val)) {
+    Toast.error('本地存储写入失败');
+    return false;
+  }
+  MobileOpsStore.audit(action || '保存故障知识库', 'faultKb', '', '共 ' + val.length + ' 条');
+  return true;
 }
 
 /* 拆分 + 去空（≤30 条） */
@@ -478,7 +484,7 @@ function readKB() {
   }
   return list;
 }
-function writeKB(list) { return writeJSON(KB_KEY, list); }
+function writeKB(list, action) { return writeJSON(KB_KEY, list, action); }
 
 function renderStats() {
   var list = readKB();
@@ -612,7 +618,7 @@ function submitEdit() {
     list.unshift(data);
     Toast.success('已新增');
   }
-  writeKB(list);
+  writeKB(list, editingId ? '编辑故障知识' : '新增故障知识');
   closeEdit();
   renderStats();
   renderCategorySummary();
@@ -625,7 +631,7 @@ function deleteItem(id) {
     message: '确认删除该故障知识条目吗？移动端将不再展示。',
     onConfirm: function () {
       var list = readKB().filter(function (k) { return k.id !== id; });
-      writeKB(list);
+      writeKB(list, '删除故障知识');
       Toast.success('已删除');
       renderStats(); renderCategorySummary(); renderTable();
     }
@@ -636,7 +642,7 @@ function toggleEnabled(id) {
   var idx = list.findIndex(function (k) { return k.id === id; });
   if (idx < 0) return;
   list[idx].enabled = !list[idx].enabled;
-  writeKB(list);
+  writeKB(list, list[idx].enabled ? '启用故障知识' : '停用故障知识');
   Toast.success(list[idx].enabled ? '已启用' : '已停用');
   renderStats(); renderTable();
 }

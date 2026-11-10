@@ -93,11 +93,6 @@
               </select>
               <select class="search-select" id="droneSelect">
                 <option value="">全部无人机</option>
-                <option value="DJI-01">DJI-01</option>
-                <option value="DJI-02">DJI-02</option>
-                <option value="DJI-03">DJI-03</option>
-                <option value="DJI-04">DJI-04</option>
-                <option value="DJI-05">DJI-05</option>
               </select>
               <input type="text" class="search-input" placeholder="搜索任务编号..." id="searchInput">
               <div class="search-actions">
@@ -273,10 +268,6 @@
             <label>执行无人机</label>
             <select class="form-select" id="addDrone">
               <option value="">请选择无人机</option>
-              <option value="DJI-01">DJI-01 · 大疆 Mavic 3M</option>
-              <option value="DJI-02">DJI-02 · 大疆 Mavic 3M</option>
-              <option value="DJI-03">DJI-03 · 大疆 Mavic 3E</option>
-              <option value="DJI-04">DJI-04 · 大疆 Mavic 3E</option>
             </select>
           </div>
         </div>
@@ -393,11 +384,7 @@
         <div class="form-row">
           <div class="form-item">
             <label>执行无人机</label>
-            <select class="form-select">
-              <option value="DJI-01" selected>DJI-01 · 大疆 Mavic 3M</option>
-              <option value="DJI-02">DJI-02 · 大疆 Mavic 3M</option>
-              <option value="DJI-03">DJI-03 · 大疆 Mavic 3E</option>
-              <option value="DJI-04">DJI-04 · 大疆 Mavic 3E</option>
+            <select class="form-select" id="editDrone">
             </select>
           </div>
           <div class="form-item">
@@ -480,6 +467,7 @@
 <script src="js/shared/mobile-bridge.js"></script>
 <script src="js/shared/demo-seed.js"></script>
 <script src="js/shared/production-store.js"></script>
+<script src="js/shared/device-store.js"></script>
 <script src="js/common-functions.js"></script>
 <script>
 /* ==========================================================
@@ -543,7 +531,7 @@ function renderRow(item, index) {
     '<td><span class="sortie-no' + (running ? ' running' : '') + '">' + item.sortieNo + '</span></td>' +
     '<td style="font-size:12px;">' + (plan ? plan.id + '<br><span style="color:var(--text-tertiary);">' + plan.name + '</span>' : '<span style="color:var(--text-tertiary);">独立飞巡</span>') + '</td>' +
     '<td>' + item.base + '</td>' +
-    '<td>' + item.drone + '</td>' +
+    '<td>' + droneCell(item.drone) + '</td>' +
     '<td>' + item.plot + '</td>' +
     '<td>' + (route ? route.routeName : (item.routeId || '—')) + '</td>' +
     '<td>' + item.area + '亩</td>' +
@@ -569,7 +557,7 @@ function showTaskDetail(id) {
     ['任务编号', s.taskId], ['架次', s.sortieNo],
     ['来源计划', plan ? plan.id + ' · ' + plan.name : '独立飞巡'],
     ['关联任务', task ? task.name + '（' + (PS.STATUS_TEXT[task.status] || task.status) + '）' : '—'],
-    ['所属基地', s.base], ['执行无人机', s.drone], ['巡查地块', s.plot],
+    ['所属基地', s.base], ['执行无人机', s.drone + (droneRef(s.drone) ? '（设备台账 ' + droneRef(s.drone).id + '）' : '')], ['巡查地块', s.plot],
     ['飞行面积', s.area + ' 亩'], ['航高 / 速度', (s.altitude || 0) + 'm / ' + (s.speed || 0) + 'm/s'],
     ['RTK 状态', s.rtk], ['计划时间', s.time], ['飞行日志', logs + ' 条'], ['状态', s.status]
   ];
@@ -622,7 +610,7 @@ function handleSearch() {
   var list = sortieList().filter(function (item) {
     if (base && item.base !== base) return false;
     if (status && item.status !== status) return false;
-    if (drone && item.drone !== drone) return false;
+    if (drone && !sameDrone(item.drone, drone)) return false;
     if (keyword && String(item.taskId).indexOf(keyword) < 0 && String(item.sortieNo).indexOf(keyword) < 0) return false;
     return true;
   });
@@ -640,6 +628,52 @@ function smartReset() {
 }
 
 /* ---------------- 新建巡检任务（任务 + 架次） ---------------- */
+/* ---------- 无人机设备化：执行无人机统一取自设备台账 ---------- */
+function droneList() {
+  if (!window.DeviceStore) return [];
+  return DeviceStore.devices().filter(function (d) { return d.type === 'drone'; });
+}
+/* 兼容历史 DJI-01~05 编号：按台账顺序映射 */
+function droneRef(code) {
+  var list = droneList();
+  if (!code) return null;
+  var hit = list.filter(function (d) { return d.id === code; })[0];
+  if (hit) return hit;
+  var legacy = String(code).match(/DJI-(\d+)/);
+  if (legacy) {
+    var idx = parseInt(legacy[1], 10) - 1;
+    if (list[idx]) return list[idx];
+  }
+  return null;
+}
+function droneOptionLabel(d, i) {
+  var code = 'DJI-' + ('0' + (i + 1)).slice(-2);
+  var statusText = window.DeviceStore ? DeviceStore.RUN_STATUS_TEXT[d.status] : d.status;
+  return code + ' · ' + d.id + ' ' + d.name + '（' + statusText + '）';
+}
+function droneCell(code) {
+  var d = droneRef(code);
+  if (!d) return code || '-';
+  return d.id + '<div style="font-size:11px;color:var(--text-tertiary);">' + code + '</div>';
+}
+function sameDrone(a, b) {
+  if (a === b) return true;
+  var da = droneRef(a), db = droneRef(b);
+  return !!(da && db && da.id === db.id);
+}
+function fillDroneOptions() {
+  var list = droneList();
+  var opts = list.map(function (d, i) {
+    return '<option value="' + d.id + '">' + droneOptionLabel(d, i) + '</option>';
+  }).join('');
+  ['addDrone', 'editDrone'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = '<option value="">请选择无人机</option>' + opts;
+  });
+  var sel = document.getElementById('droneSelect');
+  if (sel) sel.innerHTML = '<option value="">全部无人机</option>' + opts;
+}
+
 function fillAddOptions() {
   var planSel = document.getElementById('addPlan');
   if (planSel) {
@@ -647,6 +681,7 @@ function fillAddOptions() {
       return '<option value="' + p.id + '">' + p.id + ' ' + p.name + '</option>';
     }).join('');
   }
+  fillDroneOptions();
   var plotSel = document.getElementById('addPlot');
   if (plotSel) {
     plotSel.innerHTML = '<option value="">请选择地块</option>' + PS.PLOTS.map(function (p) {

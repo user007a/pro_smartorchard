@@ -496,6 +496,7 @@ body{display:block;background:
 </div>
 
 <script src="../applefarm_backhand/js/shared/biz-store.js"></script>
+<script src="../applefarm_backhand/js/shared/mall-store.js"></script>
 <script>
 /* ---------- 缩放适配（单屏不滚动） ---------- */
 (function(){
@@ -626,6 +627,7 @@ function setJit(id,val,amp){
 /* 客单价 / 认养订单：H5 与认养后台有真实数据时优先，否则回落到 BizStore 口径 */
 var ORDER_AOV = 328;          /* 客单价回退基线（H5 无订单时用 BizStore 覆盖） */
 var ADOPT_ORDERS = 0;         /* 本地认养记录单数，0 表示无本地数据 */
+var ADOPT_RENEW_RATE = null;  /* 认养续费率：后台认养订单口径，null 表示回落 BizStore */
 (function () {
   function readArr(key) {
     try {
@@ -634,20 +636,39 @@ var ADOPT_ORDERS = 0;         /* 本地认养记录单数，0 表示无本地数
     } catch (e) { return []; }
   }
 
+  /* 续费率：续费单数 / 已成交（已支付+已完成+已退款）订单数 */
+  function calcRenewRate() {
+    var list;
+    try {
+      var store = JSON.parse(localStorage.getItem('applefarm_adoption_v1') || 'null');
+      list = store && Array.isArray(store.orders) ? store.orders : [];
+    } catch (e) { list = []; }
+    list = list.filter(function (o) {
+      return o && ['paid', 'completed', 'refunded'].indexOf(o.status) >= 0;
+    });
+    if (!list.length) return null;
+    var renewed = list.filter(function (o) { return o.renew || Number(o.renewCount) > 0; }).length;
+    return Math.round(renewed / list.length * 1000) / 10;
+  }
+
   function render() {
     var orders = readArr('h5_orders');
     var adoptions = readArr('snzg_adoptions');
+    var m = (typeof MallStore !== 'undefined' && MallStore.metrics) ? MallStore.metrics() : null;
 
-    // 客单价：真实订单总额 / 订单数
-    if (orders.length) {
+    // 客单价：优先取商城统一口径（排除待付款/已取消/已退款），其次回落订单均值
+    if (m && m.orderCount > 0) {
+      ORDER_AOV = m.aov;
+    } else if (orders.length) {
       var sum = orders.reduce(function (s, o) { return s + (Number(o.total) || 0); }, 0);
       ORDER_AOV = Math.round(sum / orders.length);
     }
     ADOPT_ORDERS = adoptions.length;
-    renderOrders();
+    ADOPT_RENEW_RATE = calcRenewRate();
+    renderOrders(m);
   }
 
-  function renderOrders() {
+  function renderOrders(m) {
     var aovEl = document.getElementById('kpiAov');
     if (aovEl) aovEl.textContent = '￥' + (ORDER_AOV || 328);
 
@@ -655,6 +676,23 @@ var ADOPT_ORDERS = 0;         /* 本地认养记录单数，0 表示无本地数
     if (adoptEl && ADOPT_ORDERS) {
       adoptEl.innerHTML = ADOPT_ORDERS + '<small>单</small>';
       adoptEl.setAttribute('data-jit', ADOPT_ORDERS);
+    }
+
+    // 线上商城指标（GMV / 复购率 / 券核销 / 会员数）回写 KPI
+    if (m && m.orderCount > 0) {
+      setTimeout(function () {
+        var repurchaseEl = document.getElementById('kpiRepurchase');
+        if (repurchaseEl && m.repurchaseRate > 0) {
+          repurchaseEl.innerHTML = m.repurchaseRate + '<small>%</small>';
+        }
+        var noteEl = document.getElementById('srcNote');
+        if (noteEl) {
+          noteEl.textContent = (noteEl.__store || '数据来源：后台经营分析') +
+            '；线上商城 GMV ￥' + Number(m.gmv).toLocaleString('zh-CN') +
+            '（' + m.orderCount + ' 单 · 会员 ' + m.memberCount + ' 人 · 券核销率 ' + m.couponRedemption + '%）' +
+            (ADOPT_ORDERS ? '；认养订单 ' + ADOPT_ORDERS + ' 单' : '');
+        }
+      }, 0);
     }
 
     // 数据来源标注：追加在 BizStore 来源之后
@@ -670,7 +708,12 @@ var ADOPT_ORDERS = 0;         /* 本地认养记录单数，0 表示无本地数
   function init() {
     render();
     window.addEventListener('storage', function (e) {
-      if (e.key === 'h5_orders' || e.key === 'snzg_adoptions') render();
+      if (!e.key) return;
+      if (e.key === 'h5_orders' || e.key === 'snzg_adoptions' || e.key === 'applefarm_adoption_v1' ||
+          e.key.indexOf('mall_') === 0 || e.key === 'mall_store_version') {
+        render();
+        window.dispatchEvent(new CustomEvent('adoption-store-updated'));
+      }
     });
   }
   window.__daBizOrders = renderOrders;
@@ -994,7 +1037,7 @@ var ADOPT_ORDERS = 0;         /* 本地认养记录单数，0 表示无本地数
     if(!ADOPT_ORDERS) setJit('kpiAdopt',adopt.orders,30);
 
     $('kvAmount').innerHTML=one(adopt.amount,1)+'<small>万</small>';
-    $('kvRenew').innerHTML=one(adopt.renewRate,1)+'<small>%</small>';
+    $('kvRenew').innerHTML=one(ADOPT_RENEW_RATE != null ? ADOPT_RENEW_RATE : adopt.renewRate,1)+'<small>%</small>';
     if(!ADOPT_ORDERS) setJit('kvOrders',adopt.orders,30);
 
     renderTrend(BizStore.revenueTrend());
@@ -1023,6 +1066,7 @@ var ADOPT_ORDERS = 0;         /* 本地认养记录单数，0 表示无本地数
     if(!window.BizStore){empty($('rankList'),'共享数据源未加载');return;}
     try{ render(); }catch(e){ console.warn('[da_business] render failed', e); }
     BizStore.subscribe(function(){ render(); });
+    window.addEventListener('adoption-store-updated', function(){ try{ render(); }catch(e){} });
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();

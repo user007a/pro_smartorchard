@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 远程指令与 OTA</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; backdrop-filter:blur(4px); }
+  .modal-overlay.show { display:block; }
+  .modal-box { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:var(--bg-card); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.15);
+    width:700px; max-width:94vw; max-height:86vh; overflow-y:auto; z-index:1000; animation:modalSlideIn .25s ease-out; }
+  .modal-box.show { display:block; }
+  @keyframes modalSlideIn { from{opacity:0;transform:translate(-50%,-50%) scale(.95)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;
+    padding-bottom:16px; border-bottom:1px solid var(--border-light); }
+  .modal-header h3 { font-size:16px; font-weight:600; color:var(--text-primary); margin:0; }
+  .modal-close { width:28px; height:28px; border:none; background:var(--gray-100); border-radius:6px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; }
+  .modal-close:hover { background:var(--error-bg); color:var(--error); }
+  .modal-body { padding:0 4px; }
+  .modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; padding:16px 0 0;
+    border-top:1px solid var(--border-light); }
+
+  .form-group { margin-bottom:16px; }
+  .form-group label { display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:8px; }
+  .form-group input, .form-group select, .form-group textarea { width:100%; padding:10px;
+    border:1px solid var(--border-default); border-radius:8px; font-size:13px; box-sizing:border-box; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline:none; border-color:var(--primary-400); box-shadow:0 0 0 3px rgba(24,144,255,.1); }
+  .form-group textarea { min-height:72px; resize:vertical; font-family:Consolas,Monaco,monospace; }
+
+  .stat-card-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:16px; }
+  .stat-card { background:#fff; border:1px solid #eef0ee; border-radius:12px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .stat-label { font-size:12px; color:var(--text-tertiary); margin-bottom:6px; }
+  .stat-value { font-size:26px; font-weight:700; color:var(--text-primary); font-variant-numeric:tabular-nums; }
+  .stat-value .unit { font-size:13px; font-weight:500; color:var(--text-tertiary); margin-left:4px; }
+  .stat-sub { margin-top:6px; font-size:12px; color:var(--text-tertiary); }
+  .stat-sub.err { color:var(--error); }
+  .stat-sub.warn { color:var(--warning); }
+
+  .status-tag { display:inline-flex; align-items:center; padding:3px 10px; font-size:11.5px;
+    font-weight:500; border-radius:20px; white-space:nowrap; }
+  .status-tag.online { background:#d9f7be; color:#3a8618; border:1px solid #b7eb8f; }
+  .status-tag.warning { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .status-tag.offline { background:var(--error-bg); color:#cf1322; border:1px solid #ffccc7; }
+  .status-tag.processing { background:var(--info-bg); color:var(--primary-500); border:1px solid var(--info-border); }
+  .type-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-size:11.5px;
+    font-weight:500; background:var(--gray-100); color:var(--text-secondary); border:1px solid var(--border-default); }
+  .cmd-id { font-family:Consolas,Monaco,monospace; font-size:11.5px; color:#2b6cb0; }
+  .action-btns { display:flex; gap:6px; flex-wrap:nowrap; }
+  .action-btn { padding:4px 10px; font-size:11.5px; font-weight:500; border:1px solid transparent;
+    border-radius:6px; cursor:pointer; white-space:nowrap; background:none; }
+  .action-btn.detail { color:#2b6cb0; background:#f5f8fc; border-color:#c5d9f0; }
+  .action-btn.edit { color:var(--primary-600); background:var(--gray-50); border-color:var(--border-default); }
+  .action-btn.use { color:#3a8618; background:var(--success-bg); border-color:#b7eb8f; }
+  .action-btn.del { color:#cf1322; background:var(--error-bg); border-color:#ffccc7; }
+  .data-table { min-width:1240px; }
+  .data-table th { white-space:nowrap; }
+  .empty-row td { text-align:center; color:var(--text-tertiary); padding:40px 0; }
+  #pagination-container { padding:12px 16px; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="device" data-active-submenu="device-command">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <nav class="device-tabs" aria-label="远程控制">
+        <a href="device_control.html">水肥一体化</a>
+        <a href="device_command.html" class="active">远程指令与OTA</a>
+      </nav>
+
+      <div class="stat-card-row" id="statCards"></div>
+
+      <div class="content-wrapper">
+
+        <!-- ===== 搜索栏区 ===== -->
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="deviceSelect"><option value="">全部设备</option></select>
+            <select class="search-select" id="typeSelect" style="min-width:130px;"><option value="">全部指令类型</option></select>
+            <select class="search-select" id="statusSelect" style="min-width:120px;">
+              <option value="">全部执行状态</option>
+              <option value="pending">待下发</option>
+              <option value="sending">下发中</option>
+              <option value="success">执行成功</option>
+              <option value="failed">执行失败</option>
+            </select>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索指令编号 / 指令内容...">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="handleSearch()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 操作按钮区 ===== -->
+        <div class="page-section action-bar">
+          <button class="jg-btn-outline" onclick="openDispatchModal('')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>下发指令
+          </button>
+          <button class="jg-btn-outline" onclick="openDispatchModal('固件升级')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>
+            </svg>固件升级 / OTA
+          </button>
+          <button class="jg-btn-outline" onclick="exportCommands()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/>
+            </svg>导出指令记录
+          </button>
+        </div>
+
+        <!-- ===== 数据表格区 ===== -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:150px;">指令编号</th>
+                  <th style="width:78px;">设备编号</th>
+                  <th style="width:150px;">设备名称</th>
+                  <th style="width:96px;">指令类型</th>
+                  <th style="width:150px;">下发时间</th>
+                  <th style="width:96px;">执行状态</th>
+                  <th style="width:76px;">操作人</th>
+                  <th>指令内容</th>
+                  <th style="width:170px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ===== 下发指令弹窗 ===== -->
+<div class="modal-overlay" id="dispatchOverlay"></div>
+<div class="modal-box" id="dispatchModal">
+  <div class="modal-header">
+    <h3 id="dispatchTitle">下发指令</h3>
+    <button class="modal-close" onclick="closeDispatchModal()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div class="form-group">
+      <label>目标设备 <span style="color:var(--error);">*</span></label>
+      <select id="fDevice"></select>
+    </div>
+    <div class="form-group">
+      <label>指令类型</label>
+      <select id="fType"></select>
+    </div>
+    <div class="form-group">
+      <label>指令内容 <span style="color:var(--error);">*</span></label>
+      <textarea id="fContent" placeholder="如 目标 EC 下调至 1.8mS/cm；OTA 升级至 V4.2.0"></textarea>
+    </div>
+    <div class="form-group">
+      <label>操作人</label>
+      <select id="fOperator"></select>
+    </div>
+    <div class="form-group">
+      <label>备注</label>
+      <input type="text" id="fRemark" placeholder="选填，如变更原因、审批单号" />
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="jg-btn" onclick="closeDispatchModal()">取消</button>
+    <button class="jg-btn jg-btn-primary" onclick="submitCommand()">确认下发</button>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/shared/device-store.js"></script>
+<script src="js/shared/device-ui.js"></script>
+<script>
+/* ============================================================
+ * 远程指令与 OTA
+ * 数据源：js/shared/device-store.js → commands()
+ *
+ * 覆盖参数下发 / 远程重启 / 采集指令 / 固件升级 / 校准指令 / 开关控制，
+ * 是「控制类设备」（水肥一体机、灌溉控制器、冷库温控、无人机机库）的核心运维入口。
+ * 设备离线时下发应记为失败并写入原因，避免出现「假成功」。
+ * ============================================================ */
+
+var STATUS_STATE = { pending: 'warning', sending: 'processing', success: 'online', failed: 'offline' };
+var page = null;
+
+function stampNow() {
+  var d = new Date();
+  var p = function (n) { return n < 10 ? '0' + n : n; };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+    ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+/* ---------- 下拉初始化 ---------- */
+function initSelects() {
+  DeviceUI.fillSelect('deviceSelect', DeviceStore.devices().map(function (d) {
+    return { value: d.id, label: d.id + ' · ' + d.name };
+  }), '全部设备');
+  DeviceUI.fillSelect('fDevice', DeviceStore.devices().map(function (d) {
+    return { value: d.id, label: d.id + ' · ' + d.name + '（' + DeviceStore.RUN_STATUS_TEXT[d.status] + '）' };
+  }), '请选择设备');
+  DeviceUI.fillSelect('fOperator', DeviceUI.operatorOptions(), '请选择操作人');
+
+  var sel = document.getElementById('typeSelect');
+  sel.innerHTML = '<option value="">全部指令类型</option>' +
+    DeviceStore.COMMAND_TYPES.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+  var fType = document.getElementById('fType');
+  fType.innerHTML = DeviceStore.COMMAND_TYPES.map(function (t) {
+    return '<option value="' + t + '">' + t + '</option>';
+  }).join('');
+}
+
+/* ---------- 统计卡 ---------- */
+function renderStats() {
+  var list = DeviceStore.commands();
+  var success = list.filter(function (c) { return c.status === 'success'; }).length;
+  var failed = list.filter(function (c) { return c.status === 'failed'; }).length;
+  var pending = list.filter(function (c) { return c.status === 'pending' || c.status === 'sending'; }).length;
+  var ota = list.filter(function (c) { return c.type === '固件升级'; }).length;
+  var rate = list.length ? Math.round(success / list.length * 100) : 0;
+  document.getElementById('statCards').innerHTML =
+    '<div class="stat-card"><div class="stat-label">指令总数</div>' +
+    '<div class="stat-value">' + list.length + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub">覆盖 ' + DeviceStore.COMMAND_TYPES.length + ' 类指令</div></div>' +
+    '<div class="stat-card"><div class="stat-label">执行成功</div>' +
+    '<div class="stat-value" style="color:var(--success);">' + success + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub">成功率 ' + rate + '%</div></div>' +
+    '<div class="stat-card"><div class="stat-label">执行失败</div>' +
+    '<div class="stat-value" style="color:var(--error);">' + failed + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub err">需排查链路或设备状态</div></div>' +
+    '<div class="stat-card"><div class="stat-label">待下发 / 下发中</div>' +
+    '<div class="stat-value" style="color:var(--warning);">' + pending + '<span class="unit">条</span></div>' +
+    '<div class="stat-sub warn">指令队列积压</div></div>' +
+    '<div class="stat-card"><div class="stat-label">OTA 升级</div>' +
+    '<div class="stat-value">' + ota + '<span class="unit">次</span></div>' +
+    '<div class="stat-sub">固件版本变更记录</div></div>';
+}
+
+/* ---------- 表格行 ---------- */
+function renderRow(item, index) {
+  var dev = DeviceStore.deviceOf(item.deviceId);
+  return '<tr>' +
+    '<td>' + index + '</td>' +
+    '<td><span class="cmd-id">' + DeviceUI.esc(item.id) + '</span></td>' +
+    '<td>' + DeviceUI.esc(item.deviceId || '-') + '</td>' +
+    '<td>' + DeviceUI.esc(dev ? dev.name : '-') + '</td>' +
+    '<td><span class="type-badge">' + DeviceUI.esc(item.type) + '</span></td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + DeviceUI.esc(item.createTime || '-') + '</td>' +
+    '<td>' + DeviceUI.statusTag(STATUS_STATE[item.status] || 'warning',
+      DeviceStore.COMMAND_STATUS_TEXT[item.status] || item.status) + '</td>' +
+    '<td>' + DeviceUI.esc(item.operator || '-') + '</td>' +
+    '<td style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' +
+      DeviceUI.esc(item.content || '') + '">' + DeviceUI.esc(item.content || '-') + '</td>' +
+    '<td><div class="action-btns">' +
+      '<button class="action-btn detail" onclick="openDetail(\'' + DeviceUI.esc(item.id) + '\')">详情</button>' +
+      (item.status === 'pending' || item.status === 'sending'
+        ? '<button class="action-btn use" onclick="mockExecute(\'' + DeviceUI.esc(item.id) + '\')">回执</button>'
+        : '') +
+      '<button class="action-btn del" onclick="deleteCommand(\'' + DeviceUI.esc(item.id) + '\')">删除</button>' +
+    '</div></td>' +
+  '</tr>';
+}
+
+/* ---------- 过滤 ---------- */
+function filteredList() {
+  var dev = document.getElementById('deviceSelect').value;
+  var type = document.getElementById('typeSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  return DeviceStore.commands().filter(function (c) {
+    if (dev && c.deviceId !== dev) return false;
+    if (type && c.type !== type) return false;
+    if (status && c.status !== status) return false;
+    if (kw) {
+      var hay = (c.id + ' ' + (c.content || '') + ' ' + (c.remark || '')).toLowerCase();
+      if (hay.indexOf(kw) < 0) return false;
+    }
+    return true;
+  }).sort(function (a, b) { return (b.createTime || '').localeCompare(a.createTime || ''); });
+}
+
+function handleSearch() {
+  var list = filteredList();
+  page.updateData(list);
+  DeviceUI.toast('找到 ' + list.length + ' 条指令记录', 'info');
+}
+
+function resetFilter() {
+  ['deviceSelect', 'typeSelect', 'statusSelect', 'searchInput'].forEach(function (id) {
+    document.getElementById(id).value = '';
+  });
+  page.updateData(filteredList());
+  DeviceUI.toast('已重置搜索条件', 'info');
+}
+
+/* ---------- 详情 ---------- */
+function openDetail(id) {
+  var c = DeviceStore.commands().filter(function (x) { return x.id === id; })[0];
+  if (!c) return;
+  var dev = DeviceStore.deviceOf(c.deviceId);
+  DeviceUI.detailModal('指令 · ' + c.id, [
+    ['指令编号', c.id],
+    ['设备编号', c.deviceId],
+    ['设备名称', dev ? dev.name : '—'],
+    ['设备类型', dev ? DeviceStore.typeName(dev.type) : '—'],
+    ['设备状态', dev ? DeviceStore.RUN_STATUS_TEXT[dev.status] : '—'],
+    ['指令类型', c.type],
+    ['下发时间', c.createTime || '—'],
+    ['执行状态', DeviceStore.COMMAND_STATUS_TEXT[c.status] || c.status, 'raw'],
+    ['完成时间', c.finishTime || '—'],
+    ['操作人', c.operator || '—'],
+    ['指令内容', c.content || '—'],
+    ['备注 / 回执', c.remark || '—']
+  ]);
+}
+
+/* ---------- 下发 ---------- */
+function openDispatchModal(type) {
+  document.getElementById('dispatchTitle').textContent = type === '固件升级' ? '固件升级 / OTA' : '下发远程指令';
+  document.getElementById('fDevice').value = '';
+  document.getElementById('fType').value = type || '参数下发';
+  document.getElementById('fContent').value = type === '固件升级' ? 'OTA 升级至最新固件版本：' : '';
+  document.getElementById('fOperator').value = '';
+  document.getElementById('fRemark').value = '';
+  document.getElementById('dispatchOverlay').classList.add('show');
+  document.getElementById('dispatchModal').classList.add('show');
+}
+
+function closeDispatchModal() {
+  document.getElementById('dispatchOverlay').classList.remove('show');
+  document.getElementById('dispatchModal').classList.remove('show');
+}
+
+function submitCommand() {
+  var deviceId = document.getElementById('fDevice').value;
+  var content = document.getElementById('fContent').value.trim();
+  var type = document.getElementById('fType').value;
+  if (!deviceId) { DeviceUI.toast('请选择目标设备', 'error'); return; }
+  if (!content) { DeviceUI.toast('请填写指令内容', 'error'); return; }
+
+  var dev = DeviceStore.deviceOf(deviceId);
+  if (!dev) { DeviceUI.toast('设备不存在', 'error'); return; }
+
+  // 控制类指令必须设备在线才可下发
+  var needOnline = ['参数下发', '远程重启', '固件升级', '校准指令', '开关控制'].indexOf(type) >= 0;
+  var status = 'pending';
+  var remark = '';
+  if (needOnline && dev.status === 'offline') {
+    status = 'failed';
+    remark = '设备当前离线，指令未能送达';
+  }
+
+  var now = new Date();
+  var datePart = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
+  var seq = DeviceStore.commands().filter(function (c) {
+    return (c.id || '').indexOf('CMD-' + datePart) === 0;
+  }).length + 1;
+
+  var item = {
+    id: 'CMD-' + datePart + '-' + String(seq).padStart(3, '0'),
+    deviceId: deviceId,
+    type: type,
+    createTime: stampNow(),
+    status: status,
+    operator: document.getElementById('fOperator').value || '当前用户',
+    content: content,
+    remark: remark,
+    finishTime: status === 'failed' ? stampNow() : ''
+  };
+
+  var check = DeviceStore.validate('command', item, null);
+  if (!check.ok) { DeviceUI.toast(check.message, 'error'); return; }
+
+  DeviceStore.upsertCommand(item);
+  closeDispatchModal();
+  refreshAll();
+  if (status === 'failed') DeviceUI.toast('指令已记录，但设备离线未能送达', 'error');
+  else DeviceUI.toast('指令已下发，等待设备回执', 'success');
+}
+
+/* ---------- 模拟回执 ---------- */
+function mockExecute(id) {
+  var c = DeviceStore.commands().filter(function (x) { return x.id === id; })[0];
+  if (!c) return;
+  DeviceUI.confirmAction('确认已收到设备「' + c.deviceId + '」的执行回执吗？', {
+    title: '回执确认', confirmText: '确认回执', icon: '✅'
+  }).then(function (ok) {
+    if (!ok) return;
+    var item = Object.assign({}, c, { status: 'success', finishTime: stampNow(), remark: c.remark || '设备回执执行成功' });
+    DeviceStore.upsertCommand(item);
+    DeviceStore.appendLog({
+      deviceId: c.deviceId, level: 'info', type: '控制指令', source: '平台',
+      content: '指令执行成功：' + c.type + ' · ' + c.content,
+      traceId: 'TR-' + c.id.replace(/[^0-9]/g, '').slice(0, 12)
+    });
+    refreshAll();
+    DeviceUI.toast('回执已记录，指令执行成功', 'success');
+  });
+}
+
+function deleteCommand(id) {
+  DeviceUI.confirmDelete('确定删除指令记录「' + id + '」吗？').then(function (ok) {
+    if (!ok) return;
+    DeviceStore.removeCommand(id);
+    refreshAll();
+    DeviceUI.toast('指令记录已删除', 'success');
+  });
+}
+
+/* ---------- 导出 ---------- */
+function exportCommands() {
+  var list = filteredList();
+  var headers = ['指令编号', '设备编号', '设备名称', '指令类型', '下发时间', '执行状态', '操作人', '指令内容', '备注'];
+  var rows = list.map(function (c) {
+    var dev = DeviceStore.deviceOf(c.deviceId);
+    return [c.id, c.deviceId, dev ? dev.name : '', c.type, c.createTime || '',
+      DeviceStore.COMMAND_STATUS_TEXT[c.status] || c.status, c.operator || '', c.content || '', c.remark || ''];
+  });
+  DeviceUI.exportCsv('设备远程指令', headers, rows);
+}
+
+/* ---------- 刷新 ---------- */
+function refreshAll() {
+  renderStats();
+  page.updateData(filteredList());
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  initSelects();
+  page = DeviceUI.pagination({
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow,
+    emptyCols: 10,
+    pageSize: 10
+  });
+  page.init({ data: [] });
+
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') handleSearch();
+  });
+
+  DeviceStore.subscribe(function (reason) {
+    if (reason === 'init') return;
+    renderStats();
+  });
+
+  refreshAll();
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

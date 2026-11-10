@@ -181,6 +181,11 @@
   </div>
 
   <main class="main-content">
+    <nav class="device-tabs" aria-label="移动端运营·智能与知识">
+      <a href="mb_ai_config.html" class="active">AI助手配置</a>
+      <a href="mb_disease_config.html">识别规则配置</a>
+      <a href="mb_fault_knowledge.html">故障知识库</a>
+    </nav>
     <div class="page-header">
       <div>
         <div class="page-title">AI 助手配置</div>
@@ -311,6 +316,7 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-ops-store.js"></script>
 <script>
 /* ============================================================
  * AI 助手配置（T12）
@@ -346,18 +352,11 @@
   ];
 
   function readAll() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      var v = JSON.parse(raw);
-      if (!v || typeof v !== 'object') return null;
-      var cats = Array.isArray(v.categories) ? v.categories : [];
-      var qs = Array.isArray(v.hotQuestions) ? v.hotQuestions : [];
-      return { categories: cats, hotQuestions: qs };
-    } catch (e) {
-      // 损坏的 JSON（{BAD JSON 等）必须能被页面承受住，不应崩溃
-      return null;
-    }
+    var v = MobileOpsStore.readObj('aiConfig');
+    if (!v) return null;
+    var cats = Array.isArray(v.categories) ? v.categories : [];
+    var qs = Array.isArray(v.hotQuestions) ? v.hotQuestions : [];
+    return { categories: cats, hotQuestions: qs };
   }
 
   function ensureSeed() {
@@ -368,14 +367,14 @@
     return seed;
   }
 
-  function writeAll(data) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      return true;
-    } catch (e) {
+  function writeAll(data, action) {
+    if (!MobileOpsStore.writeObj(MobileOpsStore.KEYS.aiConfig, data)) {
       Toast.error('本地存储写入失败，请稍后重试');
       return false;
     }
+    MobileOpsStore.audit(action || '保存AI助手配置', 'aiConfig', '',
+      (data.categories || []).length + ' 个分类 / ' + (data.hotQuestions || []).length + ' 条热门问题');
+    return true;
   }
 
   function esc(s) {
@@ -533,7 +532,7 @@
         if (c.id === editingCatId) { c.name = name; c.desc = desc; hit = true; }
       });
       if (!hit) { Toast.error('未找到该分类'); return; }
-      if (writeAll(data)) {
+      if (writeAll(data, '编辑AI分类')) {
         closeCategoryModal();
         refreshAll();
         Toast.success('分类已更新');
@@ -553,7 +552,7 @@
     data2.categories.forEach(function (c) { if (c.id === id) dup = true; });
     if (dup) { Toast.warning('分类 ID 已存在'); return; }
     data2.categories.push({ id: id, name: name, desc: desc });
-    if (writeAll(data2)) {
+    if (writeAll(data2, '新增AI分类')) {
       closeCategoryModal();
       refreshAll();
       Toast.success('已新增分类');
@@ -578,7 +577,7 @@
           return;
         }
         cur.categories = cur.categories.filter(function (c) { return c.id !== id; });
-        if (writeAll(cur)) {
+        if (writeAll(cur, '删除AI分类')) {
           refreshAll();
           Toast.success('分类已删除');
         }
@@ -624,14 +623,14 @@
         if (q.id === editingQId) { q.question = qText; q.category = cat; hit = true; }
       });
       if (!hit) { Toast.error('未找到该问题'); return; }
-      if (writeAll(data)) {
+      if (writeAll(data, '编辑AI热门问题')) {
         closeQuestionModal();
         refreshAll();
         Toast.success('热门问题已更新');
       }
     } else {
       data.hotQuestions.push({ id: genId('q'), question: qText, category: cat });
-      if (writeAll(data)) {
+      if (writeAll(data, '新增AI热门问题')) {
         closeQuestionModal();
         refreshAll();
         Toast.success('已新增热门问题');
@@ -646,7 +645,7 @@
         var data = readAll();
         if (!data) return;
         data.hotQuestions = data.hotQuestions.filter(function (q) { return q.id !== id; });
-        if (writeAll(data)) {
+        if (writeAll(data, '删除AI热门问题')) {
           refreshAll();
           Toast.success('热门问题已删除');
         }
@@ -661,7 +660,7 @@
       message: '将把分类与热门问题还原为移动端内置的 6 分类 + 3 热门。继续？',
       onConfirm: function () {
         var seed = { categories: SEED_CATEGORIES.slice(), hotQuestions: SEED_HOT_QUESTIONS.slice() };
-        if (writeAll(seed)) {
+        if (writeAll(seed, '恢复默认AI配置')) {
           refreshAll();
           Toast.success('已恢复默认配置');
         }

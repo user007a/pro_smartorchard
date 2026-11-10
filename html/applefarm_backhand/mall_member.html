@@ -49,6 +49,28 @@
   .metric-cell { font-variant-numeric: tabular-nums; }
   .metric-cell strong { color: var(--text-primary); font-weight: var(--weight-semibold, 600); }
   .empty-state { padding: var(--space-2xl) 0; text-align: center; color: var(--text-tertiary); font-size: var(--font-size-sm); }
+  .status-tag { display:inline-block;padding:3px 10px;border-radius:var(--radius-full);font-size:var(--font-size-xs); }
+  .status-tag.active { background:var(--success-bg);color:var(--success); }
+  .status-tag.disabled { background:var(--gray-100);color:var(--text-secondary); }
+  .modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;justify-content:center;align-items:center;backdrop-filter:blur(4px); }
+  .modal-overlay.show { display:flex; }
+  .modal-box { background:var(--bg-card);border-radius:12px;width:92%;max-width:640px;max-height:86vh;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,.2); }
+  .modal-header { display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border-default); }
+  .modal-title { font-size:16px;font-weight:600;color:#1f1f1f; }
+  .modal-close { background:none;border:none;cursor:pointer;font-size:20px;color:var(--text-tertiary); }
+  .modal-body { padding:20px;overflow-y:auto;max-height:calc(86vh - 132px); }
+  .modal-footer { display:flex;justify-content:flex-end;gap:12px;padding:16px 20px;border-top:1px solid var(--border-default); }
+  .form-row { display:flex;gap:var(--space-md);margin-bottom:var(--space-lg); }
+  .form-field { flex:1; }
+  .form-field label { display:block;font-size:var(--font-size-sm);font-weight:500;color:var(--text-primary);margin-bottom:var(--space-sm); }
+  .form-field input,.form-field select,.form-field textarea { width:100%;padding:10px 14px;border:1.5px solid var(--border-default);border-radius:var(--radius-lg);font-size:var(--font-size-base);font-family:inherit;background:var(--bg-card);box-sizing:border-box; }
+  .detail-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px; }
+  .detail-item { background:var(--bg-secondary);border-radius:8px;padding:10px 12px; }
+  .detail-item .k { font-size:var(--font-size-xs);color:var(--text-tertiary);margin-bottom:2px; }
+  .detail-item .v { font-size:var(--font-size-sm);color:var(--text-primary);font-weight:600; }
+  .order-mini { border:1px solid var(--border-light);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:var(--font-size-sm); }
+  .order-mini .no { font-family:monospace;color:var(--text-tertiary);font-size:var(--font-size-xs); }
+  .order-mini .row { display:flex;justify-content:space-between;margin-top:4px; }
 </style>
 </head>
 <body data-active-menu="mall" data-active-submenu="mall-member">
@@ -72,6 +94,7 @@
       </div>
       <div class="page-actions">
         <button class="jg-btn" onclick="renderTable()">刷新</button>
+        <button class="jg-btn jg-btn-primary" onclick="openEdit()">新增会员</button>
       </div>
     </div>
 
@@ -93,8 +116,8 @@
         <div class="stat-value" id="statPoints">0</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">认养果树</div>
-        <div class="stat-value" id="statAdoptions">0</div>
+        <div class="stat-label">复购会员</div>
+        <div class="stat-value" id="statRepeat">0</div>
       </div>
     </div>
 
@@ -125,9 +148,10 @@
               <th style="width:80px;">订单数</th>
               <th style="width:110px;">消费总额</th>
               <th style="width:90px;">积分</th>
-              <th style="width:90px;">收藏</th>
-              <th style="width:100px;">认养</th>
+              <th style="width:120px;">最近下单</th>
               <th style="width:110px;">注册时间</th>
+              <th style="width:90px;">状态</th>
+              <th style="width:180px;">操作</th>
             </tr>
           </thead>
           <tbody id="memberBody"></tbody>
@@ -138,9 +162,93 @@
   </main>
 </div>
 
+<!-- 会员编辑 -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="editModalTitle">新增会员</h3>
+      <button class="modal-close" onclick="closeEditModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-field">
+          <label>会员昵称<span style="color:var(--error);">*</span></label>
+          <input type="text" id="editNickname" placeholder="如 李女士">
+        </div>
+        <div class="form-field">
+          <label>手机号</label>
+          <input type="text" id="editPhone" placeholder="用于与 H5 订单自动关联">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>会员等级</label>
+          <select id="editLevel">
+            <option value="normal">普通会员</option>
+            <option value="gold">金卡会员</option>
+            <option value="vip">VIP会员</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>积分</label>
+          <input type="number" id="editPoints" min="0" step="1" placeholder="0">
+        </div>
+        <div class="form-field">
+          <label>来源渠道</label>
+          <select id="editSource">
+            <option value="H5商城">H5 商城</option>
+            <option value="认养">认养</option>
+            <option value="线下">线下导入</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>所在地区</label>
+          <input type="text" id="editRegion" placeholder="如 甘肃省天水市">
+        </div>
+        <div class="form-field">
+          <label>状态</label>
+          <select id="editStatus">
+            <option value="active">正常</option>
+            <option value="disabled">已禁用</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:var(--space-lg);">
+        <label>会员标签</label>
+        <input type="text" id="editTags" placeholder="多个标签用逗号分隔，如 高复购,礼盒客户">
+      </div>
+      <div class="form-field">
+        <label>收货地址</label>
+        <input type="text" id="editAddress" placeholder="默认收货地址">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeEditModal()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 会员详情 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="detailTitle">会员详情</h3>
+      <button class="modal-close" onclick="closeDetailModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeDetailModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mall-store.js"></script>
 <script src="js/shared/demo-seed.js"></script>
 <script>
 /* ============================================================
@@ -152,18 +260,8 @@
  *   snzg_adoptions 认养果树
  *   h5_addresses   收货地址
  * ============================================================ */
-var PROFILE_KEY = 'mall_member_profiles';
-
 var LEVEL_TEXT = { vip: 'VIP会员', gold: '金卡会员', normal: '普通会员' };
-
-function readArr(key) {
-  try {
-    var v = JSON.parse(localStorage.getItem(key) || '[]');
-    return Array.isArray(v) ? v : [];
-  } catch (e) {
-    return [];
-  }
-}
+var editingId = null;
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -171,64 +269,65 @@ function esc(s) {
   });
 }
 
-/* 会员基础档案：后台可维护（H5 尚未接入登录，先由后台登记） */
-function readProfiles() {
-  try {
-    var v = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null');
-    if (Array.isArray(v) && v.length) return v;
-  } catch (e) { /* 读取失败用默认 */ }
-  return [];
+function readMembers() {
+  return typeof MallStore !== 'undefined' ? MallStore.members() : [];
 }
 
-/* 等级按累计消费自动升级：≥3000 VIP，≥1000 金卡，其余普通 */
+function levelRules() {
+  var s = typeof MallStore !== 'undefined' ? MallStore.settings() : null;
+  return (s && s.levelRules) || [
+    { level: 'vip', name: 'VIP会员', min: 3000 },
+    { level: 'gold', name: '金卡会员', min: 1000 },
+    { level: 'normal', name: '普通会员', min: 0 }
+  ];
+}
+
 function autoLevel(amount) {
-  if (amount >= 3000) return 'vip';
-  if (amount >= 1000) return 'gold';
+  var rules = levelRules().slice().sort(function (a, b) { return b.min - a.min; });
+  for (var i = 0; i < rules.length; i++) { if (amount >= rules[i].min) return rules[i].level; }
   return 'normal';
 }
 
 function buildRows() {
-  var profiles = readProfiles();
-  var orders = readArr('h5_orders');
-  var points = readArr('h5_points');
-  var favs = readArr('h5_favorites');
-  var adoptions = readArr('snzg_adoptions');
-
-  return profiles.map(function (p) {
-    var myOrders = orders;
-    var amount = myOrders.reduce(function (s, o) { return s + (Number(o.total) || 0); }, 0);
-    var myPoints = points.reduce(function (s, x) { return s + (Number(x.amount) || 0); }, 0);
-    // 演示档案昵称与 H5 硬编码一致时，统计全局数据；否则视为独立会员（当前无隔离键）
-    var byLevel = autoLevel(amount);
+  return readMembers().map(function (m) {
+    var stats = MallStore.memberStats(m);
+    var level = m.level === 'vip' || m.level === 'gold' ? m.level : autoLevel(stats.totalSpend);
+    var claims = MallStore.claims().filter(function (c) {
+      return c.memberKey === m.id || (m.phone && c.memberKey === m.phone);
+    });
     return {
-      id: p.id,
-      nickname: p.nickname,
-      phone: p.phone,
-      address: p.address,
-      regDate: p.regDate,
-      level: p.level === 'vip' ? 'vip' : byLevel,
-      orders: myOrders.length,
-      amount: amount,
-      points: myPoints,
-      favs: favs.length,
-      adoptions: adoptions.length
+      id: m.id,
+      nickname: m.nickname,
+      phone: m.phone,
+      address: m.address,
+      region: m.region,
+      regDate: m.regDate,
+      source: m.source,
+      status: m.status,
+      tags: m.tags,
+      level: level,
+      orders: stats.orderCount,
+      amount: stats.totalSpend,
+      points: m.points || 0,
+      lastOrderAt: stats.lastOrderAt,
+      coupons: claims.length
     };
   });
 }
 
 function renderStats(rows) {
-  var orders = 0, amount = 0, points = 0, adoptions = 0;
+  var orders = 0, amount = 0, points = 0, repeat = 0;
   rows.forEach(function (r) {
     orders += r.orders;
     amount += r.amount;
     points += r.points;
-    adoptions += r.adoptions;
+    if (r.orders >= 2) repeat++;
   });
   document.getElementById('statMembers').textContent = rows.length;
   document.getElementById('statOrders').textContent = orders;
   document.getElementById('statAmount').textContent = '¥' + amount.toLocaleString('zh-CN');
   document.getElementById('statPoints').textContent = points;
-  document.getElementById('statAdoptions').textContent = adoptions;
+  document.getElementById('statRepeat').textContent = repeat;
 }
 
 function filteredRows() {
@@ -263,14 +362,21 @@ function renderTable() {
     return '<tr>' +
       '<td class="checkbox-col">' + (i + 1) + '</td>' +
       '<td><div class="cell-name">' + esc(r.nickname) + '</div>' +
-          '<div class="cell-sub text-mono">' + esc(r.id) + ' · ' + esc(r.phone) + '</div></td>' +
+          '<div class="cell-sub text-mono">' + esc(r.id) + ' · ' + esc(r.phone || '未留手机号') + '</div>' +
+          '<div class="cell-sub">' + esc(r.source || 'H5商城') + (r.tags && r.tags.length ? ' · ' + esc(r.tags.join('/')) : '') + '</div></td>' +
       '<td><span class="level-tag ' + esc(r.level) + '">' + (LEVEL_TEXT[r.level] || r.level) + '</span></td>' +
       '<td class="metric-cell"><strong>' + r.orders + '</strong> 单</td>' +
       '<td class="metric-cell"><strong>¥' + r.amount.toLocaleString('zh-CN') + '</strong></td>' +
       '<td class="metric-cell"><strong>' + r.points + '</strong> 分</td>' +
-      '<td class="metric-cell">' + r.favs + '</td>' +
-      '<td class="metric-cell">' + r.adoptions + ' 棵</td>' +
+      '<td class="text-mono" style="font-size:var(--font-size-xs);">' + (r.lastOrderAt ? esc(r.lastOrderAt.slice(0, 10)) : '—') + '</td>' +
       '<td class="text-mono">' + esc(r.regDate) + '</td>' +
+      '<td><span class="status-tag ' + (r.status === 'disabled' ? 'disabled' : 'active') + '">' + (r.status === 'disabled' ? '已禁用' : '正常') + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn detail" onclick="openDetail(\'' + esc(r.id) + '\')">详情</button>' +
+        '<button class="action-btn download" onclick="openEdit(\'' + esc(r.id) + '\')">编辑</button>' +
+        '<button class="action-btn ' + (r.status === 'disabled' ? 'download' : 'delete') + '" onclick="toggleStatus(\'' + esc(r.id) + '\')">' +
+          (r.status === 'disabled' ? '启用' : '禁用') + '</button>' +
+      '</div></td>' +
     '</tr>';
   }).join('');
 }
@@ -281,9 +387,108 @@ function resetFilter() {
   renderTable();
 }
 
+function openEdit(id) {
+  editingId = id || null;
+  var m = null;
+  if (id) {
+    var list = readMembers();
+    for (var i = 0; i < list.length; i++) { if (list[i].id === id) { m = list[i]; break; } }
+    if (!m) { Toast.error('未找到该会员'); return; }
+  }
+  document.getElementById('editModalTitle').textContent = m ? '编辑会员' : '新增会员';
+  document.getElementById('editNickname').value = m ? m.nickname : '';
+  document.getElementById('editPhone').value = m ? (m.phone || '') : '';
+  document.getElementById('editLevel').value = m ? (m.level || 'normal') : 'normal';
+  document.getElementById('editPoints').value = m ? (m.points || 0) : 0;
+  document.getElementById('editSource').value = m ? (m.source || 'H5商城') : 'H5商城';
+  document.getElementById('editRegion').value = m ? (m.region || '') : '';
+  document.getElementById('editStatus').value = m ? (m.status || 'active') : 'active';
+  document.getElementById('editTags').value = m && Array.isArray(m.tags) ? m.tags.join(',') : '';
+  document.getElementById('editAddress').value = m ? (m.address || '') : '';
+  document.getElementById('editModal').classList.add('show');
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('show');
+  editingId = null;
+}
+
+function submitEdit() {
+  var wasEditing = !!editingId;
+  var nickname = document.getElementById('editNickname').value.trim();
+  if (!nickname) { Toast.warning('请填写会员昵称'); return; }
+  var payload = {
+    id: editingId || undefined,
+    nickname: nickname,
+    phone: document.getElementById('editPhone').value.trim(),
+    level: document.getElementById('editLevel').value,
+    points: Number(document.getElementById('editPoints').value) || 0,
+    source: document.getElementById('editSource').value,
+    region: document.getElementById('editRegion').value.trim(),
+    status: document.getElementById('editStatus').value,
+    tags: document.getElementById('editTags').value.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean),
+    address: document.getElementById('editAddress').value.trim()
+  };
+  var r = MallStore.saveMember(payload);
+  if (!r.ok) { Toast.warning(r.error || '会员保存失败'); return; }
+  closeEditModal();
+  renderTable();
+  Toast.success(wasEditing ? '会员已更新' : '会员已新增');
+}
+
+function toggleStatus(id) {
+  var list = readMembers();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].id === id) {
+      var next = list[i].status === 'disabled' ? 'active' : 'disabled';
+      var r = MallStore.saveMember(Object.assign({}, list[i], { status: next }));
+      if (!r.ok) { Toast.error(r.error || '操作失败'); return; }
+      renderTable();
+      Toast.success(next === 'active' ? '会员已启用' : '会员已禁用');
+      return;
+    }
+  }
+}
+
+function openDetail(id) {
+  var m = null;
+  var list = readMembers();
+  for (var i = 0; i < list.length; i++) { if (list[i].id === id) { m = list[i]; break; } }
+  if (!m) { Toast.error('未找到该会员'); return; }
+  var stats = MallStore.memberStats(m);
+  var orders = MallStore.memberOrders(m).slice(0, 5);
+  var claims = MallStore.claims().filter(function (c) { return c.memberKey === m.id || (m.phone && c.memberKey === m.phone); });
+  var html =
+    '<div class="detail-grid">' +
+      '<div class="detail-item"><div class="k">会员 ID</div><div class="v">' + esc(m.id) + '</div></div>' +
+      '<div class="detail-item"><div class="k">昵称</div><div class="v">' + esc(m.nickname) + '</div></div>' +
+      '<div class="detail-item"><div class="k">手机号</div><div class="v">' + esc(m.phone || '—') + '</div></div>' +
+      '<div class="detail-item"><div class="k">H5 用户标识</div><div class="v">' + esc(m.userId || '未绑定') + '</div></div>' +
+      '<div class="detail-item"><div class="k">等级 / 状态</div><div class="v">' + (LEVEL_TEXT[m.level] || m.level) + ' · ' + (m.status === 'disabled' ? '已禁用' : '正常') + '</div></div>' +
+      '<div class="detail-item"><div class="k">累计消费</div><div class="v">¥' + stats.totalSpend.toLocaleString('zh-CN') + '（' + stats.orderCount + ' 单）</div></div>' +
+      '<div class="detail-item"><div class="k">积分 / 持券</div><div class="v">' + (m.points || 0) + ' 分 · ' + claims.length + ' 张</div></div>' +
+      '<div class="detail-item"><div class="k">注册 / 最近下单</div><div class="v">' + esc(m.regDate) + ' / ' + (stats.lastOrderAt ? esc(stats.lastOrderAt.slice(0, 10)) : '—') + '</div></div>' +
+      '<div class="detail-item"><div class="k">所在地区</div><div class="v">' + esc(m.region || '—') + '</div></div>' +
+      '<div class="detail-item"><div class="k">会员标签</div><div class="v">' + (m.tags && m.tags.length ? esc(m.tags.join(' / ')) : '—') + '</div></div>' +
+    '</div>' +
+    '<div style="font-weight:600;margin:16px 0 8px;">最近订单</div>' +
+    (orders.length ? orders.map(function (o) {
+      return '<div class="order-mini"><div class="no">' + esc(o.no) + ' · ' + esc(String(o.createdAt).slice(0, 10)) + '</div>' +
+        '<div class="row"><span>' + esc((o.items && o.items[0] && o.items[0].name) || '商品') + ' 等</span><span>¥' + o.total + '</span></div>' +
+        '<div class="row"><span>' + esc(o.status) + '</span><span>' + esc(o.payment || '—') + '</span></div></div>';
+    }).join('') : '<div class="cell-sub">该会员暂无已归属订单</div>');
+  document.getElementById('detailTitle').textContent = m.nickname + ' · 会员详情';
+  document.getElementById('detailBody').innerHTML = html;
+  document.getElementById('detailModal').classList.add('show');
+}
+
+function closeDetailModal() {
+  document.getElementById('detailModal').classList.remove('show');
+}
+
 document.addEventListener('DOMContentLoaded', function () {
-  // 演示数据播种：仅在会员档案为空时写入 25 条示意档案 + 认养数据
-  DemoSeed.ensure(['members', 'adoptions']);
+  DemoSeed.ensure(['members', 'c-orders']);
+  if (typeof MallStore !== 'undefined') MallStore.migrate();
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });

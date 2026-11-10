@@ -680,6 +680,7 @@
 <!-- 引入交互脚本 -->
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->
 <script src="js/material-store.js"></script>
+<script src="js/shared/alert-data.js"></script>
 <script>
 // 库存数据来自共享仓库 MaterialStore，与出入库/退货/使用页面实时联动
 let inventoryData = [];
@@ -791,6 +792,45 @@ function formatMoney(value) {
   return Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// 同步库存类预警到 AlertStore（库存不足 / 临期 / 已过期），由 syncSource 幂等落库并在恢复后自动闭环
+function syncInventoryAlerts() {
+  if (!window.AlertStore || typeof AlertStore.syncSource !== 'function') return;
+  const items = [];
+  inventoryData.forEach(function (m) {
+    const qty = Number(m.stock) || 0;
+    const safety = Number(m.minStock) || 0;
+    if (m.status === 'danger' || (safety > 0 && qty < safety)) {
+      items.push({
+        dedupeKey: 'inventory:low:' + m.code,
+        category: 'inventory',
+        level: qty === 0 ? 'urgent' : 'important',
+        title: '库存不足：' + m.name,
+        desc: '当前库存 ' + qty + m.unit + '，低于安全库存 ' + safety + m.unit + '，建议补货 ' + m.suggestQty + m.unit + '。',
+        base: m.warehouse,
+        location: m.warehouse,
+        threshold: '库存 < ' + safety + m.unit,
+        value: qty
+      });
+    }
+    const days = daysUntil(m.expireDate);
+    if (days !== null && days <= 30) {
+      items.push({
+        dedupeKey: 'inventory:expire:' + m.code,
+        category: 'inventory',
+        level: days < 0 ? 'important' : 'reminder',
+        title: (days < 0 ? '物料已过期：' : '物料临期：') + m.name,
+        desc: '批次 ' + m.batchNo + ' 有效期至 ' + m.expireDate + '，'
+          + (days < 0 ? '已过期 ' + Math.abs(days) + ' 天' : '剩余 ' + days + ' 天') + '。',
+        base: m.warehouse,
+        location: m.warehouse,
+        threshold: '剩余效期 ≤ 30 天',
+        value: days
+      });
+    }
+  });
+  AlertStore.syncSource('inventory', items, 'inventory:');
+}
+
 function loadInventoryData() {
   inventoryData = MaterialStore.all().map(function (m, idx) {
     const stock = Number(m.stock) || 0;
@@ -836,6 +876,7 @@ function loadInventoryData() {
       lastOutDate: extra.lastOutDate || '-'
     };
   });
+  syncInventoryAlerts();
 }
 
 // 当前页面、每页条数、总条数、总页数

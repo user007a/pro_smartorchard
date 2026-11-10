@@ -459,13 +459,13 @@ body{display:block;background:
           </div>
           <div class="fn">
             <div class="node">④</div>
-            <div class="ct"><div class="k">复核闭环</div><div class="v">园区主任复核 · 结果回写</div></div>
+            <div class="ct"><div class="k">转工单协同</div><div class="v">跨部门联办 · 工单编号回写</div></div>
             <div class="sla">SLA 4h</div>
             <div class="bdg sk" id="bd4">--</div>
           </div>
           <div class="fn">
             <div class="node">⑤</div>
-            <div class="ct"><div class="k">归档</div><div class="v">沉淀样本 · 反哺预警模型</div></div>
+            <div class="ct"><div class="k">闭环归档</div><div class="v">结果复核 · 沉淀样本反哺模型</div></div>
             <div class="sla">无时限</div>
             <div class="bdg sk" id="bd5">--</div>
           </div>
@@ -702,8 +702,8 @@ function snapshot(){
   if(!arr){arr=MOCK.list.slice();st=MOCK.stats;usingMock=true;}
 
   var lv={urgent:0,important:0,reminder:0,notice:0};
-  var src={device:0,farming:0,disaster:0,quality:0};
-  var typ={device:0,env:0,pest:0,farm:0,quality:0};
+  var src={device:0,manual:0,model:0,inventory:0,system:0};
+  var typ={device:0,pest:0,weather:0,soil:0,growth:0,environment:0,yield:0,inventory:0,quality:0};
   var byPlot={};
   var today=new Date(),p=function(n){return ('0'+n).slice(-2);};
   var todayStr=today.getFullYear()+'-'+p(today.getMonth()+1)+'-'+p(today.getDate());
@@ -711,17 +711,20 @@ function snapshot(){
 
   arr.forEach(function(x){
     if(lv[x.level]!==undefined)lv[x.level]++;
-    if(x.type==='device'){src.device++;typ.device++;}
-    else{
-      var s=x.srcType||'';
-      if(s==='disease'||s==='weather'){src.disaster++;}
-      else if(s==='soil'||s==='growth'){src.farming++;}
-      else{src.quality++;}
-      if(s==='disease')typ.pest++;
-      else if(s==='weather'||s==='soil')typ.env++;
-      else if(s==='growth')typ.farm++;
-      else typ.quality++;
+    /* 来源维度：以 AlertStore 的 source 字段为准（device/manual/model/inventory/system） */
+    var s=x.source;
+    if(!s){
+      s = x.type==='device' ? 'device' : (x.type==='farming' ? 'system' : 'system');
     }
+    if(src[s]===undefined)src[s]=0;
+    src[s]++;
+    /* 业务分类维度：以 category 字段为准，缺失时按旧 type 回退 */
+    var c=x.category;
+    if(!c){
+      c = x.type==='device' ? 'device' : 'growth';
+    }
+    if(typ[c]===undefined)typ[c]=0;
+    typ[c]++;
     if(String(x.time||'').slice(0,10)===todayStr)todayNew++;
     var k=plotKey(x.location);
     if(k){
@@ -779,18 +782,22 @@ function renderStats(s){
     var be=document.getElementById('bar'+nm);if(be)be.style.width=pct+'%';
   });
 
-  /* 处置链路积压：④ 待复核 + ⑤ 已归档 = 已完成，避免两节点显示同一数字 */
-  var total2=st.total||1;
-  var archived=Math.round((st.completed||0)*0.8);
-  var b1=st.pending+st.processing+st.completed;
-  var b2=st.pending, b3=st.processing, b4=(st.completed||0)-archived, b5=archived;
+  /* 处置链路积压：按 AlertStore 六态映射
+     ① 预警触发 = 总量；② 待确认 = pending；③ 处置中 = processing；
+     ④ 转工单 = transferred；⑤ 已归档 = closed（已忽略 / 已作废不进链路） */
+  var st2=st.byStatus||{};
+  var b1=st.total||0;
+  var b2=st2.pending!==undefined?st2.pending:(st.pending||0);
+  var b3=st2.processing!==undefined?st2.processing:(st.processing||0);
+  var b4=st2.transferred||0;
+  var b5=st2.closed!==undefined?st2.closed:(st.closed||st.completed||0);
   [['bd1',b1],['bd2',b2],['bd3',b3],['bd4',b4],['bd5',b5]].forEach(function(pair){
     var e=document.getElementById(pair[0]);if(e){e.textContent=pair[1];e.classList.remove('sk');}
   });
-  var mf=document.getElementById('metaFlow');if(mf)mf.textContent=(b2+b3);
+  var mf=document.getElementById('metaFlow');if(mf)mf.textContent=(b2+b3+b4);
 
-  /* 近 24h 闭环率：与共享数据源统计保持一致 */
-  var closeRate=(st.rate!==undefined&&st.rate!==null)?st.rate:Math.round((st.completed||0)/total2*100);
+  /* 闭环率：与共享数据源统计保持一致 */
+  var closeRate=(st.closedRate!==undefined&&st.closedRate!==null)?st.closedRate:(st.rate||0);
   var hc=document.getElementById('hClosed');
   if(hc){
     hc.innerHTML=closeRate+'<small>%</small>';
@@ -798,8 +805,12 @@ function renderStats(s){
     var hb=hc.parentNode.querySelector('.bar i');
     if(hb)hb.style.width=closeRate+'%';
   }
+  var m=slaMetrics(s.arr,st);
   var ha=document.getElementById('hAvg');
-  if(ha){ha.innerHTML='38<small>分钟</small>';ha.classList.remove('sk');}
+  if(ha){
+    ha.innerHTML=(m.avg===null?'--':m.avg)+'<small>分钟</small>';
+    ha.classList.remove('sk');
+  }
 }
 
 /* ---------- 渲染：地图 ---------- */
@@ -939,17 +950,21 @@ function renderTop(snap){
   }
 }
 
-/* ---------- 渲染：类型饼图 ---------- */
+/* ---------- 渲染：类型饼图（按业务分类 category） ---------- */
+var CAT_META={
+  device:{name:'设备故障',color:'#38D6FF'}, pest:{name:'病虫害',color:'#F2B33D'},
+  weather:{name:'气象',color:'#31C9E8'}, soil:{name:'土壤',color:'#3E8EF0'},
+  growth:{name:'生育',color:'#2bd46e'}, environment:{name:'环境',color:'#8E7CFF'},
+  yield:{name:'产量',color:'#E5564B'}, inventory:{name:'库存',color:'#F58A3D'},
+  quality:{name:'品质',color:'#C0D4EA'}
+};
 function renderPie(snap){
   var svg=document.getElementById('pieSvg'),lg=document.getElementById('pieLegend');
   if(!svg||!lg)return;
-  var items=[
-    {name:'设备故障',val:snap.typ.device,color:'#38D6FF'},
-    {name:'环境异常',val:snap.typ.env,   color:'#31C9E8'},
-    {name:'病虫害',  val:snap.typ.pest,  color:'#F2B33D'},
-    {name:'农事逾期',val:snap.typ.farm,  color:'#2E8FE8'},
-    {name:'质量',    val:snap.typ.quality,color:'#E5564B'}
-  ];
+  var items=Object.keys(CAT_META).map(function(k){
+    return {name:CAT_META[k].name,val:snap.typ[k]||0,color:CAT_META[k].color};
+  }).filter(function(it){return it.val>0;});
+  if(!items.length)items=[{name:'暂无预警',val:1,color:'rgba(255,255,255,.12)'}];
   var total=items.reduce(function(a,b){return a+b.val;},0)||1;
   svg.innerHTML=segments(84,84,{r:42,w:84,items:items});
   lg.innerHTML=items.map(function(it){
@@ -958,22 +973,50 @@ function renderPie(snap){
   }).join('');
 }
 
-/* ---------- SLA 指标：时效表与环形图共用同一套计算口径 ----------
-   超时率 / 升级率 / 平均处置时长由 AlertStore 的 pending / processing 占比折算；
-   AlertStore 未提供每个预警的响应与闭环时间戳，故「平均响应 / 平均闭环」为演示值。 */
-function slaMetrics(st){
-  var total=st.total||1;
-  var over=Math.max(3,Math.min(30,Math.round((st.pending||0)/total*26)));
-  var esc=Math.max(2,Math.min(15,Math.round((st.processing||0)/total*8)));
+/* ---------- SLA 指标：全部由 AlertStore 真实时间戳实算 ----------
+   超时率 = 未闭环且已过 respondDue 的条数 / 总条数；
+   升级率 = 已转工单条数 / 总条数；
+   平均处理 = closedAt - time（无闭环记录时退化为 acceptedAt - time）。 */
+function parseTm(t){
+  if(!t)return null;
+  var d=new Date(String(t).replace(/-/g,'/'));
+  return isNaN(d.getTime())?null:d;
+}
+function slaMetrics(arr,st){
+  arr=arr||[];
+  var now=Date.now();
+  var overdue=0,transferred=0;
+  var respSum=0,respN=0,closeSum=0,closeN=0;
+  arr.forEach(function(x){
+    var isOpen=x.status==='pending'||x.status==='processing'||x.status==='transferred';
+    if(x.status==='transferred')transferred++;
+    var due=parseTm(x.respondDue);
+    if(isOpen&&due&&due.getTime()<now)overdue++;
+    var t0=parseTm(x.time)||parseTm(x.createTime);
+    var tAcc=parseTm(x.acceptedAt);
+    if(t0&&tAcc&&tAcc.getTime()>=t0.getTime()){respSum+=(tAcc-t0)/60000;respN++;}
+    var tCls=parseTm(x.closedAt);
+    if(t0&&tCls&&tCls.getTime()>=t0.getTime()){closeSum+=(tCls-t0)/60000;closeN++;}
+  });
+  var total=arr.length;
+  var over=total?Math.round(overdue/total*100):0;
+  var esc=total?Math.round(transferred/total*100):0;
   var onTime=Math.max(0,100-over-esc);
-  return {onTime:onTime,over:over,esc:esc,avg:38};
+  return {
+    onTime:onTime,
+    over:over,
+    esc:esc,
+    avg:closeN?Math.round(closeSum/closeN):(respN?Math.round(respSum/respN):null),
+    avgResp:respN?Math.round(respSum/respN):null,
+    avgClose:closeN?Math.round(closeSum/closeN):null
+  };
 }
 
 /* ---------- 渲染：SLA 环形 ---------- */
 function renderSla(snap){
   var svg=document.getElementById('slaSvg');
   if(!svg)return;
-  var m=slaMetrics((snap&&snap.st)||MOCK.stats);
+  var m=slaMetrics((snap&&snap.arr)||[],(snap&&snap.st)||{});
   var items=[
     {name:'按时处理',val:m.onTime,color:'#2bd46e'},
     {name:'超时',    val:m.over,  color:'#F2B33D'},
@@ -989,19 +1032,22 @@ function renderSla(snap){
     var e=document.getElementById(id);
     if(e){e.innerHTML=val+'<small>'+unit+'</small>';e.classList.remove('sk');}
   };
-  put('kOnTime',m.onTime,'%');put('kOver',m.over,'%');put('kEsc',m.esc,'%');put('kAvg',m.avg,'分钟');
+  put('kOnTime',m.onTime,'%');put('kOver',m.over,'%');put('kEsc',m.esc,'%');
+  put('kAvg',m.avg===null?'--':m.avg,'分钟');
 }
 
-/* ---------- 渲染：来源分布 ---------- */
+/* ---------- 渲染：来源分布（按 AlertStore 的 source） ---------- */
+var SRC_META={
+  device:{name:'设备预警',color:'#38D6FF'}, manual:{name:'人工上报',color:'#8E7CFF'},
+  model:{name:'模型预警',color:'#31C9E8'}, inventory:{name:'库存预警',color:'#F58A3D'},
+  system:{name:'系统预警',color:'#C0D4EA'}
+};
 function renderSrc(snap){
   var box=document.getElementById('srcList');
   if(!box)return;
-  var items=[
-    {name:'设备类',val:snap.src.device,  color:'#38D6FF'},
-    {name:'农事类',val:snap.src.farming, color:'#2E8FE8'},
-    {name:'灾害类',val:snap.src.disaster,color:'#F2B33D'},
-    {name:'质量类',val:snap.src.quality, color:'#31C9E8'}
-  ];
+  var items=Object.keys(SRC_META).map(function(k){
+    return {name:SRC_META[k].name,val:snap.src[k]||0,color:SRC_META[k].color};
+  });
   var max=Math.max.apply(null,items.map(function(i){return i.val;}))||1;
   var total=items.reduce(function(a,b){return a+b.val;},0)||1;
   box.innerHTML=items.map(function(it){
@@ -1043,23 +1089,24 @@ function renderTrend(snap){
   if(x)x.innerHTML=t.map(function(d){return '<span>'+String(d.date).slice(5)+'</span>';}).join('');
 }
 
-/* ---------- 渲染：时效表 ----------
-   avgDeal / overRate 来自 slaMetrics()（由 AlertStore 状态占比折算）；
-   avgResp / avgClose 为演示值 —— AlertStore 未记录逐条预警的响应与闭环时刻。 */
+/* ---------- 渲染：时效表（与 SLA 环形同口径，全部实算） ---------- */
 function renderTable(snap){
-  var st=snap.st;
-  var m=slaMetrics(st);
+  var m=slaMetrics(snap.arr||[],snap.st||{});
+  var avgDeal=m.avg, avgResp=m.avgResp;
+  var avgClose=m.avgClose===null?null:Math.round(m.avgClose/6)/10;   /* 分钟 → 小时，保留 1 位 */
   var overRate=m.over;
-  var avgDeal=m.avg, avgResp=12, avgClose=2.4;
   var set=function(id,v){var e=document.getElementById(id);if(e){e.textContent=v;e.classList.remove('sk');}};
-  set('ttResp',avgResp);set('ttDeal',avgDeal);set('ttClose',avgClose);set('ttOver',overRate);
+  set('ttResp',avgResp===null?'--':avgResp);
+  set('ttDeal',avgDeal===null?'--':avgDeal);
+  set('ttClose',avgClose===null?'--':avgClose);
+  set('ttOver',overRate);
   var ok=function(id,txt,good){
     var e=document.getElementById(id);
     if(e){e.className=good?'good':'bad';e.innerHTML='<b style="font-family:var(--num);font-size:14px">'+txt+'</b>';}
   };
-  ok('ttRespOk','达标',true);
-  ok('ttDealOk','达标',true);
-  ok('ttCloseOk','达标',true);
+  ok('ttRespOk',avgResp===null?'无数据':(avgResp<=30?'达标':'超限'),avgResp!==null&&avgResp<=30);
+  ok('ttDealOk',avgDeal===null?'无数据':(avgDeal<=120?'达标':'超限'),avgDeal!==null&&avgDeal<=120);
+  ok('ttCloseOk',avgClose===null?'无数据':(avgClose<=24?'达标':'超限'),avgClose!==null&&avgClose<=24);
   ok('ttOverOk',overRate>10?'偏高':'正常',overRate<=10);
 }
 

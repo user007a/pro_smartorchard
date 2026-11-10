@@ -4,1173 +4,602 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>智慧果园 - 销售统计</title>
-<!-- 使用设计系统: Design System v2.0 + sidebar-layout -->
 <link rel="stylesheet" href="css/design-system.css">
 <link rel="stylesheet" href="css/sidebar-layout.css">
 <link rel="stylesheet" href="css/page-content.css">
-<style>
-  /* 统计卡片 - 参考巡园管理样式 */
-  .stats-cards {
-    display:grid;
-    grid-template-columns:repeat(3, 1fr);
-    gap:16px;
-    margin-bottom:var(--space-xl);
-  }
-
-  /* 统计卡基础样式统一走 design-system.css（扁平风），本页仅保留布局与排版微调 */
-  .stat-card {
-    border-radius:12px;
-    padding:20px;
-    box-shadow:0 1px 3px rgba(16,24,40,0.06);
-    border:1px solid rgba(0,0,0,0.06);
-    transition:all 0.25s ease;
-    display:flex;
-    flex-direction:column;
-    gap:6px;
-    position:relative;
-    overflow:hidden;
-  }
-
-  .stat-card:hover {
-    box-shadow:0 6px 20px rgba(24,144,255,0.12);
-    transform:translateY(-2px);
-    border-color:rgba(0,0,0,0.08);
-  }
-
-  .stat-card .stat-header {
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:0;
-  }
-
-  .stat-card .stat-icon {
-    width:36px;
-    height:36px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    border-radius:10px;
-    flex-shrink:0;
-  }
-
-  .stat-card .stat-label {
-    font-size:13px;
-    color:var(--text-tertiary);
-    font-weight:var(--font-weight-medium);
-  }
-
-  /* 数值统一深色实心（取消渐变裁剪文字，与全后台扁平风一致） */
-  .stat-card .stat-value {
-    font-size:24px;
-    font-weight:var(--font-weight-bold);
-    line-height:1.2;
-    color:var(--text-primary);
-    background:none;
-    -webkit-background-clip:border-box;
-    background-clip:border-box;
-    -webkit-text-fill-color:var(--text-primary);
-  }
-
-  /* 涨跌：纯文字 + 自带 SVG 箭头，取消 pill 底色（与全后台扁平风一致） */
-  .stat-change {
-    display:inline-flex;
-    align-items:center;
-    font-size:12px;
-    font-weight:600;
-    margin-top:4px;
-  }
-  /* 本页涨幅自带 SVG 箭头，关闭共享样式的三角箭头避免双箭头 */
-  .stat-card .stat-change::before { display:none; }
-  .stat-change.up {
-    color:var(--success);
-  }
-  .stat-change.down {
-    color:var(--error);
-  }
-
-  /* 筛选栏 */
-  .filter-bar {
-    display:flex;
-    gap:var(--space-xl);
-    align-items:center;
-    flex-wrap:wrap;
-    padding:var(--space-lg);
-    background:var(--bg-card);
-    border-radius:var(--radius-lg);
-    box-shadow:var(--shadow-card);
-    border:1px solid var(--border-light);
-    margin-bottom:var(--space-xl);
-  }
-
-  .filter-item {
-    display:flex;
-    align-items:center;
-    gap:var(--space-sm);
-  }
-
-  .filter-item label {
-    font-size:var(--font-size-sm);
-    color:var(--text-secondary);
-    font-weight:var(--font-weight-medium);
-  }
-
-  .filter-select {
-    padding:10px 36px 10px 14px;
-    border:1.5px solid var(--border-default);
-    border-radius:var(--radius-md);
-    font-size:var(--font-size-base);
-    cursor:pointer;
-    background:var(--bg-card);
-    appearance:none;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238c8c8c' stroke-width='2'%3E%3Cpath d='m6,9 6,6 6,-6'/%3E%3C/svg%3E");
-    background-repeat:no-repeat;
-    background-position:right 12px center;
-    outline:none;
-    transition:all var(--transition-fast);
-    min-width:120px;
-  }
-
-  .filter-select:focus {
-    border-color:var(--primary-500);
-    box-shadow:0 0 0 3px rgba(24, 144, 255, 0.1);
-  }
-
-  /* 图表区域 */
-  .chart-section {
-    background:var(--bg-card);
-    border-radius:var(--radius-lg);
-    box-shadow:var(--shadow-card);
-    border:1px solid var(--border-light);
-    padding:var(--space-xl);
-    margin-bottom:var(--space-lg);
-  }
-
-  .section-title {
-    font-size:var(--font-size-lg);
-    font-weight:var(--font-weight-semibold);
-    color:var(--text-primary);
-    margin-bottom:var(--space-xl);
-    display:flex;
-    align-items:center;
-    gap:var(--space-sm);
-  }
-
-  .double-section {
-    display:grid;
-    grid-template-columns:repeat(2, 1fr);
-    gap:var(--space-lg);
-    margin-bottom:var(--space-lg);
-  }
-
-  /* 三列图表布局 */
-  .triple-section {
-    display:grid;
-    grid-template-columns:repeat(3, 1fr);
-    gap:var(--space-lg);
-    margin-bottom:var(--space-lg);
-  }
-
-  .triple-section .chart-section {
-    background:var(--bg-card);
-    border-radius:14px;
-    border:1px solid rgba(0,0,0,0.06);
-    box-shadow:0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.02);
-    padding:20px;
-  }
-
-  .triple-section .chart-section .section-title {
-    font-size:15px;
-    margin-bottom:16px;
-    display:flex;
-    align-items:center;
-    gap:8px;
-  }
-
-  .triple-section .line-chart {
-    height:220px;
-  }
-
-  .triple-section .pie-chart {
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    gap:16px;
-  }
-
-  .triple-section .pie-container {
-    width:140px;
-    height:140px;
-  }
-
-  .triple-section .bar-chart {
-    padding-top:10px;
-  }
-
-  .triple-section .bar-container {
-    height:180px;
-  }
-
-  /* 折线图 */
-  .line-chart {
-    position:relative;
-    height:300px;
-  }
-
-  .chart-grid {
-    position:absolute;
-    top:0;
-    left:60px;
-    right:20px;
-    bottom:30px;
-    display:flex;
-    flex-direction:column;
-    justify-content:space-between;
-  }
-
-  .chart-grid-line {
-    height:1px;
-    background:var(--border-light);
-    position:relative;
-  }
-
-  .chart-grid-line::before {
-    content:attr(data-label);
-    position:absolute;
-    left:-50px;
-    top:-8px;
-    font-size:var(--font-size-xs);
-    color:var(--text-tertiary);
-  }
-
-  .chart-area {
-    position:absolute;
-    top:0;
-    left:60px;
-    right:20px;
-    bottom:30px;
-  }
-
-  .chart-line {
-    fill:none;
-    stroke:var(--primary-500);
-    stroke-width:3;
-    stroke-linecap:round;
-    stroke-linejoin:round;
-  }
-
-  .chart-area-fill {
-    fill:url(#lineGradient);
-    opacity:0.3;
-  }
-
-  .chart-point {
-    fill:#fff;
-    stroke:var(--primary-500);
-    stroke-width:3;
-    cursor:pointer;
-    transition:all var(--transition-fast);
-  }
-
-  .chart-point:hover {
-    fill:var(--primary-500);
-    transform:scale(1.5);
-  }
-
-  .chart-x-axis {
-    position:absolute;
-    bottom:0;
-    left:60px;
-    right:20px;
-    height:30px;
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-end;
-  }
-
-  .chart-x-label {
-    font-size:var(--font-size-xs);
-    color:var(--text-tertiary);
-  }
-
-  /* 饼图 */
-  .pie-chart {
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    gap:var(--space-xl);
-    height:250px;
-    justify-content:center;
-  }
-
-  .pie-container {
-    width:180px;
-    height:180px;
-    position:relative;
-  }
-
-  .pie-circle {
-    width:100%;
-    height:100%;
-    border-radius:50%;
-    background:conic-gradient(
-      var(--info) 0% 70%,
-      var(--accent-500) 70% 100%
-    );
-    position:relative;
-  }
-
-  .pie-center {
-    position:absolute;
-    top:50%;
-    left:50%;
-    transform:translate(-50%, -50%);
-    width:90px;
-    height:90px;
-    border-radius:50%;
-    background:var(--bg-card);
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-  }
-
-  .pie-center-value {
-    font-size:24px;
-    font-weight:var(--font-weight-bold);
-    color:var(--text-primary);
-  }
-
-  .pie-center-label {
-    font-size:var(--font-size-xs);
-    color:var(--text-tertiary);
-  }
-
-  .pie-legend {
-    display:flex;
-    flex-direction:column;
-    gap:var(--space-sm);
-  }
-
-  .legend-item {
-    display:flex;
-    align-items:center;
-    gap:var(--space-sm);
-    font-size:var(--font-size-sm);
-    color:var(--text-secondary);
-  }
-
-  .legend-color {
-    width:12px;
-    height:12px;
-    border-radius:var(--radius-sm);
-  }
-
-  /* 柱状图 */
-  .bar-chart {
-    height:250px;
-    position:relative;
-  }
-
-  .bar-container {
-    position:absolute;
-    top:0;
-    left:0;
-    right:0;
-    bottom:30px;
-    display:flex;
-    justify-content:space-around;
-    align-items:flex-end;
-  }
-
-  .bar-item {
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    gap:var(--space-sm);
-    flex:1;
-    max-width:80px;
-  }
-
-  .bar {
-    width:40px;
-    border-radius:var(--radius-md) var(--radius-md) 0 0;
-    transition:all var(--transition-bounce);
-    cursor:pointer;
-    position:relative;
-  }
-
-  .bar:hover {
-    opacity:0.8;
-    transform:scaleY(1.05);
-  }
-
-  .bar.wholesale {
-    height:180px;
-    background:linear-gradient(180deg, var(--info), #69c0ff);
-  }
-
-  .bar.retail {
-    height:77px;
-    background:linear-gradient(180deg, var(--accent-500), #ffd666);
-  }
-
-  .bar-value {
-    font-size:var(--font-size-xs);
-    font-weight:var(--font-weight-semibold);
-    color:var(--text-secondary);
-  }
-
-  .bar-label {
-    font-size:var(--font-size-xs);
-    color:var(--text-tertiary);
-  }
-
-  /* 数据表格 */
-  .data-table-wrapper {
-    overflow-x:auto;
-    border-radius:var(--radius-lg);
-    border:1px solid var(--border-light);
-    margin-bottom:var(--space-lg);
-  }
-
-  .data-table th {
-    background:linear-gradient(135deg, var(--gray-50), var(--gray-100));
-    font-weight:var(--font-weight-semibold);
-    color:var(--text-secondary);
-    font-size:var(--font-size-sm);
-    white-space:nowrap;
-  }
-
-  .text-success {
-    color:var(--success);
-    font-weight:var(--font-weight-semibold);
-  }
-
-  .text-primary {
-    color:var(--primary-500);
-    font-weight:var(--font-weight-semibold);
-  }
-
-  /* 统计卡补充说明（无涨跌箭头的中性说明行） */
-  .stat-card .stat-note {
-    font-size:12px;
-    color:var(--text-tertiary);
-    margin-top:4px;
-  }
-
-  /* 排名徽标（覆盖 design-system.css 的同名类，圆角徽标胶囊样式） */
-  .rank-badge {
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    width:auto;
-    min-width:22px;
-    height:22px;
-    padding:0 6px;
-    border-radius:var(--radius-full);
-    font-size:var(--font-size-xs);
-    font-weight:var(--font-weight-semibold);
-    background:var(--gray-100);
-    color:var(--text-tertiary);
-  }
-  .rank-badge.top1 { background:linear-gradient(135deg,#fff7e6,#ffd666); color:#ad8b00; }
-  .rank-badge.top2 { background:linear-gradient(135deg,#f5f5f5,#d9d9d9); color:#595959; }
-  .rank-badge.top3 { background:linear-gradient(135deg,#f6e3d0,#e8b98a); color:#96551b; }
-
-  /* 表格内占比进度条 */
-  .cell-ratio { width:190px; }
-  .cell-ratio-bar { height:8px; background:var(--border-light); border-radius:4px; overflow:hidden; }
-  .cell-ratio-fill {
-    height:100%;
-    border-radius:4px;
-    background:var(--primary-500);
-    transition:width 0.5s ease;
-  }
-  .cell-ratio-fill.risk { background:var(--warning); }
-  .cell-ratio-text {
-    margin-top:5px;
-    font-size:12px;
-    color:var(--text-secondary);
-    font-variant-numeric:tabular-nums;
-    text-align:right;
-  }
-  .cell-ratio-text strong { color:var(--text-primary); font-size:13px; }
-
-  /* 区块口径说明条 */
-  .table-note {
-    padding:10px 14px;
-    margin-bottom:14px;
-    background:var(--gray-50);
-    border:1px solid var(--border-light);
-    border-radius:var(--radius-md);
-    font-size:12.5px;
-    color:var(--text-tertiary);
-  }
-
-  /* 账龄区块布局：环形图 + 账龄区间列表 */
-  .aging-grid {
-    display:grid;
-    grid-template-columns:1fr 2fr;
-    gap:var(--space-lg);
-    margin-bottom:var(--space-lg);
-    align-items:start;
-  }
-  @media (max-width:992px) {
-    .aging-grid { grid-template-columns:1fr; }
-  }
-
-  /* 账龄区间列表 */
-  .aging-row { padding:12px 0; border-bottom:1px dashed var(--border-light); }
-  .aging-row:last-child { border-bottom:none; }
-  .aging-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
-  .aging-name { font-size:13px; color:var(--text-primary); font-weight:var(--font-weight-medium); }
-  .aging-val { font-size:12.5px; color:var(--text-tertiary); font-variant-numeric:tabular-nums; }
-  .aging-val strong { color:var(--text-primary); font-size:13px; }
-  .aging-bar { height:8px; background:var(--border-light); border-radius:4px; overflow:hidden; }
-  .aging-bar-fill {
-    height:100%;
-    border-radius:4px;
-    background:var(--primary-500);
-    transition:width 0.5s ease;
-  }
-  .aging-bar-fill.risk { background:var(--warning); }
-
-  /* 账龄汇总指标 */
-  .aging-summary { display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
-  .aging-summary-item {
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    padding:10px 14px;
-    border-radius:var(--radius-md);
-    background:var(--gray-50);
-    border:1px solid var(--border-light);
-    font-size:13px;
-    color:var(--text-secondary);
-  }
-  .aging-summary-item strong {
-    color:var(--text-primary);
-    font-size:15px;
-    font-weight:var(--font-weight-bold);
-    font-variant-numeric:tabular-nums;
-  }
-  .aging-summary-item strong.risk { color:var(--error); }
-
-  .empty-row td { text-align:center; color:var(--text-tertiary); padding:40px 0; }
-
-  /* 页面加载动画 */
-  .content-wrapper {
-    animation:pageIn var(--transition-slow) ease;
-  }
-
-  @keyframes pageIn {
-    from { opacity:0; transform:translateY(10px); }
-    to { opacity:1; transform:translateY(0); }
-  }
-
-  /* 底部版权 */
-  .page-footer {
-    background:var(--bg-card);
-    padding:var(--space-lg);
-    text-align:center;
-    color:var(--text-secondary);
-    font-size:var(--font-size-sm);
-    margin-top:auto;
-  }
-
-  /* 响应式布局 */
-  @media (max-width:992px) {
-    .stats-cards {
-      grid-template-columns:repeat(2, 1fr);
-    }
-    .double-section {
-      grid-template-columns:1fr;
-    }
-  }
-
-  @media (max-width:576px) {
-    .stats-cards {
-      grid-template-columns:1fr;
-    }
-    .filter-bar {
-      flex-direction:column;
-      align-items:stretch;
-    }
-    .filter-item {
-      justify-content:space-between;
-    }
-  }
-</style>
-<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
-  .main-wrapper{margin-left:0!important;width:100%!important;}
-</style>
 <link rel="stylesheet" href="css/unified-theme.css">
 <link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/sales-module.css">
+<style>
+  .chart-box { height: 240px; }
+  .dim-table { min-width: 1080px; }
+  .stat-bars { display: flex; align-items: center; gap: 10px; }
+  .stat-bars .progress-track { flex: 1; }
+  .target-row { padding: 10px 0; border-bottom: 1px dashed var(--border-light, #e8efe8); }
+  .target-row:last-child { border-bottom: none; }
+  .target-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .target-name { font-size: 13px; font-weight: 600; color: var(--text-primary, #1f2d1f); }
+  .target-meta { font-size: 12px; color: var(--text-tertiary, #8c9a8c); font-variant-numeric: tabular-nums; }
+  .target-meta strong { color: var(--text-primary, #1f2d1f); }
+  .aging-row { padding: 10px 0; border-bottom: 1px dashed var(--border-light, #e8efe8); }
+  .aging-row:last-child { border-bottom: none; }
+  .aging-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; font-size: 13px; }
+  .aging-name { color: var(--text-primary, #1f2d1f); }
+  .aging-val { color: var(--text-tertiary, #8c9a8c); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .aging-val strong { color: var(--text-primary, #1f2d1f); font-size: 13px; }
+  .rank-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+    font-size: 12px; font-weight: 600; background: var(--gray-100, #f3f6f3); color: var(--text-tertiary, #8c9a8c);
+  }
+  .rank-badge.top1 { background: #fff7e6; color: #ad8b00; }
+  .rank-badge.top2 { background: #f5f5f5; color: #595959; }
+  .rank-badge.top3 { background: #f6e3d0; color: #96551b; }
+  .cell-ratio-bar { height: 8px; background: var(--gray-100, #eef2ee); border-radius: 4px; overflow: hidden; min-width: 90px; }
+  .cell-ratio-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #1890ff, #1a8a3a); }
+  .cell-ratio-text { margin-top: 4px; font-size: 12px; color: var(--text-secondary, #4a5a4a); text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+<style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
 </head>
 <body data-active-menu="sales" data-active-submenu="sales-statistics">
-
-<!-- ===== 整体布局容器 ===== -->
 <div class="app-layout">
-
-  <!-- ===== 侧边栏 ===== -->
-  <!-- 移动端遮罩层 -->
-  <!-- ===== 主内容区 ===== -->
   <div class="main-wrapper">
-
-    <!-- 顶栏 -->
-    <!-- Tab 标签栏 -->
     <div class="tab-bar">
-      <!-- Tab 标签由 JS 动态渲染 -->
       <div class="tab-bar-actions">
         <button class="tab-close-all" title="关闭全部标签">
-          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 3L11 11M11 3L3 11"/>
-          </svg>
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3L11 11M11 3L3 11"/></svg>
         </button>
       </div>
     </div>
 
-    <!-- 主内容区 -->
     <main class="main-content">
       <div class="content-wrapper">
-        <!-- ===== 筛选栏 ===== -->
-        <div class="filter-bar">
-          <div class="filter-item">
-            <label>年份：</label>
-            <select class="filter-select" id="yearSelect">
-              <option value="2026">2026</option>
-              <option value="2025">2025</option>
-              <option value="2024">2024</option>
+        <div class="page-header">
+          <h1 class="page-title">销售统计</h1>
+          <p class="page-subtitle">与销售订单、客户管理同源统计：年份 / 月份 / 渠道 / 业务员 / 日期区间 / 维度筛选全部生效；已取消订单不计入，退款按售后已完成金额冲减。</p>
+        </div>
+
+        <div class="page-section search-section">
+          <div class="search-bar filter-bar">
+            <span class="filter-label">年份</span>
+            <select class="search-select" id="stYear"></select>
+            <span class="filter-label">月份</span>
+            <select class="search-select" id="stMonth">
+              <option value="">全年</option>
+              <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+              <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+              <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+              <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
             </select>
-          </div>
-          <div class="filter-item">
-            <label>月份：</label>
-            <select class="filter-select" id="monthSelect">
-              <option value="">全部</option>
-              <option value="1">1月</option>
-              <option value="2">2月</option>
-              <option value="3">3月</option>
-              <option value="4">4月</option>
-              <option value="5">5月</option>
-              <option value="6">6月</option>
-              <option value="7">7月</option>
-              <option value="8">8月</option>
-              <option value="9">9月</option>
-              <option value="10">10月</option>
-              <option value="11">11月</option>
-              <option value="12">12月</option>
-            </select>
-          </div>
-          <div class="filter-item">
-            <label>渠道：</label>
-            <select class="filter-select" id="channelSelect">
-              <option value="">全部渠道</option>
+            <span class="filter-label">渠道</span>
+            <select class="search-select" id="stChannel">
+              <option value="all">全部渠道</option>
               <option value="wholesale">批发渠道</option>
               <option value="retail">零售渠道</option>
-              <option value="adopt">认养渠道</option>
+              <option value="adoption">认养渠道</option>
               <option value="tour">观光采摘</option>
             </select>
-          </div>
-          <button class="jg-btn jg-btn-primary" style="margin-left:auto;" onclick="handleQuery()">查询</button>
-        </div>
-
-        <!-- ===== 统计卡片 ===== -->
-        <div class="stats-cards">
-          <div class="stat-card green">
-            <div class="stat-header">
-              <div class="stat-label">订单总数（半年）</div>
-              <div class="stat-icon" style="background:var(--primary-50);color:var(--primary-500);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
-                  <path d="M16 13h-5v5h5v-5z"/>
-                  <path d="M21 16v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1"/>
-                  <path d="M14 2H6a2 2 0 0 0-2 2v3a2 2 0 0 1-2 2h20a2 2 0 0 1-2-2V4a2 2 0 0 0-2-2z"/>
-                </svg>
-              </div>
+            <span class="filter-label">业务员</span>
+            <select class="search-select" id="stOwner"><option value="all">全部业务员</option></select>
+            <span class="filter-label">下单日期</span>
+            <input type="date" class="search-input" id="stStart" style="min-width:140px;max-width:160px;">
+            <span class="filter-label">至</span>
+            <input type="date" class="search-input" id="stEnd" style="min-width:140px;max-width:160px;">
+            <span class="filter-label">统计维度</span>
+            <select class="search-select" id="stDim">
+              <option value="channel">渠道</option>
+              <option value="owner">业务员</option>
+              <option value="customer">客户</option>
+              <option value="region">区域</option>
+              <option value="variety">品类</option>
+              <option value="month">月份</option>
+            </select>
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="applyFilter()">查询</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+              <button class="jg-btn" onclick="exportStats()">导出 CSV</button>
             </div>
-            <div class="stat-value">1,258</div>
-            <div class="stat-change up">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;margin-right:2px;">
-                <path d="M12 19V5"/>
-                <path d="M5 12l7-7 7 7"/>
-              </svg>
-              ↑ 15.3% 较上月
-            </div>
-          </div>
-          <div class="stat-card blue">
-            <div class="stat-header">
-              <div class="stat-label">销售额（半年）</div>
-              <div class="stat-icon" style="background:var(--info-bg);color:var(--primary-500);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polyline points="12 6 12 12 16 14"/>
-                </svg>
-              </div>
-            </div>
-            <div class="stat-value">¥142.4万</div>
-            <div class="stat-change up">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;margin-right:2px;">
-                <path d="M12 19V5"/>
-                <path d="M5 12l7-7 7 7"/>
-              </svg>
-              ↑ 12.5% 较上月
-            </div>
-          </div>
-          <div class="stat-card orange">
-            <div class="stat-header">
-              <div class="stat-label">客户数量（活跃）</div>
-              <div class="stat-icon" style="background:var(--warning-bg);color:var(--warning);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="9" cy="7" r="4"/>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-              </div>
-            </div>
-            <div class="stat-value">386</div>
-            <div class="stat-change up">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;margin-right:2px;">
-                <path d="M12 19V5"/>
-                <path d="M5 12l7-7 7 7"/>
-              </svg>
-              ↑ 8.2% 较上月
-            </div>
-          </div>
-          <div class="stat-card purple">
-            <div class="stat-header">
-              <div class="stat-label">客单价（半年）</div>
-              <div class="stat-icon" style="background:#f5f0ff;color:#722ed1;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M12 8v4"/>
-                  <path d="M12 16h.01"/>
-                </svg>
-              </div>
-            </div>
-            <div class="stat-value">¥1,132</div>
-            <div class="stat-change down">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;margin-right:2px;">
-                <path d="M12 5v14"/>
-                <path d="M19 12l-7 7-7-7"/>
-              </svg>
-              ↓ 2.4% 较上月
-            </div>
-          </div>
-          <!-- 回款口径卡片：数据来自 BizStore（见页尾脚本 renderCollectStats） -->
-          <div class="stat-card blue">
-            <div class="stat-header">
-              <div class="stat-label">回款金额</div>
-              <div class="stat-icon" style="background:var(--success-bg);color:var(--success);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
-                  <rect x="2" y="5" width="20" height="14" rx="2"/>
-                  <line x1="2" y1="10" x2="22" y2="10"/>
-                  <line x1="6" y1="15" x2="10" y2="15"/>
-                </svg>
-              </div>
-            </div>
-            <div class="stat-value" id="statCollected">—</div>
-            <div class="stat-note" id="statCollectedNote">按客户/渠道回款排行汇总</div>
-          </div>
-          <div class="stat-card green">
-            <div class="stat-header">
-              <div class="stat-label">回款率</div>
-              <div class="stat-icon" style="background:var(--primary-50);color:var(--primary-500);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;">
-                  <path d="M12 20V10"/>
-                  <path d="M18 20V4"/>
-                  <path d="M6 20v-4"/>
-                </svg>
-              </div>
-            </div>
-            <div class="stat-value" id="statCollectRate">—</div>
-            <div class="stat-note" id="statCollectRateNote">回款金额 / 营业总收入</div>
           </div>
         </div>
 
-        <!-- ===== 销售分析图表（三列布局） ===== -->
-        <div class="triple-section">
-          <!-- 销售趋势分析 -->
-          <div class="chart-section">
-            <h2 class="section-title">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--primary-500);">
-                <path d="M3 3v18h18"/>
-                <path d="M5 18l3-5 4 3 4-5 4 5"/>
-              </svg>
-              销售趋势分析
-            </h2>
-            <div id="chart-sales-trend" style="width:100%; height:220px;"></div>
-          </div>
+        <div class="sales-stats" id="statCards"></div>
 
-          <!-- 销售构成分析 -->
-          <div class="chart-section">
-            <h2 class="section-title">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--info);">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 2 L12 12 L22 12 Z"/>
-              </svg>
-              销售构成分析
-            </h2>
-            <div id="chart-sales-pie" style="width:100%; height:220px;"></div>
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-card-head">
+              <h4>销售趋势（万元）</h4>
+              <span class="muted" id="trendNote"></span>
+            </div>
+            <div class="chart-box" id="chartTrend"></div>
           </div>
-
-          <!-- 渠道销售对比 -->
-          <div class="chart-section">
-            <h2 class="section-title">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--accent-500);">
-                <rect x="3" y="4" width="4" height="16" rx="1"/>
-                <rect x="10" y="8" width="4" height="12" rx="1"/>
-                <rect x="17" y="12" width="4" height="8" rx="1"/>
-              </svg>
-              渠道销售对比
-            </h2>
-            <div id="chart-channel-compare" style="width:100%; height:220px;"></div>
+          <div class="chart-card">
+            <div class="chart-card-head">
+              <h4>渠道销售构成</h4>
+              <span class="muted">按销售额占比</span>
+            </div>
+            <div class="chart-box" id="chartChannel"></div>
           </div>
         </div>
 
-        <!-- ===== 销售明细表格 ===== -->
-        <div class="chart-section" style="margin-bottom:0;">
-          <h2 class="section-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--purple);">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" x2="8" y1="13" y2="13"/>
-              <line x1="16" x2="8" y1="17" y2="17"/>
-            </svg>
-            销售明细
-          </h2>
+        <div class="chart-grid cols-3">
+          <div class="chart-card">
+            <div class="chart-card-head"><h4>业务员业绩 TOP8</h4><span class="muted">万元</span></div>
+            <div class="chart-box sm" id="chartOwner"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-head"><h4>月度订单量</h4><span class="muted">按所选年份</span></div>
+            <div class="chart-box sm" id="chartCount"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-head"><h4>目标达成</h4><span class="muted" id="targetNote"></span></div>
+            <div id="targetList" style="max-height:220px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
+        <div class="chart-card" style="margin-bottom:16px;">
+          <div class="chart-card-head">
+            <h4>维度明细（<span id="dimName">渠道</span>）</h4>
+            <span class="muted">点击「下钻」查看该维度下的订单清单</span>
+          </div>
           <div class="data-table-wrapper">
-            <table class="data-table">
+            <table class="data-table dim-table">
               <thead>
                 <tr>
-                  <th style="width:100px;">月份</th>
-                  <th style="width:120px;">订单数</th>
-                  <th style="width:140px;" class="text-right">批发渠道</th>
-                  <th style="width:140px;" class="text-right">零售渠道</th>
-                  <th style="width:140px;" class="text-right">合计金额</th>
-                  <th style="width:100px;">同比增长</th>
+                  <th style="width:60px;">序号</th>
+                  <th style="width:220px;">维度</th>
+                  <th style="width:90px;" class="text-right">订单数</th>
+                  <th style="width:130px;" class="text-right">销售额</th>
+                  <th style="width:130px;" class="text-right">净销售额</th>
+                  <th style="width:130px;" class="text-right">已收</th>
+                  <th style="width:110px;" class="text-right">退款</th>
+                  <th style="width:200px;">占比</th>
+                  <th style="width:90px;">操作</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr>
-                  <td style="font-weight:var(--font-weight-medium);">6月</td>
-                  <td>236</td>
-                  <td class="text-right">¥19.4万</td>
-                  <td class="text-right">¥8.0万</td>
-                  <td class="text-right text-success">¥27.4万</td>
-                  <td class="text-success">↑ 12.3%</td>
-                </tr>
-                <tr>
-                  <td style="font-weight:var(--font-weight-medium);">5月</td>
-                  <td>218</td>
-                  <td class="text-right">¥17.5万</td>
-                  <td class="text-right">¥7.4万</td>
-                  <td class="text-right text-success">¥24.9万</td>
-                  <td class="text-success">↑ 8.7%</td>
-                </tr>
-                <tr>
-                  <td style="font-weight:var(--font-weight-medium);">4月</td>
-                  <td>205</td>
-                  <td class="text-right">¥16.2万</td>
-                  <td class="text-right">¥7.2万</td>
-                  <td class="text-right text-success">¥23.4万</td>
-                  <td class="text-success">↑ 15.2%</td>
-                </tr>
-                <tr>
-                  <td style="font-weight:var(--font-weight-medium);">3月</td>
-                  <td>192</td>
-                  <td class="text-right">¥14.6万</td>
-                  <td class="text-right">¥6.7万</td>
-                  <td class="text-right text-success">¥21.3万</td>
-                  <td class="text-success">↑ 6.4%</td>
-                </tr>
-                <tr>
-                  <td style="font-weight:var(--font-weight-medium);">2月</td>
-                  <td>196</td>
-                  <td class="text-right">¥15.9万</td>
-                  <td class="text-right">¥6.6万</td>
-                  <td class="text-right text-success">¥22.5万</td>
-                  <td style="color:var(--warning);">↑ 2.1%</td>
-                </tr>
-                <tr>
-                  <td style="font-weight:var(--font-weight-medium);">1月</td>
-                  <td>211</td>
-                  <td class="text-right">¥16.1万</td>
-                  <td class="text-right">¥6.8万</td>
-                  <td class="text-right text-success">¥22.9万</td>
-                  <td class="text-success">↑ 9.8%</td>
-                </tr>
-              </tbody>
+              <tbody id="dimTableBody"></tbody>
             </table>
           </div>
+          <div id="pagination-container" style="display:flex;justify-content:flex-end;margin-top:14px;"></div>
         </div>
 
-        <!-- ===== 客户/渠道回款排行 TOP10（数据源：BizStore.customerRank()） ===== -->
-        <div class="chart-section" style="margin-top:var(--space-lg);">
-          <h2 class="section-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--primary-500);">
-              <path d="M3 3v18h18"/>
-              <rect x="7" y="12" width="3" height="6" rx="1"/>
-              <rect x="12" y="8" width="3" height="10" rx="1"/>
-              <rect x="17" y="5" width="3" height="13" rx="1"/>
-            </svg>
-            客户/渠道回款排行 TOP10（按回款金额）
-          </h2>
-          <div class="table-note" id="rankNote"></div>
-          <div class="data-table-wrapper" style="margin-bottom:0;">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th style="width:80px;">排名</th>
-                  <th style="width:200px;">名称</th>
-                  <th style="width:120px;">类型</th>
-                  <th style="width:160px;" class="text-right">回款金额（万元）</th>
-                  <th style="width:220px;">占比</th>
-                </tr>
-              </thead>
-              <tbody id="rankBody"></tbody>
-            </table>
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-card-head"><h4>回款 TOP10 客户</h4><span class="muted">按收款时间，年份 / 月份生效</span></div>
+            <div id="rankList"></div>
           </div>
-        </div>
-
-        <!-- ===== 应收账龄分布（数据源：BizStore.receivable()） ===== -->
-        <div class="aging-grid" style="margin-top:var(--space-lg);">
-          <div class="chart-section">
-            <h2 class="section-title">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--warning);">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 6v6l4 2"/>
-              </svg>
-              应收账龄分布
-            </h2>
-            <div id="chart-aging" style="width:100%; height:260px;"></div>
-          </div>
-
-          <div class="chart-section">
-            <h2 class="section-title">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;color:var(--accent-500);">
-                <line x1="8" y1="6" x2="21" y2="6"/>
-                <line x1="8" y1="12" x2="21" y2="12"/>
-                <line x1="8" y1="18" x2="21" y2="18"/>
-                <circle cx="4" cy="6" r="1.4"/>
-                <circle cx="4" cy="12" r="1.4"/>
-                <circle cx="4" cy="18" r="1.4"/>
-              </svg>
-              账龄区间金额与占比
-            </h2>
-            <div class="aging-summary" id="agingSummary"></div>
+          <div class="chart-card">
+            <div class="chart-card-head"><h4>应收账龄</h4><span class="muted" id="agingNote"></span></div>
             <div id="agingList"></div>
           </div>
         </div>
-
-        </div>
+      </div>
     </main>
   </div>
-
 </div>
 
-<!-- 引入交互脚本 -->
+<!-- 维度下钻 -->
+<div class="modal-overlay" id="drillModal" style="display:none;">
+  <div class="modal modal-xl">
+    <div class="modal-header">
+      <h3 class="modal-title" id="drillTitle">维度下钻</h3>
+      <button class="modal-close" onclick="closeDrill()">×</button>
+    </div>
+    <div class="modal-body" id="drillBody"></div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeDrill()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/shared/sales-store.js"></script>
 <script src="js/components/chart.js"></script>
-<script src="js/shared/biz-store.js"></script>
-<!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->
+<script src="js/common-functions.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  // 销售趋势（半年明细 + 7-12 月推算），单位万元
-  Chart.line('#chart-sales-trend', {
-    categories: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
-    series: [
-      {
-        name: '销售总额(万元)',
-        data: [22.9, 22.5, 21.3, 23.4, 24.9, 27.4, 26.5, 23.8, 28.2, 25.6, 19.5, 16.4],
-        color: '#1890ff',
-        area: true
-      }
-    ]
-  });
-
-  // 销售构成（半年累计）
-  Chart.pie('#chart-sales-pie', {
-    series: [
-      { name: '批发渠道', value: 99.7 },
-      { name: '零售渠道', value: 42.7 }
-    ]
-  });
-
-  // 渠道销售对比（半年累计 + 全年）
-  Chart.bar('#chart-channel-compare', {
-    categories: ['批发渠道', '零售渠道'],
-    series: [
-      {
-        name: '上半年累计(万元)',
-        data: [99.7, 42.7],
-        color: '#1890ff'
-      }
-    ]
-  });
-});
-
-// 销售统计查询（PC-B-053）：根据日期范围 + 维度过滤
-function handleQuery() {
-  var startDate = document.getElementById('startDate') ? document.getElementById('startDate').value : '';
-  var endDate = document.getElementById('endDate') ? document.getElementById('endDate').value : '';
-  var dim = document.getElementById('dimensionSelect') ? document.getElementById('dimensionSelect').value : 'month';
-  if (startDate && endDate && startDate > endDate) {
-    alert('开始日期不能晚于结束日期');
-    return;
-  }
-  // 持久化查询条件到 localStorage，PC 端 dashboard 可读取联动
-  try {
-    localStorage.setItem('snzg_sales_query', JSON.stringify({ startDate: startDate, endDate: endDate, dim: dim, queriedAt: new Date().toISOString() }));
-  } catch (e) {}
-  if (typeof Toast !== 'undefined') Toast.success('已按 ' + (dim || '维度') + ' 过滤：' + (startDate || '不限') + ' 至 ' + (endDate || '不限'));
-}
-
-/* ============================================================
-   回款口径 + 客户维度榜单 + 应收账龄（统一读取 BizStore）
-   ============================================================ */
-(function(){
+(function () {
   'use strict';
 
-  var AGING_COLORS = ['#52c41a', '#1890ff', '#faad14', '#ff4d4f'];
+  var S = window.SalesStore;
+  var PAGE_SIZE = 10;
+  var DIM_TEXT = { channel: '渠道', owner: '业务员', customer: '客户', region: '区域', variety: '品类', month: '月份' };
+  var PIE_COLORS = ['#1890ff', '#52c41a', '#faad14', '#722ed1', '#13c2c2', '#eb2f96'];
 
-  function fmt(n){
-    n = Number(n) || 0;
-    return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  }
-  // 保留 1 位小数
-  function pct(n){ return Math.round((Number(n) || 0) * 10) / 10; }
-  // 金额占比（%），保留 1 位小数
-  function shareOf(amount, total){ return total ? pct((Number(amount) || 0) / total * 100) : 0; }
-  function esc(v){
-    return String(v === undefined || v === null ? '' : v)
+  var F = { year: '2026', month: '', channel: 'all', owner: 'all', startDate: '', endDate: '', dim: 'channel' };
+  var lastDimRows = [];
+
+  function $(id) { return document.getElementById(id); }
+  function esc(v) {
+    return String(v == null ? '' : v)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
+  function pct(n) { return ((Number(n) || 0) * 100).toFixed(1) + '%'; }
+  function wanVal(n) { return Math.round((Number(n) || 0) / 100) / 100; }
+  function wanText(n) { return (Number(n) || 0) >= 10000 ? S.fmtWan(n) : S.fmtMoney(n); }
 
-  function rankBadge(rank){
-    var cls = rank === 1 ? ' top1' : rank === 2 ? ' top2' : rank === 3 ? ' top3' : '';
-    return '<span class="rank-badge' + cls + '">' + rank + '</span>';
+  function toast(msg, type) {
+    if (window.LegacyToast) window.LegacyToast.show(msg, type || 'success');
   }
 
-  // 回款金额 = customerRank() 各条 amount 之和
-  function totalCollected(){
-    return BizStore.customerRank().reduce(function(sum, x){ return sum + (Number(x.amount) || 0); }, 0);
+  /* ---------------- 筛选 ---------------- */
+  function currentFilter() {
+    return {
+      year: F.year,
+      month: F.month,
+      channel: F.channel,
+      owner: F.owner,
+      startDate: F.startDate,
+      endDate: F.endDate
+    };
   }
 
-  var els = {
-    collected     : document.getElementById('statCollected'),
-    collectedNote : document.getElementById('statCollectedNote'),
-    collectRate   : document.getElementById('statCollectRate'),
-    collectRateNote: document.getElementById('statCollectRateNote'),
-    rankNote      : document.getElementById('rankNote'),
-    rankBody      : document.getElementById('rankBody'),
-    agingSummary  : document.getElementById('agingSummary'),
-    agingList     : document.getElementById('agingList')
+  function readFilter() {
+    F.year = $('stYear').value || F.year;
+    F.month = $('stMonth').value;
+    F.channel = $('stChannel').value;
+    F.owner = $('stOwner').value;
+    F.startDate = $('stStart').value;
+    F.endDate = $('stEnd').value;
+    F.dim = $('stDim').value;
+  }
+
+  window.applyFilter = function () {
+    readFilter();
+    if (F.startDate && F.endDate && F.startDate > F.endDate) {
+      toast('开始日期不能晚于结束日期', 'warning');
+      return;
+    }
+    renderAll();
+    toast('筛选已生效');
   };
 
-  /* ---------- 统计卡：回款金额 / 回款率 ---------- */
-  function renderCollectStats(){
-    var total = totalCollected();
-    var revenue = Number(BizStore.summary().totalRevenue) || 0;
-    var rate = revenue ? pct(total / revenue * 100) : 0;
-    var count = BizStore.customerRank().length;
+  window.resetFilter = function () {
+    var y = String(new Date().getFullYear());
+    $('stYear').value = $('stYear').options.length ? ($('stYear').querySelector('option[value="' + y + '"]') ? y : $('stYear').options[0].value) : '';
+    $('stMonth').value = '';
+    $('stChannel').value = 'all';
+    $('stOwner').value = 'all';
+    $('stStart').value = '';
+    $('stEnd').value = '';
+    $('stDim').value = 'channel';
+    readFilter();
+    renderAll();
+  };
 
-    els.collected.textContent = fmt(pct(total)) + ' 万元';
-    els.collectedNote.textContent = '汇总 ' + count + ' 个客户/渠道回款';
+  function populateOptions() {
+    var orders = S.orders();
+    var years = {};
+    orders.forEach(function (o) {
+      var y = String(o.createdAt || '').slice(0, 4);
+      if (y) years[y] = true;
+    });
+    years[String(new Date().getFullYear())] = true;
+    years['2025'] = true;
+    var yearList = Object.keys(years).sort().reverse();
+    $('stYear').innerHTML = yearList.map(function (y) { return '<option value="' + y + '">' + y + ' 年</option>'; }).join('');
 
-    els.collectRate.textContent = fmt(rate) + '%';
-    els.collectRateNote.textContent = '回款 ' + fmt(pct(total)) + ' 万 / 营收 ' + fmt(revenue) + ' 万';
+    var owners = {};
+    orders.forEach(function (o) { if (o.owner) owners[o.owner] = true; });
+    var ownerList = Object.keys(owners).sort();
+    $('stOwner').innerHTML = '<option value="all">全部业务员</option>' +
+      ownerList.map(function (n) { return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join('');
   }
 
-  /* ---------- 客户/渠道回款排行 TOP10 ---------- */
-  function renderRank(){
-    var list = BizStore.customerRank().slice().sort(function(a, b){
-      return (Number(b.amount) || 0) - (Number(a.amount) || 0);
-    }).slice(0, 10);
-    var total = totalCollected();
-
-    els.rankNote.innerHTML =
-      '口径说明：回款金额取自共享数据源 <b>BizStore.customerRank()</b>（单位万元），' +
-      '与经营分析驾驶舱、应收周转页保持同一口径；按回款金额降序取前 10 名，' +
-      '占比 = 该客户/渠道回款金额 ÷ 全部客户/渠道回款总额（与上方「回款金额」卡一致）。';
-
-    if (!list.length){
-      els.rankBody.innerHTML = '<tr class="empty-row"><td colspan="5">暂无客户回款数据</td></tr>';
-      return;
-    }
-
-    els.rankBody.innerHTML = list.map(function(x, i){
-      var rank = i + 1;
-      var ratio = shareOf(x.amount, total);
-      return '<tr>' +
-        '<td>' + rankBadge(rank) + '</td>' +
-        '<td style="font-weight:var(--font-weight-medium);">' + esc(x.name) + '</td>' +
-        '<td>' + esc(x.type || '-') + '</td>' +
-        '<td class="text-right text-success">' + fmt(pct(x.amount)) + '</td>' +
-        '<td class="cell-ratio">' +
-          '<div class="cell-ratio-bar"><div class="cell-ratio-fill" style="width:' + Math.max(2, ratio) + '%;"></div></div>' +
-          '<div class="cell-ratio-text"><strong>' + fmt(ratio) + '%</strong></div>' +
-        '</td>' +
-      '</tr>';
-    }).join('');
+  /* ---------------- 统计卡 ---------------- */
+  function card(label, value, sub, cls) {
+    return '<div class="sales-stat-card ' + (cls || '') + '">' +
+      '<div class="stat-label">' + label + '</div>' +
+      '<div class="stat-value">' + value + '</div>' +
+      '<div class="stat-sub">' + sub + '</div>' +
+    '</div>';
   }
 
-  /* ---------- 应收账龄分布 ---------- */
-  function renderAging(){
-    var r = BizStore.receivable();
-    var aging = r.aging || [];
-    var over60 = Number(r.over60) || 0;
+  function renderStats() {
+    var f = currentFilter();
+    var s = S.summary(f);
+    var ag = S.aging(f);
+    var rate = s.amount ? s.paid / s.amount : 0;
+    $('statCards').innerHTML =
+      card('销售额', wanText(s.amount), s.count + ' 笔有效订单 / 共 ' + s.total + ' 笔', 'is-primary') +
+      card('净销售额', wanText(s.net), '退款冲减 ' + wanText(s.refund), 'is-success') +
+      card('已回款', wanText(s.paid), '回款率 ' + pct(rate), 'is-success') +
+      card('应收余额', wanText(s.balance), '超 60 天 ' + wanText(ag.over60), s.balance > 0 ? 'is-warning' : '') +
+      card('客单价', S.fmtMoney(s.avg), '平均单笔成交金额', '') +
+      card('目标达成', s.targetAmount ? pct(s.achievement) : '未设目标',
+        s.targetAmount ? '目标 ' + wanText(s.targetAmount) + ' · 实际 ' + wanText(s.amount) : '请前往「销售目标」设置',
+        s.targetAmount ? (s.achievement >= 1 ? 'is-success' : (s.achievement >= 0.8 ? 'is-warning' : 'is-danger')) : 'is-danger');
 
-    els.agingSummary.innerHTML =
-      '<div class="aging-summary-item"><span>应收余额</span><strong>' + fmt(r.balance) + ' 万元</strong></div>' +
-      '<div class="aging-summary-item"><span>账龄超 60 天占比</span><strong' +
-        (over60 > 10 ? ' class="risk"' : '') + '>' + fmt(over60) + '%</strong></div>' +
-      '<div class="aging-summary-item"><span>应收周转天数</span><strong>' + fmt(r.turnoverDays) + ' 天</strong></div>';
+    $('agingNote').textContent = '平均账龄 ' + ag.avgDays + ' 天 · 超 60 天 ' + wanText(ag.over60);
+  }
 
-    if (!aging.length){
-      els.agingList.innerHTML = '<div class="empty-row" style="text-align:center;color:var(--text-tertiary);padding:40px 0;">暂无账龄数据</div>';
+  /* ---------------- 图表 ---------------- */
+  function safeChart(fn) {
+    try {
+      var p = fn();
+      if (p && typeof p.catch === 'function') p.catch(function () {});
+    } catch (e) { /* ECharts 不可用时不阻塞页面 */ }
+  }
+
+  function renderCharts() {
+    var f = currentFilter();
+    var trend = S.monthlyStats({ year: F.year, channel: F.channel, owner: F.owner });
+    var cats = trend.map(function (r) { return r.month + '月'; });
+    var totals = trend.map(function (r) { return wanVal(r.total); });
+    var nets = trend.map(function (r) { return wanVal(r.net); });
+    var bases = trend.map(function (r) { return wanVal(r.baseline); });
+
+    $('trendNote').textContent = F.year + ' 年 · 全年 12 个月（渠道 / 业务员筛选生效）';
+
+    safeChart(function () {
+      return Chart.line('#chartTrend', {
+        categories: cats,
+        series: [
+          { name: '销售额', data: totals, color: '#1890ff', area: true },
+          { name: '净销售额', data: nets, color: '#52c41a', area: false },
+          { name: '上年同期', data: bases, color: '#bfbfbf', area: false }
+        ]
+      });
+    });
+
+    var byChannel = S.dimensionStats('channel', f);
+    safeChart(function () {
+      return Chart.pie('#chartChannel', {
+        series: byChannel.map(function (r, i) {
+          return { name: r.label, value: wanVal(r.amount), color: PIE_COLORS[i % PIE_COLORS.length] };
+        })
+      });
+    });
+
+    var byOwner = S.dimensionStats('owner', f).slice(0, 8).reverse();
+    safeChart(function () {
+      return Chart.bar('#chartOwner', {
+        categories: byOwner.map(function (r) { return r.label; }),
+        series: [{ name: '销售额(万元)', data: byOwner.map(function (r) { return wanVal(r.amount); }), color: '#1890ff' }]
+      });
+    });
+
+    safeChart(function () {
+      return Chart.bar('#chartCount', {
+        categories: cats,
+        series: [{ name: '订单数', data: trend.map(function (r) { return r.count; }), color: '#52c41a' }]
+      });
+    });
+  }
+
+  /* ---------------- 目标达成 ---------------- */
+  function renderTargets() {
+    var list = S.targets().filter(function (t) { return String(t.period).indexOf(F.year) === 0; });
+    list.sort(function (a, b) {
+      var am = String(a.period).length, bm = String(b.period).length;
+      if (am !== bm) return am - bm;
+      return String(a.period) < String(b.period) ? -1 : 1;
+    });
+    if (!list.length) {
+      $('targetList').innerHTML = '<div class="empty-state"><strong>暂无销售目标</strong>请在「销售目标」页面按年度或月度设置目标</div>';
+      $('targetNote').textContent = '';
       return;
     }
-
-    els.agingList.innerHTML = aging.map(function(x, i){
-      var width = Math.max(2, Number(x.ratio) || 0);
-      var isRisk = i >= 2; // 61-90 天及以上视为长账龄
-      return '<div class="aging-row">' +
-        '<div class="aging-head">' +
-          '<span class="aging-name">' + esc(x.name) + '</span>' +
-          '<span class="aging-val"><strong>' + fmt(x.value) + '</strong> 万元 · ' + fmt(x.ratio) + '%</span>' +
+    $('targetNote').textContent = F.year + ' 年共 ' + list.length + ' 条目标';
+    $('targetList').innerHTML = list.map(function (t) {
+      var p = S.targetProgress(t.period, t.owner);
+      var rate = p.amountRate;
+      var cls = rate >= 1 ? '' : (rate >= 0.8 ? 'warn' : 'danger');
+      return '<div class="target-row">' +
+        '<div class="target-head">' +
+          '<span class="target-name">' + esc(String(t.period).indexOf('-') > 0 ? t.period + ' 月' : t.period + ' 年度') +
+            ' · ' + esc(t.owner || '全公司') + '</span>' +
+          '<span class="target-meta"><strong>' + pct(rate) + '</strong> · ' + p.actualAmount.toFixed(1) + ' / ' + p.targetAmount.toFixed(1) + ' 万</span>' +
         '</div>' +
-        '<div class="aging-bar"><div class="aging-bar-fill' + (isRisk ? ' risk' : '') + '" style="width:' + width + '%;"></div></div>' +
+        '<div class="progress-track"><div class="progress-fill ' + cls + '" style="width:' + Math.min(100, Math.round(rate * 100)) + '%;"></div></div>' +
       '</div>';
     }).join('');
   }
 
-  // 图表静默降级：ECharts CDN 不可用时不阻塞页面
-  function renderAgingChart(){
-    var aging = BizStore.receivable().aging || [];
-    if (!aging.length || typeof Chart === 'undefined' || typeof Chart.donut !== 'function') return;
-    var p = Chart.donut('#chart-aging', {
-      series: aging.map(function(x, i){
-        return { name: x.name, value: Number(x.value) || 0, color: AGING_COLORS[i % AGING_COLORS.length] };
-      })
-    });
-    if (p && typeof p.catch === 'function') p.catch(function(){ /* 静默忽略图表加载失败 */ });
+  /* ---------------- 维度明细 ---------------- */
+  function dimRow(r, index) {
+    var rid = encodeURIComponent(r.key);
+    return '<tr>' +
+      '<td>' + (index + 1) + '</td>' +
+      '<td style="font-weight:600;">' + esc(r.label) + '</td>' +
+      '<td class="num text-right">' + r.count + '</td>' +
+      '<td class="num money text-right">' + wanText(r.amount) + '</td>' +
+      '<td class="num text-right">' + wanText(r.net) + '</td>' +
+      '<td class="num text-right text-success">' + wanText(r.paid) + '</td>' +
+      '<td class="num text-right ' + (r.refund > 0 ? 'text-danger' : 'muted') + '">' + wanText(r.refund) + '</td>' +
+      '<td><div class="cell-ratio-bar"><div class="cell-ratio-fill" style="width:' + Math.max(2, Math.min(100, r.ratio * 100)) + '%;"></div></div>' +
+        '<div class="cell-ratio-text">' + pct(r.ratio) + '</div></td>' +
+      '<td><button class="action-btn view" data-key="' + rid + '">下钻</button></td>' +
+    '</tr>';
   }
 
-  function renderBizSections(){
-    renderCollectStats();
+  function renderDimensionTable() {
+    lastDimRows = S.dimensionStats(F.dim, currentFilter());
+    $('dimName').textContent = DIM_TEXT[F.dim] || '渠道';
+    var tbody = $('dimTableBody');
+    if (!lastDimRows.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="9" style="text-align:center;color:var(--text-tertiary);padding:36px 0;">当前筛选条件下暂无销售数据</td></tr>';
+      $('pagination-container').innerHTML = '';
+      return;
+    }
+    Pagination.init({
+      data: lastDimRows,
+      pageSize: PAGE_SIZE,
+      containerId: 'pagination-container',
+      tbodyId: 'dimTableBody',
+      renderRow: dimRow
+    });
+  }
+
+  /* ---------------- 下钻 ---------------- */
+  function orderMatches(o) {
+    if (o.status === 'cancelled') return false;
+    var d = String(o.createdAt || '').slice(0, 10);
+    if (F.year && d.slice(0, 4) !== F.year) return false;
+    if (F.month && Number(d.slice(5, 7)) !== Number(F.month)) return false;
+    if (F.channel !== 'all' && o.channel !== F.channel) return false;
+    if (F.owner !== 'all' && o.owner !== F.owner) return false;
+    if (F.startDate && d < F.startDate) return false;
+    if (F.endDate && d > F.endDate) return false;
+    return true;
+  }
+
+  function dimKeyOf(o) {
+    if (F.dim === 'channel') return o.channel;
+    if (F.dim === 'owner') return o.owner || '未分配';
+    if (F.dim === 'customer') return o.customerId + '|' + o.customerName;
+    if (F.dim === 'region') {
+      var c = S.customer(o.customerId);
+      return c ? c.region : '线上';
+    }
+    if (F.dim === 'variety') return (o.items && o.items[0]) ? o.items[0].name : '其他';
+    return String(o.createdAt || '').slice(0, 7);
+  }
+
+  window.drillDown = function (btn) {
+    var key = decodeURIComponent(btn.getAttribute('data-key'));
+    var row = null;
+    lastDimRows.forEach(function (r) { if (r.key === key) row = r; });
+    var orders = S.orders().filter(function (o) {
+      return orderMatches(o) && dimKeyOf(o) === key;
+    }).sort(function (a, b) {
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+
+    $('drillTitle').textContent = '下钻 · ' + (row ? row.label : key) + '（' + orders.length + ' 笔订单）';
+    if (!orders.length) {
+      $('drillBody').innerHTML = '<div class="empty-state">该维度下暂无订单</div>';
+    } else {
+      var total = 0, paid = 0;
+      orders.forEach(function (o) { total += Number(o.payableAmount) || 0; paid += Number(o.paidAmount) || 0; });
+      $('drillBody').innerHTML = '<div class="detail-grid cols-3" style="margin-bottom:14px;">' +
+        '<div class="detail-item"><span class="detail-label">订单数</span><span class="detail-value">' + orders.length + ' 笔</span></div>' +
+        '<div class="detail-item"><span class="detail-label">销售额</span><span class="detail-value">' + S.fmtMoney(total) + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">已收 / 应收</span><span class="detail-value">' + S.fmtMoney(paid) + ' / ' + S.fmtMoney(total - paid) + '</span></div>' +
+      '</div>' +
+      '<table class="detail-table"><thead><tr><th>订单编号</th><th>客户</th><th>渠道</th><th class="num">金额</th><th class="num">已收</th><th>状态</th><th>下单时间</th></tr></thead><tbody>' +
+      orders.map(function (o) {
+        return '<tr><td>' + esc(o.no) + '</td><td>' + esc(o.customerName) + '</td>' +
+          '<td>' + esc(S.CHANNEL_TEXT[o.channel] || o.channel) + '</td>' +
+          '<td class="num">' + S.fmtMoney(o.payableAmount) + '</td>' +
+          '<td class="num">' + S.fmtMoney(o.paidAmount) + '</td>' +
+          '<td>' + esc(S.ORDER_STATUS_TEXT[o.status] || o.status) + '</td>' +
+          '<td>' + S.fmtTime(o.createdAt) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    }
+    $('drillModal').style.display = 'flex';
+    $('drillModal').classList.add('show');
+  };
+
+  window.closeDrill = function () {
+    $('drillModal').classList.remove('show');
+    $('drillModal').style.display = 'none';
+  };
+
+  $('dimTableBody').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-key]');
+    if (btn) window.drillDown(btn);
+  });
+
+  /* ---------------- 回款 TOP10 ---------------- */
+  function renderRank() {
+    var list = S.customerRank({ year: F.year, month: F.month ? Number(F.month) : null }, 10);
+    if (!list.length) {
+      $('rankList').innerHTML = '<div class="empty-state">当前条件下暂无回款记录</div>';
+      return;
+    }
+    var total = list.reduce(function (sum, x) { return sum + (Number(x.amount) || 0); }, 0);
+    $('rankList').innerHTML = '<table class="detail-table"><thead><tr>' +
+      '<th style="width:56px;">排名</th><th>客户</th><th class="num">订单数</th><th class="num">回款金额</th><th style="width:130px;">占比</th>' +
+      '</tr></thead><tbody>' +
+      list.map(function (x, i) {
+        var cls = i === 0 ? ' top1' : i === 1 ? ' top2' : i === 2 ? ' top3' : '';
+        var ratio = total ? x.amount / total : 0;
+        return '<tr><td><span class="rank-badge' + cls + '">' + (i + 1) + '</span></td>' +
+          '<td>' + esc(x.customerName) + '</td>' +
+          '<td class="num">' + x.orderCount + '</td>' +
+          '<td class="num">' + S.fmtMoney(x.amount) + '</td>' +
+          '<td><div class="cell-ratio-bar"><div class="cell-ratio-fill" style="width:' + Math.max(2, Math.min(100, ratio * 100)) + '%;"></div></div>' +
+            '<div class="cell-ratio-text">' + pct(ratio) + '</div></td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  /* ---------------- 账龄 ---------------- */
+  function renderAging() {
+    var ag = S.aging(currentFilter());
+    var max = 0;
+    ag.buckets.forEach(function (b) { if (b.amount > max) max = b.amount; });
+    $('agingList').innerHTML =
+      '<div class="detail-grid cols-3" style="margin-bottom:12px;">' +
+        '<div class="detail-item"><span class="detail-label">应收余额</span><span class="detail-value">' + wanText(ag.total) + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">超 60 天</span><span class="detail-value ' + (ag.over60 > 0 ? 'text-danger' : '') + '">' + wanText(ag.over60) + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">平均账龄</span><span class="detail-value">' + ag.avgDays + ' 天</span></div>' +
+      '</div>' +
+      ag.buckets.map(function (b, i) {
+        var width = max ? Math.max(2, Math.round(b.amount / max * 100)) : 0;
+        return '<div class="aging-row">' +
+          '<div class="aging-head"><span class="aging-name">' + esc(b.label) + '</span>' +
+            '<span class="aging-val"><strong>' + wanText(b.amount) + '</strong> · ' + b.count + ' 笔</span></div>' +
+          '<div class="progress-track"><div class="progress-fill ' + (i >= 2 ? 'warn' : '') + '" style="width:' + width + '%;"></div></div>' +
+        '</div>';
+      }).join('');
+  }
+
+  /* ---------------- 导出 ---------------- */
+  window.exportStats = function () {
+    readFilter();
+    var f = currentFilter();
+    var s = S.summary(f);
+    var rows = S.dimensionStats(F.dim, f);
+    var headers = ['统计维度', '维度值', '订单数', '销售额(元)', '净销售额(元)', '已收(元)', '退款(元)', '占比(%)'];
+    var data = rows.map(function (r) {
+      return [DIM_TEXT[F.dim] || '渠道', r.label, r.count, r.amount.toFixed(2), r.net.toFixed(2), r.paid.toFixed(2), r.refund.toFixed(2), (r.ratio * 100).toFixed(1)];
+    });
+    data.push(['合计', '—', s.count, s.amount.toFixed(2), s.net.toFixed(2), s.paid.toFixed(2), s.refund.toFixed(2), '100.0']);
+    var name = '销售统计_' + F.year + (F.month ? '-' + F.month : '') + '_' + (DIM_TEXT[F.dim] || '渠道') + '.csv';
+    if (S.downloadCsv(name, headers, data)) toast('已导出 ' + rows.length + ' 行明细');
+    else toast('导出失败，请检查浏览器下载权限', 'error');
+  };
+
+  /* ---------------- 初始化 ---------------- */
+  function renderAll() {
+    renderStats();
+    renderCharts();
+    renderTargets();
+    renderDimensionTable();
     renderRank();
     renderAging();
-    renderAgingChart();
   }
 
-  BizStore.subscribe(function(){
-    renderBizSections();
-  });
+  function init() {
+    if (!S) {
+      document.querySelector('.content-wrapper').innerHTML = '<div class="empty-state"><strong>销售数据层加载失败</strong>请刷新页面重试</div>';
+      return;
+    }
+    populateOptions();
+    var y = String(new Date().getFullYear());
+    $('stYear').value = $('stYear').querySelector('option[value="' + y + '"]') ? y : ($('stYear').options[0] ? $('stYear').options[0].value : '2026');
+    readFilter();
+
+    $('stDim').addEventListener('change', function () {
+      F.dim = $('stDim').value;
+      renderDimensionTable();
+    });
+    $('stYear').addEventListener('change', function () {
+      F.year = $('stYear').value;
+      renderAll();
+    });
+    $('stMonth').addEventListener('change', function () {
+      F.month = $('stMonth').value;
+      renderAll();
+    });
+
+    renderAll();
+    S.subscribe(renderAll);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();
 </script>
-<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
-<script src="js/icons.js"></script>
-<script src="js/common-functions.js"></script>
-  <script src="js/typography.js"></script>
 </body>
 </html>

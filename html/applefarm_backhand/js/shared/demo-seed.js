@@ -886,10 +886,20 @@
    * 结构：{ device, urgency, urgencyText, reason, status, statusText, id, createTime }
    * ============================================================ */
   function maintenanceLogs() {
+    // 与后台设备台账（DeviceStore.devices()）编号对应，保证报修可回溯到具体设备
     var devices = [
-      '温湿度传感器S003', '土壤墒情仪S007', '摄像头C02', '气象站W01',
-      '智能水肥机I05', '无人机D01', '虫情测报灯L02', '网关GW01',
-      '冷库温控器R03', '分选线称重秤M02', '配电柜P01', '泵站控制柜B02'
+      ['D-012', 'C区分拣车间温湿度仪'],
+      ['D-002', '东区土壤墒情仪'],
+      ['D-005', 'B区主干道枪机'],
+      ['D-001', '东区气象监测站'],
+      ['D-008', 'A区水肥一体化控制机'],
+      ['D-013', 'A区植保无人机 T50'],
+      ['D-003', 'B区虫情测报仪'],
+      ['D-007', '中心机房智能网关'],
+      ['D-011', 'C区冷库温控仪'],
+      ['D-020', 'A区分选线电子秤'],
+      ['D-016', 'A区配电柜'],
+      ['D-021', 'A区灌溉控制器']
     ];
     var reasons = [
       '设备离线，数据已 6 小时未上报',
@@ -903,7 +913,7 @@
       '冷库温度波动超过阈值',
       '称重秤显示跳动，数值不稳',
       '配电柜有异响，存在安全隐患',
-      '泵站控制柜启动失败'
+      '灌溉控制器阀门动作异常'
     ];
     var out = [];
     for (var i = 0; i < 24; i++) {
@@ -915,9 +925,11 @@
       var month = 9 + Math.floor(i / 12);
       var day = 1 + (i * 4) % 27;
       var createTime = ymdhm(new Date(2026, month - 1, day, 8 + (i % 10), (i * 17) % 60));
+      var dev = devices[i % devices.length];
       var row = {
         id: 'MT' + String(2000 + i * 13),
-        device: devices[i % devices.length],
+        deviceId: dev[0],
+        device: dev[0] + ' ' + dev[1],
         urgency: urgency,
         urgencyText: urgencyTextMap[urgency],
         reason: reasons[i % reasons.length],

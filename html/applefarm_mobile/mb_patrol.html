@@ -9,6 +9,7 @@
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/alert-data.js"></script>
   <style>
     /* ========== 页面专属样式（仅保留设计系统未覆盖的部分） ========== */
     
@@ -1103,6 +1104,25 @@
       };
       MobileStore.push(MobileStore.KEYS.patrol, Object.assign({ kind: 'abnormal' }, rec));
       MobileStore.enqueue({ id: 'q_' + rec.id, type: 'patrol_abnormal', refId: rec.id, payload: rec });
+
+      // 同步进入预警中心（source=manual）
+      if (window.AlertStore && typeof AlertStore.create === 'function') {
+        var catMap = { '病虫害': 'pest', '设备故障': 'device' };
+        var lvMap  = { '病虫害': 'important', '设备故障': 'important' };
+        var baseName = readSavedBase();
+        AlertStore.create({
+          source: 'manual',
+          category: catMap[reportType] || 'quality',
+          level: lvMap[reportType] || 'notice',
+          title: '人工上报：' + reportType,
+          desc: rec.remark || ('巡查发现' + reportType + '异常，已上传现场照片。'),
+          base: baseName,
+          location: baseName ? baseName + ' - 巡园发现' : '巡园发现',
+          dedupeKey: 'manual:' + rec.id,
+          value: null,
+          threshold: '人工巡查判断'
+        });
+      }
 
       closeReportModal();
       document.getElementById('successModal').classList.add('show');

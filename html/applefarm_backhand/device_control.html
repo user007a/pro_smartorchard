@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 水肥一体化控制</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; backdrop-filter:blur(4px); }
+  .modal-overlay.show { display:block; }
+  .modal-box { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:var(--bg-card); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.15);
+    width:560px; max-width:94vw; max-height:86vh; overflow-y:auto; z-index:1000; }
+  .modal-box.show { display:block; }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;
+    padding-bottom:16px; border-bottom:1px solid var(--border-light); }
+  .modal-header h3 { font-size:16px; font-weight:600; color:var(--text-primary); margin:0; }
+  .modal-close { width:28px; height:28px; border:none; background:var(--gray-100); border-radius:6px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; }
+  .modal-body { padding:0 4px; }
+  .modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; padding:16px 0 0;
+    border-top:1px solid var(--border-light); }
+  .form-group { margin-bottom:16px; }
+  .form-group label { display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:8px; }
+  .form-group input, .form-group select { width:100%; padding:10px; border:1px solid var(--border-default);
+    border-radius:8px; font-size:13px; box-sizing:border-box; }
+
+  .ctrl-layout { display:grid; grid-template-columns:320px 1fr; gap:16px; align-items:start; }
+  @media (max-width:1180px){ .ctrl-layout{ grid-template-columns:1fr; } }
+
+  .panel { background:#fff; border:1px solid #eef0ee; border-radius:12px; padding:16px;
+    box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .panel-title { font-weight:600; font-size:14px; color:#1f2e1f; margin-bottom:12px;
+    display:flex; justify-content:space-between; align-items:center; }
+  .panel-title .hint { font-size:11.5px; font-weight:400; color:var(--text-tertiary); }
+
+  .dev-item { display:flex; align-items:center; gap:10px; padding:11px 12px; border-radius:10px;
+    border:1px solid var(--border-light); margin-bottom:8px; cursor:pointer; transition:all .18s; }
+  .dev-item:hover { border-color:var(--primary-400); background:#f7fbff; }
+  .dev-item.active { border-color:var(--primary-500); background:#f0f8ff; box-shadow:0 2px 8px rgba(24,144,255,.12); }
+  .dev-item .dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .dev-item .dot.online { background:var(--success); }
+  .dev-item .dot.warning { background:var(--warning); }
+  .dev-item .dot.offline { background:#bfbfbf; }
+  .dev-item .di-name { font-size:13px; font-weight:600; color:var(--text-primary); }
+  .dev-item .di-meta { font-size:11.5px; color:var(--text-tertiary); margin-top:2px; }
+
+  .metric-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .metric { background:var(--gray-50); border:1px solid var(--border-light); border-radius:10px; padding:12px 14px; }
+  .metric .m-label { font-size:11.5px; color:var(--text-tertiary); margin-bottom:6px; }
+  .metric .m-value { font-size:22px; font-weight:700; color:var(--text-primary); font-variant-numeric:tabular-nums; line-height:1.15; }
+  .metric .m-value small { font-size:12px; font-weight:500; color:var(--text-tertiary); margin-left:3px; }
+  .metric .m-sub { font-size:11.5px; color:var(--text-tertiary); margin-top:5px; }
+  .metric.off .m-value { color:#bfbfbf; }
+
+  .ctrl-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:14px; }
+  .ctrl-btn { padding:12px 14px; border-radius:10px; border:1px solid var(--border-default); background:#fff;
+    cursor:pointer; text-align:left; transition:all .18s; }
+  .ctrl-btn:hover { border-color:var(--primary-400); box-shadow:0 2px 8px rgba(24,144,255,.12); }
+  .ctrl-btn:disabled { opacity:.5; cursor:not-allowed; box-shadow:none; }
+  .ctrl-btn .cb-title { font-size:13px; font-weight:600; color:var(--text-primary); }
+  .ctrl-btn .cb-desc { font-size:11.5px; color:var(--text-tertiary); margin-top:4px; }
+  .ctrl-btn.danger .cb-title { color:var(--error); }
+  .ctrl-btn.primary .cb-title { color:var(--primary-600); }
+
+  .status-tag { display:inline-flex; align-items:center; padding:3px 10px; font-size:11.5px;
+    font-weight:500; border-radius:20px; white-space:nowrap; }
+  .status-tag.online { background:#d9f7be; color:#3a8618; border:1px solid #b7eb8f; }
+  .status-tag.warning { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .status-tag.offline { background:var(--error-bg); color:#cf1322; border:1px solid #ffccc7; }
+  .status-tag.processing { background:var(--info-bg); color:var(--primary-500); border:1px solid var(--info-border); }
+  .data-table { min-width:900px; }
+  .data-table th { white-space:nowrap; }
+  .empty-row td { text-align:center; color:var(--text-tertiary); padding:32px 0; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="device" data-active-submenu="device-control">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <nav class="device-tabs" aria-label="远程控制">
+        <a href="device_control.html" class="active">水肥一体化</a>
+        <a href="device_command.html">远程指令与OTA</a>
+      </nav>
+
+      <div class="ctrl-layout">
+        <!-- 左：可控设备列表 -->
+        <div class="panel">
+          <div class="panel-title">可控设备 <span class="hint">来自设备台账</span></div>
+          <div id="deviceList"></div>
+        </div>
+
+        <!-- 右：控制台 -->
+        <div>
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-title">
+              <span id="ctrlTitle">请选择设备</span>
+              <span id="ctrlBadge"></span>
+            </div>
+            <div class="metric-grid" id="metricGrid"></div>
+            <div class="ctrl-actions" id="ctrlActions"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">最近控制指令 <span class="hint">来源：设备远程指令</span></div>
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:150px;">指令编号</th>
+                    <th style="width:96px;">指令类型</th>
+                    <th>指令内容</th>
+                    <th style="width:150px;">下发时间</th>
+                    <th style="width:96px;">状态</th>
+                    <th style="width:76px;">操作人</th>
+                  </tr>
+                </thead>
+                <tbody id="cmdBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ===== 参数设置弹窗 ===== -->
+<div class="modal-overlay" id="paramOverlay"></div>
+<div class="modal-box" id="paramModal">
+  <div class="modal-header">
+    <h3 id="paramTitle">参数设置</h3>
+    <button class="modal-close" onclick="closeParam()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div class="form-group">
+      <label id="paramLabel">设定值</label>
+      <input type="number" id="paramValue" step="0.01" />
+    </div>
+    <div class="form-group">
+      <label>操作人</label>
+      <select id="paramOperator"></select>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="jg-btn" onclick="closeParam()">取消</button>
+    <button class="jg-btn jg-btn-primary" onclick="submitParam()">确认下发</button>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/shared/device-store.js"></script>
+<script src="js/shared/device-ui.js"></script>
+<script>
+/* ============================================================
+ * 水肥一体化控制台
+ * 数据源：js/shared/device-store.js
+ *
+ * 控制域（water_fertilizer）：
+ *   目标 / 实际 EC、目标 / 实际 pH、阀门开启路数、肥料余量、
+ *   水泵状态、过滤状态、回收率、运行模式、流量、压力、当日灌溉量。
+ * 所有控制动作均落为「远程指令」，不直接改写设备运行数据，
+ * 以保证控制链路可追溯、可回放。
+ * ============================================================ */
+
+var CONTROL_TYPES = ['water_fertilizer', 'irrigation_controller', 'cold_storage', 'drone_hangar'];
+var currentId = '';
+var pendingParam = null;
+
+function nowStr() {
+  var d = new Date();
+  var p = function (n) { return n < 10 ? '0' + n : n; };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+    ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+function controlDevices() {
+  return DeviceStore.devices().filter(function (d) { return CONTROL_TYPES.indexOf(d.type) >= 0; });
+}
+
+/* ---------- 左列表 ---------- */
+function renderDeviceList() {
+  var list = controlDevices();
+  var box = document.getElementById('deviceList');
+  if (!list.length) {
+    box.innerHTML = '<div style="padding:24px 0;text-align:center;color:var(--text-tertiary);font-size:13px;">暂无可控设备</div>';
+    return;
+  }
+  box.innerHTML = list.map(function (d) {
+    return '<div class="dev-item' + (d.id === currentId ? ' active' : '') + '" onclick="selectDevice(\'' + d.id + '\')">' +
+      '<span class="dot ' + d.status + '"></span>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div class="di-name">' + DeviceUI.esc(d.name) + '</div>' +
+        '<div class="di-meta">' + DeviceUI.esc(d.id) + ' · ' + DeviceUI.esc(DeviceStore.typeName(d.type)) + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+/* ---------- 右控制台 ---------- */
+function selectDevice(id) {
+  currentId = id;
+  renderDeviceList();
+  var d = DeviceStore.deviceOf(id);
+  if (!d) return;
+  var r = DeviceStore.readingsOf(id);
+  document.getElementById('ctrlTitle').textContent = d.name;
+  document.getElementById('ctrlBadge').innerHTML = DeviceUI.statusTag(
+    d.status === 'online' ? 'online' : d.status === 'offline' ? 'offline' : 'warning',
+    DeviceStore.RUN_STATUS_TEXT[d.status] + ' · ' + d.id);
+
+  document.getElementById('metricGrid').innerHTML = buildMetrics(d, r);
+  document.getElementById('ctrlActions').innerHTML = buildActions(d);
+  renderCommands();
+}
+
+function metric(label, value, unit, sub, offline) {
+  return '<div class="metric' + (offline ? ' off' : '') + '">' +
+    '<div class="m-label">' + label + '</div>' +
+    '<div class="m-value">' + value + (unit ? '<small>' + unit + '</small>' : '') + '</div>' +
+    '<div class="m-sub">' + (sub || '') + '</div>' +
+  '</div>';
+}
+
+function buildMetrics(d, r) {
+  if (!r) {
+    return metric('实时数据', '—', '', '设备离线或未上报，控制功能已锁定', true) +
+      metric('通信状态', '离线', '', '最近在线 ' + (d.lastOnline || '—'), true) +
+      metric('累计运行', Math.round(Number(d.runHours) || 0).toLocaleString(), 'h', '可用率 ' + (d.uptimeRate || 0) + '%', true);
+  }
+  if (d.type === 'water_fertilizer') {
+    return metric('实际 EC', r.actualEc, 'mS/cm', '目标 ' + r.targetEc) +
+      metric('实际 pH', r.actualPh, '', '目标 ' + r.targetPh) +
+      metric('开启阀门', r.valveOpen + ' / ' + r.valveTotal, '路', '灌溉分区') +
+      metric('肥料余量', r.fertRemain, '%', '低于 20% 需补料') +
+      metric('水泵状态', r.pumpState, '', '过滤 ' + r.filterState) +
+      metric('回收率', r.recycleRate, '%', '尾水回收利用') +
+      metric('运行模式', r.runMode, '', '流量 ' + r.flowRate + ' m³/h') +
+      metric('管道压力', r.pressure, 'MPa', '当日灌溉 ' + r.irrigatedToday + ' m³');
+  }
+  if (d.type === 'cold_storage') {
+    return metric('库温', r.storeTemp, '℃', '适温 0~4℃') +
+      metric('库湿', r.storeHum, '%RH', '适湿 85%~95%') +
+      metric('压缩机', r.compressState, '', '制冷机组') +
+      metric('化霜', r.defrostState, '', '定时化霜') +
+      metric('库门', r.doorState, '', '门磁状态') +
+      metric('累计运行', Math.round(Number(d.runHours) || 0).toLocaleString(), 'h', '可用率 ' + d.uptimeRate + '%');
+  }
+  return metric('设备状态', DeviceStore.RUN_STATUS_TEXT[d.status], '', '已上报 ' + Object.keys(r).length + ' 个测点') +
+    metric('累计运行', Math.round(Number(d.runHours) || 0).toLocaleString(), 'h', '可用率 ' + (d.uptimeRate || 0) + '%');
+}
+
+function buildActions(d) {
+  var offline = d.status === 'offline' || !DeviceStore.readingsOf(d.id);
+  var btn = function (title, desc, cmd, cls, arg) {
+    return '<button class="ctrl-btn ' + (cls || '') + '"' + (offline ? ' disabled' : '') +
+      ' onclick="issue(\'' + cmd + '\'' + (arg ? ',\'' + arg + '\'' : '') + ')">' +
+      '<div class="cb-title">' + title + '</div><div class="cb-desc">' + desc + '</div></button>';
+  };
+  if (d.type === 'water_fertilizer') {
+    return btn('启动灌溉', '按当前目标 EC / pH 自动配肥', '启动灌溉', 'primary') +
+      btn('停止灌溉', '关闭全部电磁阀并停泵', '停止灌溉', 'danger') +
+      btn('调整目标 EC', '设定灌溉液电导率', '调整目标EC', '') +
+      btn('调整目标 pH', '设定灌溉液酸碱度', '调整目标pH', '') +
+      btn('自动 / 手动', '切换运行模式', '切换运行模式', '') +
+      btn('一键冲洗', '反冲洗过滤器与管路', '一键冲洗', '');
+  }
+  if (d.type === 'cold_storage') {
+    return btn('设置目标库温', '调整冷库制冷温度', '设置库温', 'primary') +
+      btn('强制化霜', '立即执行一次化霜', '强制化霜', '') +
+      btn('开启制冷', '启动压缩机组', '开启制冷', '') +
+      btn('停止制冷', '停止压缩机组', '停止制冷', 'danger');
+  }
+  if (d.type === 'irrigation_controller') {
+    return btn('开启全部阀门', '按分区依次开启', '开启全部阀门', 'primary') +
+      btn('关闭全部阀门', '立即停止灌溉', '关闭全部阀门', 'danger') +
+      btn('上报采集', '召测一次实时数据', '采集指令', '');
+  }
+  return btn('下发采集指令', '召测一次实时数据', '采集指令', 'primary') +
+    btn('远程重启', '重启设备通信模组', '远程重启', 'danger');
+}
+
+/* ---------- 指令下发 ---------- */
+function issue(cmd, arg) {
+  var d = DeviceStore.deviceOf(currentId);
+  if (!d) return;
+  if (cmd === '调整目标EC') { openParam('目标 EC（mS/cm）', 1.8, cmd, 0.1); return; }
+  if (cmd === '调整目标pH') { openParam('目标 pH', 6.2, cmd, 0.05); return; }
+  if (cmd === '设置库温') { openParam('目标库温（℃）', 2.5, cmd, 0.1); return; }
+  var content = arg ? (cmd + '：' + arg) : cmd;
+  pushCommand(d, '开关控制', content);
+}
+
+function openParam(label, def, cmd, step) {
+  pendingParam = cmd;
+  document.getElementById('paramTitle').textContent = cmd;
+  document.getElementById('paramLabel').textContent = label;
+  var input = document.getElementById('paramValue');
+  input.value = def;
+  input.step = step;
+  DeviceUI.fillSelect('paramOperator', DeviceUI.operatorOptions(), '请选择操作人');
+  document.getElementById('paramOverlay').classList.add('show');
+  document.getElementById('paramModal').classList.add('show');
+}
+
+function closeParam() {
+  document.getElementById('paramOverlay').classList.remove('show');
+  document.getElementById('paramModal').classList.remove('show');
+}
+
+function submitParam() {
+  var d = DeviceStore.deviceOf(currentId);
+  var v = document.getElementById('paramValue').value;
+  if (v === '') { DeviceUI.toast('请填写设定值', 'error'); return; }
+  pushCommand(d, '参数下发', pendingParam + '：' + v, document.getElementById('paramOperator').value);
+  closeParam();
+}
+
+function pushCommand(d, type, content, operator) {
+  if (!d) return;
+  var now = new Date();
+  var datePart = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
+  var seq = DeviceStore.commands().filter(function (c) { return (c.id || '').indexOf('CMD-' + datePart) === 0; }).length + 1;
+  var item = {
+    id: 'CMD-' + datePart + '-' + String(seq).padStart(3, '0'),
+    deviceId: d.id,
+    type: type,
+    createTime: nowStr(),
+    status: d.status === 'offline' ? 'failed' : 'pending',
+    operator: operator || '当前用户',
+    content: content,
+    remark: d.status === 'offline' ? '设备离线，指令未能送达' : '',
+    finishTime: d.status === 'offline' ? nowStr() : ''
+  };
+  var check = DeviceStore.validate('command', item, null);
+  if (!check.ok) { DeviceUI.toast(check.message, 'error'); return; }
+  DeviceStore.upsertCommand(item);
+  DeviceStore.appendLog({
+    deviceId: d.id, level: 'info', type: '控制指令', source: '平台',
+    content: '下发控制指令：' + content,
+    traceId: 'TR-' + item.id.replace(/[^0-9]/g, '').slice(0, 12)
+  });
+  if (item.status === 'failed') DeviceUI.toast('设备离线，指令已记录未送达', 'error');
+  else DeviceUI.toast('指令已下发，等待设备回执', 'success');
+  renderCommands();
+}
+
+/* ---------- 指令列表 ---------- */
+function renderCommands() {
+  var list = DeviceStore.commands().filter(function (c) { return c.deviceId === currentId; })
+    .sort(function (a, b) { return (b.createTime || '').localeCompare(a.createTime || ''); }).slice(0, 10);
+  var body = document.getElementById('cmdBody');
+  if (!list.length) {
+    body.innerHTML = '<tr class="empty-row"><td colspan="6">该设备暂无控制指令</td></tr>';
+    return;
+  }
+  body.innerHTML = list.map(function (c) {
+    var state = c.status === 'success' ? 'online' : c.status === 'failed' ? 'offline' : 'warning';
+    return '<tr>' +
+      '<td style="font-family:Consolas,monospace;font-size:11.5px;color:#2b6cb0;">' + DeviceUI.esc(c.id) + '</td>' +
+      '<td>' + DeviceUI.esc(c.type) + '</td>' +
+      '<td>' + DeviceUI.esc(c.content) + '</td>' +
+      '<td style="font-size:12px;">' + DeviceUI.esc(c.createTime) + '</td>' +
+      '<td>' + DeviceUI.statusTag(state, DeviceStore.COMMAND_STATUS_TEXT[c.status] || c.status) + '</td>' +
+      '<td>' + DeviceUI.esc(c.operator) + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  var list = controlDevices();
+  currentId = list.length ? list[0].id : '';
+  renderDeviceList();
+  if (currentId) selectDevice(currentId);
+  else {
+    document.getElementById('metricGrid').innerHTML = metric('暂无可控设备', '—', '', '请先在设备台账中登记控制类设备', true);
+    document.getElementById('cmdBody').innerHTML = '<tr class="empty-row"><td colspan="6">暂无数据</td></tr>';
+  }
+
+  DeviceStore.subscribe(function (reason) {
+    if (reason === 'init') return;
+    renderDeviceList();
+    if (currentId) selectDevice(currentId);
+  });
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 资产盘点</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; backdrop-filter:blur(4px); }
+  .modal-overlay.show { display:block; }
+  .modal-box { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:var(--bg-card); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.15);
+    width:780px; max-width:94vw; max-height:86vh; overflow-y:auto; z-index:1000; animation:modalSlideIn .25s ease-out; }
+  .modal-box.show { display:block; }
+  @keyframes modalSlideIn { from{opacity:0;transform:translate(-50%,-50%) scale(.95)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;
+    padding-bottom:16px; border-bottom:1px solid var(--border-light); }
+  .modal-header h3 { font-size:16px; font-weight:600; color:var(--text-primary); margin:0; }
+  .modal-close { width:28px; height:28px; border:none; background:var(--gray-100); border-radius:6px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; }
+  .modal-close:hover { background:var(--error-bg); color:var(--error); }
+  .modal-body { padding:0 4px; }
+  .modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; padding:16px 0 0;
+    border-top:1px solid var(--border-light); }
+
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .form-group { margin-bottom:16px; }
+  .form-group.full { grid-column:1 / -1; }
+  .form-group label { display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:8px; }
+  .form-group input, .form-group select, .form-group textarea { width:100%; padding:10px;
+    border:1px solid var(--border-default); border-radius:8px; font-size:13px; box-sizing:border-box; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline:none; border-color:var(--primary-400); box-shadow:0 0 0 3px rgba(24,144,255,.1); }
+  .form-group textarea { min-height:60px; resize:vertical; }
+
+  .stat-card-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:16px; }
+  .stat-card { background:#fff; border:1px solid #eef0ee; border-radius:12px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .stat-label { font-size:12px; color:var(--text-tertiary); margin-bottom:6px; }
+  .stat-value { font-size:26px; font-weight:700; color:var(--text-primary); font-variant-numeric:tabular-nums; }
+  .stat-value .unit { font-size:13px; font-weight:500; color:var(--text-tertiary); margin-left:4px; }
+  .stat-sub { margin-top:6px; font-size:12px; color:var(--text-tertiary); }
+  .stat-sub.err { color:var(--error); }
+  .stat-sub.warn { color:var(--warning); }
+
+  .status-tag { display:inline-flex; align-items:center; padding:3px 10px; font-size:11.5px;
+    font-weight:500; border-radius:20px; white-space:nowrap; }
+  .status-tag.online { background:#d9f7be; color:#3a8618; border:1px solid #b7eb8f; }
+  .status-tag.warning { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .status-tag.offline { background:var(--error-bg); color:#cf1322; border:1px solid #ffccc7; }
+  .status-tag.processing { background:var(--info-bg); color:var(--primary-500); border:1px solid var(--info-border); }
+  .action-btns { display:flex; gap:6px; flex-wrap:nowrap; }
+  .action-btn { padding:4px 10px; font-size:11.5px; font-weight:500; border:1px solid transparent;
+    border-radius:6px; cursor:pointer; white-space:nowrap; background:none; }
+  .action-btn.detail { color:#2b6cb0; background:#f5f8fc; border-color:#c5d9f0; }
+  .action-btn.edit { color:var(--primary-600); background:var(--gray-50); border-color:var(--border-default); }
+  .action-btn.use { color:#3a8618; background:var(--success-bg); border-color:#b7eb8f; }
+  .action-btn.del { color:#cf1322; background:var(--error-bg); border-color:#ffccc7; }
+  .data-table { min-width:1160px; }
+  .data-table th { white-space:nowrap; }
+  .empty-row td { text-align:center; color:var(--text-tertiary); padding:40px 0; }
+  #pagination-container { padding:12px 16px; }
+
+  .check-list { border:1px solid var(--border-default); border-radius:10px; overflow:hidden; }
+  .check-row { display:flex; align-items:center; gap:10px; padding:9px 12px; border-bottom:1px solid var(--border-light); font-size:13px; }
+  .check-row:last-child { border-bottom:none; }
+  .check-row:nth-child(even) { background:var(--gray-50); }
+  .check-row label { display:flex; align-items:center; gap:8px; flex:1; cursor:pointer; }
+  .check-row input[type=checkbox] { width:16px; height:16px; }
+  .check-row .cr-meta { font-size:11.5px; color:var(--text-tertiary); }
+  .check-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .check-head span { font-size:12.5px; color:var(--text-tertiary); }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="device" data-active-submenu="device-asset">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <nav class="device-tabs" aria-label="设备台账">
+        <a href="device_info.html">设备列表</a>
+        <a href="device_model.html">类型与物模型</a>
+        <a href="device_asset.html" class="active">资产盘点</a>
+      </nav>
+
+      <div class="stat-card-row" id="statCards"></div>
+
+      <div class="content-wrapper">
+
+        <!-- ===== 搜索栏区 ===== -->
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="statusSelect" style="min-width:130px;">
+              <option value="">全部盘点状态</option>
+              <option value="draft">待开始</option>
+              <option value="checking">盘点中</option>
+              <option value="done">已完成</option>
+              <option value="abnormal">有盘亏</option>
+            </select>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索盘点单号 / 盘点名称 / 盘点人...">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="handleSearch()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 操作按钮区 ===== -->
+        <div class="page-section action-bar">
+          <button class="jg-btn-outline" onclick="openEditModal('')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/>
+            </svg>新建盘点单
+          </button>
+          <button class="jg-btn-outline" onclick="exportAssets()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/>
+            </svg>导出盘点单
+          </button>
+        </div>
+
+        <!-- ===== 数据表格区 ===== -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:130px;">盘点单号</th>
+                  <th style="width:220px;">盘点名称</th>
+                  <th style="width:100px;">开始日期</th>
+                  <th style="width:100px;">结束日期</th>
+                  <th style="width:86px;">盘点人</th>
+                  <th style="width:70px;">应盘</th>
+                  <th style="width:70px;">已盘</th>
+                  <th style="width:86px;">盘亏/异常</th>
+                  <th style="width:96px;">状态</th>
+                  <th style="width:230px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ===== 编辑弹窗 ===== -->
+<div class="modal-overlay" id="editOverlay"></div>
+<div class="modal-box" id="editModal">
+  <div class="modal-header">
+    <h3 id="editTitle">资产盘点单</h3>
+    <button class="modal-close" onclick="closeEditModal()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>盘点名称 <span style="color:var(--error);">*</span></label>
+        <input type="text" id="fName" placeholder="如 2026 年 12 月设备盘点" />
+      </div>
+      <div class="form-group">
+        <label>开始日期</label>
+        <input type="date" id="fStartDate" />
+      </div>
+      <div class="form-group">
+        <label>结束日期</label>
+        <input type="date" id="fEndDate" />
+      </div>
+      <div class="form-group">
+        <label>盘点负责人</label>
+        <select id="fOwner"></select>
+      </div>
+      <div class="form-group">
+        <label>盘点状态</label>
+        <select id="fStatus">
+          <option value="draft">待开始</option>
+          <option value="checking">盘点中</option>
+          <option value="done">已完成</option>
+          <option value="abnormal">有盘亏</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label>盘点结论</label>
+        <textarea id="fSummary" placeholder="如 全部设备账实相符"></textarea>
+      </div>
+      <div class="form-group full">
+        <label>备注</label>
+        <input type="text" id="fRemark" placeholder="选填" />
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="jg-btn" onclick="closeEditModal()">取消</button>
+    <button class="jg-btn jg-btn-primary" onclick="saveAsset()">保存</button>
+  </div>
+</div>
+
+<!-- ===== 执行盘点弹窗 ===== -->
+<div class="modal-overlay" id="checkOverlay"></div>
+<div class="modal-box" id="checkModal" style="width:820px;">
+  <div class="modal-header">
+    <h3 id="checkTitle">执行盘点</h3>
+    <button class="modal-close" onclick="closeCheckModal()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div class="check-head">
+      <span id="checkHint">勾选现场实际找到的设备</span>
+      <span id="checkCount"></span>
+    </div>
+    <div class="check-list" id="checkList"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="jg-btn" onclick="closeCheckModal()">取消</button>
+    <button class="jg-btn jg-btn-primary" onclick="submitCheck()">提交盘点结果</button>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/shared/device-store.js"></script>
+<script src="js/shared/device-ui.js"></script>
+<script>
+/* ============================================================
+ * 资产盘点
+ * 数据源：js/shared/device-store.js → assets() / devices()
+ *
+ * 固资管理要求账实相符：盘点单记录应盘 / 实盘 / 盘亏，
+ * 盘点结果直接决定设备资产状态（在用 / 闲置 / 报废）的处置依据。
+ * ============================================================ */
+
+var STATUS_TEXT = { draft: '待开始', checking: '盘点中', done: '已完成', abnormal: '有盘亏' };
+var STATUS_STATE = { draft: 'warning', checking: 'processing', done: 'online', abnormal: 'offline' };
+var currentId = '';
+var checkId = '';
+var page = null;
+
+function todayStr() {
+  var d = new Date();
+  var p = function (n) { return n < 10 ? '0' + n : n; };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+/* ---------- 下拉初始化 ---------- */
+function initSelects() {
+  DeviceUI.fillSelect('fOwner', DeviceUI.operatorOptions(), '请选择盘点负责人');
+}
+
+/* ---------- 统计卡 ---------- */
+function renderStats() {
+  var list = DeviceStore.assets();
+  var devices = DeviceStore.devices();
+  var assetDevices = devices.filter(function (d) { return d.assetStatus !== 'scrapped'; });
+  var lastDone = list.filter(function (a) { return a.status === 'done'; })
+    .sort(function (a, b) { return (b.endDate || '').localeCompare(a.endDate || ''); })[0];
+  var abnormal = list.filter(function (a) { return a.status === 'abnormal'; }).length;
+  document.getElementById('statCards').innerHTML =
+    '<div class="stat-card"><div class="stat-label">应盘资产</div>' +
+    '<div class="stat-value">' + assetDevices.length + '<span class="unit">台</span></div>' +
+    '<div class="stat-sub">不含已报废设备</div></div>' +
+    '<div class="stat-card"><div class="stat-label">盘点单</div>' +
+    '<div class="stat-value">' + list.length + '<span class="unit">张</span></div>' +
+    '<div class="stat-sub">覆盖历史盘点记录</div></div>' +
+    '<div class="stat-card"><div class="stat-label">最近盘点</div>' +
+    '<div class="stat-value" style="font-size:17px;">' + (lastDone ? lastDone.endDate : '暂无') + '</div>' +
+    '<div class="stat-sub">' + (lastDone ? lastDone.name : '尚未完成过盘点') + '</div></div>' +
+    '<div class="stat-card"><div class="stat-label">盘亏异常单</div>' +
+    '<div class="stat-value" style="color:var(--error);">' + abnormal + '<span class="unit">张</span></div>' +
+    '<div class="stat-sub err">需跟进核实处置</div></div>';
+}
+
+/* ---------- 表格行 ---------- */
+function renderRow(item, index) {
+  var diff = (Number(item.total) || 0) - (Number(item.checked) || 0);
+  return '<tr>' +
+    '<td>' + index + '</td>' +
+    '<td><strong>' + DeviceUI.esc(item.id) + '</strong></td>' +
+    '<td>' + DeviceUI.esc(item.name) + '</td>' +
+    '<td>' + DeviceUI.esc(item.startDate || '-') + '</td>' +
+    '<td>' + DeviceUI.esc(item.endDate || '-') + '</td>' +
+    '<td>' + DeviceUI.esc(item.owner || '-') + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + (Number(item.total) || 0) + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + (Number(item.checked) || 0) + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;color:' + (diff > 0 ? 'var(--error)' : 'var(--text-secondary)') + ';">' +
+      (Number(item.abnormal) || 0) + '</td>' +
+    '<td>' + DeviceUI.statusTag(STATUS_STATE[item.status] || 'warning', STATUS_TEXT[item.status] || item.status) + '</td>' +
+    '<td><div class="action-btns">' +
+      '<button class="action-btn detail" onclick="openDetail(\'' + DeviceUI.esc(item.id) + '\')">详情</button>' +
+      '<button class="action-btn use" onclick="openCheckModal(\'' + DeviceUI.esc(item.id) + '\')">执行盘点</button>' +
+      '<button class="action-btn edit" onclick="openEditModal(\'' + DeviceUI.esc(item.id) + '\')">编辑</button>' +
+      '<button class="action-btn del" onclick="deleteAsset(\'' + DeviceUI.esc(item.id) + '\')">删除</button>' +
+    '</div></td>' +
+  '</tr>';
+}
+
+/* ---------- 过滤 ---------- */
+function filteredList() {
+  var status = document.getElementById('statusSelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  return DeviceStore.assets().filter(function (a) {
+    if (status && a.status !== status) return false;
+    if (kw) {
+      var hay = (a.id + ' ' + a.name + ' ' + (a.owner || '') + ' ' + (a.summary || '')).toLowerCase();
+      if (hay.indexOf(kw) < 0) return false;
+    }
+    return true;
+  }).sort(function (a, b) { return (b.startDate || '').localeCompare(a.startDate || ''); });
+}
+
+function handleSearch() {
+  var list = filteredList();
+  page.updateData(list);
+  DeviceUI.toast('找到 ' + list.length + ' 张盘点单', 'info');
+}
+
+function resetFilter() {
+  document.getElementById('statusSelect').value = '';
+  document.getElementById('searchInput').value = '';
+  page.updateData(filteredList());
+  DeviceUI.toast('已重置搜索条件', 'info');
+}
+
+/* ---------- 详情 ---------- */
+function openDetail(id) {
+  var a = DeviceStore.assets().filter(function (x) { return x.id === id; })[0];
+  if (!a) return;
+  var details = (a.details || []).filter(function (d) { return d.found === false; });
+  var lostText = details.length ? details.map(function (d) { return d.deviceId; }).join('、') : '无';
+  DeviceUI.detailModal('盘点单 · ' + a.name, [
+    ['盘点单号', a.id],
+    ['盘点名称', a.name],
+    ['开始日期', a.startDate || '—'],
+    ['结束日期', a.endDate || '—'],
+    ['盘点负责人', a.owner || '—'],
+    ['盘点状态', STATUS_TEXT[a.status] || a.status],
+    ['应盘数量', String(a.total || 0)],
+    ['已盘数量', String(a.checked || 0)],
+    ['盘亏数量', String(a.abnormal || 0), 'raw'],
+    ['盘亏设备', lostText],
+    ['盘点结论', a.summary || '—'],
+    ['备注', a.remark || '—']
+  ], { editId: a.id, editFn: 'openEditModal' });
+}
+
+/* ---------- 新增 / 编辑 ---------- */
+function openEditModal(id) {
+  currentId = id || '';
+  var a = id ? DeviceStore.assets().filter(function (x) { return x.id === id; })[0] : null;
+  document.getElementById('editTitle').textContent = a ? ('编辑盘点单 · ' + a.id) : '新建盘点单';
+  document.getElementById('fName').value = a ? a.name : ('设备盘点 · ' + todayStr());
+  document.getElementById('fStartDate').value = a ? (a.startDate || '') : todayStr();
+  document.getElementById('fEndDate').value = a ? (a.endDate || '') : '';
+  document.getElementById('fOwner').value = a ? (a.owner || '') : '';
+  document.getElementById('fStatus').value = a ? a.status : 'draft';
+  document.getElementById('fSummary').value = a ? (a.summary || '') : '';
+  document.getElementById('fRemark').value = a ? (a.remark || '') : '';
+  document.getElementById('editOverlay').classList.add('show');
+  document.getElementById('editModal').classList.add('show');
+}
+
+function closeEditModal() {
+  document.getElementById('editOverlay').classList.remove('show');
+  document.getElementById('editModal').classList.remove('show');
+}
+
+function saveAsset() {
+  var name = document.getElementById('fName').value.trim();
+  if (!name) { DeviceUI.toast('请填写盘点名称', 'error'); return; }
+  var old = currentId ? DeviceStore.assets().filter(function (x) { return x.id === currentId; })[0] : null;
+  var status = document.getElementById('fStatus').value;
+  var total = old ? (Number(old.total) || DeviceStore.devices().length) : DeviceStore.devices().length;
+  var item = {
+    id: currentId || DeviceStore.nextId('asset'),
+    name: name,
+    startDate: document.getElementById('fStartDate').value,
+    endDate: document.getElementById('fEndDate').value,
+    owner: document.getElementById('fOwner').value,
+    status: status,
+    total: total,
+    checked: old ? Number(old.checked) || 0 : 0,
+    abnormal: old ? Number(old.abnormal) || 0 : 0,
+    summary: document.getElementById('fSummary').value.trim(),
+    remark: document.getElementById('fRemark').value.trim(),
+    details: old ? (old.details || []) : [],
+    createdAt: old ? old.createdAt : DeviceStore.stampNow()
+  };
+  if (status === 'done' && !item.endDate) item.endDate = todayStr();
+  var check = DeviceStore.validate('asset', item, currentId || null);
+  if (!check.ok) { DeviceUI.toast(check.message, 'error'); return; }
+  DeviceStore.upsertAsset(item);
+  closeEditModal();
+  refreshAll();
+  DeviceUI.toast('盘点单已保存', 'success');
+}
+
+function deleteAsset(id) {
+  DeviceUI.confirmDelete('确定删除盘点单「' + id + '」吗？').then(function (ok) {
+    if (!ok) return;
+    DeviceStore.removeAsset(id);
+    refreshAll();
+    DeviceUI.toast('盘点单已删除', 'success');
+  });
+}
+
+/* ---------- 执行盘点 ---------- */
+function openCheckModal(id) {
+  var a = DeviceStore.assets().filter(function (x) { return x.id === id; })[0];
+  if (!a) return;
+  checkId = id;
+  document.getElementById('checkTitle').textContent = '执行盘点 · ' + a.name;
+  var devices = DeviceStore.devices();
+  var found = {};
+  (a.details || []).forEach(function (d) { found[d.deviceId] = d.found; });
+  document.getElementById('checkList').innerHTML = devices.map(function (d) {
+    var isFound = found[d.id] === undefined ? (d.assetStatus !== 'scrapped') : !!found[d.id];
+    return '<div class="check-row">' +
+      '<label><input type="checkbox" data-id="' + DeviceUI.esc(d.id) + '"' + (isFound ? ' checked' : '') + ' />' +
+      '<strong>' + DeviceUI.esc(d.id) + '</strong> ' + DeviceUI.esc(d.name) + '</label>' +
+      '<span class="cr-meta">' + DeviceUI.esc(d.base) + ' · ' + DeviceUI.esc(d.location) + ' · ' +
+        DeviceUI.esc(DeviceStore.typeName(d.type)) + '</span>' +
+    '</div>';
+  }).join('');
+  updateCheckCount();
+  document.getElementById('checkList').addEventListener('change', updateCheckCount);
+  document.getElementById('checkOverlay').classList.add('show');
+  document.getElementById('checkModal').classList.add('show');
+}
+
+function updateCheckCount() {
+  var boxes = document.querySelectorAll('#checkList input[type=checkbox]');
+  var checked = 0;
+  Array.prototype.forEach.call(boxes, function (b) { if (b.checked) checked++; });
+  document.getElementById('checkCount').textContent = '已盘 ' + checked + ' / 应盘 ' + boxes.length + ' 台';
+}
+
+function closeCheckModal() {
+  document.getElementById('checkOverlay').classList.remove('show');
+  document.getElementById('checkModal').classList.remove('show');
+}
+
+function submitCheck() {
+  var a = DeviceStore.assets().filter(function (x) { return x.id === checkId; })[0];
+  if (!a) return;
+  var boxes = document.querySelectorAll('#checkList input[type=checkbox]');
+  var details = [];
+  var checked = 0;
+  Array.prototype.forEach.call(boxes, function (b) {
+    var found = !!b.checked;
+    if (found) checked++;
+    details.push({ deviceId: b.getAttribute('data-id'), found: found, checkTime: DeviceStore.stampNow() });
+  });
+  var total = details.length;
+  var abnormal = total - checked;
+  var item = Object.assign({}, a, {
+    details: details, total: total, checked: checked, abnormal: abnormal,
+    status: abnormal > 0 ? 'abnormal' : 'done',
+    endDate: a.endDate || todayStr(),
+    summary: abnormal > 0 ? ('盘点完成，盘亏 ' + abnormal + ' 台，需跟进核实') : '盘点完成，账实相符'
+  });
+  DeviceStore.upsertAsset(item);
+  DeviceStore.audit('status', 'asset', item.id,
+    '完成盘点：应盘 ' + total + ' 台，实盘 ' + checked + ' 台，盘亏 ' + abnormal + ' 台');
+  closeCheckModal();
+  refreshAll();
+  DeviceUI.toast('盘点结果已提交', 'success');
+}
+
+/* ---------- 导出 ---------- */
+function exportAssets() {
+  var list = filteredList();
+  var headers = ['盘点单号', '盘点名称', '开始日期', '结束日期', '盘点人', '应盘', '已盘', '盘亏', '状态', '盘点结论'];
+  var rows = list.map(function (a) {
+    return [a.id, a.name, a.startDate || '', a.endDate || '', a.owner || '',
+      Number(a.total) || 0, Number(a.checked) || 0, Number(a.abnormal) || 0,
+      STATUS_TEXT[a.status] || a.status, a.summary || ''];
+  });
+  DeviceUI.exportCsv('设备资产盘点', headers, rows);
+}
+
+/* ---------- 刷新 ---------- */
+function refreshAll() {
+  renderStats();
+  page.updateData(filteredList());
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  initSelects();
+  page = DeviceUI.pagination({
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow,
+    emptyCols: 11,
+    pageSize: 10
+  });
+  page.init({ data: [] });
+
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') handleSearch();
+  });
+
+  DeviceStore.subscribe(function (reason) {
+    if (reason === 'init') return;
+    renderStats();
+  });
+
+  refreshAll();
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

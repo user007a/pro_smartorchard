@@ -41,7 +41,7 @@
   }
   .status-tag.available { background:var(--success-bg); color:var(--success); border:1px solid var(--success-border); }
   .status-tag.adopted   { background:var(--warning-bg); color:#ad8b00;        border:1px solid var(--warning-border); }
-  .status-tag.disabled  { background:var(--gray-100);  color:var(--text-tertiary); border:1px solid var(--border-default); }
+  .status-tag.unavailable { background:var(--gray-100);  color:var(--text-tertiary); border:1px solid var(--border-default); }
 
   /* Switch 开关 */
   .switch {
@@ -237,7 +237,7 @@
             <option value="">全部状态</option>
             <option value="available">可认养</option>
             <option value="adopted">已认养</option>
-            <option value="disabled">不可认养</option>
+            <option value="unavailable">不可认养</option>
           </select>
           <input type="text" class="search-input" id="searchKw" placeholder="搜索果树编号 / 品种...">
           <div class="search-actions">
@@ -332,7 +332,7 @@
           <select id="editStatus">
             <option value="available">可认养</option>
             <option value="adopted">已认养</option>
-            <option value="disabled">不可认养</option>
+            <option value="unavailable">不可认养</option>
           </select>
         </div>
       </div>
@@ -384,23 +384,14 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/adoption-store.js"></script>
 <script>
 /* ============================================================
  * 认养展示配置（移动端 mb_adoption_browse.html 数据源）
  * ============================================================ */
 
-var TREE_KEY = 'adoption_browse_trees';
 var GUIDE_KEY = 'adoption_guide';
-
-/* 种子：来自原硬编码 6 张卡片 */
-var DEFAULT_TREES = [
-  { treeNo:'A001', variety:'huaniu',    varietyName:'花牛苹果', treeAge:8,  price:399, status:'available', cameraId:'',          openMonitor:true },
-  { treeNo:'A025', variety:'huaniu',    varietyName:'花牛苹果', treeAge:8,  price:429, status:'available', cameraId:'',          openMonitor:true },
-  { treeNo:'G012', variety:'gala',       varietyName:'嘎拉',     treeAge:6,  price:299, status:'adopted',   cameraId:'',          openMonitor:false },
-  { treeNo:'Q008', variety:'qinguang',   varietyName:'秦冠',     treeAge:10, price:459, status:'available', cameraId:'',          openMonitor:true },
-  { treeNo:'J015', variety:'jonagold',   varietyName:'乔纳金',   treeAge:7,  price:359, status:'available', cameraId:'',          openMonitor:true },
-  { treeNo:'X003', variety:'xinredstar', varietyName:'新红星',   treeAge:5,  price:279, status:'available', cameraId:'',          openMonitor:true }
-];
+var S = window.AdoptionStore;
 
 var DEFAULT_GUIDE = {
   title: '果树认养指南',
@@ -422,7 +413,7 @@ var DEFAULT_GUIDE = {
   updatedAt: ''
 };
 
-var STATUS_TEXT = { available: '可认养', adopted: '已认养', disabled: '不可认养' };
+var STATUS_TEXT = { available: '可认养', adopted: '已认养', unavailable: '不可认养' };
 
 var editingTreeNo = null;
 var editingCameraIdPrev = null;
@@ -455,27 +446,10 @@ function writeJSON(key, val) {
 }
 
 /* ---------- 数据 ---------- */
-/* 历史数据迁移：早期品种代码 hongfushi 实际指向「花牛苹果」，语义与红富士冲突，
-   统一改为 huaniu；已落库的存量果树在读取时自愈并回写 */
-function migrateLegacyVariety(list) {
-  var changed = false;
-  list.forEach(function (t) {
-    if (t && t.variety === 'hongfushi') { t.variety = 'huaniu'; changed = true; }
-  });
-  return changed;
-}
-
+/* 果树池统一由 AdoptionStore 承载：本页只读写展示字段，不再维护独立种子 */
 function readTrees() {
-  var list = readJSON(TREE_KEY, null);
-  if (!list || list.length === 0) {
-    list = DEFAULT_TREES.map(function (t) { return Object.assign({}, t); });
-    writeJSON(TREE_KEY, list);
-  } else if (migrateLegacyVariety(list)) {
-    writeJSON(TREE_KEY, list);
-  }
-  return list;
+  return S.browsePool();
 }
-function writeTrees(list) { return writeJSON(TREE_KEY, list); }
 
 function readGuide() {
   var v = readObject(GUIDE_KEY, null);
@@ -568,13 +542,30 @@ function renderTreeTable() {
 }
 
 function toggleMonitor(treeNo, val) {
-  var list = readTrees();
-  var idx = list.findIndex(function (t) { return t.treeNo === treeNo; });
-  if (idx < 0) return;
-  list[idx].openMonitor = !!val;
-  writeTrees(list);
-  Toast.success(val ? '已开放实景' : '已关闭实景');
+  var raw = S.findTree(treeNo);
+  if (!raw) return;
+  try {
+    S.saveTree({
+      id: raw.id,
+      treeCode: raw.treeCode,
+      treeName: raw.treeName,
+      variety: raw.variety,
+      baseName: raw.baseName,
+      plotName: raw.plotName,
+      price: raw.price,
+      status: raw.status,
+      adopter: raw.adopter,
+      adopterPhone: raw.adopterPhone,
+      openMonitor: !!val,
+      cameraId: raw.cameraId,
+      remark: raw.remark
+    });
+    Toast.success(val ? '已开放实景' : '已关闭实景');
+  } catch (e) {
+    Toast.error(e.message || '保存失败');
+  }
   renderStats();
+  renderTreeTable();
 }
 
 function openTreeEdit(treeNo) {
@@ -605,30 +596,50 @@ function submitTreeEdit() {
   if (!variety) { Toast.warning('请填写品种代码'); return; }
   if (!varietyName) { Toast.warning('请填写品种中文名'); return; }
   if (!price || isNaN(price) || price <= 0) { Toast.warning('请填写有效的价格'); return; }
-  var data = {
-    treeNo: treeNo,
-    variety: variety,
-    varietyName: varietyName,
-    treeAge: parseInt(document.getElementById('editTreeAge').value, 10) || 0,
-    price: price,
-    status: document.getElementById('editStatus').value || 'available',
-    cameraId: (document.getElementById('editCameraId').value || '').trim(),
-    openMonitor: document.getElementById('editOpenMonitor').checked
-  };
-  var list = readTrees();
-  if (editingTreeNo) {
-    var dup = list.filter(function (t) { return t.treeNo === treeNo && t.treeNo !== editingTreeNo; })[0];
-    if (dup) { Toast.error('果树编号已存在：' + treeNo); return; }
-    var idx = list.findIndex(function (t) { return t.treeNo === editingTreeNo; });
-    if (idx >= 0) list[idx] = data;
-    Toast.success('已保存');
-  } else {
-    var dup2 = list.filter(function (t) { return t.treeNo === treeNo; })[0];
-    if (dup2) { Toast.error('果树编号已存在：' + treeNo); return; }
-    list.unshift(data);
-    Toast.success('已新增');
+
+  var exist = editingTreeNo ? S.findTree(editingTreeNo) : null;
+  var status = document.getElementById('editStatus').value || 'available';
+  var adopter = exist ? exist.adopter : '';
+  var adopterPhone = exist ? exist.adopterPhone : '';
+  if (status === S.TREE_STATUS.ADOPTED && !String(adopter || '').trim()) {
+    var name = prompt('标记为已认养需填写认养人姓名：');
+    if (!name || !name.trim()) { Toast.warning('已认养果树必须填写认养人'); return; }
+    adopter = name.trim();
+    var phone = prompt('请输入认养人手机号（11 位）：');
+    if (phone && !/^1\d{10}$/.test(phone.trim())) { Toast.error('手机号格式不正确'); return; }
+    adopterPhone = (phone || '').trim();
   }
-  writeTrees(list);
+
+  /* 新增果树时从地块总表取默认外键，避免出现无基地 / 无地块的孤立记录 */
+  var defaultPlot = typeof S.plotMaster === 'function' ? (S.plotMaster()[0] || null) : null;
+
+  try {
+    S.saveTree({
+      id: exist ? exist.id : '',
+      treeCode: treeNo,
+      treeName: exist ? exist.treeName : treeNo + ' · ' + varietyName,
+      variety: varietyName,
+      baseName: exist ? exist.baseName : (defaultPlot ? defaultPlot.enterprise : ''),
+      plotName: exist ? exist.plotName : (defaultPlot ? defaultPlot.name : ''),
+      plotId: exist ? exist.plotId : (defaultPlot ? defaultPlot.id : ''),
+      plotCode: exist ? exist.plotCode : (defaultPlot ? defaultPlot.code : ''),
+      treeAge: parseInt(document.getElementById('editTreeAge').value, 10) || (exist ? exist.treeAge : 0),
+      price: price,
+      status: status,
+      adopter: adopter,
+      adopterPhone: adopterPhone,
+      startDate: exist ? exist.startDate : '',
+      expireDate: exist ? exist.expireDate : '',
+      duration: exist ? exist.duration : 0,
+      openMonitor: document.getElementById('editOpenMonitor').checked,
+      cameraId: (document.getElementById('editCameraId').value || '').trim(),
+      remark: exist ? exist.remark : ''
+    });
+    Toast.success(editingTreeNo ? '已保存' : '已新增');
+  } catch (e) {
+    Toast.error(e.message || '保存失败');
+    return;
+  }
   closeTreeEdit();
   refreshVarietyFilter();
   renderStats();
@@ -639,9 +650,13 @@ function deleteTree(treeNo) {
     title: '删除果树',
     message: '确认从果树池删除 ' + treeNo + ' 吗？',
     onConfirm: function () {
-      var list = readTrees().filter(function (t) { return t.treeNo !== treeNo; });
-      writeTrees(list);
-      Toast.success('已删除');
+      try {
+        S.removeTree(treeNo);
+        Toast.success('已删除');
+      } catch (e) {
+        Toast.error(e.message || '删除失败');
+        return;
+      }
       refreshVarietyFilter();
       renderStats();
       renderTreeTable();
@@ -697,10 +712,16 @@ function resetSearch() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+  S.publishBrowsePool();
   refreshVarietyFilter();
   renderStats();
   renderTreeTable();
   renderGuide();
+  S.onChange(function () {
+    refreshVarietyFilter();
+    renderStats();
+    renderTreeTable();
+  });
 });
 </script>
 </body>

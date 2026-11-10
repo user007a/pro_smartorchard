@@ -49,6 +49,9 @@
   }
   .status-tag.on { background: var(--success-bg); color: var(--success); }
   .status-tag.off { background: var(--gray-100); color: var(--text-secondary); }
+  .status-tag.expired { background: var(--error-bg); color: var(--error); }
+  .status-tag.ready { background: var(--info-bg); color: var(--info); }
+  .status-tag.soldout { background: var(--warning-bg); color: var(--warning); }
   .cell-name { font-weight: var(--font-weight-semibold, 600); color: var(--text-primary); }
   .cell-sub { font-size: var(--font-size-xs); color: var(--text-tertiary); }
   .rule-text { color: var(--error); font-weight: var(--weight-semibold, 600); }
@@ -142,6 +145,18 @@
         <div class="stat-label">折扣券</div>
         <div class="stat-value" id="statPercent">0</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-label">已发放</div>
+        <div class="stat-value" id="statIssued">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已核销</div>
+        <div class="stat-value" id="statUsed">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">核销率</div>
+        <div class="stat-value" id="statRate">0%</div>
+      </div>
     </div>
 
     <div class="page-section search-section">
@@ -173,6 +188,9 @@
               <th>优惠券</th>
               <th style="width:100px;">类型</th>
               <th style="width:110px;">使用门槛</th>
+              <th style="width:170px;">有效期</th>
+              <th style="width:130px;">发放 / 核销</th>
+              <th style="width:90px;">每人限领</th>
               <th style="width:100px;">状态</th>
               <th style="width:190px;">操作</th>
             </tr>
@@ -221,6 +239,49 @@
           <input type="number" id="editMin" min="0" step="1" placeholder="0 表示无门槛">
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>有效期开始</label>
+          <input type="date" id="editValidFrom">
+        </div>
+        <div class="form-field">
+          <label>有效期结束</label>
+          <input type="date" id="editValidTo">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>发放总量</label>
+          <input type="number" id="editTotalQty" min="0" step="1" placeholder="1000">
+        </div>
+        <div class="form-field">
+          <label>每人限领</label>
+          <input type="number" id="editPerUserLimit" min="1" step="1" placeholder="1">
+        </div>
+        <div class="form-field">
+          <label>领取方式</label>
+          <select id="editReceiveType">
+            <option value="public">公开领取</option>
+            <option value="auto">新人自动发放</option>
+            <option value="points">积分兑换</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label>适用范围</label>
+          <select id="editScope">
+            <option value="all">全场通用</option>
+            <option value="category">指定分类</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;height:42px;margin-top:22px;">
+            <input type="checkbox" id="editStackable" style="width:auto;">
+            允许与其他优惠叠加
+          </label>
+        </div>
+      </div>
       <div class="form-field" style="margin-bottom:var(--space-lg);">
         <label>使用说明</label>
         <input type="text" id="editDesc" placeholder="如 订单满 100 元可用">
@@ -243,6 +304,7 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mall-store.js"></script>
 <script>
 /* ============================================================
  * 优惠券管理（商城管理）
@@ -281,14 +343,24 @@ function readCoupons() {
     list = DEFAULT_COUPONS.map(function (c) { return Object.assign({}, c); });
     writeList(list);
   }
-  return list;
+  return typeof MallStore !== 'undefined' ? MallStore.coupons() : list;
 }
 
 function writeList(list) {
+  if (typeof MallStore !== 'undefined') {
+    var ok = true;
+    list.forEach(function (c) {
+      var r = MallStore.saveCoupon(c);
+      if (!r.ok) { Toast.error(r.error || '优惠券保存失败'); ok = false; }
+    });
+    return ok;
+  }
   try {
     localStorage.setItem(COUPON_KEY, JSON.stringify(list));
+    return true;
   } catch (e) {
     Toast.error('本地存储写入失败，优惠券未能保存');
+    return false;
   }
 }
 
@@ -306,15 +378,29 @@ function ruleText(c) {
 
 function renderStats() {
   var list = readCoupons();
-  var on = 0, cash = 0, percent = 0;
+  var on = 0, cash = 0, percent = 0, issued = 0, used = 0;
   list.forEach(function (c) {
     if (c.status !== 'off') on++;
     if (c.type === 'cash') cash++; else percent++;
+    issued += Number(c.issuedQty) || 0;
+    used += Number(c.usedQty) || 0;
   });
   document.getElementById('statTotal').textContent = list.length;
   document.getElementById('statOn').textContent = on;
   document.getElementById('statCash').textContent = cash;
   document.getElementById('statPercent').textContent = percent;
+  document.getElementById('statIssued').textContent = issued;
+  document.getElementById('statUsed').textContent = used;
+  document.getElementById('statRate').textContent = (issued ? (used / issued * 100).toFixed(1) : '0.0') + '%';
+}
+
+function couponState(c) {
+  var today = new Date().toISOString().slice(0, 10);
+  if (c.status === 'off') return 'off';
+  if (c.validTo && today > c.validTo) return 'expired';
+  if (c.validFrom && today < c.validFrom) return 'ready';
+  if (c.totalQty > 0 && c.issuedQty >= c.totalQty) return 'soldout';
+  return 'on';
 }
 
 function filteredList() {
@@ -348,6 +434,8 @@ function renderTable() {
   emptyHint.style.display = 'none';
 
   body.innerHTML = list.map(function (c, i) {
+    var st = couponState(c);
+    var stateText = { on: '生效中', off: '已停用', expired: '已过期', ready: '未开始', soldout: '已领完' }[st] || st;
     return '<tr>' +
       '<td class="checkbox-col">' + (i + 1) + '</td>' +
       '<td><div class="cell-name">' + esc(c.name) + '</div>' +
@@ -355,7 +443,11 @@ function renderTable() {
       '<td><span class="type-tag ' + esc(c.type) + '">' + (TYPE_TEXT[c.type] || c.type) + '</span></td>' +
       '<td><span class="rule-text">' + ruleText(c) + '</span>' +
           '<div class="cell-sub">' + (Number(c.min) > 0 ? '满 ¥' + c.min + ' 可用' : '无门槛') + '</div></td>' +
-      '<td><span class="status-tag ' + esc(c.status) + '">' + (c.status === 'off' ? '已停用' : '启用中') + '</span></td>' +
+      '<td class="text-mono" style="font-size:var(--font-size-xs);">' + esc(c.validFrom || '不限') + '<br>~ ' + esc(c.validTo || '不限') + '</td>' +
+      '<td><div>' + Number(c.issuedQty) + ' / ' + Number(c.usedQty) + '</div>' +
+          '<div class="cell-sub">共 ' + (Number(c.totalQty) ? Number(c.totalQty) : '不限') + ' 张</div></td>' +
+      '<td>' + Number(c.perUserLimit) + ' 张</td>' +
+      '<td><span class="status-tag ' + st + '">' + stateText + '</span></td>' +
       '<td><div class="action-btns">' +
         '<button class="action-btn detail" onclick="openEdit(\'' + esc(c.code) + '\')">编辑</button>' +
         '<button class="action-btn ' + (c.status === 'on' ? 'delete' : 'download') + '" onclick="toggleStatus(\'' + esc(c.code) + '\')">' +
@@ -393,6 +485,13 @@ function openEdit(code) {
   document.getElementById('editMin').value = c ? (c.min || 0) : 0;
   document.getElementById('editDesc').value = c ? (c.desc || '') : '';
   document.getElementById('editStatus').value = c ? (c.status || 'on') : 'on';
+  document.getElementById('editValidFrom').value = c ? (c.validFrom || '') : new Date().toISOString().slice(0, 10);
+  document.getElementById('editValidTo').value = c ? (c.validTo || '') : '';
+  document.getElementById('editTotalQty').value = c ? (c.totalQty == null ? 1000 : c.totalQty) : 1000;
+  document.getElementById('editPerUserLimit').value = c ? (c.perUserLimit || 1) : 1;
+  document.getElementById('editReceiveType').value = c ? (c.receiveType || 'public') : 'public';
+  document.getElementById('editScope').value = c ? (c.scope || 'all') : 'all';
+  document.getElementById('editStackable').checked = !!(c && c.stackable);
 
   document.getElementById('editModal').classList.add('show');
 }
@@ -423,25 +522,41 @@ function submitEdit() {
     }
   }
 
+  var validFrom = document.getElementById('editValidFrom').value;
+  var validTo = document.getElementById('editValidTo').value;
+  if (validFrom && validTo && validFrom > validTo) { Toast.warning('有效期开始不能晚于结束'); return; }
+
   var payload = {
     code: code,
     name: name,
     type: type,
     value: value,
     min: min,
+    validFrom: validFrom,
+    validTo: validTo,
+    totalQty: Number(document.getElementById('editTotalQty').value) || 0,
+    perUserLimit: Number(document.getElementById('editPerUserLimit').value) || 1,
+    receiveType: document.getElementById('editReceiveType').value,
+    scope: document.getElementById('editScope').value,
+    stackable: document.getElementById('editStackable').checked,
     status: document.getElementById('editStatus').value,
     desc: document.getElementById('editDesc').value.trim()
   };
 
-  if (editingCode) {
-    for (var k = 0; k < list.length; k++) {
-      if (list[k].code === editingCode) { list[k] = payload; break; }
-    }
+  if (typeof MallStore !== 'undefined') {
+    var result = MallStore.saveCoupon(payload);
+    if (!result.ok) { Toast.warning(result.error || '优惠券保存失败'); return; }
   } else {
-    list.push(payload);
+    if (editingCode) {
+      for (var k = 0; k < list.length; k++) {
+        if (list[k].code === editingCode) { list[k] = payload; break; }
+      }
+    } else {
+      list.push(payload);
+    }
+    if (!writeList(list)) return;
   }
 
-  writeList(list);
   closeEditModal();
   renderTable();
   Toast.success(editingCode ? '优惠券已更新' : '优惠券已新增');
@@ -465,8 +580,12 @@ function removeCoupon(code) {
     title: '删除优惠券',
     message: '确定删除券「' + code + '」吗？删除后 H5 端购物车将不再显示该券。',
     onConfirm: function () {
-      var list = readCoupons().filter(function (c) { return c.code !== code; });
-      writeList(list);
+      if (typeof MallStore !== 'undefined') {
+        var r = MallStore.removeCoupon(code);
+        if (!r.ok) { Toast.error(r.error || '删除失败'); return; }
+      } else {
+        writeList(readCoupons().filter(function (c) { return c.code !== code; }));
+      }
       renderTable();
       Toast.success('优惠券已删除');
     }

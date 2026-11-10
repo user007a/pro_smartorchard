@@ -39,6 +39,238 @@ const BASE_STATUS_OPTIONS = [
 // 基地图片上传上限：4 张
 const BASE_IMAGE_MAX = 4;
 
+/* ============================================================
+ * 证书相关辅助（数据源统一为共享数据层 CertStore）
+ * ============================================================ */
+function certStore() {
+  return (typeof window !== 'undefined' && window.CertStore) ? window.CertStore : null;
+}
+function getCert(id) {
+  const S = certStore();
+  return S ? S.get(id) : null;
+}
+function certTypeOptions() {
+  const S = certStore();
+  if (!S) return [];
+  return S.CERT_TYPES.map(t => ({ value: t.code, label: t.name }));
+}
+function certDeptOptions() {
+  const S = certStore();
+  const list = S ? S.DEPARTMENTS : [];
+  return [{ value: '', label: '请选择责任部门' }].concat(list.map(d => ({ value: d, label: d })));
+}
+function certStatusTag(cert) {
+  const S = certStore();
+  if (!S || !cert) return '';
+  const sv = S.computeStatus(cert);
+  return `<span class="status-tag ${sv.cls}">${sv.text}</span>`;
+}
+function certAttachList(files) {
+  const S = certStore();
+  const list = Array.isArray(files) ? files : [];
+  if (!list.length) return '—';
+  return '<div class="attach-list">' + list.map(f => {
+    const url = f.url || '';
+    const name = f.name || '附件';
+    const body = url ? `<a href="${url}" target="_blank" rel="noopener">${S ? S.esc(name) : name}</a>` : (S ? S.esc(name) : name);
+    const size = f.size ? ' · ' + Math.round(f.size / 1024) + ' KB' : '';
+    return `<div class="attach-item">${body}<span>${size}</span></div>`;
+  }).join('') + '</div>';
+}
+function certAuditList(logs) {
+  const S = certStore();
+  const list = Array.isArray(logs) ? logs : [];
+  if (!list.length) return '—';
+  return '<div class="attach-list">' + list.map(l => {
+    const at = S ? S.esc(l.at) : l.at;
+    const actor = S ? S.esc(l.actor) : l.actor;
+    const action = S ? S.esc(l.action) : l.action;
+    const detail = S ? S.esc(l.detail) : l.detail;
+    return `<div class="attach-item"><span>${at}</span><span>${actor}</span><span>${action}</span><span>${detail}</span></div>`;
+  }).join('') + '</div>';
+}
+
+/** 证书详情字段：按企业资质 / 批次凭证分别展示 */
+function certDetailFields(cert) {
+  const S = certStore();
+  const isQual = S ? S.categoryOf(cert) === 'qualification' : false;
+  const days = S ? S.remainDays(cert) : null;
+  const remainText = days === null || days === undefined ? '—'
+    : (days < 0 ? '已过期 ' + Math.abs(days) + ' 天' : '剩余 ' + days + ' 天');
+  const fields = [
+    { label: '证书编号', name: 'certNo' },
+    { label: '证书类型', name: 'type' },
+    { label: '分类', name: 'category', render: () => isQual ? '企业资质' : '批次凭证' },
+    { label: '状态', name: 'status', render: () => certStatusTag(cert) }
+  ];
+  if (isQual) {
+    fields.push(
+      { label: '证书编号（发证方）', name: 'sourceNo' },
+      { label: '发证机构', name: 'issueOrg' },
+      { label: '发证日期', name: 'issueDate' },
+      { label: '认证范围', name: 'scope' }
+    );
+  } else {
+    fields.push(
+      { label: '关联批次', name: 'batchNo' },
+      { label: '客户名称', name: 'customer' },
+      { label: '产品名称', name: 'product' },
+      { label: '检测结论', name: 'conclusion' },
+      { label: '检测人', name: 'tester' },
+      { label: '报告编号', name: 'reportNo' }
+    );
+  }
+  fields.push(
+    { label: '有效期开始', name: 'validStart' },
+    { label: '有效期截止', name: 'validEnd' },
+    { label: '剩余天数', name: '__remain', render: () => remainText },
+    { label: '责任部门', name: 'owner' },
+    { label: '经办人', name: 'operator' },
+    { label: '二维码链接', name: 'qrUrl', render: v => v ? `<a href="${v}" target="_blank" rel="noopener">${v}</a>` : '—' },
+    { label: '附件', name: 'attachments', render: v => certAttachList(v) },
+    { label: '作废原因', name: 'revokeReason' },
+    { label: '操作留痕', name: 'auditLogs', render: v => certAuditList(v) },
+    { label: '创建时间', name: 'createdAt' },
+    { label: '更新时间', name: 'updatedAt' }
+  );
+  return fields;
+}
+
+/** 证书编辑字段：已生效证书的编号 / 类型 / 批次 / 发证日期锁定 */
+function certEditFields(cert) {
+  const S = certStore();
+  const isQual = S ? S.categoryOf(cert) === 'qualification' : false;
+  const locked = cert && (cert.status === 'active' || cert.status === 'revoked');
+  const fields = [
+    { name: 'certNo', label: '证书编号', type: 'text', required: true, hint: locked ? '已生效证书编号不可修改' : '留空则按规则自动生成' },
+    { name: 'typeCode', label: '证书类型', type: 'select', required: true, options: certTypeOptions() }
+  ];
+  if (isQual) {
+    fields.push(
+      { name: 'sourceNo', label: '证书编号（发证方）', type: 'text' },
+      { name: 'issueOrg', label: '发证机构', type: 'text', required: true },
+      { name: 'issueDate', label: '发证日期', type: 'date', required: true },
+      { name: 'scope', label: '认证范围', type: 'text', placeholder: '如：全域 / A1 区东区 1-8 号地' },
+      { name: 'validStart', label: '有效期开始', type: 'date', required: true },
+      { name: 'validEnd', label: '有效期截止', type: 'date', required: true },
+      { name: 'owner', label: '责任部门', type: 'select', options: certDeptOptions() },
+      { name: 'operator', label: '经办人', type: 'select', options: buildUserOptions(cert && cert.operator) },
+      { name: 'attachments', label: '证书扫描件 / 附件', type: 'custom',
+        html: buildCertAttachmentsUploader(cert && cert.attachments),
+        collect: collectCertAttachments }
+    );
+  } else {
+    fields.push(
+      { name: 'batchNo', label: '关联批次', type: 'text', required: true },
+      { name: 'customer', label: '客户名称', type: 'text' },
+      { name: 'product', label: '产品名称', type: 'text' },
+      { name: 'validStart', label: '有效期开始', type: 'date', required: true },
+      { name: 'validEnd', label: '有效期截止', type: 'date', required: true },
+      { name: 'owner', label: '责任部门', type: 'select', options: certDeptOptions() },
+      { name: 'operator', label: '经办人', type: 'select', options: buildUserOptions(cert && cert.operator) },
+      { name: 'attachments', label: '附件（检测报告等）', type: 'custom',
+        html: buildCertAttachmentsUploader(cert && cert.attachments),
+        collect: collectCertAttachments }
+    );
+  }
+  return fields;
+}
+
+/** 新建证书字段：分类切换后由 openCertCreateForm 重绘 */
+function certCreateFields(category) {
+  const S = certStore();
+  const cat = category || 'qualification';
+  const typeList = S
+    ? (cat === 'qualification' ? S.QUALIFICATION_TYPES : S.BATCH_TYPES)
+    : [];
+  const head = [
+    { name: 'category', label: '证书分类', type: 'select', required: true, options: [
+      { value: 'qualification', label: '企业资质' },
+      { value: 'batch', label: '批次凭证' }
+    ]},
+    { name: 'typeCode', label: '证书类型', type: 'select', required: true, options: typeList.map(t => ({ value: t.code, label: t.name })) }
+  ];
+  if (cat === 'qualification') {
+    return head.concat([
+      { name: 'certNo', label: '证书编号', type: 'text', hint: '留空则按规则自动生成' },
+      { name: 'sourceNo', label: '证书编号（发证方）', type: 'text' },
+      { name: 'issueOrg', label: '发证机构', type: 'text', required: true },
+      { name: 'issueDate', label: '发证日期', type: 'date', required: true },
+      { name: 'scope', label: '认证范围', type: 'text', placeholder: '如：全域 / A1 区东区 1-8 号地' },
+      { name: 'validStart', label: '有效期开始', type: 'date', required: true },
+      { name: 'validEnd', label: '有效期截止', type: 'date', required: true },
+      { name: 'owner', label: '责任部门', type: 'select', options: certDeptOptions() },
+      { name: 'operator', label: '经办人', type: 'select', options: buildUserOptions() },
+      { name: 'attachments', label: '证书扫描件 / 附件', type: 'custom',
+        html: buildCertAttachmentsUploader([]),
+        collect: collectCertAttachments }
+    ]);
+  }
+  return head.concat([
+    { name: 'certNo', label: '证书编号', type: 'text', hint: '留空则按规则自动生成' },
+    { name: 'batchNo', label: '关联批次', type: 'text', required: true },
+    { name: 'customer', label: '客户名称', type: 'text' },
+    { name: 'product', label: '产品名称', type: 'text' },
+    { name: 'conclusion', label: '检测结论', type: 'select', options: [{ value: '合格', label: '合格' }] },
+    { name: 'tester', label: '检测人', type: 'text' },
+    { name: 'validStart', label: '有效期开始', type: 'date', required: true },
+    { name: 'validEnd', label: '有效期截止', type: 'date', required: true },
+    { name: 'owner', label: '责任部门', type: 'select', options: certDeptOptions() },
+    { name: 'operator', label: '经办人', type: 'select', options: buildUserOptions() },
+    { name: 'attachments', label: '附件（检测报告等）', type: 'custom',
+      html: buildCertAttachmentsUploader([]),
+      collect: collectCertAttachments }
+  ]);
+}
+
+/**
+ * 新建证书弹窗：分类切换时重建表单（按分类展示不同字段），保留已填内容
+ */
+function openCertCreateForm(preset) {
+  let category = (preset && preset.category) || 'qualification';
+  let keep = Object.assign({}, preset || {});
+
+  function render() {
+    const modal = Modal.form({
+      title: '新建证书',
+      fields: certCreateFields(category),
+      values: keep,
+      submitText: '创建',
+      width: '640px',
+      onRender: function (m) {
+        bindEnterpriseFormInteractions(m);
+        const sel = m.querySelector('select[name="category"]');
+        if (sel) {
+          sel.addEventListener('change', function () {
+            // 保存当前已填内容，切换分类后回填
+            const form = m.querySelector('#modal-form');
+            if (form) {
+              const fd = new FormData(form);
+              fd.forEach(function (v, k) { if (keep[k] === undefined) keep[k] = v; });
+            }
+            keep.category = sel.value;
+            category = sel.value;
+            Modal.close();
+            render();
+          });
+        }
+      },
+      onSubmit: function (formData) {
+        const res = CertStore.saveCert(Object.assign({}, formData, { status: 'active' }));
+        if (!res.ok) {
+          Toast.show(res.message || '创建失败', 'error');
+          return false;
+        }
+        Toast.show('证书已创建：' + res.item.certNo, 'success');
+        return true;
+      }
+    });
+    return modal;
+  }
+
+  render();
+}
+
 const PageActions = (function() {
   // 模拟数据
   const mockData = {
@@ -133,31 +365,7 @@ const PageActions = (function() {
       { id: 'PLOT022', code: 'D-022', name: '西区5号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 93, year: 2017, status: 'danger', manager: '黄忠坚' },
       { id: 'PLOT023', code: 'D-023', name: '北区5号地', enterprise: '甘肃麦积区苹果基地', variety: '金帅', area: 81, year: 2020, status: 'normal', manager: '徐水应' },
     ],
-    certificates: [
-      { id: 'CERT001', type: '质量合格证', batch: 'PC-20260901-001', customer: '北京华联超市', validStart: '2026-09-01', validEnd: '2027-09-01', status: 'enabled', issueTime: '2026-09-01' },
-      { id: 'CERT002', type: '检测报告', batch: 'PC-20260902-002', customer: '上海果蔬配送中心', validStart: '2026-09-02', validEnd: '2027-09-02', status: 'enabled', issueTime: '2026-09-02' },
-      { id: 'CERT003', type: '检测报告', batch: 'PC-20260903-003', customer: '广州江南市场', validStart: '2026-08-20', validEnd: '2026-09-10', status: 'error', issueTime: '2026-08-20' },
-      { id: 'CERT004', type: '质量合格证', batch: 'PC-20260904-004', customer: '深圳沃尔玛超市', validStart: '2026-09-04', validEnd: '2027-09-04', status: 'disabled', issueTime: '2026-09-04' },
-      { id: 'CERT005', type: '质量合格证', batch: 'PC-20260905-005', customer: '天津家乐福', validStart: '2026-09-05', validEnd: '2027-09-05', status: 'enabled', issueTime: '2026-09-05' },
-      { id: 'CERT006', type: '检测报告', batch: 'PC-20260906-006', customer: '重庆永辉超市', validStart: '2026-09-06', validEnd: '2027-09-06', status: 'enabled', issueTime: '2026-09-06' },
-      { id: 'CERT007', type: '原产地证明', batch: 'PC-20260907-007', customer: '成都伊藤洋华堂', validStart: '2026-09-07', validEnd: '2027-09-07', status: 'enabled', issueTime: '2026-09-07' },
-      { id: 'CERT008', type: '质量合格证', batch: 'PC-20260908-008', customer: '武汉中百仓储', validStart: '2026-09-08', validEnd: '2027-09-08', status: 'enabled', issueTime: '2026-09-08' },
-      { id: 'CERT009', type: '检测报告', batch: 'PC-20260909-009', customer: '杭州世纪联华', validStart: '2026-09-09', validEnd: '2027-09-09', status: 'enabled', issueTime: '2026-09-09' },
-      { id: 'CERT010', type: '检测报告', batch: 'PC-20260910-010', customer: '南京苏果超市', validStart: '2026-08-25', validEnd: '2026-09-15', status: 'error', issueTime: '2026-08-25' },
-      { id: 'CERT011', type: '原产地证明', batch: 'PC-20260911-011', customer: '苏州大润发', validStart: '2026-09-11', validEnd: '2027-09-11', status: 'enabled', issueTime: '2026-09-11' },
-      { id: 'CERT012', type: '质量合格证', batch: 'PC-20260912-012', customer: '无锡欧尚', validStart: '2026-09-12', validEnd: '2027-09-12', status: 'enabled', issueTime: '2026-09-12' },
-      { id: 'CERT013', type: '检测报告', batch: 'PC-20260913-013', customer: '宁波三江购物', validStart: '2026-09-13', validEnd: '2027-09-13', status: 'enabled', issueTime: '2026-09-13' },
-      { id: 'CERT014', type: '质量合格证', batch: 'PC-20260914-014', customer: '温州人本超市', validStart: '2026-09-14', validEnd: '2027-09-14', status: 'enabled', issueTime: '2026-09-14' },
-      { id: 'CERT015', type: '原产地证明', batch: 'PC-20260915-015', customer: '青岛利群集团', validStart: '2026-09-15', validEnd: '2027-09-15', status: 'enabled', issueTime: '2026-09-15' },
-      { id: 'CERT016', type: '质量合格证', batch: 'PC-20260916-016', customer: '济南银座商城', validStart: '2026-09-16', validEnd: '2027-09-16', status: 'enabled', issueTime: '2026-09-16' },
-      { id: 'CERT017', type: '检测报告', batch: 'PC-20260917-017', customer: '大连大商集团', validStart: '2026-09-17', validEnd: '2027-09-17', status: 'enabled', issueTime: '2026-09-17' },
-      { id: 'CERT018', type: '检测报告', batch: 'PC-20260918-018', customer: '沈阳兴隆大家庭', validStart: '2026-08-30', validEnd: '2026-09-20', status: 'error', issueTime: '2026-08-30' },
-      { id: 'CERT019', type: '原产地证明', batch: 'PC-20260919-019', customer: '哈尔滨中央红', validStart: '2026-09-19', validEnd: '2027-09-19', status: 'enabled', issueTime: '2026-09-19' },
-      { id: 'CERT020', type: '质量合格证', batch: 'PC-20260920-020', customer: '长春欧亚集团', validStart: '2026-09-20', validEnd: '2027-09-20', status: 'disabled', issueTime: '2026-09-20' },
-      { id: 'CERT021', type: '检测报告', batch: 'PC-20260901-001', customer: '合肥百大集团', validStart: '2026-09-01', validEnd: '2027-09-01', status: 'enabled', issueTime: '2026-09-01' },
-      { id: 'CERT022', type: '质量合格证', batch: 'PC-20260902-002', customer: '福州永辉超市', validStart: '2026-09-02', validEnd: '2027-09-02', status: 'enabled', issueTime: '2026-09-02' },
-      { id: 'CERT023', type: '原产地证明', batch: 'PC-20260903-003', customer: '厦门夏商集团', validStart: '2026-09-03', validEnd: '2027-09-03', status: 'enabled', issueTime: '2026-09-03' },
-    ],
+    // 证书数据已迁移至共享数据层 CertStore（js/shared/cert-store.js），此处不再保留副本
     certRecords: [
       { id: 1, certId: 'SN202606130001', product: '花牛苹果', queryTime: '2026-09-13 14:30:00', ip: '192.168.1.100', status: 'success' },
       { id: 2, certId: 'SN202606130001', product: '花牛苹果', queryTime: '2026-09-13 11:20:00', ip: '10.0.0.55', status: 'success' },
@@ -222,6 +430,13 @@ const PageActions = (function() {
         enabled: '有效',
         disabled: '已撤销',
         error: '已过期'
+      },
+      // 证书管理页状态由 CertStore 派生（草稿 / 待审核 / 已生效 / 已撤销 / 即将到期 / 已过期）
+      certStore: {
+        draft: '草稿',
+        pending: '待审核',
+        active: '已生效',
+        revoked: '已撤销'
       }
     };
     return statusMap[type]?.[status] || statusMap.default[status] || status;
@@ -291,6 +506,64 @@ const PageActions = (function() {
     return urls;
   }
 
+  /* ========== 证书附件上传（企业资质扫描件 / 检测报告 PDF） ========== */
+  // options: { max 上限个数（默认 6）, hint 提示文案 }
+  function buildCertAttachmentsUploader(files, options) {
+    const opt = options || {};
+    const max = opt.max || 6;
+    const list = (Array.isArray(files) ? files : []).slice(0, max);
+    const previews = list.map((f, i) => {
+      const url = f.url || '';
+      const name = f.name || '附件';
+      const inner = (f.type || '').indexOf('image') === 0
+        ? `<img src="${url}" alt="${name}" />`
+        : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:20px;">📄</div>`;
+      return `
+        <div class="ent-upload-item" data-url="${url.replace(/"/g, '&quot;')}" data-name="${name.replace(/"/g, '&quot;')}" data-type="${(f.type || '').replace(/"/g, '&quot;')}" data-size="${f.size || 0}" data-source="preset">
+          ${inner}
+          <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="ent-upload" data-field="attachments" data-max="${max}">
+        <div class="ent-upload-toolbar">
+          <label class="ent-upload-btn">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3v10M3 8h10"/>
+            </svg>
+            添加附件
+            <input type="file" accept="image/*,application/pdf" multiple class="ent-upload-input" />
+          </label>
+          <span class="ent-upload-count">已上传 <b class="ent-upload-num">${list.length}</b> / ${max} 个</span>
+          <span class="ent-upload-hint">${opt.hint || '支持 JPG / PNG / PDF，单个不超过 5MB'}</span>
+        </div>
+        <div class="ent-upload-list">${previews}</div>
+      </div>
+    `;
+  }
+
+  function collectCertAttachments(modal) {
+    const wrap = modal.querySelector('.ent-upload[data-field="attachments"]');
+    if (!wrap) return [];
+    const out = [];
+    wrap.querySelectorAll('.ent-upload-item').forEach(item => {
+      const url = item.dataset.url;
+      if (!url) return;
+      out.push({
+        url: url,
+        name: item.dataset.name || '附件',
+        type: item.dataset.type || '',
+        size: Number(item.dataset.size) || 0,
+        uploadedAt: CertStore.stampNow()
+      });
+    });
+    return out;
+  }
+
   // 刷新上传控件的计数与剩余空位占位卡
   function updateUploadState(wrap) {
     const max = parseInt(wrap.dataset.max, 10) || 4;
@@ -324,6 +597,58 @@ const PageActions = (function() {
 
   // 弹窗打开后为表单中的图片上传 custom 字段绑定交互事件
   function bindEnterpriseFormInteractions(modal) {
+    // 证书附件上传（与图片上传结构一致，但记录文件名 / 类型 / 大小）
+    const attachWrap = modal.querySelector('.ent-upload[data-field="attachments"]');
+    if (attachWrap) {
+      const aList = attachWrap.querySelector('.ent-upload-list');
+      const aInput = attachWrap.querySelector('.ent-upload-input');
+      const aMax = parseInt(attachWrap.dataset.max, 10) || 6;
+      updateUploadState(attachWrap);
+      aInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        const remain = Math.max(0, aMax - aList.querySelectorAll('.ent-upload-item').length);
+        files.slice(0, remain).forEach(file => {
+          if (file.size > 5 * 1024 * 1024) {
+            window.Toast && window.Toast.show(`${file.name} 超过 5MB，已跳过`, 'warning');
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const item = document.createElement('div');
+            item.className = 'ent-upload-item';
+            item.dataset.url = ev.target.result;
+            item.dataset.name = file.name;
+            item.dataset.type = file.type || '';
+            item.dataset.size = file.size || 0;
+            item.dataset.source = 'local';
+            const isImg = (file.type || '').indexOf('image') === 0;
+            item.innerHTML = `
+              ${isImg ? `<img src="${ev.target.result}" alt="${file.name}" />` : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);font-size:20px;">📄</div>'}
+              <button type="button" class="ent-upload-remove" title="移除" aria-label="移除">
+                <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+              </button>
+            `;
+            aList.appendChild(item);
+            updateUploadState(attachWrap);
+          };
+          reader.readAsDataURL(file);
+        });
+        e.target.value = '';
+      });
+      aList.addEventListener('click', (e) => {
+        const removeBtn = e.target.closest('.ent-upload-remove');
+        if (removeBtn) {
+          const item = removeBtn.closest('.ent-upload-item');
+          if (item) item.remove();
+          updateUploadState(attachWrap);
+          return;
+        }
+        const slot = e.target.closest('.ent-upload-slot');
+        if (slot) aInput.click();
+      });
+    }
+
     const uploadWrap = modal.querySelector('.ent-upload[data-field="baseImages"]');
     if (!uploadWrap) return;
     const list = uploadWrap.querySelector('.ent-upload-list');
@@ -483,11 +808,11 @@ const PageActions = (function() {
           p.name.includes(keyword) || p.id.includes(keyword) || p.enterprise.includes(keyword)
         );
         break;
-      case 'cert-manage':
-        data = mockData.certificates.filter(c => 
-          c.id.includes(keyword) || c.customer.includes(keyword) || c.batch.includes(keyword)
-        );
+      case 'cert-manage': {
+        const S = certStore();
+        data = S ? S.filter({ keyword: keyword }) : [];
         break;
+      }
     }
 
     return data;
@@ -528,17 +853,8 @@ const PageActions = (function() {
         ];
         break;
       case 'cert-manage':
-        data = mockData.certificates.find(c => c.id === id);
-        fields = [
-          { label: '证书编号', name: 'id' },
-          { label: '证书类型', name: 'type' },
-          { label: '关联批次', name: 'batch' },
-          { label: '客户名称', name: 'customer' },
-          { label: '有效期开始', name: 'validStart' },
-          { label: '有效期结束', name: 'validEnd' },
-          { label: '状态', name: 'status', render: v => `<span class="${getStatusClass(v)}">${getStatusText(v, 'cert')}</span>` },
-          { label: '签发时间', name: 'issueTime' },
-        ];
+        data = getCert(id);
+        fields = certDetailFields(data);
         break;
     }
 
@@ -592,18 +908,8 @@ const PageActions = (function() {
         ];
         break;
       case 'cert-manage':
-        data = mockData.certificates.find(c => c.id === id);
-        fields = [
-          { name: 'type', label: '证书类型', type: 'select', options: [
-            { value: '质量合格证', label: '质量合格证' },
-            { value: '检测报告', label: '检测报告' },
-            { value: '原产地证明', label: '原产地证明' }
-          ]},
-          { name: 'batch', label: '关联批次', type: 'text', required: true },
-          { name: 'customer', label: '客户名称', type: 'text', required: true },
-          { name: 'validStart', label: '有效期开始', type: 'date', required: true },
-          { name: 'validEnd', label: '有效期结束', type: 'date', required: true },
-        ];
+        data = getCert(id);
+        fields = certEditFields(data);
         break;
     }
 
@@ -616,6 +922,15 @@ const PageActions = (function() {
         width: currentPage === 'plot' ? '580px' : '640px',
         onRender: bindEnterpriseFormInteractions,
         onSubmit: (formData) => {
+          if (currentPage === 'cert-manage') {
+            const res = CertStore.saveCert(Object.assign({}, data, formData));
+            if (!res.ok) {
+              Toast.show(res.message || '保存失败', 'error');
+              return false;
+            }
+            Toast.show('修改成功', 'success');
+            return true;
+          }
           Toast.show('修改成功', 'success');
           return true;
         }
@@ -625,6 +940,21 @@ const PageActions = (function() {
 
   // 删除项
   function deleteItem(id) {
+    if (document.body.dataset.activePage === 'cert-manage') {
+      const cert = getCert(id);
+      if (!cert) { Toast.show('证书不存在或已被删除', 'error'); return; }
+      if (cert.status !== 'draft') {
+        Toast.show('仅草稿状态证书可删除，已生效证书请使用「作废」', 'error');
+        return;
+      }
+      Confirm.delete('确定要删除该草稿证书吗？此操作不可撤销。').then((confirmed) => {
+        if (!confirmed) return;
+        const res = CertStore.remove(id);
+        if (!res.ok) { Toast.show(res.message || '删除失败', 'error'); return; }
+        Toast.show('删除成功', 'success');
+      });
+      return;
+    }
     Confirm.delete().then((confirmed) => {
       if (confirmed) {
         const row = document.querySelector(`tr[data-id="${id}"]`);
@@ -704,19 +1034,9 @@ const PageActions = (function() {
         ];
         break;
       case 'cert-manage':
-        title = '新建证书';
-        fields = [
-          { name: 'type', label: '证书类型', type: 'select', options: [
-            { value: '质量合格证', label: '质量合格证' },
-            { value: '检测报告', label: '检测报告' },
-            { value: '原产地证明', label: '原产地证明' }
-          ]},
-          { name: 'batch', label: '关联批次', type: 'text', required: true },
-          { name: 'customer', label: '客户名称', type: 'text', required: true },
-          { name: 'validStart', label: '有效期开始', type: 'date', required: true },
-          { name: 'validEnd', label: '有效期结束', type: 'date', required: true },
-        ];
-        break;
+        // 证书新建走独立弹窗（分类切换需重绘字段）
+        openCertCreateForm();
+        return;
       case 'cert-issue':
         title = '开具合格证';
         fields = [
@@ -756,22 +1076,21 @@ const PageActions = (function() {
   // 导出
   function exportData() {
     const currentPage = document.body.dataset.activePage;
-    const data = currentPage === 'enterprise' ? mockData.enterprises : 
-                 currentPage === 'plot' ? mockData.plots :
-                 mockData.certificates;
+    // 证书管理页由页面自身的 printCertList() 按当前筛选结果导出（列更贴合证书业务）
+    if (currentPage === 'cert-manage') {
+      if (typeof window.printCertList === 'function') window.printCertList();
+      return;
+    }
+    const data = currentPage === 'enterprise' ? mockData.enterprises : mockData.plots;
 
     const headers = currentPage === 'enterprise' ? ['基地编号', '基地名称', '地址', '面积(亩)', '负责人', '联系电话', '状态'] :
-                    currentPage === 'plot' ? ['地块编号', '地块名称', '所属基地', '品种', '面积(亩)', '种植年份', '负责人', '状态'] :
-                    ['证书编号', '类型', '批次', '客户', '有效期开始', '有效期结束', '状态', '签发时间'];
+                    ['地块编号', '地块名称', '所属基地', '品种', '面积(亩)', '种植年份', '负责人', '状态'];
 
     const rows = data.map(row => {
       if (currentPage === 'enterprise') {
         return [row.code, row.name, row.address, row.area, row.manager, row.phone, getStatusText(row.status, 'enterprise')];
-      } else if (currentPage === 'plot') {
-        return [row.id, row.name, row.enterprise, row.variety, row.area, row.year, row.manager, getStatusText(row.status, 'plot')];
-      } else {
-        return [row.id, row.type, row.batch, row.customer, row.validStart, row.validEnd, getStatusText(row.status, 'cert'), row.issueTime];
       }
+      return [row.id, row.name, row.enterprise, row.variety, row.area, row.year, row.manager, getStatusText(row.status, 'plot')];
     });
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -867,120 +1186,176 @@ const PageActions = (function() {
     });
   }
 
-  // 下载证书
+  // 下载证书：生成可打印的证书凭证（CSV 明细 + 打印视图），不再是假 Toast
   function downloadCert(id) {
-    Modal.loading('正在生成证书...');
-    setTimeout(() => {
-      Modal.hideLoading();
-      Toast.show('证书已下载', 'success');
-    }, 1500);
+    const cert = getCert(id);
+    if (!cert) { Toast.show('证书不存在或已被删除', 'error'); return; }
+    const S = certStore();
+    const sv = S ? S.computeStatus(cert) : { text: '' };
+    const isQual = S ? S.categoryOf(cert) === 'qualification' : false;
+    const rows = [
+      ['证书编号', cert.certNo],
+      ['证书类型', cert.type],
+      ['分类', isQual ? '企业资质' : '批次凭证'],
+      ['发证机构', cert.issueOrg || ''],
+      ['发证日期', cert.issueDate || ''],
+      ['关联批次', cert.batchNo || ''],
+      ['客户名称', cert.customer || ''],
+      ['产品名称', cert.product || ''],
+      ['检测结论', cert.conclusion || ''],
+      ['检测人', cert.tester || ''],
+      ['有效期开始', cert.validStart],
+      ['有效期截止', cert.validEnd],
+      ['当前状态', sv.text || ''],
+      ['责任部门', cert.owner || ''],
+      ['经办人', cert.operator || ''],
+      ['二维码链接', cert.qrUrl || '']
+    ];
+    const csv = ['字段,值']
+      .concat(rows.map(r => r.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')))
+      .join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${cert.certNo}_${cert.type}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    Toast.show('证书凭证已下载：' + cert.certNo, 'success');
   }
 
-  // 作废证书
+  // 作废证书：必须填原因并记录操作人（需求：撤销证书须填原因）
   function revokeCert(id) {
-    Confirm.warning('确定要作废此证书吗？作废后证书将失效，此操作不可撤销。').then((confirmed) => {
-      if (confirmed) {
-        const row = document.querySelector(`tr[data-id="${id}"]`);
-        if (row) {
-          const statusCell = row.querySelector('.status-tag');
-          if (statusCell) {
-            statusCell.className = 'status-tag disabled';
-            statusCell.textContent = '已撤销';
-          }
-          const actionBtns = row.querySelector('.action-btns');
-          if (actionBtns) {
-            actionBtns.innerHTML = `
-              <button class="action-btn" onclick="PageActions.showDetail('${id}')">查看</button>
-              <button class="action-btn delete" onclick="PageActions.deleteItem('${id}')">删除</button>
-            `;
-          }
-          Toast.show('证书已作废', 'success');
+    const cert = getCert(id);
+    if (!cert) { Toast.show('证书不存在或已被删除', 'error'); return; }
+
+    Modal.form({
+      title: '证书作废',
+      fields: [
+        { name: 'reason', label: '作废原因', type: 'textarea', required: true, placeholder: '请填写作废原因（必填）' },
+        { name: 'operator', label: '作废人', type: 'select', required: true, options: buildUserOptions(cert.operator) }
+      ],
+      values: { operator: cert.operator || '' },
+      submitText: '确认作废',
+      width: '520px',
+      onSubmit: (formData) => {
+        const res = CertStore.revoke(id, formData.reason, formData.operator);
+        if (!res.ok) {
+          Toast.show(res.message || '作废失败', 'error');
+          return false;
         }
+        Toast.show('证书已作废', 'success');
+        return true;
       }
     });
   }
 
   // 续期证书
   function renewCert(id) {
-    const data = mockData.certificates.find(c => c.id === id);
-    if (!data) return;
+    const cert = getCert(id);
+    if (!cert) { Toast.show('证书不存在或已被删除', 'error'); return; }
+    const S = certStore();
+    const defaultEnd = S ? S.shiftDate(S.today(), 365) : '';
 
     Modal.form({
       title: '证书续期',
       fields: [
-        { name: 'validEnd', label: '新有效期截止日期', type: 'date', required: true }
+        { name: 'validEnd', label: '新有效期截止日期', type: 'date', required: true },
+        { name: 'note', label: '续期说明', type: 'text', placeholder: '如：已换发新证，原证到期作废' },
+        { name: 'operator', label: '经办人', type: 'select', required: true, options: buildUserOptions(cert.operator) }
       ],
-      values: { validEnd: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
+      values: { validEnd: defaultEnd, operator: cert.operator || '' },
       submitText: '确认续期',
+      width: '520px',
       onSubmit: (formData) => {
-        const row = document.querySelector(`tr[data-id="${id}"]`);
-        if (row) {
-          const cells = row.querySelectorAll('td');
-          if (cells[5]) {
-            cells[5].textContent = `${data.validStart} 至 ${formData.validEnd}`;
-          }
-          const statusCell = row.querySelector('.status-tag');
-          if (statusCell) {
-            statusCell.className = 'status-tag enabled';
-            statusCell.textContent = '有效';
-          }
-          const actionBtns = row.querySelector('.action-btns');
-          if (actionBtns) {
-            actionBtns.innerHTML = `
-              <button class="action-btn" onclick="PageActions.showDetail('${id}')">查看</button>
-              <button class="action-btn" onclick="PageActions.downloadCert('${id}')">下载</button>
-              <button class="action-btn delete" onclick="PageActions.revokeCert('${id}')">作废</button>
-            `;
-          }
+        const res = CertStore.renew(id, formData.validEnd, formData.operator, formData.note);
+        if (!res.ok) {
+          Toast.show(res.message || '续期失败', 'error');
+          return false;
         }
-        Toast.show('续期成功', 'success');
+        Toast.show('续期成功，有效期至 ' + res.item.validEnd, 'success');
         return true;
       }
     });
   }
 
-  // 查询证书
+  // 提交审核：草稿 → 待审核
+  function submitCert(id) {
+    const cert = getCert(id);
+    if (!cert) { Toast.show('证书不存在或已被删除', 'error'); return; }
+    const res = CertStore.submit(id, cert.operator || '惠加宁');
+    if (!res.ok) { Toast.show(res.message || '提交失败', 'error'); return; }
+    Toast.show('已提交审核', 'success');
+  }
+
+  // 审核通过：待审核 → 已生效
+  function approveCert(id) {
+    const cert = getCert(id);
+    if (!cert) { Toast.show('证书不存在或已被删除', 'error'); return; }
+    const res = CertStore.approve(id, cert.operator || '惠加宁');
+    if (!res.ok) { Toast.show(res.message || '审核失败', 'error'); return; }
+    Toast.show('证书已生效', 'success');
+  }
+
+  // 驳回：待审核 → 草稿，必须填原因
+  function rejectCert(id) {
+    const cert = getCert(id);
+    if (!cert) { Toast.show('证书不存在或已被删除', 'error'); return; }
+    Modal.form({
+      title: '证书驳回',
+      fields: [
+        { name: 'reason', label: '驳回原因', type: 'textarea', required: true, placeholder: '请填写驳回原因（必填）' },
+        { name: 'operator', label: '审核人', type: 'select', required: true, options: buildUserOptions(cert.operator) }
+      ],
+      values: { operator: cert.operator || '' },
+      submitText: '确认驳回',
+      width: '520px',
+      onSubmit: (formData) => {
+        const res = CertStore.reject(id, formData.reason, formData.operator);
+        if (!res.ok) {
+          Toast.show(res.message || '驳回失败', 'error');
+          return false;
+        }
+        Toast.show('已驳回，证书回到草稿状态', 'success');
+        return true;
+      }
+    });
+  }
+
+  // 查询证书：按证书编号在共享数据层中真实查询
   function queryCert(code) {
-    if (!code.trim()) {
+    const no = String(code || '').trim();
+    if (!no) {
       Toast.show('请输入证书编号', 'warning');
       return;
     }
-
-    Modal.loading('查询中...');
-    setTimeout(() => {
-      Modal.hideLoading();
-      
-      const certData = {
-        id: code,
-        product: '花牛苹果',
-        batch: '20260613001',
-        produceDate: '2026-09-13',
-        netWeight: '500g/袋',
-        grade: '特级',
-        result: '合格',
-        tester: '惠加宁',
-        queryCount: '第3次查询',
-        firstQuery: '2026-09-13 10:30:00'
-      };
-
-      const fields = [
-        { label: '合格证编号', name: 'id' },
-        { label: '产品名称', name: 'product' },
-        { label: '批次号', name: 'batch' },
-        { label: '生产日期', name: 'produceDate' },
-        { label: '净含量', name: 'netWeight' },
-        { label: '等级', name: 'grade' },
-        { label: '检测结论', name: 'result', render: v => `<span style="color: var(--success); font-weight: bold;">${v}</span>` },
-        { label: '检测人', name: 'tester' },
-        { label: '查询次数', name: 'queryCount' },
-        { label: '首次查询时间', name: 'firstQuery' },
-      ];
-
-      Modal.detail('查询结果', certData, { fields, width: '560px' });
-      document.querySelector('.modal-header').insertAdjacentHTML('beforeend', 
-        '<span style="margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 6px 14px; background: var(--success-bg); color: var(--success); border-radius: var(--radius-full); font-size: var(--font-size-sm); font-weight: medium;">\n          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">\n            <path d="M5 12l5 5L20 7"/>\n          </svg>\n          验证通过\n        </span>'
-      );
-    }, 1000);
+    const S = certStore();
+    if (!S) { Toast.show('证书数据层未加载', 'error'); return; }
+    const cert = S.getByNo(no);
+    if (!cert) {
+      Modal.open({
+        title: '查询结果',
+        content: `<div style="padding:24px;text-align:center;">
+          <div style="font-size:40px;margin-bottom:12px;">❌</div>
+          <p style="font-size:15px;color:var(--text-primary);margin-bottom:6px;">未查询到该证书</p>
+          <p style="font-size:13px;color:var(--text-tertiary);">证书编号：${S.esc(no)}</p>
+        </div>`,
+        footer: '<button class="jg-btn jg-btn-primary" data-action="close">知道了</button>',
+        width: '420px'
+      });
+      const btn = document.querySelector('.modal-overlay.show [data-action="close"]');
+      if (btn) btn.addEventListener('click', () => Modal.close());
+      return;
+    }
+    const fields = certDetailFields(cert);
+    const sv = S.computeStatus(cert);
+    Modal.detail('证书查询结果', cert, { fields, width: '620px' });
+    const header = document.querySelector('.modal-header');
+    if (header) {
+      const ok = sv.cls === 'enabled';
+      header.insertAdjacentHTML('beforeend',
+        `<span style="margin-left:auto;display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:var(--radius-full);font-size:var(--font-size-sm);font-weight:medium;background:${ok ? 'var(--success-bg)' : 'var(--warning-bg)'};color:${ok ? 'var(--success)' : '#ad8b00'};">${ok ? '证书有效' : '证书' + sv.text}</span>`);
+    }
   }
 
   // 分页切换：真实生效——更新当前页并重绘分页条与数据表格
@@ -992,7 +1367,7 @@ const PageActions = (function() {
       return;
     }
     // 列表数据源按当前页切片后重绘 tbody
-    const rows = sliceByPage(mockData[document.body.dataset.activePage] || mockData.certificates);
+    const rows = sliceByPage(mockData[document.body.dataset.activePage] || []);
     const tbody = document.querySelector('.data-table tbody');
     if (tbody && rows.length) {
       const columns = currentColumns || [];
@@ -1033,65 +1408,14 @@ const PageActions = (function() {
     return arr.slice(start, start + pageSize);
   }
 
-  // 已签发合格证的本地存储键（证书管理页会合并展示）
-  const ISSUED_CERT_KEY = 'smartorchard_issued_certs';
-
-  function readIssuedCerts() {
-    try {
-      const raw = localStorage.getItem(ISSUED_CERT_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) { return []; }
-  }
-
-  function writeIssuedCerts(list) {
-    try { localStorage.setItem(ISSUED_CERT_KEY, JSON.stringify(list)); } catch (e) {}
-  }
-
-  // 开具证书：校验表单 → 生成证书编号 → 落库（证书管理页可查询）
+  // 合格证开具已迁移到 cert_issue.html 页面自有实现（校验 / 真实二维码 / 完整落库），
+  // 此处保留空实现以兼容旧调用入口，实际逻辑由页面级 certIssueSubmit() 承担。
   function issueCert() {
-    const get = id => { const el = document.getElementById(id); return el ? el.value : ''; };
-    const batch = get('certBatch');
-    const netWeight = get('certNetWeight').trim();
-    const tester = get('certTester').trim();
-
-    if (!batch) { Toast.show('请选择批次号', 'error'); return; }
-    if (!netWeight) { Toast.show('请输入净含量', 'error'); return; }
-    if (!tester) { Toast.show('请输入检测人', 'error'); return; }
-
-    Modal.loading('正在生成合格证...');
-    setTimeout(() => {
-      Modal.hideLoading();
-
-      const issued = readIssuedCerts();
-      const now = new Date();
-      const p = n => String(n).padStart(2, '0');
-      const issueDate = get('certProduceDate') || `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
-      const end = new Date(issueDate + 'T00:00:00');
-      end.setFullYear(end.getFullYear() + 1);
-      const validEnd = `${end.getFullYear()}-${p(end.getMonth() + 1)}-${p(end.getDate())}`;
-      const certNo = 'ZH-' + now.getFullYear() + '-' + p(now.getMonth() + 1) + String(200 + issued.length + 1);
-
-      const record = {
-        id: 'CERT' + String(mockData.certificates.length + issued.length + 1).padStart(3, '0'),
-        certNo: certNo,
-        type: '质量合格证',
-        product: get('certProduct'),
-        batchNo: batch,
-        supplier: '未指定',
-        validity: issueDate + ' 至 ' + validEnd,
-        status: 'enabled',
-        statusText: '有效'
-      };
-      issued.push(record);
-      writeIssuedCerts(issued);
-
-      Confirm.success('合格证已生成！证书编号：' + certNo, {
-        confirmText: '下载证书',
-        icon: '✅'
-      }).then(() => {
-        downloadCert(record.id);
-      });
-    }, 800);
+    if (typeof window.certIssueSubmit === 'function') {
+      window.certIssueSubmit();
+      return;
+    }
+    Toast.show('请在「农产品合格证」页面开具合格证', 'info');
   }
 
   // 初始化页面交互
@@ -1154,7 +1478,10 @@ const PageActions = (function() {
     // 绑定开具证书按钮
     const issueBtn = document.querySelector('.btn-issue');
     if (issueBtn) {
-      issueBtn.addEventListener('click', issueCert);
+      issueBtn.addEventListener('click', () => {
+        if (typeof window.certIssueSubmit === 'function') window.certIssueSubmit();
+        else issueCert();
+      });
     }
 
     // 绑定下载按钮
@@ -1192,6 +1519,9 @@ const PageActions = (function() {
     downloadCert,
     revokeCert,
     renewCert,
+    submitCert,
+    approveCert,
+    rejectCert,
     queryCert,
     changePage,
     issueCert,

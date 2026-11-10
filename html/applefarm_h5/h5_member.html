@@ -243,6 +243,7 @@
   </div>
 
   <script src="js/h5-auth.js"></script>
+  <script src="../applefarm_backhand/js/shared/mall-store.js"></script>
   <script>
     function navigateTo(page) { window.location.href = page; }
 
@@ -279,38 +280,82 @@ function readArr(key) {
   catch (e) { return []; }
 }
 
-// 会员等级（与后台 mall_member.html 一致）：消费≥3000 VIP，≥1000 金卡，其余普通
+// 会员等级：优先读取后台「用户运营 / 积分与权益」维护的等级规则
 function computeMemberLevel(totalSpend) {
+  if (typeof MallStore !== 'undefined') {
+    var rules = (MallStore.settings().levelRules || []).slice().sort(function (a, b) { return b.min - a.min; });
+    for (var i = 0; i < rules.length; i++) {
+      if (totalSpend >= Number(rules[i].min || 0)) return { name: rules[i].name, min: rules[i].min };
+    }
+  }
   if (totalSpend >= 3000) return { name: 'VIP会员', min: 3000 };
   if (totalSpend >= 1000) return { name: '金卡会员', min: 1000 };
   return { name: '普通会员', min: 0 };
 }
 
-// 仅统计「当前登录用户」的订单总额
-function currentUserSpend(orders) {
+// 当前登录用户对应的后台会员档案（手机号 / 用户名 / 昵称任一匹配）
+function currentUserMember() {
+  if (typeof MallStore === 'undefined' || !H5Auth.isLoggedIn()) return null;
   var loginUser = sessionStorage.getItem('loginUser') || '';
-  if (!Array.isArray(orders) || !orders.length) return 0;
-  var s = 0;
-  for (var i = 0; i < orders.length; i++) {
-    var o = orders[i];
-    if (!o) continue;
-    var byUser = !loginUser || (o.user === loginUser) || (o.userName === loginUser) || (o.username === loginUser);
-    if (!byUser) continue;
-    var amt = parseFloat(o.amount || o.totalAmount || o.total || 0);
-    if (!isNaN(amt)) s += amt;
+  var p = H5Auth.profile() || {};
+  var phone = String(p.phone || '');
+  var names = [loginUser, p.nickname, p.name, H5Auth.displayName()].filter(Boolean);
+  var list = MallStore.members();
+  for (var i = 0; i < list.length; i++) {
+    var m = list[i];
+    if (loginUser && m.userId && m.userId === loginUser) return m;
+    if (phone && m.phone === phone) return m;
+    if (names.indexOf(m.nickname) >= 0) return m;
   }
-  return s;
+  return null;
 }
 
-// 仅统计「当前登录用户」的认养数；未登录或无匹配时显示 0
+// 仅统计「当前登录用户」的订单：优先按会员档案归属，其次按收货人/用户名归属
+function currentUserOrders(orders) {
+  var loginUser = sessionStorage.getItem('loginUser') || '';
+  if (!loginUser || !Array.isArray(orders)) return [];
+  var member = currentUserMember();
+  if (member && typeof MallStore !== 'undefined') {
+    return orders.filter(function (o) { return MallStore.orderBelongsTo(o, member); });
+  }
+  var p = (typeof H5Auth.profile === 'function') ? (H5Auth.profile() || {}) : {};
+  var names = [loginUser, p.nickname, p.name, (typeof H5Auth.displayName === 'function' ? H5Auth.displayName() : '')].filter(Boolean);
+  var phone = String(p.phone || '');
+  return orders.filter(function (o) {
+    if (!o) return false;
+    if (o.user === loginUser || o.userName === loginUser || o.username === loginUser) return true;
+    if (o.userId && o.userId === loginUser) return true;
+    if (o.address && names.indexOf(o.address.name) >= 0) return true;
+    if (phone && o.address && String(o.address.phone || '') === phone) return true;
+    return false;
+  });
+}
+
+function currentUserSpend(orders) {
+  var mine = currentUserOrders(orders);
+  return mine.reduce(function (s, o) {
+    if (!o || o.statusCode === 'cancelled') return s;
+    var amt = parseFloat(o.total != null ? o.total : (o.amount || o.totalAmount || 0));
+    return s + (isNaN(amt) ? 0 : amt);
+  }, 0);
+}
+
+// 仅统计「当前登录用户」的认养数；兼容用户名/昵称/手机号三种归属字段
 function currentUserAdoptions(all) {
   var loginUser = sessionStorage.getItem('loginUser') || '';
   if (!loginUser || !Array.isArray(all) || !all.length) return 0;
+  var profile = (typeof H5Auth !== 'undefined' && H5Auth.profile) ? (H5Auth.profile() || {}) : {};
+  var names = [loginUser, profile.name, profile.nickname];
+  if (typeof H5Auth !== 'undefined' && H5Auth.displayName) names.push(H5Auth.displayName());
+  names = names.filter(Boolean);
+  var phone = String(profile.phone || '');
+
   var n = 0;
   for (var i = 0; i < all.length; i++) {
     var a = all[i];
     if (!a) continue;
-    if (a.user === loginUser || a.userName === loginUser || a.username === loginUser) n++;
+    if (names.indexOf(a.user) >= 0 || names.indexOf(a.userName) >= 0 || names.indexOf(a.username) >= 0) { n++; continue; }
+    if (phone && String(a.phone || '') === phone) { n++; continue; }
   }
   return n;
 }
@@ -343,10 +388,13 @@ function refreshMemberStats() {
   if (areaEl) areaEl.textContent = loginUser ? ('已认养 ' + adoptionsN + ' 棵果树') : '登录后即可认养果树、查看溯源档案';
 
   // 未登录时订单/收藏统计不展示，避免游客看到他人数据
-  document.getElementById('statOrders').textContent = loginUser ? orders.length : 0;
+  var mine = currentUserOrders(orders);
+  var member = currentUserMember();
+  var memberPoints = member ? (Number(member.points) || 0) : points;
+  document.getElementById('statOrders').textContent = loginUser ? mine.length : 0;
   document.getElementById('statAdoptions').textContent = adoptionsN;
   document.getElementById('statFavs').textContent = loginUser ? favs.length : 0;
-  document.getElementById('statPoints').textContent = loginUser ? points : 0;
+  document.getElementById('statPoints').textContent = loginUser ? memberPoints : 0;
 }
 document.addEventListener('DOMContentLoaded', refreshMemberStats);
 document.addEventListener('DOMContentLoaded', renderLoginEntry);

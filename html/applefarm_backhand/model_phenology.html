@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/page-content.css">
 <link rel="stylesheet" href="css/unified-theme.css">
 <link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/model-page.css">
 <style>
   /* 偏差列表 */
   .deviation-list { display:flex; flex-direction:column; }
@@ -61,6 +62,19 @@
 
     <main class="main-content">
 <div class="page-container">
+  <div class="mp-header">
+    <div class="mp-header-main">
+      <div class="mp-header-icon"><i data-uicon="seed"></i></div>
+      <div>
+        <div class="mp-title">物候模型</div>
+        <div class="mp-subtitle">物候年历 · 期配置与农时偏差预警</div>
+      </div>
+    </div>
+    <div class="mp-header-actions">
+      <span class="mp-live">模型运行中</span>
+    </div>
+  </div>
+
   <!-- 顶部 4 指标 -->
   <div class="patrol-stats">
     <div class="patrol-stat-card green"><div class="stat-value" style="font-size:20px;">膨大期</div><div class="stat-label">花牛苹果·晚熟</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">98块地块</div></div>
@@ -69,12 +83,22 @@
     <div class="patrol-stat-card blue"><div class="stat-value">3</div><div class="stat-label">品种跟踪</div><div class="stat-trend" style="font-size:12px;color:var(--success);">本周全预测</div></div>
   </div>
 
+  <!-- 页签 -->
+  <div class="mp-tabs">
+    <button class="mp-tab active" data-tab="calendar" onclick="mpSwitchTab('calendar')"><i data-uicon="calendar"></i>物候年历</button>
+    <button class="mp-tab" data-tab="config" onclick="mpSwitchTab('config')"><i data-uicon="settings"></i>物候期配置</button>
+    <button class="mp-tab" data-tab="task" onclick="mpSwitchTab('task')"><i data-uicon="fileList"></i>农时与任务</button>
+  </div>
+
+  <div class="mp-panel active" data-panel="calendar">
   <!-- 物候期年历视图（整行） -->
   <div class="chart-section" style="margin-bottom:20px;">
     <h2 class="section-title">物候期年历视图 <span style="font-size:12px;color:var(--text-tertiary);font-weight:400;">红虚线=今天 09-24</span></h2>
     <div id="chart-calendar" class="chart-container" style="height:340px;"></div>
   </div>
+  </div>
 
+  <div class="mp-panel" data-panel="config">
   <!-- 物候期配置 -->
   <div class="chart-section" style="margin-bottom:20px;">
     <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
@@ -94,57 +118,21 @@
       <tbody id="stageConfigBody"></tbody>
     </table>
   </div>
+  </div>
 
+  <div class="mp-panel" data-panel="task">
   <!-- 农时偏差 + 驱动任务（2 列） -->
   <div style="display:grid; grid-template-columns:1fr 2fr; gap:16px;">
     <div class="chart-section">
       <h2 class="section-title">农时偏差</h2>
-      <div class="deviation-list">
-        <div class="deviation-item">
-          <div class="deviation-content"><div class="deviation-title">早熟·盛花期</div><div class="deviation-desc">推迟5天，关注授粉</div></div>
-          <span class="deviation-value delay">推迟5天</span>
-        </div>
-        <div class="deviation-item">
-          <div class="deviation-content"><div class="deviation-title">晚熟·幼果期</div><div class="deviation-desc">推迟3天，加强营养</div></div>
-          <span class="deviation-value delay">推迟3天</span>
-        </div>
-        <div class="deviation-item">
-          <div class="deviation-content"><div class="deviation-title">早熟·着色期</div><div class="deviation-desc">提前2天，控水促色</div></div>
-          <span class="deviation-value advance">提前2天</span>
-        </div>
-        <div class="deviation-item">
-          <div class="deviation-content"><div class="deviation-title">金帅·采收期</div><div class="deviation-desc">常年持平</div></div>
-          <span class="deviation-value normal">正常</span>
-        </div>
-      </div>
+      <div class="deviation-list" id="deviationList"></div>
     </div>
 
     <div class="chart-section">
       <h2 class="section-title">物候期驱动任务</h2>
-      <div style="display:flex; flex-direction:column; gap:10px;">
-        <div class="task-item">
-          <div class="task-content">
-            <div class="task-title">膨大期灌溉任务</div>
-            <div class="task-meta">花牛苹果膨大期关键阶段，建议增加灌溉频率</div>
-          </div>
-          <button class="task-action" onclick="publishPhenologyTask('膨大期灌溉任务','花牛苹果')">发布</button>
-        </div>
-        <div class="task-item">
-          <div class="task-content">
-            <div class="task-title">膨大期追肥任务</div>
-            <div class="task-meta">追施高钾复合肥 0.5-1kg/株</div>
-          </div>
-          <button class="task-action" onclick="publishPhenologyTask('膨大期追肥任务','花牛苹果')">发布</button>
-        </div>
-        <div class="task-item">
-          <div class="task-content">
-            <div class="task-title">着色期病虫害防治</div>
-            <div class="task-meta">注意防治炭疽病和轮纹病</div>
-          </div>
-          <button class="task-action" onclick="publishPhenologyTask('着色期病虫害防治','花牛苹果')">发布</button>
-        </div>
-      </div>
+      <div id="taskList" style="display:flex; flex-direction:column; gap:10px;"></div>
     </div>
+  </div>
   </div>
 </div>
     </main>
@@ -187,25 +175,27 @@
   </div>
 </div>
 
+<script>
+  /* 模型页面通用页签切换 */
+  function mpSwitchTab(name) {
+    document.querySelectorAll('.mp-tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
+    document.querySelectorAll('.mp-panel').forEach(function (p) { p.classList.toggle('active', p.dataset.panel === name); });
+    requestAnimationFrame(function () { window.dispatchEvent(new Event('resize')); });
+  }
+</script>
+<script src="js/shared/model-store.js"></script>
 <script src="js/components/modal.js"></script>
 <script src="js/components/confirm.js"></script>
 <script src="js/components/chart.js"></script>
 <script>
 // ===== 物候期配置（localStorage: snzg_phenology_stages）=====
-// 默认值由原硬编码月份小数区间换算为 MM-DD
-const PHENOLOGY_STAGE_DEFAULTS = [
-  { name: '休眠期', start: '01-01', end: '01-15', color: '#d5dbd5', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
-  { name: '萌芽期', start: '01-15', end: '02-15', color: '#b7eb8f', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
-  { name: '花期',   start: '02-15', end: '03-15', color: '#ffadd2', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
-  { name: '幼果期', start: '03-15', end: '04-15', color: '#ffd591', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
-  { name: '膨大期', start: '04-15', end: '08-15', color: '#91d5ff', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
-  { name: '着色期', start: '08-15', end: '10-01', color: '#d3adf7', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' },
-  { name: '采收期', start: '10-01', end: '12-31', color: '#ffa39e', varieties: '花牛苹果（早熟）/ 花牛苹果（晚熟）/ 金帅' }
-];
-const PHENOLOGY_STORAGE_KEY = 'snzg_phenology_stages';
+// 默认值与品种偏移统一取自 ModelStore，避免与移动端/大屏数据分叉
+const PHENOLOGY_MODEL = ModelStore.get('phenology');
+const PHENOLOGY_STAGE_DEFAULTS = PHENOLOGY_MODEL.lists.stages.map(s => ({ ...s }));
+const PHENOLOGY_STORAGE_KEY = PHENOLOGY_MODEL.meta.storageKey || 'snzg_phenology_stages';
 
 // 品种偏移（保持原有逻辑不变）
-const PHENOLOGY_OFFSETS = { '花牛苹果（早熟）': -0.3, '花牛苹果（晚熟）': 0, '金帅': 0.2 };
+const PHENOLOGY_OFFSETS = { ...PHENOLOGY_MODEL.meta.offsets };
 
 let phenologyStages = loadPhenologyStages();
 let calendarChart = null;
@@ -226,6 +216,10 @@ function loadPhenologyStages() {
 
 function savePhenologyStages() {
   try { localStorage.setItem(PHENOLOGY_STORAGE_KEY, JSON.stringify(phenologyStages)); } catch (e) { /* 忽略存储异常 */ }
+  // 同步回统一数据层，保证移动端/大屏读到同一份物候期配置
+  try {
+    ModelStore.patch('phenology', { lists: Object.assign({}, PHENOLOGY_MODEL.lists, { stages: phenologyStages.map(s => ({ ...s })) }) });
+  } catch (e) { /* 数据层不可用时仅保留本地存储 */ }
 }
 
 // MM-DD → 月份小数（用于复用原有 ECharts 月份坐标轴）
@@ -326,8 +320,8 @@ function renderCalendarChart() {
   const draw = (chart) => {
     calendarChart = chart;
 
-    const varieties = ['花牛苹果（早熟）', '花牛苹果（晚熟）', '金帅'];
-    const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+    const varieties = PHENOLOGY_MODEL.meta.varieties;
+    const months = PHENOLOGY_MODEL.meta.months;
 
     const stages = {};
     phenologyStages.forEach(s => {
@@ -368,7 +362,7 @@ function renderCalendarChart() {
         symbol: 'none',
         lineStyle: { color: '#ff4d4f', type: 'dashed', width: 2 },
         label: { show: true, position: 'end', formatter: '今天', color: '#ff4d4f', fontSize: 11 },
-        data: [{ xAxis: 8.6, yAxis: 0 }, { xAxis: 8.6, yAxis: varieties.length - 1 }]
+        data: [{ xAxis: PHENOLOGY_MODEL.meta.todayMarker, yAxis: 0 }, { xAxis: PHENOLOGY_MODEL.meta.todayMarker, yAxis: varieties.length - 1 }]
       },
       data: []
     });
@@ -424,7 +418,39 @@ function renderCalendarChart() {
   });
 }
 
+// 农时偏差列表（数据来自 ModelStore）
+function renderDeviationList(M) {
+  const list = document.getElementById('deviationList');
+  if (!list) return;
+  list.innerHTML = M.lists.deviations.map(function (d) {
+    return '<div class="deviation-item">' +
+      '<div class="deviation-content"><div class="deviation-title">' + d.title + '</div><div class="deviation-desc">' + d.desc + '</div></div>' +
+      '<span class="deviation-value ' + d.tone + '">' + d.value + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+// 物候期驱动任务列表（数据来自 ModelStore）
+function renderTaskList(M) {
+  const list = document.getElementById('taskList');
+  if (!list) return;
+  list.innerHTML = M.lists.tasks.map(function (t) {
+    return '<div class="task-item">' +
+      '<div class="task-content">' +
+        '<div class="task-title">' + t.title + '</div>' +
+        '<div class="task-meta">' + t.desc + '</div>' +
+      '</div>' +
+      '<button class="task-action" onclick="publishPhenologyTask(\'' + t.title + '\',\'' + t.variety + '\')">' + t.action + '</button>' +
+    '</div>';
+  }).join('');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+  const M = PHENOLOGY_MODEL;
+  ModelStore.hydrateKpi('.patrol-stats', 'phenology');
+  renderDeviationList(M);
+  renderTaskList(M);
+
   renderStageConfig();
 
   // 物候期编辑弹窗关闭（关闭按钮 / 遮罩 / ESC）

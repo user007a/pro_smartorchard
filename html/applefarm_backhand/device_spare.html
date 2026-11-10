@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 备品备件</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<style>
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; backdrop-filter:blur(4px); }
+  .modal-overlay.show { display:block; }
+  .modal-box { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    background:var(--bg-card); border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.15);
+    width:720px; max-width:94vw; max-height:86vh; overflow-y:auto; z-index:1000; animation:modalSlideIn .25s ease-out; }
+  .modal-box.show { display:block; }
+  @keyframes modalSlideIn { from{opacity:0;transform:translate(-50%,-50%) scale(.95)} to{opacity:1;transform:translate(-50%,-50%) scale(1)} }
+  .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;
+    padding-bottom:16px; border-bottom:1px solid var(--border-light); }
+  .modal-header h3 { font-size:16px; font-weight:600; color:var(--text-primary); margin:0; }
+  .modal-close { width:28px; height:28px; border:none; background:var(--gray-100); border-radius:6px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; }
+  .modal-close:hover { background:var(--error-bg); color:var(--error); }
+  .modal-body { padding:0 4px; }
+  .modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:24px; padding:16px 0 0;
+    border-top:1px solid var(--border-light); }
+
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .form-group { margin-bottom:16px; }
+  .form-group.full { grid-column:1 / -1; }
+  .form-group label { display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:8px; }
+  .form-group input, .form-group select, .form-group textarea { width:100%; padding:10px;
+    border:1px solid var(--border-default); border-radius:8px; font-size:13px; box-sizing:border-box; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline:none; border-color:var(--primary-400); box-shadow:0 0 0 3px rgba(24,144,255,.1); }
+  .form-group textarea { min-height:60px; resize:vertical; }
+
+  .stat-card-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:16px; }
+  .stat-card { background:#fff; border:1px solid #eef0ee; border-radius:12px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .stat-label { font-size:12px; color:var(--text-tertiary); margin-bottom:6px; }
+  .stat-value { font-size:26px; font-weight:700; color:var(--text-primary); font-variant-numeric:tabular-nums; }
+  .stat-value .unit { font-size:13px; font-weight:500; color:var(--text-tertiary); margin-left:4px; }
+  .stat-sub { margin-top:6px; font-size:12px; color:var(--text-tertiary); }
+  .stat-sub.err { color:var(--error); }
+  .stat-sub.warn { color:var(--warning); }
+
+  .status-tag { display:inline-flex; align-items:center; padding:3px 10px; font-size:11.5px;
+    font-weight:500; border-radius:20px; white-space:nowrap; }
+  .status-tag.online { background:#d9f7be; color:#3a8618; border:1px solid #b7eb8f; }
+  .status-tag.warning { background:var(--warning-bg); color:#ad8b00; border:1px solid var(--warning-border); }
+  .status-tag.offline { background:var(--error-bg); color:#cf1322; border:1px solid #ffccc7; }
+  .type-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-size:11.5px;
+    font-weight:500; background:var(--gray-100); color:var(--text-secondary); border:1px solid var(--border-default); }
+  .action-btns { display:flex; gap:6px; flex-wrap:nowrap; }
+  .action-btn { padding:4px 10px; font-size:11.5px; font-weight:500; border:1px solid transparent;
+    border-radius:6px; cursor:pointer; white-space:nowrap; background:none; }
+  .action-btn.detail { color:#2b6cb0; background:#f5f8fc; border-color:#c5d9f0; }
+  .action-btn.edit { color:var(--primary-600); background:var(--gray-50); border-color:var(--border-default); }
+  .action-btn.use { color:#3a8618; background:var(--success-bg); border-color:#b7eb8f; }
+  .action-btn.del { color:#cf1322; background:var(--error-bg); border-color:#ffccc7; }
+  .stock-bar { height:6px; border-radius:3px; background:var(--gray-100); overflow:hidden; margin-top:4px; width:70px; }
+  .stock-bar i { display:block; height:100%; border-radius:3px; }
+  .data-table { min-width:1300px; }
+  .data-table th { white-space:nowrap; }
+  .empty-row td { text-align:center; color:var(--text-tertiary); padding:40px 0; }
+  #pagination-container { padding:12px 16px; }
+</style>
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+</head>
+<body data-active-menu="device" data-active-submenu="device-spare">
+
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3L11 11M11 3L3 11"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <nav class="device-tabs" aria-label="运维工单">
+        <a href="device_maintain.html">维护工单</a>
+        <a href="device_calibration.html">校准检定</a>
+        <a href="device_spare.html" class="active">备品备件</a>
+        <a href="mb_device_maintain.html">移动报修</a>
+      </nav>
+
+      <div class="stat-card-row" id="statCards"></div>
+
+      <div class="content-wrapper">
+
+        <!-- ===== 搜索栏区 ===== -->
+        <div class="page-section search-section">
+          <div class="search-bar">
+            <select class="search-select" id="typeSelect"><option value="">全部设备类型</option></select>
+            <select class="search-select" id="statusSelect" style="min-width:120px;">
+              <option value="">全部库存状态</option>
+              <option value="in_stock">库存充足</option>
+              <option value="low">库存偏低</option>
+              <option value="out">已缺货</option>
+            </select>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索备件名称 / 型号 / 厂家...">
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="handleSearch()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 操作按钮区 ===== -->
+        <div class="page-section action-bar">
+          <button class="jg-btn-outline" onclick="openEditModal('')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/>
+            </svg>新增备件
+          </button>
+          <button class="jg-btn-outline" onclick="exportSpares()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/>
+            </svg>导出备件清单
+          </button>
+        </div>
+
+        <!-- ===== 数据表格区 ===== -->
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:90px;">备件编号</th>
+                  <th style="width:180px;">备件名称</th>
+                  <th style="width:140px;">规格型号</th>
+                  <th style="width:150px;">适用设备类型</th>
+                  <th style="width:56px;">单位</th>
+                  <th style="width:110px;">当前库存</th>
+                  <th style="width:86px;">安全库存</th>
+                  <th style="width:76px;">已领用</th>
+                  <th style="width:90px;">单价(元)</th>
+                  <th style="width:100px;">库存金额</th>
+                  <th style="width:96px;">库位</th>
+                  <th style="width:86px;">状态</th>
+                  <th style="width:210px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="dataTableBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container"></div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ===== 编辑弹窗 ===== -->
+<div class="modal-overlay" id="editOverlay"></div>
+<div class="modal-box" id="editModal">
+  <div class="modal-header">
+    <h3 id="editTitle">备品备件</h3>
+    <button class="modal-close" onclick="closeEditModal()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>备件名称 <span style="color:var(--error);">*</span></label>
+        <input type="text" id="fName" placeholder="如 土壤水分探头" />
+      </div>
+      <div class="form-group">
+        <label>规格型号</label>
+        <input type="text" id="fModel" placeholder="如 TS-PROBE-300" />
+      </div>
+      <div class="form-group">
+        <label>适用设备类型</label>
+        <select id="fDeviceType"></select>
+      </div>
+      <div class="form-group">
+        <label>生产厂家</label>
+        <input type="text" id="fVendor" placeholder="如 托普云农" />
+      </div>
+      <div class="form-group">
+        <label>计量单位</label>
+        <input type="text" id="fUnit" placeholder="个 / 块 / 套" />
+      </div>
+      <div class="form-group">
+        <label>单价（元）</label>
+        <input type="number" id="fPrice" min="0" step="0.01" />
+      </div>
+      <div class="form-group">
+        <label>当前库存</label>
+        <input type="number" id="fStock" min="0" step="1" />
+      </div>
+      <div class="form-group">
+        <label>安全库存</label>
+        <input type="number" id="fSafety" min="0" step="1" />
+      </div>
+      <div class="form-group">
+        <label>已领用数量</label>
+        <input type="number" id="fUsed" min="0" step="1" />
+      </div>
+      <div class="form-group">
+        <label>存放库位</label>
+        <input type="text" id="fLocation" placeholder="如 中心仓库 A-03" />
+      </div>
+      <div class="form-group full">
+        <label>备注</label>
+        <input type="text" id="fRemark" placeholder="选填" />
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="jg-btn" onclick="closeEditModal()">取消</button>
+    <button class="jg-btn jg-btn-primary" onclick="saveSpare()">保存</button>
+  </div>
+</div>
+
+<!-- ===== 领用弹窗 ===== -->
+<div class="modal-overlay" id="useOverlay"></div>
+<div class="modal-box" id="useModal" style="width:560px;">
+  <div class="modal-header">
+    <h3 id="useTitle">领用备件</h3>
+    <button class="modal-close" onclick="closeUseModal()">
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>备件</label>
+        <input type="text" id="uName" disabled />
+      </div>
+      <div class="form-group">
+        <label>领用数量 <span style="color:var(--error);">*</span></label>
+        <input type="number" id="uQty" min="1" step="1" value="1" />
+      </div>
+      <div class="form-group">
+        <label>关联设备</label>
+        <select id="uDevice"><option value="">不关联设备</option></select>
+      </div>
+      <div class="form-group full">
+        <label>领用说明</label>
+        <textarea id="uRemark" placeholder="如 更换 D-013 磨损桨叶"></textarea>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="jg-btn" onclick="closeUseModal()">取消</button>
+    <button class="jg-btn jg-btn-primary" onclick="submitUse()">确认领用</button>
+  </div>
+</div>
+
+<script src="js/components/modal.js"></script>
+<script src="js/components/confirm.js"></script>
+<script src="js/shared/device-store.js"></script>
+<script src="js/shared/device-ui.js"></script>
+<script>
+/* ============================================================
+ * 备品备件
+ * 数据源：js/shared/device-store.js → spares() / consumeSpare()
+ *
+ * 备件库存是设备维修时效（MTTR）的物理保障：缺货会直接拉长停机时长，
+ * 因此本页按「安全库存」做低于阈值告警，并与故障维修工单联动领用。
+ * ============================================================ */
+
+var STOCK_TEXT = { in_stock: '库存充足', low: '库存偏低', out: '已缺货' };
+var STOCK_STATE = { in_stock: 'online', low: 'warning', out: 'offline' };
+var currentId = '';
+var useId = '';
+var page = null;
+
+function stockStatus(sp) {
+  var stock = Number(sp.stock) || 0;
+  var safe = Number(sp.safetyStock) || 0;
+  if (stock <= 0) return 'out';
+  if (stock < safe) return 'low';
+  return 'in_stock';
+}
+
+/* ---------- 下拉初始化 ---------- */
+function initSelects() {
+  var models = DeviceStore.typeList();
+  var opts = models.map(function (m) { return { value: m.name, label: m.name }; });
+  DeviceUI.fillSelect('typeSelect', opts, '全部设备类型');
+  DeviceUI.fillSelect('fDeviceType', opts, '请选择适用设备类型');
+  DeviceUI.fillSelect('uDevice', DeviceStore.devices().map(function (d) {
+    return { value: d.id, label: d.id + ' · ' + d.name };
+  }), '不关联设备');
+}
+
+/* ---------- 统计卡 ---------- */
+function renderStats() {
+  var list = DeviceStore.spares();
+  var s = DeviceStore.spareSummary();
+  var low = list.filter(function (x) { return stockStatus(x) === 'low'; }).length;
+  var out = list.filter(function (x) { return stockStatus(x) === 'out'; }).length;
+  var value = list.reduce(function (sum, x) { return sum + (Number(x.stock) || 0) * (Number(x.price) || 0); }, 0);
+  document.getElementById('statCards').innerHTML =
+    '<div class="stat-card"><div class="stat-label">备件品种</div>' +
+    '<div class="stat-value">' + s.total + '<span class="unit">种</span></div>' +
+    '<div class="stat-sub">覆盖 ' + s.types + ' 类设备</div></div>' +
+    '<div class="stat-card"><div class="stat-label">库存总量</div>' +
+    '<div class="stat-value">' + s.stock + '<span class="unit">件</span></div>' +
+    '<div class="stat-sub">累计领用 ' + s.used + ' 件</div></div>' +
+    '<div class="stat-card"><div class="stat-label">库存金额</div>' +
+    '<div class="stat-value">' + (value / 10000).toFixed(2) + '<span class="unit">万元</span></div>' +
+    '<div class="stat-sub">按当前库存 × 单价估算</div></div>' +
+    '<div class="stat-card"><div class="stat-label">低于安全库存</div>' +
+    '<div class="stat-value" style="color:var(--warning);">' + low + '<span class="unit">种</span></div>' +
+    '<div class="stat-sub warn">建议尽快补货</div></div>' +
+    '<div class="stat-card"><div class="stat-label">已缺货</div>' +
+    '<div class="stat-value" style="color:var(--error);">' + out + '<span class="unit">种</span></div>' +
+    '<div class="stat-sub err">影响故障修复时效</div></div>';
+}
+
+/* ---------- 表格行 ---------- */
+function renderRow(sp, index) {
+  var st = stockStatus(sp);
+  var stock = Number(sp.stock) || 0;
+  var safe = Number(sp.safetyStock) || 0;
+  var ratio = safe > 0 ? Math.min(100, Math.round(stock / safe * 100)) : 100;
+  var color = st === 'out' ? 'var(--error)' : (st === 'low' ? 'var(--warning)' : 'var(--success)');
+  return '<tr>' +
+    '<td>' + index + '</td>' +
+    '<td><strong>' + DeviceUI.esc(sp.id) + '</strong></td>' +
+    '<td>' + DeviceUI.esc(sp.name) + '</td>' +
+    '<td style="font-size:12px;color:var(--text-tertiary);">' + DeviceUI.esc(sp.model || '-') + '</td>' +
+    '<td><span class="type-badge">' + DeviceUI.esc(sp.deviceType || '-') + '</span></td>' +
+    '<td>' + DeviceUI.esc(sp.unit || '-') + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;font-weight:600;">' + stock +
+      '<div class="stock-bar"><i style="width:' + ratio + '%;background:' + color + ';"></i></div></td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + safe + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + (Number(sp.used) || 0) + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + (Number(sp.price) || 0).toFixed(2) + '</td>' +
+    '<td style="font-variant-numeric:tabular-nums;">' + ((Number(sp.price) || 0) * stock).toFixed(2) + '</td>' +
+    '<td>' + DeviceUI.esc(sp.location || '-') + '</td>' +
+    '<td>' + DeviceUI.statusTag(STOCK_STATE[st], STOCK_TEXT[st]) + '</td>' +
+    '<td><div class="action-btns">' +
+      '<button class="action-btn detail" onclick="openDetail(\'' + DeviceUI.esc(sp.id) + '\')">详情</button>' +
+      '<button class="action-btn use" onclick="openUseModal(\'' + DeviceUI.esc(sp.id) + '\')">领用</button>' +
+      '<button class="action-btn edit" onclick="openEditModal(\'' + DeviceUI.esc(sp.id) + '\')">编辑</button>' +
+      '<button class="action-btn del" onclick="deleteSpare(\'' + DeviceUI.esc(sp.id) + '\')">删除</button>' +
+    '</div></td>' +
+  '</tr>';
+}
+
+/* ---------- 过滤 ---------- */
+function filteredList() {
+  var type = document.getElementById('typeSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  return DeviceStore.spares().filter(function (sp) {
+    if (type && sp.deviceType !== type) return false;
+    if (status && stockStatus(sp) !== status) return false;
+    if (kw) {
+      var hay = (sp.name + ' ' + (sp.model || '') + ' ' + (sp.vendor || '') + ' ' + (sp.location || '')).toLowerCase();
+      if (hay.indexOf(kw) < 0) return false;
+    }
+    return true;
+  });
+}
+
+function handleSearch() {
+  var list = filteredList();
+  page.updateData(list);
+  DeviceUI.toast('找到 ' + list.length + ' 种备件', 'info');
+}
+
+function resetFilter() {
+  ['typeSelect', 'statusSelect', 'searchInput'].forEach(function (id) {
+    document.getElementById(id).value = '';
+  });
+  page.updateData(filteredList());
+  DeviceUI.toast('已重置搜索条件', 'info');
+}
+
+/* ---------- 详情 ---------- */
+function openDetail(id) {
+  var sp = DeviceStore.spares().filter(function (x) { return x.id === id; })[0];
+  if (!sp) return;
+  var st = stockStatus(sp);
+  DeviceUI.detailModal('备件 · ' + sp.name, [
+    ['备件编号', sp.id],
+    ['备件名称', sp.name],
+    ['规格型号', sp.model || '—'],
+    ['适用设备类型', sp.deviceType || '—'],
+    ['生产厂家', sp.vendor || '—'],
+    ['计量单位', sp.unit || '—'],
+    ['当前库存', (Number(sp.stock) || 0) + ' ' + (sp.unit || '')],
+    ['安全库存', (Number(sp.safetyStock) || 0) + ' ' + (sp.unit || '')],
+    ['已领用', (Number(sp.used) || 0) + ' ' + (sp.unit || '')],
+    ['单价', '¥' + (Number(sp.price) || 0).toFixed(2)],
+    ['库存金额', '¥' + ((Number(sp.price) || 0) * (Number(sp.stock) || 0)).toFixed(2)],
+    ['存放库位', sp.location || '—'],
+    ['库存状态', STOCK_TEXT[st], 'raw'],
+    ['备注', sp.remark || '—']
+  ], { editId: sp.id, editFn: 'openEditModal' });
+}
+
+/* ---------- 新增 / 编辑 ---------- */
+function openEditModal(id) {
+  currentId = id || '';
+  var sp = id ? DeviceStore.spares().filter(function (x) { return x.id === id; })[0] : null;
+  document.getElementById('editTitle').textContent = sp ? ('编辑备件 · ' + sp.name) : '新增备件';
+  document.getElementById('fName').value = sp ? sp.name : '';
+  document.getElementById('fModel').value = sp ? (sp.model || '') : '';
+  document.getElementById('fDeviceType').value = sp ? (sp.deviceType || '') : '';
+  document.getElementById('fVendor').value = sp ? (sp.vendor || '') : '';
+  document.getElementById('fUnit').value = sp ? (sp.unit || '个') : '个';
+  document.getElementById('fPrice').value = sp ? (Number(sp.price) || 0) : 0;
+  document.getElementById('fStock').value = sp ? (Number(sp.stock) || 0) : 0;
+  document.getElementById('fSafety').value = sp ? (Number(sp.safetyStock) || 0) : 0;
+  document.getElementById('fUsed').value = sp ? (Number(sp.used) || 0) : 0;
+  document.getElementById('fLocation').value = sp ? (sp.location || '中心仓库') : '中心仓库';
+  document.getElementById('fRemark').value = sp ? (sp.remark || '') : '';
+  document.getElementById('editOverlay').classList.add('show');
+  document.getElementById('editModal').classList.add('show');
+}
+
+function closeEditModal() {
+  document.getElementById('editOverlay').classList.remove('show');
+  document.getElementById('editModal').classList.remove('show');
+}
+
+function saveSpare() {
+  var name = document.getElementById('fName').value.trim();
+  if (!name) { DeviceUI.toast('请填写备件名称', 'error'); return; }
+  var item = {
+    id: currentId || DeviceStore.nextId('spare'),
+    name: name,
+    model: document.getElementById('fModel').value.trim(),
+    deviceType: document.getElementById('fDeviceType').value,
+    vendor: document.getElementById('fVendor').value.trim(),
+    unit: document.getElementById('fUnit').value.trim() || '个',
+    price: Number(document.getElementById('fPrice').value) || 0,
+    stock: Number(document.getElementById('fStock').value) || 0,
+    safetyStock: Number(document.getElementById('fSafety').value) || 0,
+    used: Number(document.getElementById('fUsed').value) || 0,
+    location: document.getElementById('fLocation').value.trim(),
+    remark: document.getElementById('fRemark').value.trim(),
+    supplier: document.getElementById('fVendor').value.trim(),
+    updatedAt: DeviceStore.stampNow()
+  };
+  var check = DeviceStore.validate('spare', item, currentId || null);
+  if (!check.ok) { DeviceUI.toast(check.message, 'error'); return; }
+  DeviceStore.upsertSpare(item);
+  closeEditModal();
+  refreshAll();
+  DeviceUI.toast('备件已保存', 'success');
+}
+
+function deleteSpare(id) {
+  DeviceUI.confirmDelete('确定删除备件「' + id + '」吗？').then(function (ok) {
+    if (!ok) return;
+    DeviceStore.removeSpare(id);
+    refreshAll();
+    DeviceUI.toast('备件已删除', 'success');
+  });
+}
+
+/* ---------- 领用 ---------- */
+function openUseModal(id) {
+  var sp = DeviceStore.spares().filter(function (x) { return x.id === id; })[0];
+  if (!sp) return;
+  useId = id;
+  document.getElementById('useTitle').textContent = '领用备件 · ' + sp.name;
+  document.getElementById('uName').value = sp.name + '（库存 ' + sp.stock + ' ' + (sp.unit || '') + '）';
+  document.getElementById('uQty').value = 1;
+  document.getElementById('uQty').max = sp.stock;
+  document.getElementById('uDevice').value = '';
+  document.getElementById('uRemark').value = '';
+  document.getElementById('useOverlay').classList.add('show');
+  document.getElementById('useModal').classList.add('show');
+}
+
+function closeUseModal() {
+  document.getElementById('useOverlay').classList.remove('show');
+  document.getElementById('useModal').classList.remove('show');
+}
+
+function submitUse() {
+  var qty = Number(document.getElementById('uQty').value) || 0;
+  var deviceId = document.getElementById('uDevice').value;
+  var remark = document.getElementById('uRemark').value.trim();
+  if (qty <= 0) { DeviceUI.toast('领用数量必须大于 0', 'error'); return; }
+  var r = DeviceStore.consumeSpare(useId, qty, deviceId);
+  if (!r.ok) { DeviceUI.toast(r.message, 'error'); return; }
+  DeviceStore.audit('status', 'spare', useId,
+    '领用备件 ' + qty + (deviceId ? '（设备 ' + deviceId + '）' : '') + (remark ? '：' + remark : ''));
+  closeUseModal();
+  refreshAll();
+  DeviceUI.toast(r.message, 'success');
+}
+
+/* ---------- 导出 ---------- */
+function exportSpares() {
+  var list = filteredList();
+  var headers = ['备件编号', '备件名称', '规格型号', '适用设备类型', '单位', '当前库存', '安全库存', '已领用', '单价', '库存金额', '库位', '状态'];
+  var rows = list.map(function (sp) {
+    var st = stockStatus(sp);
+    return [sp.id, sp.name, sp.model || '', sp.deviceType || '', sp.unit || '',
+      Number(sp.stock) || 0, Number(sp.safetyStock) || 0, Number(sp.used) || 0,
+      Number(sp.price) || 0, ((Number(sp.price) || 0) * (Number(sp.stock) || 0)).toFixed(2),
+      sp.location || '', STOCK_TEXT[st]];
+  });
+  DeviceUI.exportCsv('备品备件清单', headers, rows);
+}
+
+/* ---------- 刷新 ---------- */
+function refreshAll() {
+  renderStats();
+  page.updateData(filteredList());
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  initSelects();
+  page = DeviceUI.pagination({
+    containerId: 'pagination-container',
+    tbodyId: 'dataTableBody',
+    renderRow: renderRow,
+    emptyCols: 14,
+    pageSize: 10
+  });
+  page.init({ data: [] });
+
+  document.getElementById('searchInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') handleSearch();
+  });
+
+  DeviceStore.subscribe(function (reason) {
+    if (reason === 'init') return;
+    page.updateData(filteredList());
+  });
+
+  refreshAll();
+});
+</script>
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+</body>
+</html>

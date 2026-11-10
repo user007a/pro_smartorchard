@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 客户对账单</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/sales-module.css">
+<style>
+  .timeline { margin-top: 4px; }
+  .period-chip {
+    display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px;
+    background: var(--gray-100, #f3f6f3); color: var(--text-secondary, #4a5a4a);
+  }
+</style>
+<style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
+</head>
+<body data-active-menu="sales" data-active-submenu="sales-statement">
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3L11 11M11 3L3 11"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <div class="page-header">
+          <h1 class="page-title">客户对账单</h1>
+          <p class="page-subtitle">按月生成客户对账单，汇总当月有效订单、已收款与应收余额；确认后可打印 / 导出，结清需先补齐应收差额。</p>
+        </div>
+
+        <div class="sales-stats" id="stStats"></div>
+
+        <div class="page-section search-section">
+          <div class="search-bar filter-bar">
+            <input type="text" class="search-input" id="stKeyword" placeholder="搜索对账单号 / 客户">
+            <select class="search-select" id="stCustomer"><option value="all">全部客户</option></select>
+            <span class="filter-label">对账期间</span>
+            <input type="month" class="search-input" id="stPeriod" style="min-width:150px;max-width:170px;">
+            <select class="search-select" id="stStatus">
+              <option value="all">全部状态</option>
+              <option value="draft">待确认</option>
+              <option value="confirmed">已确认</option>
+              <option value="settled">已结清</option>
+            </select>
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="applyFilter()">查询</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+              <button class="jg-btn" onclick="exportStatements()">导出 CSV</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="page-section action-bar">
+          <div class="action-left">
+            <button class="jg-btn jg-btn-primary" onclick="openGenerate()">+ 生成对账单</button>
+          </div>
+          <div class="action-right" style="margin-left:auto;">
+            <span class="selected-info" id="stCountInfo"></span>
+          </div>
+        </div>
+
+        <div class="page-section data-section">
+          <div class="data-table-wrapper">
+            <table class="data-table" style="min-width:1350px;">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:170px;">对账单号</th>
+                  <th style="width:180px;">客户</th>
+                  <th style="width:110px;">对账期间</th>
+                  <th style="width:90px;" class="text-right">订单数</th>
+                  <th style="width:130px;" class="text-right">对账金额</th>
+                  <th style="width:130px;" class="text-right">已收金额</th>
+                  <th style="width:130px;" class="text-right">应收余额</th>
+                  <th style="width:90px;">状态</th>
+                  <th style="width:140px;">生成时间</th>
+                  <th style="width:220px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="stBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container" style="display:flex;justify-content:flex-end;margin-top:14px;"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 生成对账单 -->
+<div class="modal-overlay" id="genModal" style="display:none;">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3 class="modal-title">生成客户对账单</h3>
+      <button class="modal-close" onclick="closeModal('genModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:14px;">
+        <label><span class="required"></span>客户</label>
+        <select id="genCustomer"><option value="">请选择客户</option></select>
+      </div>
+      <div class="form-group">
+        <label><span class="required"></span>对账期间</label>
+        <input type="month" id="genPeriod">
+        <div class="form-hint">同一客户同一期间重复生成时会直接返回已有对账单</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('genModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitGenerate()">生成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 对账详情 -->
+<div class="modal-overlay" id="detailModal" style="display:none;">
+  <div class="modal modal-xl">
+    <div class="modal-header">
+      <h3 class="modal-title">对账单详情</h3>
+      <button class="modal-close" onclick="closeModal('detailModal')">×</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer" id="detailFooter"></div>
+  </div>
+</div>
+
+<script src="js/shared/sales-store.js"></script>
+<script src="js/common-functions.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+<script>
+(function () {
+  'use strict';
+  var S = window.SalesStore;
+  var PAGE_SIZE = 10;
+  var detailId = '';
+  var F = { keyword: '', customerId: 'all', period: '', status: 'all' };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function toast(msg, type) {
+    if (window.LegacyToast) window.LegacyToast.show(msg, type || 'success');
+  }
+  function wanText(n) { return (Number(n) || 0) >= 10000 ? S.fmtWan(n) : S.fmtMoney(n); }
+  function statusClass(s) {
+    if (s === 'settled') return 'st-completed';
+    if (s === 'confirmed') return 'st-paid';
+    return 'st-confirm';
+  }
+
+  window.closeModal = function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.classList.remove('show');
+    el.style.display = 'none';
+  };
+  function openModal(id) {
+    var el = $(id);
+    el.style.display = 'flex';
+    el.classList.add('show');
+  }
+
+  /* ---------------- 统计 ---------------- */
+  function renderStats() {
+    var list = S.statements();
+    var draft = list.filter(function (s) { return s.status === 'draft'; });
+    var confirmed = list.filter(function (s) { return s.status === 'confirmed'; });
+    var settled = list.filter(function (s) { return s.status === 'settled'; });
+    var amount = list.reduce(function (s, x) { return s + (Number(x.amount) || 0); }, 0);
+    var balance = list.reduce(function (s, x) { return s + (Number(x.balance) || 0); }, 0);
+    var draftBalance = draft.reduce(function (s, x) { return s + (Number(x.balance) || 0); }, 0);
+
+    function card(label, value, sub, cls) {
+      return '<div class="sales-stat-card ' + (cls || '') + '">' +
+        '<div class="stat-label">' + label + '</div>' +
+        '<div class="stat-value">' + value + '</div>' +
+        '<div class="stat-sub">' + sub + '</div></div>';
+    }
+    $('stStats').innerHTML =
+      card('对账单总数', list.length + ' 份', '覆盖 ' + uniqueCustomers(list) + ' 户客户', '') +
+      card('待确认', draft.length + ' 份', '待收 ' + wanText(draftBalance), draft.length ? 'is-warning' : 'is-success') +
+      card('已确认', confirmed.length + ' 份', '待结清', 'is-primary') +
+      card('已结清', settled.length + ' 份', '回款完成', 'is-success') +
+      card('对账总金额', wanText(amount), '全部对账单', '') +
+      card('应收余额', wanText(balance), '对账单口径', balance > 0 ? 'is-danger' : 'is-success');
+  }
+
+  function uniqueCustomers(list) {
+    var map = {};
+    list.forEach(function (s) { map[s.customerId] = true; });
+    return Object.keys(map).length;
+  }
+
+  /* ---------------- 列表 ---------------- */
+  function list() {
+    var kw = F.keyword.toLowerCase();
+    return S.statements().filter(function (s) {
+      if (F.customerId !== 'all' && s.customerId !== F.customerId) return false;
+      if (F.period && s.period !== F.period) return false;
+      if (F.status !== 'all' && s.status !== F.status) return false;
+      if (kw) {
+        var hay = (s.no + ' ' + s.customerName).toLowerCase();
+        if (hay.indexOf(kw) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function row(s, index) {
+    return '<tr>' +
+      '<td>' + (index + 1) + '</td>' +
+      '<td><strong>' + esc(s.no) + '</strong></td>' +
+      '<td>' + esc(s.customerName) + '</td>' +
+      '<td><span class="period-chip">' + esc(s.period) + '</span></td>' +
+      '<td class="num text-right">' + s.orderCount + '</td>' +
+      '<td class="num money text-right">' + S.fmtMoney(s.amount) + '</td>' +
+      '<td class="num text-right text-success">' + S.fmtMoney(s.paid) + '</td>' +
+      '<td class="num text-right ' + (s.balance > 0 ? 'text-danger' : 'muted') + '">' + S.fmtMoney(s.balance) + '</td>' +
+      '<td><span class="status-tag ' + statusClass(s.status) + '">' + (S.STATEMENT_STATUS_TEXT[s.status] || s.status) + '</span></td>' +
+      '<td class="muted">' + S.fmtTime(s.createdAt) + '</td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn view" onclick="viewStatement(\'' + s.id + '\')">详情</button>' +
+        (s.status === 'draft' ? '<button class="action-btn edit" onclick="confirmStatement(\'' + s.id + '\')">确认</button>' : '') +
+        (s.status === 'confirmed' ? '<button class="action-btn edit" onclick="settleStatement(\'' + s.id + '\')">结清</button>' : '') +
+        '<button class="action-btn" onclick="printStatement(\'' + s.id + '\')">打印</button>' +
+        (s.status === 'draft' ? '<button class="action-btn delete" onclick="removeStatement(\'' + s.id + '\')">删除</button>' : '') +
+      '</div></td>' +
+    '</tr>';
+  }
+
+  function refreshTable() {
+    var data = list();
+    $('stCountInfo').textContent = '共 ' + data.length + ' 份对账单';
+    if (!data.length) {
+      $('stBody').innerHTML = '<tr class="empty-row"><td colspan="11" style="text-align:center;color:var(--text-tertiary);padding:36px 0;">当前条件下暂无对账单</td></tr>';
+      $('pagination-container').innerHTML = '';
+      return;
+    }
+    Pagination.init({
+      data: data,
+      pageSize: PAGE_SIZE,
+      containerId: 'pagination-container',
+      tbodyId: 'stBody',
+      renderRow: row
+    });
+  }
+
+  function refresh() {
+    renderStats();
+    refreshTable();
+  }
+
+  window.applyFilter = function () {
+    F.keyword = $('stKeyword').value.trim();
+    F.customerId = $('stCustomer').value;
+    F.period = $('stPeriod').value;
+    F.status = $('stStatus').value;
+    refreshTable();
+  };
+
+  window.resetFilter = function () {
+    $('stKeyword').value = '';
+    $('stCustomer').value = 'all';
+    $('stPeriod').value = '';
+    $('stStatus').value = 'all';
+    F = { keyword: '', customerId: 'all', period: '', status: 'all' };
+    refreshTable();
+  };
+
+  /* ---------------- 生成 ---------------- */
+  window.openGenerate = function () {
+    var customers = S.customers().filter(function (c) { return c.status === 'active'; });
+    $('genCustomer').innerHTML = '<option value="">请选择客户</option>' + customers.map(function (c) {
+      return '<option value="' + c.id + '">' + esc(c.name) + '（' + esc(c.code) + '）</option>';
+    }).join('');
+    var d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    $('genPeriod').value = d.getFullYear() + '-' + (d.getMonth() + 1 < 10 ? '0' : '') + (d.getMonth() + 1);
+    openModal('genModal');
+  };
+
+  window.submitGenerate = function () {
+    var customerId = $('genCustomer').value;
+    var period = $('genPeriod').value;
+    if (!customerId) return toast('请选择客户', 'warning');
+    if (!period) return toast('请选择对账期间', 'warning');
+    var r = S.generateStatement(customerId, period);
+    if (!r.ok) return toast(r.message, 'error');
+    closeModal('genModal');
+    toast('对账单已生成：' + r.data.no);
+    refresh();
+  };
+
+  /* ---------------- 状态流转 ---------------- */
+  window.confirmStatement = function (id) {
+    var r = S.confirmStatement(id);
+    if (!r.ok) return toast(r.message, 'error');
+    toast('对账单已确认，可发送客户核对');
+    refresh();
+  };
+
+  window.settleStatement = function (id) {
+    var r = S.settleStatement(id);
+    if (!r.ok) return toast(r.message, 'error');
+    toast('对账单已结清');
+    refresh();
+  };
+
+  window.removeStatement = function (id) {
+    if (!confirm('确认删除该对账单？仅待确认状态可删除。')) return;
+    var r = S.removeStatement(id);
+    if (!r.ok) return toast(r.message, 'error');
+    toast('对账单已删除');
+    refresh();
+  };
+
+  /* ---------------- 详情 ---------------- */
+  window.viewStatement = function (id) {
+    var d = S.statementDetail(id);
+    if (!d) return toast('对账单不存在', 'error');
+    detailId = id;
+    var s = d.statement;
+    var html = '<div class="detail-section"><div class="detail-section-title">对账信息</div><div class="detail-grid cols-3">' +
+      '<div class="detail-item"><span class="detail-label">对账单号</span><span class="detail-value">' + esc(s.no) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">客户</span><span class="detail-value">' + esc(s.customerName) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">对账期间</span><span class="detail-value">' + esc(s.period) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">订单数</span><span class="detail-value">' + s.orderCount + ' 笔</span></div>' +
+      '<div class="detail-item"><span class="detail-label">对账金额</span><span class="detail-value">' + S.fmtMoney(s.amount) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">已收金额</span><span class="detail-value">' + S.fmtMoney(s.paid) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">应收余额</span><span class="detail-value ' + (s.balance > 0 ? 'text-danger' : '') + '">' + S.fmtMoney(s.balance) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">状态</span><span class="detail-value">' + (S.STATEMENT_STATUS_TEXT[s.status] || s.status) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">生成时间</span><span class="detail-value">' + S.fmtTime(s.createdAt) + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">确认时间</span><span class="detail-value">' + (s.confirmedAt ? S.fmtTime(s.confirmedAt) : '—') + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">结清时间</span><span class="detail-value">' + (s.settledAt ? S.fmtTime(s.settledAt) : '—') + '</span></div>' +
+    '</div></div>';
+
+    html += '<div class="detail-section"><div class="detail-section-title">订单明细</div>' +
+      '<table class="detail-table"><thead><tr><th>订单编号</th><th>下单时间</th><th>渠道</th><th class="num">金额</th><th class="num">已收</th><th class="num">应收</th><th>状态</th></tr></thead><tbody>' +
+      d.orders.map(function (o) {
+        var bal = (Number(o.payableAmount) || 0) - (Number(o.paidAmount) || 0);
+        return '<tr><td>' + esc(o.no) + '</td><td>' + S.fmtTime(o.createdAt) + '</td>' +
+          '<td>' + esc(S.CHANNEL_TEXT[o.channel] || o.channel) + '</td>' +
+          '<td class="num">' + S.fmtMoney(o.payableAmount) + '</td>' +
+          '<td class="num">' + S.fmtMoney(o.paidAmount) + '</td>' +
+          '<td class="num">' + S.fmtMoney(bal) + '</td>' +
+          '<td>' + esc(S.ORDER_STATUS_TEXT[o.status] || o.status) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+
+    $('detailBody').innerHTML = html;
+    $('detailFooter').innerHTML =
+      '<button class="jg-btn" onclick="closeModal(\'detailModal\')">关闭</button>' +
+      '<button class="jg-btn" onclick="printStatement(\'' + id + '\')">打印对账单</button>' +
+      (s.status === 'draft' ? '<button class="jg-btn jg-btn-primary" onclick="confirmStatement(\'' + id + '\')">确认对账单</button>' : '') +
+      (s.status === 'confirmed' ? '<button class="jg-btn jg-btn-primary" onclick="settleStatement(\'' + id + '\')">标记结清</button>' : '');
+    openModal('detailModal');
+  };
+
+  /* ---------------- 打印 ---------------- */
+  window.printStatement = function (id) {
+    var d = S.statementDetail(id);
+    if (!d) return toast('对账单不存在', 'error');
+    var s = d.statement;
+    var rows = d.orders.map(function (o, i) {
+      var bal = (Number(o.payableAmount) || 0) - (Number(o.paidAmount) || 0);
+      return '<tr><td>' + (i + 1) + '</td><td>' + esc(o.no) + '</td><td>' + S.fmtDate(o.createdAt) + '</td>' +
+        '<td class="r">' + (Number(o.payableAmount) || 0).toFixed(2) + '</td>' +
+        '<td class="r">' + (Number(o.paidAmount) || 0).toFixed(2) + '</td>' +
+        '<td class="r">' + bal.toFixed(2) + '</td></tr>';
+    }).join('');
+    var html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>对账单 ' + esc(s.no) + '</title>' +
+      '<style>body{font-family:"Microsoft YaHei",sans-serif;padding:32px;color:#1f2d1f;}' +
+      'h1{font-size:20px;text-align:center;margin:0 0 6px;}h2{font-size:13px;text-align:center;color:#666;font-weight:400;margin:0 0 22px;}' +
+      '.meta{display:flex;flex-wrap:wrap;gap:8px 40px;font-size:13px;margin-bottom:16px;}' +
+      'table{width:100%;border-collapse:collapse;font-size:12.5px;}th,td{border:1px solid #d9d9d9;padding:7px 9px;text-align:left;}' +
+      'th{background:#f5f7f5;}.r{text-align:right;}tfoot td{font-weight:700;background:#fafafa;}' +
+      '.sign{display:flex;justify-content:space-between;margin-top:46px;font-size:13px;color:#555;}' +
+      '@media print{body{padding:0}}</style></head><body>' +
+      '<h1>销售对账单</h1><h2>' + esc(s.period) + ' 对账期间 · 单号 ' + esc(s.no) + '</h2>' +
+      '<div class="meta"><span>客户：' + esc(s.customerName) + '</span><span>订单数：' + s.orderCount + ' 笔</span>' +
+      '<span>对账金额：' + s.amount.toFixed(2) + ' 元</span><span>已收：' + s.paid.toFixed(2) + ' 元</span>' +
+      '<span>应收余额：' + s.balance.toFixed(2) + ' 元</span><span>状态：' + (S.STATEMENT_STATUS_TEXT[s.status] || s.status) + '</span></div>' +
+      '<table><thead><tr><th>序号</th><th>订单编号</th><th>下单日期</th><th class="r">订单金额</th><th class="r">已收</th><th class="r">应收</th></tr></thead><tbody>' +
+      rows + '</tbody><tfoot><tr><td colspan="3">合计</td><td class="r">' + s.amount.toFixed(2) + '</td>' +
+      '<td class="r">' + s.paid.toFixed(2) + '</td><td class="r">' + s.balance.toFixed(2) + '</td></tr></tfoot></table>' +
+      '<div class="sign"><span>供方（盖章）：智慧果园</span><span>需方（盖章）：' + esc(s.customerName) + '</span></div>' +
+      '<script>window.onload=function(){window.print();};<\/script></body></html>';
+    var w = window.open('', '_blank');
+    if (!w) return toast('打印窗口被拦截，请允许弹窗', 'warning');
+    w.document.write(html);
+    w.document.close();
+  };
+
+  /* ---------------- 导出 ---------------- */
+  window.exportStatements = function () {
+    var data = list();
+    if (!data.length) return toast('当前没有可导出的对账单', 'warning');
+    var headers = ['对账单号', '客户', '对账期间', '订单数', '对账金额', '已收金额', '应收余额', '状态', '生成时间', '确认时间', '结清时间'];
+    var rows = data.map(function (s) {
+      return [s.no, s.customerName, s.period, s.orderCount, s.amount, s.paid, s.balance,
+        S.STATEMENT_STATUS_TEXT[s.status] || s.status, S.fmtTime(s.createdAt),
+        s.confirmedAt ? S.fmtTime(s.confirmedAt) : '', s.settledAt ? S.fmtTime(s.settledAt) : ''];
+    });
+    if (S.downloadCsv('客户对账单_' + new Date().toISOString().slice(0, 10) + '.csv', headers, rows)) toast('已导出 ' + data.length + ' 份对账单');
+    else toast('导出失败', 'error');
+  };
+
+  /* ---------------- 初始化 ---------------- */
+  function init() {
+    if (!S) {
+      document.querySelector('.content-wrapper').innerHTML = '<div class="empty-state"><strong>销售数据层加载失败</strong>请刷新页面后重试</div>';
+      return;
+    }
+    $('stCustomer').innerHTML = '<option value="all">全部客户</option>' + S.customers().map(function (c) {
+      return '<option value="' + c.id + '">' + esc(c.name) + '</option>';
+    }).join('');
+    refresh();
+    S.subscribe(refresh);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

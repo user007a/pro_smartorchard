@@ -6,6 +6,7 @@
   <title>个人信息 - 移动商城</title>
   <script src="js/h5-auth.js"></script>
   <script>H5Auth.require();</script>
+  <script src="../applefarm_backhand/js/shared/mall-store.js"></script>
   <link rel="stylesheet" href="../applefarm_mobile/css/mobile-design-system.css">
   <style>
     .profile-section { padding: var(--space-4); padding-bottom: 100px; }
@@ -257,6 +258,18 @@
         <div class="info-row" style="margin-top: var(--space-2);">
           <span class="info-label">其他地址</span>
           <span class="info-value info-edit" onclick="manageAddress()">管理地址 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></span>
+        </div>
+      </div>
+
+      <!-- 我的优惠券 -->
+      <div class="info-card">
+        <div class="info-card-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6"/><path d="M2 7h20v5H2z"/><path d="M12 7v13"/></svg>
+          我的优惠券
+        </div>
+        <div class="info-row">
+          <span class="info-label">可用优惠券</span>
+          <span class="info-value info-edit" onclick="viewCoupons()">查看优惠券 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></span>
         </div>
       </div>
 
@@ -536,6 +549,64 @@
         '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="margin-top:16px;width:100%;background:#eee;color:#333;padding:8px;border-radius:6px;">关闭</button>' +
         '</div>';
       document.body.appendChild(overlay);
+    }
+
+    /* 我的优惠券：与后台「商品营销 / 优惠券」同一数据源 */
+    function viewCoupons() {
+      var html = '';
+      if (typeof MallStore === 'undefined') {
+        html = '<p style="text-align:center;color:#999;margin:24px 0;">暂不可用</p>';
+      } else {
+        var me = H5Auth.currentUser() || '';
+        var p = H5Auth.profile() || {};
+        var phone = String(p.phone || '');
+        var member = null;
+        MallStore.members().forEach(function (m) {
+          if (!member && ((me && m.userId === me) || (phone && m.phone === phone) || (me && m.nickname === me))) member = m;
+        });
+        var key = (member && member.id) || me || 'guest';
+        var claims = MallStore.claims().filter(function (c) { return c.memberKey === key; });
+        var mine = {};
+        claims.forEach(function (c) { if (c.status === 'claimed') mine[c.code] = (mine[c.code] || 0) + 1; });
+        var list = MallStore.coupons().filter(function (c) {
+          return MallStore.couponUsable(c, 0, key);
+        });
+        if (!list.length) {
+          html = '<p style="text-align:center;color:#999;margin:24px 0;">暂无可用优惠券</p>';
+        } else {
+          html = list.map(function (c) {
+            var val = c.type === 'percent' ? (c.value + '折') : ('¥' + c.value);
+            var owned = mine[c.code] ? ('已领 ' + mine[c.code] + ' 张') : '未领取';
+            return '<div style="border:1px solid #eee;border-radius:8px;padding:12px;margin:8px 0;display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+              '<div><strong style="color:#ff4d4f;">' + val + '</strong> ' + (c.name || '') +
+                '<div style="color:#999;font-size:12px;margin-top:4px;">满 ' + (c.min || 0) + ' 可用 · 有效期至 ' + (c.validTo || '-') + ' · ' + owned + '</div>' +
+              '</div>' +
+              '<button onclick="claimCoupon(\'' + c.code + '\')" style="background:#1890ff;color:#fff;padding:6px 12px;border-radius:6px;white-space:nowrap;">领取</button>' +
+            '</div>';
+          }).join('');
+        }
+      }
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      overlay.innerHTML = '<div style="background:#fff;border-radius:10px;width:90%;max-width:420px;max-height:80vh;overflow-y:auto;padding:16px;">' +
+        '<h3 style="margin-bottom:12px;">我的优惠券</h3>' + html +
+        '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="margin-top:16px;width:100%;background:#eee;color:#333;padding:8px;border-radius:6px;">关闭</button>' +
+        '</div>';
+      document.body.appendChild(overlay);
+    }
+
+    function claimCoupon(code) {
+      if (typeof MallStore === 'undefined') return;
+      var me = H5Auth.currentUser() || 'guest';
+      var p = H5Auth.profile() || {};
+      var phone = String(p.phone || '');
+      var member = null;
+      MallStore.members().forEach(function (m) {
+        if (!member && ((me && m.userId === me) || (phone && m.phone === phone) || (me && m.nickname === me))) member = m;
+      });
+      var key = (member && member.id) || me;
+      var res = MallStore.claimCoupon(code, key);
+      showToast(res && res.ok ? '领取成功，可在结算时使用' : ((res && res.error) || '领取失败'));
     }
 
     function showToast(message) {

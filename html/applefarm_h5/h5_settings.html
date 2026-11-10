@@ -287,7 +287,8 @@
       keep: [
         'h5_orders', 'h5_addresses', 'snzg_adoptions', 'h5_favorites',
         'h5_cart_items', 'loginUser', 'loginUserProfile', 'isLoggedIn',
-        'h5_invoices', 'h5_message_read', 'h5_messages_read'
+        'h5_invoices', 'h5_message_read', 'h5_messages_read',
+        'smartorchard_feedbacks'
       ],
       // 缓存数据：清理
       drop: [
@@ -344,8 +345,88 @@
       showToast('缓存已清理（业务数据已保留）');
     }
 
+    /* ============================================================
+     * 意见反馈：与移动端作业端写入同一审核队列
+     *   localStorage['smartorchard_feedbacks']
+     *   字段：{ id, title, content, type, status, createTime, source:'h5',
+     *           operator, operatorId, contact }
+     *   后台「移动端运营 › 用户服务 › 意见反馈审核」按「来源端 = H5消费者端」筛出
+     * ============================================================ */
+    var FEEDBACK_KEY = 'smartorchard_feedbacks';
+
+    function escHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
     function feedback() {
-      showToast('意见反馈：可通过「我的 → 帮助与反馈」提交，或拨打客服热线 400-000-0000');
+      var profile = (window.H5Auth && H5Auth.profile()) || {};
+      var name = (window.H5Auth && H5Auth.displayName && H5Auth.displayName()) || 'H5消费者';
+      var overlay = document.createElement('div');
+      overlay.id = 'h5FeedbackOverlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+      overlay.innerHTML =
+        '<div style="background:#fff;border-radius:12px;width:100%;max-width:420px;padding:18px;box-sizing:border-box;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+            '<h3 style="margin:0;font-size:16px;color:var(--text,#1a2e1a);">意见反馈</h3>' +
+            '<span onclick="document.getElementById(\'h5FeedbackOverlay\').remove()" style="color:#999;cursor:pointer;font-size:14px;">关闭</span>' +
+          '</div>' +
+          '<label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">反馈类型</label>' +
+          '<select id="h5FbType" style="width:100%;height:38px;border:1px solid #e5e7eb;border-radius:8px;padding:0 10px;font-size:14px;margin-bottom:12px;background:#fff;">' +
+            '<option value="suggestion">功能建议</option>' +
+            '<option value="problem">问题反馈</option>' +
+            '<option value="other">其他</option>' +
+          '</select>' +
+          '<label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">标题</label>' +
+          '<input id="h5FbTitle" maxlength="40" placeholder="一句话描述你的反馈" style="width:100%;height:38px;border:1px solid #e5e7eb;border-radius:8px;padding:0 10px;font-size:14px;box-sizing:border-box;margin-bottom:12px;">' +
+          '<label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">详细描述</label>' +
+          '<textarea id="h5FbContent" maxlength="500" placeholder="请补充具体情况，便于我们跟进处理" style="width:100%;height:96px;border:1px solid #e5e7eb;border-radius:8px;padding:10px;font-size:14px;box-sizing:border-box;resize:none;margin-bottom:12px;font-family:inherit;"></textarea>' +
+          '<label style="display:block;font-size:13px;color:#666;margin-bottom:6px;">联系方式（选填）</label>' +
+          '<input id="h5FbContact" maxlength="30" value="' + escHtml(profile.phone || '') + '" placeholder="手机号 / 微信，便于回访" style="width:100%;height:38px;border:1px solid #e5e7eb;border-radius:8px;padding:0 10px;font-size:14px;box-sizing:border-box;margin-bottom:16px;">' +
+          '<button onclick="submitH5Feedback(\'' + escHtml(name).replace(/'/g, '\\\'') + '\',\'' + escHtml(profile.phone || '') + '\')" style="width:100%;height:42px;border:none;border-radius:21px;background:var(--primary,#3a8618);color:#fff;font-size:15px;font-weight:600;">提交反馈</button>' +
+        '</div>';
+      document.body.appendChild(overlay);
+    }
+
+    function submitH5Feedback(operator, operatorId) {
+      var title = (document.getElementById('h5FbTitle').value || '').trim();
+      var content = (document.getElementById('h5FbContent').value || '').trim();
+      var contact = (document.getElementById('h5FbContact').value || '').trim();
+      var type = document.getElementById('h5FbType').value;
+
+      if (!title) { showToast('请填写反馈标题'); return; }
+      if (content.length < 5) { showToast('详细描述至少 5 个字'); return; }
+
+      var list = [];
+      try {
+        var saved = JSON.parse(localStorage.getItem(FEEDBACK_KEY) || '[]');
+        list = Array.isArray(saved) ? saved : [];
+      } catch (e) { list = []; }
+
+      list.unshift({
+        id: Date.now(),
+        title: title,
+        content: content,
+        type: type,
+        status: 'pending',
+        createTime: new Date().toLocaleString('zh-CN', { hour12: false }),
+        source: 'h5',
+        operator: operator || 'H5消费者',
+        operatorId: operatorId || '',
+        contact: contact
+      });
+
+      try {
+        localStorage.setItem(FEEDBACK_KEY, JSON.stringify(list));
+      } catch (e) {
+        showToast('提交失败，请稍后重试');
+        return;
+      }
+
+      var ov = document.getElementById('h5FeedbackOverlay');
+      if (ov) ov.remove();
+      showToast('反馈已提交，我们会尽快处理');
     }
 
     function aboutUs() {

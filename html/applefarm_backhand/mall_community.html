@@ -102,6 +102,13 @@
     padding: 16px 20px; border-top: 1px solid var(--border-default);
   }
   .empty-state { padding: var(--space-2xl) 0; text-align: center; color: var(--text-tertiary); font-size: var(--font-size-sm); }
+  .status-tag { display:inline-block;padding:3px 10px;border-radius:99px;font-size:var(--font-size-xs); }
+  .status-tag.pending { background:var(--warning-bg);color:var(--warning); }
+  .status-tag.approved { background:var(--success-bg);color:var(--success); }
+  .status-tag.rejected { background:var(--error-bg);color:var(--error); }
+  .post-images { display:flex;gap:6px;margin-top:6px;flex-wrap:wrap; }
+  .post-images img { width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--border-light); }
+  .search-select { padding:9px 12px;border:1px solid var(--border-default);border-radius:8px;background:var(--bg-card);font-size:var(--font-size-sm); }
 </style>
 </head>
 <body data-active-menu="mall" data-active-submenu="mall-community">
@@ -138,8 +145,12 @@
         <div class="stat-value" id="statComments">0</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">累计点赞</div>
-        <div class="stat-value" id="statLikes">0</div>
+        <div class="stat-label">待审核</div>
+        <div class="stat-value" id="statPending" style="color:var(--warning);">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已通过</div>
+        <div class="stat-value" id="statApproved">0</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">今日新增</div>
@@ -150,6 +161,12 @@
     <div class="page-section search-section">
       <div class="search-bar">
         <input type="text" class="search-input" placeholder="搜索作者 / 动态内容..." id="searchInput">
+        <select class="search-select" id="statusSelect">
+          <option value="">全部状态</option>
+          <option value="pending">待审核</option>
+          <option value="approved">已通过</option>
+          <option value="rejected">已驳回</option>
+        </select>
         <div class="search-actions">
           <button class="jg-btn jg-btn-primary" onclick="renderTable()">搜索</button>
           <button class="jg-btn" onclick="resetFilter()">重置</button>
@@ -166,9 +183,10 @@
               <th style="width:110px;">发布时间</th>
               <th style="width:140px;">作者</th>
               <th>动态内容</th>
-              <th style="width:80px;">点赞数</th>
-              <th style="width:80px;">评论数</th>
-              <th style="width:160px;">操作</th>
+              <th style="width:100px;">状态</th>
+              <th style="width:70px;">点赞数</th>
+              <th style="width:70px;">评论数</th>
+              <th style="width:230px;">操作</th>
             </tr>
           </thead>
           <tbody id="postBody"></tbody>
@@ -196,6 +214,7 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mall-store.js"></script>
 <script src="js/shared/demo-seed.js"></script>
 <script>
 /* ============================================================
@@ -217,6 +236,7 @@ function esc(s) {
 }
 
 function readPosts() {
+  if (typeof MallStore !== 'undefined') return MallStore.posts();
   try {
     var v = JSON.parse(localStorage.getItem(POSTS_KEY) || '[]');
     return Array.isArray(v) ? v : [];
@@ -279,7 +299,13 @@ function buildRows() {
       id: p.id,
       author: p.author || '匿名用户',
       content: p.content || '',
+      images: Array.isArray(p.images) ? p.images : [],
+      topic: p.topic || '',
+      status: p.status || 'approved',
       time: p.time || '',
+      auditBy: p.auditBy || '',
+      auditAt: p.auditAt || '',
+      rejectReason: p.rejectReason || '',
       likes: isNaN(lc) || lc < 0 ? 0 : lc,
       comments: cc,
       ts: new Date(p.time || 0).getTime() || 0
@@ -288,22 +314,26 @@ function buildRows() {
 }
 
 function renderStats(rows) {
-  var likes = 0, comments = 0, today = 0;
+  var comments = 0, today = 0, pending = 0, approved = 0;
   var t = todayStr();
   rows.forEach(function (r) {
-    likes += r.likes;
     comments += r.comments;
     if (r.time && fmtTime(r.time).slice(0, 10) === t) today++;
+    if (r.status === 'pending') pending++;
+    if (r.status === 'approved') approved++;
   });
   document.getElementById('statPosts').textContent = rows.length;
   document.getElementById('statComments').textContent = comments;
-  document.getElementById('statLikes').textContent = likes;
+  document.getElementById('statPending').textContent = pending;
+  document.getElementById('statApproved').textContent = approved;
   document.getElementById('statToday').textContent = today;
 }
 
 function filteredRows() {
   var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+  var status = document.getElementById('statusSelect').value;
   return buildRows().filter(function (r) {
+    if (status && r.status !== status) return false;
     if (!kw) return true;
     var hay = ((r.author || '') + ' ' + (r.content || '') + ' ' + (r.id || '')).toLowerCase();
     return hay.indexOf(kw) !== -1;
@@ -328,25 +358,37 @@ function renderTable() {
 
   body.innerHTML = rows.map(function (r, i) {
     var initial = esc((r.author || '我').charAt(0));
+    var statusText = { pending: '待审核', approved: '已通过', rejected: '已驳回' }[r.status] || r.status;
+    var imagesHtml = r.images.length ? '<div class="post-images">' + r.images.slice(0, 3).map(function (src) {
+      return '<img src="' + esc(src) + '" alt="" onerror="this.style.display=\'none\'">';
+    }).join('') + '</div>' : '';
+    var actions = '<button class="action-btn detail" onclick="openDetail(\'' + esc(r.id) + '\')">查看详情</button>';
+    if (r.status === 'pending') {
+      actions += '<button class="action-btn download" onclick="reviewPost(\'' + esc(r.id) + '\',\'approved\')">通过</button>' +
+                 '<button class="action-btn delete" onclick="reviewPost(\'' + esc(r.id) + '\',\'rejected\')">驳回</button>';
+    } else if (r.status === 'rejected') {
+      actions += '<button class="action-btn download" onclick="reviewPost(\'' + esc(r.id) + '\',\'approved\')">恢复</button>';
+    }
+    actions += '<button class="action-btn delete" onclick="removePost(\'' + esc(r.id) + '\')">删除</button>';
     return '<tr>' +
       '<td class="checkbox-col">' + (i + 1) + '</td>' +
       '<td class="text-mono" style="font-size:var(--font-size-xs);">' + esc(fmtTime(r.time)) + '</td>' +
       '<td><div class="author-cell"><div class="author-avatar">' + initial + '</div>' +
           '<div><div class="cell-name">' + esc(r.author) + '</div>' +
           '<div class="cell-sub text-mono">' + esc(r.id) + '</div></div></div></td>' +
-      '<td><div class="content-cell" title="' + esc(r.content) + '">' + esc(r.content || '（无内容）') + '</div></td>' +
+      '<td><div class="content-cell" title="' + esc(r.content) + '">' + esc(r.content || '（无内容）') + '</div>' +
+          imagesHtml + '</td>' +
+      '<td><span class="status-tag ' + esc(r.status) + '">' + statusText + '</span></td>' +
       '<td class="metric-cell like">' + r.likes + '</td>' +
       '<td class="metric-cell cmt">' + r.comments + '</td>' +
-      '<td><div class="action-btns">' +
-        '<button class="action-btn detail" onclick="openDetail(\'' + esc(r.id) + '\')">查看详情</button>' +
-        '<button class="action-btn delete" onclick="removePost(\'' + esc(r.id) + '\')">删除</button>' +
-      '</div></td>' +
+      '<td><div class="action-btns">' + actions + '</div></td>' +
     '</tr>';
   }).join('');
 }
 
 function resetFilter() {
   document.getElementById('searchInput').value = '';
+  document.getElementById('statusSelect').value = '';
   renderTable();
 }
 
@@ -369,18 +411,41 @@ function openDetail(id) {
       }).join('')
     : '<div style="color:var(--text-tertiary);font-size:var(--font-size-sm);padding:8px 0;">该动态暂无评论</div>';
 
+  var statusText = { pending: '待审核', approved: '已通过', rejected: '已驳回' }[r.status] || r.status;
+  var imagesHtml = r.images.length ? '<div class="detail-block"><div class="detail-label">动态图片</div><div class="post-images">' +
+    r.images.map(function (src) { return '<img src="' + esc(src) + '" alt="" onerror="this.style.display=\'none\'">'; }).join('') + '</div></div>' : '';
+
   document.getElementById('detailBody').innerHTML =
     '<div class="detail-block"><div class="detail-label">作者</div>' +
       '<div class="detail-value">' + esc(r.author) + '</div></div>' +
-    '<div class="detail-block"><div class="detail-label">发布时间</div>' +
-      '<div class="detail-value">' + esc(fmtTime(r.time)) + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">审核状态</div>' +
+      '<div class="detail-value"><span class="status-tag ' + esc(r.status) + '">' + statusText + '</span>' +
+      (r.auditBy ? ' · ' + esc(r.auditBy) + ' ' + esc(fmtTime(r.auditAt)) : '') +
+      (r.rejectReason ? '<br>驳回原因：' + esc(r.rejectReason) : '') + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">发布时间 / 话题</div>' +
+      '<div class="detail-value">' + esc(fmtTime(r.time)) + (r.topic ? ' · #' + esc(r.topic) + '#' : '') + '</div></div>' +
     '<div class="detail-block"><div class="detail-label">动态内容</div>' +
       '<div class="detail-value">' + esc(r.content || '（无内容）') + '</div></div>' +
+    imagesHtml +
     '<div class="detail-block"><div class="detail-label">互动数据</div>' +
       '<div class="detail-value">点赞 ' + r.likes + ' 次 · 评论 ' + r.comments + ' 条</div></div>' +
     '<div class="detail-block"><div class="detail-label">评论列表（' + list.length + '）</div>' + commentsHtml + '</div>';
 
   document.getElementById('detailModal').classList.add('show');
+}
+
+function reviewPost(id, status) {
+  var reason = '';
+  if (status === 'rejected') {
+    reason = window.prompt('请填写驳回原因（将展示给内容作者）', '内容不符合社区规范');
+    if (reason === null) return;
+    reason = reason.trim();
+    if (!reason) { Toast.warning('驳回原因不能为空'); return; }
+  }
+  var r = MallStore.reviewPost(id, status, reason, '后台管理员');
+  if (!r.ok) { Toast.error(r.error || '审核失败'); return; }
+  renderTable();
+  Toast.success(status === 'approved' ? '动态已通过审核' : '动态已驳回');
 }
 
 function closeDetailModal() {
@@ -392,10 +457,14 @@ function removePost(id) {
     title: '删除动态',
     message: '确定删除动态「' + id + '」吗？删除后 H5 社区页将不再展示该内容及其评论，此操作不可撤销。',
     onConfirm: function () {
-      var list = readPosts().filter(function (p) { return p && p.id !== id; });
-      writePosts(list);
+      if (typeof MallStore !== 'undefined') {
+        var r = MallStore.removePost(id);
+        if (!r.ok) { Toast.error(r.error || '删除失败'); return; }
+      } else {
+        writePosts(readPosts().filter(function (p) { return p && p.id !== id; }));
+      }
       renderTable();
-      Toast.success('动态已删除');
+      Toast.success('动态已删除，关联评论与点赞已清理');
     }
   });
 }
@@ -403,6 +472,7 @@ function removePost(id) {
 document.addEventListener('DOMContentLoaded', function () {
   // 演示数据播种：仅在社区为空时写入 24 条动态 + 对应点赞/评论
   DemoSeed.ensure('community');
+  if (typeof MallStore !== 'undefined') MallStore.migrate();
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });

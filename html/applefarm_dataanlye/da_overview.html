@@ -461,22 +461,9 @@ body{display:block;background:
       <div class="card" id="L2a">
         <div class="card-h">
           <h3 class="t"><i></i>资质证书</h3>
-          <div class="meta">持证 <b>12</b> 项 · 有效期跟踪中</div>
+          <div class="meta">持证 <b id="certCount">—</b> 项 · 有效期跟踪中</div>
         </div>
-        <div class="cert-grid">
-          <div class="cert"><div class="cn">有机产品认证</div><div class="cr"><span class="st">有效</span></div></div>
-          <div class="cert"><div class="cn">绿色食品认证</div><div class="cr"><span class="st">有效</span></div></div>
-          <div class="cert"><div class="cn">HACCP 体系</div><div class="cr"><span class="st">有效</span></div></div>
-          <div class="cert"><div class="cn">农产品地理标志</div><div class="cr"><span class="st">有效</span></div></div>
-          <div class="cert"><div class="cn">ISO9001 体系</div><div class="cr"><span class="st">有效</span></div></div>
-          <div class="cert gold"><div class="cn">国家重点龙头企业</div><div class="cr"><span class="st">有效</span></div></div>
-          <div class="cert"><div class="cn">GAP 认证</div><div class="cr"><span class="st">有效</span></div></div>
-          <div class="cert"><div class="cn">国家绿色食品标志</div><div class="cr"><span class="st">有效</span></div></div>
-          <div class="cert"><div class="cn">HACCP 加工认证</div><div class="cr"><span class="st">有效</span></div></div>
-          <div class="cert"><div class="cn">出口质量备案</div><div class="cr"><span class="st">有效</span></div></div>
-          <div class="cert"><div class="cn">区块链溯源试点</div><div class="cr"><span class="st">有效</span></div></div>
-          <div class="cert gold"><div class="cn">GAP 2.0 升级</div><div class="cr"><span class="st">有效</span></div></div>
-        </div>
+        <div class="cert-grid" id="certGrid"></div>
       </div>
 
       <!-- L2b 发展历程 -->
@@ -973,14 +960,24 @@ function legend(host,segs,total,unit,pArr){
   }).join('');
 })();
 
-/* ---------- 认养续费率：与经营分析大屏（BizStore.adoption）同源 ---------- */
+/* ---------- 认养续费率：优先聚合认养订单，无数据回落 BizStore ---------- */
 (function(){
   var FALLBACK=76.4;
+  function storeRate(){
+    try{
+      var obj=JSON.parse(localStorage.getItem('applefarm_adoption_v1')||'null');
+      var list=obj&&Array.isArray(obj.orders)?obj.orders:[];
+      list=list.filter(function(o){return o&&['paid','completed','refunded'].indexOf(o.status)>=0;});
+      if(!list.length)return null;
+      var renewed=list.filter(function(o){return o.renew||Number(o.renewCount)>0;}).length;
+      return Math.round(renewed/list.length*1000)/10;
+    }catch(e){return null;}
+  }
   function paint(){
     var el=document.getElementById('adoptRenewRate');
     if(!el)return;
-    var v=FALLBACK;
-    if(window.BizStore){try{v=BizStore.adoption().renewRate;}catch(e){}}
+    var v=storeRate();
+    if(v==null&&window.BizStore){try{v=BizStore.adoption().renewRate;}catch(e){}}
     if(typeof v!=='number'||isNaN(v))v=FALLBACK;
     el.innerHTML=(Math.round(v*10)/10)+'<small>%</small>';
   }
@@ -989,7 +986,7 @@ function legend(host,segs,total,unit,pArr){
     paint();
     window.addEventListener('bizStoreChange',paint);
     window.addEventListener('storage',function(e){
-      if(window.BizStore&&e.key===BizStore.STORAGE_KEY)paint();
+      if(e.key==='applefarm_adoption_v1'||(window.BizStore&&e.key===BizStore.STORAGE_KEY))paint();
     });
   }
   if(document.readyState==='loading'){
@@ -999,5 +996,37 @@ function legend(host,segs,total,unit,pArr){
 })();
 </script>
 <script src="../applefarm_backhand/js/shared/biz-store.js"></script>
+<script src="../applefarm_backhand/js/shared/cert-store.js"></script>
+<script>
+/* 资质证书卡片：统一读 CertStore，状态实时派生（有效 / 即将到期 / 已过期 / 已撤销） */
+(function () {
+  function renderCertGrid() {
+    var grid = document.getElementById('certGrid');
+    if (!grid || typeof CertStore === 'undefined') return;
+    var list = CertStore.qualifications().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
+    var cnt = document.getElementById('certCount');
+    if (cnt) cnt.textContent = list.length;
+    if (!list.length) {
+      grid.innerHTML = '<div class="cert"><div class="cn">暂无资质证书</div><div class="cr"><span class="st">—</span></div></div>';
+      return;
+    }
+    grid.innerHTML = list.map(function (c) {
+      var sv = CertStore.computeStatus(c);
+      var cls = sv.cls === 'enabled' ? '' : (sv.cls === 'error' ? ' gold' : ' gold');
+      var stCls = sv.cls === 'enabled' ? '' : ' gold';
+      var stText = sv.cls === 'enabled' ? '有效'
+        : sv.cls === 'error' ? '已过期'
+        : sv.cls === 'warning' || sv.cls === 'urgent' ? '即将到期'
+        : sv.text;
+      return '<div class="cert' + cls + '"><div class="cn" title="' + CertStore.esc(c.certNo + ' · ' + c.issueOrg) + '">' + CertStore.esc(c.type) + '</div>' +
+        '<div class="cr"><span class="st' + stCls + '">' + stText + '</span></div></div>';
+    }).join('');
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', renderCertGrid);
+  } else { renderCertGrid(); }
+  if (typeof CertStore !== 'undefined') CertStore.subscribe(renderCertGrid);
+})();
+</script>
 </body>
 </html>

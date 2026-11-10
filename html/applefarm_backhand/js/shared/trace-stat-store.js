@@ -111,6 +111,28 @@
 
   function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
 
+  /**
+   * 认证证书覆盖批次：优先取自共享数据层 CertStore（企业资质），
+   * 未加载时回退到内置种子，保证大屏不因依赖缺失而空白。
+   * 状态文案与 CertStore.computeStatus 保持一致（有效 / 即将到期 / 已过期 / 已撤销）。
+   */
+  function certsFromCertStore(){
+    var S = global.CertStore;
+    if (!S || typeof S.qualifications !== 'function') return null;
+    var list = S.qualifications();
+    if (!list || !list.length) return null;
+    // 覆盖批次量按证书排序位估算，保证同一张资质在不同页得到同一数字
+    return list.map(function(c, i){
+      var sv = S.computeStatus(c);
+      return {
+        name: c.type,
+        code: c.certNo,
+        batches: 18240 + i * 8600,
+        valid: sv.text
+      };
+    });
+  }
+
   function load(){
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
@@ -183,7 +205,10 @@
     channels:     function(){ return deepClone(ensure().channels); },
     codeStatus:   function(){ return deepClone(ensure().codeStatus); },
     chainBlocks:  function(){ return deepClone(ensure().chainBlocks); },
-    certificates: function(){ return deepClone(ensure().certificates); },
+    certificates: function(){
+      var fromStore = certsFromCertStore();
+      return fromStore ? fromStore : deepClone(ensure().certificates);
+    },
     flow:         function(){ return deepClone(ensure().flow); },
 
     /** 累加扫码量：同步今日值与趋势末点 */

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>消息通知</title>
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/mall-subpage.css">
+<style>
+  .scene-tag { display: inline-block; padding: 2px 9px; border-radius: 6px; font-size: 11px; background: #eef4ff; color: #1c7ed6; }
+  .scene-tag.pay { background: #eef9f2; color: #1f8a4c; }
+  .scene-tag.ship { background: #fff7e8; color: #b26a00; }
+  .scene-tag.refund { background: #fdf2f1; color: #d93026; }
+  .scene-tag.activity { background: #fff0f6; color: #c2255c; }
+  .msg-preview { padding: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .msg-card { border: 1px solid #eef0f2; border-radius: 10px; padding: 12px 14px; background: #fff; }
+  .msg-card.off { opacity: .5; }
+  .msg-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .msg-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .msg-body { font-size: 12px; color: #5c636a; line-height: 1.7; }
+  @media (max-width: 768px) {
+    .msg-preview { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="mall-page">
+  <div class="mall-head">
+    <div>
+      <h2>消息通知</h2>
+      <p>配置订单、活动与系统通知模板，启用后同步至 H5 消息中心。</p>
+    </div>
+    <div class="mall-actions">
+      <button class="mall-btn" onclick="resetNotices()">恢复默认</button>
+      <button class="mall-btn primary" onclick="openEdit()">新增通知模板</button>
+    </div>
+  </div>
+
+  <div class="mall-kpis">
+    <div class="mall-kpi"><div class="k">模板总数</div><div class="v" id="kpiTotal">0</div></div>
+    <div class="mall-kpi"><div class="k">启用中</div><div class="v" id="kpiOn">0</div></div>
+    <div class="mall-kpi"><div class="k">订单类</div><div class="v" id="kpiOrder">0</div></div>
+    <div class="mall-kpi"><div class="k">活动 / 系统</div><div class="v" id="kpiOther">0</div></div>
+  </div>
+
+  <div class="mall-card">
+    <div class="mall-card-head"><span>通知模板</span><span class="mall-sub">停用后 H5 消息中心不再展示</span></div>
+    <table class="mall-table">
+      <thead><tr>
+        <th style="width:60px;">序号</th><th style="width:110px;">触发场景</th>
+        <th>标题 / 内容</th><th style="width:150px;">更新时间</th>
+        <th style="width:90px;">状态</th><th style="width:150px;">操作</th>
+      </tr></thead>
+      <tbody id="body"></tbody>
+    </table>
+  </div>
+
+  <div class="mall-card">
+    <div class="mall-card-head"><span>H5 消息中心预览</span><span class="mall-sub">仅展示启用中的模板</span></div>
+    <div class="msg-preview" id="preview"></div>
+  </div>
+
+  <div class="mall-card" id="editCard" style="display:none;">
+    <div class="mall-card-head"><span id="editTitle">新增通知模板</span></div>
+    <div class="mall-form">
+      <div class="mall-form-row">
+        <div class="mall-field"><label>触发场景</label>
+          <select id="fScene">
+            <option value="order_paid">订单支付成功</option>
+            <option value="order_shipped">订单发货</option>
+            <option value="order_refund">订单退款</option>
+            <option value="activity_start">活动开始</option>
+            <option value="system">系统通知</option>
+          </select>
+        </div>
+        <div class="mall-field"><label>状态</label>
+          <select id="fStatus"><option value="on">启用</option><option value="off">停用</option></select>
+        </div>
+      </div>
+      <div class="mall-form-row">
+        <div class="mall-field"><label>通知标题</label><input id="fTitle" placeholder="如 支付成功"></div>
+      </div>
+      <div class="mall-form-row">
+        <div class="mall-field"><label>通知内容</label>
+          <textarea id="fContent" rows="4" placeholder="支持写出订单号、商品名等占位说明"></textarea>
+        </div>
+      </div>
+      <button class="mall-btn primary" onclick="saveNotice()">保存模板</button>
+      <button class="mall-btn" onclick="document.getElementById('editCard').style.display='none'">取消</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/shared/mall-store.js"></script>
+<script>
+var editingId = null;
+
+var SCENE = {
+  order_paid: { text: '支付成功', cls: 'pay' },
+  order_shipped: { text: '订单发货', cls: 'ship' },
+  order_refund: { text: '订单退款', cls: 'refund' },
+  activity_start: { text: '活动开始', cls: 'activity' },
+  system: { text: '系统通知', cls: '' }
+};
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function toast(msg) {
+  var el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText = 'position:fixed;left:50%;top:24px;transform:translateX(-50%);background:#1f2329;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;z-index:9999;';
+  document.body.appendChild(el);
+  setTimeout(function () { el.remove(); }, 1800);
+}
+
+function list() {
+  return (MallStore.settings().notices || []).map(function (n, i) {
+    return {
+      id: n.id || ('NT-' + (i + 1)),
+      scene: n.scene || 'system',
+      title: n.title || '通知',
+      content: n.content || '',
+      status: n.status === 'off' ? 'off' : 'on',
+      updatedAt: n.updatedAt || ''
+    };
+  });
+}
+
+function save(listArr) {
+  MallStore.saveSettings({ notices: listArr });
+}
+
+function render() {
+  var arr = list();
+  document.getElementById('kpiTotal').textContent = arr.length;
+  document.getElementById('kpiOn').textContent = arr.filter(function (n) { return n.status !== 'off'; }).length;
+  document.getElementById('kpiOrder').textContent = arr.filter(function (n) { return n.scene.indexOf('order_') === 0; }).length;
+  document.getElementById('kpiOther').textContent = arr.filter(function (n) { return n.scene.indexOf('order_') !== 0; }).length;
+
+  document.getElementById('body').innerHTML = arr.map(function (n, i) {
+    var s = SCENE[n.scene] || SCENE.system;
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td><span class="scene-tag ' + s.cls + '">' + s.text + '</span></td>' +
+      '<td><strong>' + esc(n.title) + '</strong><div class="mall-sub">' + esc(n.content) + '</div></td>' +
+      '<td>' + esc(n.updatedAt || '-') + '</td>' +
+      '<td><span class="mall-tag ' + (n.status === 'off' ? 'off' : '') + '">' + (n.status === 'off' ? '已停用' : '启用中') + '</span></td>' +
+      '<td><div class="mall-row-actions">' +
+        '<button class="mall-link" onclick="openEdit(\'' + esc(n.id) + '\')">编辑</button>' +
+        '<button class="mall-link" onclick="toggle(\'' + esc(n.id) + '\')">' + (n.status === 'off' ? '启用' : '停用') + '</button>' +
+        '<button class="mall-link danger" onclick="remove(\'' + esc(n.id) + '\')">删除</button>' +
+      '</div></td></tr>';
+  }).join('') || '<tr><td colspan="6" class="mall-empty">暂无通知模板</td></tr>';
+
+  document.getElementById('preview').innerHTML = arr.filter(function (n) { return n.status !== 'off'; }).map(function (n) {
+    var s = SCENE[n.scene] || SCENE.system;
+    return '<div class="msg-card">' +
+      '<div class="msg-top"><span class="scene-tag ' + s.cls + '">' + s.text + '</span><span class="mall-sub">' + esc(n.updatedAt || '') + '</span></div>' +
+      '<div class="msg-title">' + esc(n.title) + '</div>' +
+      '<div class="msg-body">' + esc(n.content) + '</div></div>';
+  }).join('') || '<div class="mall-empty" style="grid-column:1/-1;">暂无启用中的通知</div>';
+}
+
+function openEdit(id) {
+  editingId = id || null;
+  var n = id ? list().filter(function (x) { return x.id === id; })[0] : null;
+  document.getElementById('editTitle').textContent = n ? '编辑通知模板' : '新增通知模板';
+  document.getElementById('fScene').value = n ? n.scene : 'order_paid';
+  document.getElementById('fTitle').value = n ? n.title : '';
+  document.getElementById('fContent').value = n ? n.content : '';
+  document.getElementById('fStatus').value = n ? n.status : 'on';
+  document.getElementById('editCard').style.display = 'block';
+  document.getElementById('fTitle').focus();
+}
+
+function saveNotice() {
+  var title = document.getElementById('fTitle').value.trim();
+  var content = document.getElementById('fContent').value.trim();
+  if (!title) { toast('请填写通知标题'); return; }
+  if (!content) { toast('请填写通知内容'); return; }
+  var arr = list();
+  var item = {
+    id: editingId || ('NT' + Date.now()),
+    scene: document.getElementById('fScene').value,
+    title: title,
+    content: content,
+    status: document.getElementById('fStatus').value,
+    updatedAt: new Date().toISOString().slice(0, 10)
+  };
+  var idx = -1;
+  arr.forEach(function (n, i) { if (n.id === item.id) idx = i; });
+  if (idx >= 0) arr[idx] = item; else arr.push(item);
+  save(arr);
+  document.getElementById('editCard').style.display = 'none';
+  render();
+  toast(editingId ? '通知模板已更新' : '通知模板已新增');
+  editingId = null;
+}
+
+function toggle(id) {
+  var arr = list();
+  arr.forEach(function (n) { if (n.id === id) { n.status = n.status === 'off' ? 'on' : 'off'; n.updatedAt = new Date().toISOString().slice(0, 10); } });
+  save(arr);
+  render();
+}
+
+function remove(id) {
+  if (!confirm('确认删除该通知模板？')) return;
+  save(list().filter(function (n) { return n.id !== id; }));
+  render();
+  toast('通知模板已删除');
+}
+
+function resetNotices() {
+  if (!confirm('恢复默认通知模板？当前配置将被覆盖。')) return;
+  save([
+    { id: 'NT-01', scene: 'order_paid', title: '支付成功', content: '您的订单已支付成功，我们将尽快为您发货', status: 'on', updatedAt: '2026-11-10' },
+    { id: 'NT-02', scene: 'order_shipped', title: '宝贝已发货', content: '您的订单已发货，请注意查收', status: 'on', updatedAt: '2026-11-10' }
+  ]);
+  render();
+  toast('已恢复默认通知');
+}
+
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 价格与促销</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/sidebar-layout.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<link rel="stylesheet" href="css/sales-module.css">
+<style>
+  .tab-switch { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab-switch button {
+    padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border-default, #d9e2d9);
+    background: #fff; color: var(--text-secondary, #4a5a4a); font-size: 13px; cursor: pointer;
+  }
+  .tab-switch button.active { background: #1890ff; border-color: #1890ff; color: #fff; font-weight: 600; }
+  .tab-switch .count { display: inline-block; margin-left: 6px; font-size: 12px; opacity: .85; }
+  .rule-cell { max-width: 260px; white-space: normal; line-height: 1.4; }
+</style>
+<style id="standalone-fix">.main-wrapper{margin-left:0!important;width:100%!important;}</style>
+</head>
+<body data-active-menu="sales" data-active-submenu="sales-price">
+<div class="app-layout">
+  <div class="main-wrapper">
+    <div class="tab-bar">
+      <div class="tab-bar-actions">
+        <button class="tab-close-all" title="关闭全部标签">
+          <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3L11 11M11 3L3 11"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div class="content-wrapper">
+        <div class="page-header">
+          <h1 class="page-title">价格与促销</h1>
+          <p class="page-subtitle">客户协议价 / 品类价维护与促销活动管理；协议价与促销规则为销售下单时的人工参考口径，不自动改写历史订单金额。</p>
+        </div>
+
+        <div class="sales-stats" id="priceStats"></div>
+
+        <div class="page-section search-section">
+          <div class="search-bar filter-bar">
+            <input type="text" class="search-input" id="pKeyword" placeholder="搜索政策 / 活动名称、商品、适用范围">
+            <select class="search-select" id="pStatus">
+              <option value="all">全部状态</option>
+              <option value="active">生效中 / 进行中</option>
+              <option value="upcoming">即将生效 / 未开始</option>
+              <option value="expired">已失效 / 已结束</option>
+              <option value="disabled">已停用</option>
+            </select>
+            <div class="search-actions">
+              <button class="jg-btn jg-btn-primary" onclick="applyFilter()">查询</button>
+              <button class="jg-btn" onclick="resetFilter()">重置</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-switch">
+          <button id="tabPolicy" class="active" onclick="switchTab('policy')">价格政策<span class="count" id="policyCount"></span></button>
+          <button id="tabPromo" onclick="switchTab('promo')">促销活动<span class="count" id="promoCount"></span></button>
+        </div>
+
+        <div class="page-section action-bar">
+          <div class="action-left">
+            <button class="jg-btn jg-btn-primary" id="addBtn" onclick="openAdd()">+ 新建价格政策</button>
+          </div>
+          <div class="action-right" style="margin-left:auto;">
+            <span class="selected-info" id="listInfo"></span>
+          </div>
+        </div>
+
+        <div class="page-section data-section">
+          <div class="data-table-wrapper" id="policyWrap">
+            <table class="data-table" style="min-width:1500px;">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:150px;">政策编号</th>
+                  <th style="width:200px;">政策名称</th>
+                  <th style="width:180px;">适用对象</th>
+                  <th style="width:180px;">商品</th>
+                  <th style="width:110px;" class="text-right">协议单价</th>
+                  <th style="width:80px;" class="text-right">起订量</th>
+                  <th style="width:120px;">生效日期</th>
+                  <th style="width:120px;">失效日期</th>
+                  <th style="width:90px;">状态</th>
+                  <th style="width:170px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="policyBody"></tbody>
+            </table>
+          </div>
+
+          <div class="data-table-wrapper" id="promoWrap" style="display:none;">
+            <table class="data-table" style="min-width:1400px;">
+              <thead>
+                <tr>
+                  <th style="width:52px;">序号</th>
+                  <th style="width:150px;">活动编号</th>
+                  <th style="width:200px;">活动名称</th>
+                  <th style="width:110px;">优惠类型</th>
+                  <th style="width:160px;">适用范围</th>
+                  <th style="width:280px;">优惠规则</th>
+                  <th style="width:120px;">开始日期</th>
+                  <th style="width:120px;">结束日期</th>
+                  <th style="width:90px;">状态</th>
+                  <th style="width:170px;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="promoBody"></tbody>
+            </table>
+          </div>
+          <div id="pagination-container" style="display:flex;justify-content:flex-end;margin-top:14px;"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 价格政策 -->
+<div class="modal-overlay" id="policyModal" style="display:none;">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title" id="policyTitle">新建价格政策</h3>
+      <button class="modal-close" onclick="closeModal('policyModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label><span class="required"></span>政策名称</label>
+          <input type="text" id="plName" placeholder="如：北京商超花牛协议价">
+        </div>
+        <div class="form-group">
+          <label>适用客户</label>
+          <select id="plCustomer"><option value="">不指定（按客户类型）</option></select>
+        </div>
+        <div class="form-group">
+          <label>适用客户类型</label>
+          <select id="plCustomerType">
+            <option value="">不指定</option>
+            <option value="wholesale">批发客户</option>
+            <option value="retail">零售客户</option>
+            <option value="adoption">认养用户</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label><span class="required"></span>商品</label>
+          <input type="text" id="plProduct" list="productOptions" placeholder="选择或输入商品名称">
+          <datalist id="productOptions"></datalist>
+        </div>
+        <div class="form-group">
+          <label><span class="required"></span>协议单价（元）</label>
+          <input type="number" id="plPrice" min="0" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+          <label>计价单位</label>
+          <select id="plUnit">
+            <option value="kg">kg</option>
+            <option value="箱">箱</option>
+            <option value="盒">盒</option>
+            <option value="棵">棵</option>
+            <option value="份">份</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>起订量</label>
+          <input type="number" id="plMinQty" min="0" step="1" value="0">
+        </div>
+        <div class="form-group">
+          <label>状态</label>
+          <select id="plStatus">
+            <option value="active">启用</option>
+            <option value="disabled">停用</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>生效日期</label>
+          <input type="date" id="plStart">
+        </div>
+        <div class="form-group">
+          <label>失效日期</label>
+          <input type="date" id="plEnd">
+        </div>
+        <div class="form-group full">
+          <label>备注</label>
+          <input type="text" id="plRemark" placeholder="如：年度框架协议、月结 30 天">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('policyModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitPolicy()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 促销活动 -->
+<div class="modal-overlay" id="promoModal" style="display:none;">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 class="modal-title" id="promoTitle">新建促销活动</h3>
+      <button class="modal-close" onclick="closeModal('promoModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label><span class="required"></span>活动名称</label>
+          <input type="text" id="pmName" placeholder="如：双十一零售预售">
+        </div>
+        <div class="form-group">
+          <label>优惠类型</label>
+          <select id="pmType">
+            <option value="fullReduction">满减</option>
+            <option value="discount">折扣</option>
+            <option value="cash">立减</option>
+            <option value="gift">赠品</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>适用范围</label>
+          <input type="text" id="pmScope" placeholder="如：批发渠道 / 零售礼盒 / 新客户">
+        </div>
+        <div class="form-group">
+          <label>状态</label>
+          <select id="pmStatus">
+            <option value="active">启用</option>
+            <option value="disabled">停用</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>开始日期</label>
+          <input type="date" id="pmStart">
+        </div>
+        <div class="form-group">
+          <label>结束日期</label>
+          <input type="date" id="pmEnd">
+        </div>
+        <div class="form-group full">
+          <label><span class="required"></span>优惠规则</label>
+          <textarea id="pmRule" placeholder="如：满 1000 元减 80 元；满 5 万元享 95 折"></textarea>
+        </div>
+        <div class="form-group full">
+          <label>备注</label>
+          <input type="text" id="pmRemark" placeholder="如：与协议价不叠加">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('promoModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitPromo()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/shared/sales-store.js"></script>
+<script src="js/common-functions.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/typography.js"></script>
+<script>
+(function () {
+  'use strict';
+  var S = window.SalesStore;
+  var PAGE_SIZE = 10;
+  var TAB = 'policy';
+  var editId = '';
+  var F = { keyword: '', status: 'all' };
+  var PROMO_TYPE_TEXT = { fullReduction: '满减', discount: '折扣', cash: '立减', gift: '赠品' };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function toast(msg, type) {
+    if (window.LegacyToast) window.LegacyToast.show(msg, type || 'success');
+  }
+  function policyStatusClass(s) {
+    if (s === 'active') return 'st-active';
+    if (s === 'upcoming') return 'st-paid';
+    if (s === 'expired') return 'st-cancelled';
+    return 'st-inactive';
+  }
+  function promoStatusClass(s) {
+    if (s === 'active') return 'st-active';
+    if (s === 'upcoming') return 'st-paid';
+    if (s === 'ended') return 'st-cancelled';
+    return 'st-inactive';
+  }
+  function customerName(id) {
+    var c = id ? S.customer(id) : null;
+    return c ? c.name : '';
+  }
+  function applyTargetText(p) {
+    if (p.customerId) return '客户：' + (customerName(p.customerId) || p.customerId);
+    if (p.customerType) return '类型：' + (S.CUSTOMER_TYPE_TEXT[p.customerType] || p.customerType);
+    return '全部客户';
+  }
+
+  window.closeModal = function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.classList.remove('show');
+    el.style.display = 'none';
+  };
+  function openModal(id) {
+    var el = $(id);
+    el.style.display = 'flex';
+    el.classList.add('show');
+  }
+
+  /* ---------------- 统计 ---------------- */
+  function renderStats() {
+    var policies = S.pricePolicies();
+    var promos = S.promotions();
+    var activePolicy = policies.filter(function (p) { return p.computedStatus === 'active'; });
+    var upcoming = policies.filter(function (p) { return p.computedStatus === 'upcoming'; });
+    var activePromo = promos.filter(function (p) { return p.computedStatus === 'active'; });
+    var promoUpcoming = promos.filter(function (p) { return p.computedStatus === 'upcoming'; });
+
+    function card(label, value, sub, cls) {
+      return '<div class="sales-stat-card ' + (cls || '') + '">' +
+        '<div class="stat-label">' + label + '</div>' +
+        '<div class="stat-value">' + value + '</div>' +
+        '<div class="stat-sub">' + sub + '</div></div>';
+    }
+    $('priceStats').innerHTML =
+      card('价格政策', policies.length + ' 条', '生效中 ' + activePolicy.length + ' 条', '') +
+      card('生效中协议价', activePolicy.length + ' 条', '即将生效 ' + upcoming.length + ' 条', 'is-success') +
+      card('覆盖客户', activePolicy.filter(function (p) { return !!p.customerId; }).length + ' 户', '另有类型价政策', 'is-primary') +
+      card('促销活动', promos.length + ' 个', '进行中 ' + activePromo.length + ' 个', '') +
+      card('进行中促销', activePromo.length + ' 个', '未开始 ' + promoUpcoming.length + ' 个', 'is-warning') +
+      card('最低协议单价', minPrice(policies), '元 / 计价单位', '');
+
+    $('policyCount').textContent = '(' + policies.length + ')';
+    $('promoCount').textContent = '(' + promos.length + ')';
+  }
+
+  function minPrice(list) {
+    var arr = list.filter(function (p) { return p.price > 0; }).map(function (p) { return Number(p.price); });
+    return arr.length ? Math.min.apply(null, arr).toFixed(2) : '—';
+  }
+
+  /* ---------------- 列表 ---------------- */
+  function statusMatch(computed) {
+    if (F.status === 'all') return true;
+    if (F.status === 'active') return computed === 'active';
+    if (F.status === 'upcoming') return computed === 'upcoming';
+    if (F.status === 'expired') return computed === 'expired' || computed === 'ended';
+    return computed === 'disabled';
+  }
+
+  function policyList() {
+    var kw = F.keyword.toLowerCase();
+    return S.pricePolicies().filter(function (p) {
+      if (!statusMatch(p.computedStatus)) return false;
+      if (kw) {
+        var hay = (p.id + ' ' + p.name + ' ' + (p.product || '') + ' ' + (p.remark || '')).toLowerCase();
+        if (hay.indexOf(kw) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function promoList() {
+    var kw = F.keyword.toLowerCase();
+    return S.promotions().filter(function (p) {
+      if (!statusMatch(p.computedStatus)) return false;
+      if (kw) {
+        var hay = (p.id + ' ' + p.name + ' ' + (p.scope || '') + ' ' + (p.rule || '')).toLowerCase();
+        if (hay.indexOf(kw) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function policyRow(p, index) {
+    return '<tr>' +
+      '<td>' + (index + 1) + '</td>' +
+      '<td><strong>' + esc(p.id) + '</strong></td>' +
+      '<td>' + esc(p.name) + '</td>' +
+      '<td>' + esc(applyTargetText(p)) + '</td>' +
+      '<td>' + esc(p.product || '—') + '</td>' +
+      '<td class="num money text-right">' + S.fmtMoney(p.price) + '</td>' +
+      '<td class="num text-right">' + (Number(p.minQty) || 0) + ' ' + esc(p.unit || '') + '</td>' +
+      '<td class="muted">' + esc(p.startDate || '—') + '</td>' +
+      '<td class="muted">' + esc(p.endDate || '—') + '</td>' +
+      '<td><span class="status-tag ' + policyStatusClass(p.computedStatus) + '">' + (S.POLICY_STATUS_TEXT[p.computedStatus] || p.computedStatus) + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn edit" onclick="openPolicy(\'' + p.id + '\')">编辑</button>' +
+        '<button class="action-btn" onclick="togglePolicy(\'' + p.id + '\')">' + (p.status === 'disabled' ? '启用' : '停用') + '</button>' +
+        '<button class="action-btn delete" onclick="removePolicy(\'' + p.id + '\')">删除</button>' +
+      '</div></td>' +
+    '</tr>';
+  }
+
+  function promoRow(p, index) {
+    return '<tr>' +
+      '<td>' + (index + 1) + '</td>' +
+      '<td><strong>' + esc(p.id) + '</strong></td>' +
+      '<td>' + esc(p.name) + '</td>' +
+      '<td>' + esc(PROMO_TYPE_TEXT[p.type] || p.type) + '</td>' +
+      '<td>' + esc(p.scope || '—') + '</td>' +
+      '<td><div class="rule-cell">' + esc(p.rule) + '</div></td>' +
+      '<td class="muted">' + esc(p.startDate || '—') + '</td>' +
+      '<td class="muted">' + esc(p.endDate || '—') + '</td>' +
+      '<td><span class="status-tag ' + promoStatusClass(p.computedStatus) + '">' + (S.PROMO_STATUS_TEXT[p.computedStatus] || p.computedStatus) + '</span></td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn edit" onclick="openPromo(\'' + p.id + '\')">编辑</button>' +
+        '<button class="action-btn" onclick="togglePromo(\'' + p.id + '\')">' + (p.status === 'disabled' ? '启用' : '停用') + '</button>' +
+        '<button class="action-btn delete" onclick="removePromo(\'' + p.id + '\')">删除</button>' +
+      '</div></td>' +
+    '</tr>';
+  }
+
+  function renderTable() {
+    var isPolicy = TAB === 'policy';
+    $('policyWrap').style.display = isPolicy ? '' : 'none';
+    $('promoWrap').style.display = isPolicy ? 'none' : '';
+    $('addBtn').textContent = isPolicy ? '+ 新建价格政策' : '+ 新建促销活动';
+    var data = isPolicy ? policyList() : promoList();
+    var tbodyId = isPolicy ? 'policyBody' : 'promoBody';
+    $('listInfo').textContent = '共 ' + data.length + ' 条记录';
+
+    if (!data.length) {
+      $(tbodyId).innerHTML = '<tr class="empty-row"><td colspan="' + (isPolicy ? 11 : 10) + '" style="text-align:center;color:var(--text-tertiary);padding:36px 0;">当前条件下暂无记录</td></tr>';
+      $('pagination-container').innerHTML = '';
+      return;
+    }
+    Pagination.init({
+      data: data,
+      pageSize: PAGE_SIZE,
+      containerId: 'pagination-container',
+      tbodyId: tbodyId,
+      renderRow: isPolicy ? policyRow : promoRow
+    });
+  }
+
+  function refresh() {
+    renderStats();
+    renderTable();
+  }
+
+  window.switchTab = function (tab) {
+    TAB = tab;
+    $('tabPolicy').classList.toggle('active', tab === 'policy');
+    $('tabPromo').classList.toggle('active', tab === 'promo');
+    renderTable();
+  };
+
+  window.applyFilter = function () {
+    F.keyword = $('pKeyword').value.trim();
+    F.status = $('pStatus').value;
+    renderTable();
+  };
+
+  window.resetFilter = function () {
+    $('pKeyword').value = '';
+    $('pStatus').value = 'all';
+    F = { keyword: '', status: 'all' };
+    renderTable();
+  };
+
+  /* ---------------- 价格政策维护 ---------------- */
+  window.openAdd = function () {
+    if (TAB === 'policy') openPolicy('');
+    else openPromo('');
+  };
+
+  window.openPolicy = function (id) {
+    editId = id || '';
+    var p = null;
+    if (id) p = S.pricePolicies().filter(function (x) { return x.id === id; })[0];
+    if (id && !p) return toast('价格政策不存在', 'error');
+    $('policyTitle').textContent = id ? '编辑价格政策' : '新建价格政策';
+    $('plCustomer').innerHTML = '<option value="">不指定（按客户类型）</option>' +
+      S.customers().map(function (c) {
+        return '<option value="' + c.id + '"' + (p && p.customerId === c.id ? ' selected' : '') + '>' + esc(c.name) + '（' + esc(c.code) + '）</option>';
+      }).join('');
+    var products = {};
+    Object.keys(S.PRODUCTS).forEach(function (k) {
+      S.PRODUCTS[k].forEach(function (x) { products[x.name] = true; });
+    });
+    $('productOptions').innerHTML = Object.keys(products).map(function (n) {
+      return '<option value="' + esc(n) + '">';
+    }).join('');
+    $('plName').value = p ? p.name : '';
+    $('plCustomerType').value = p ? (p.customerType || '') : '';
+    $('plProduct').value = p ? (p.product || '') : '';
+    $('plPrice').value = p ? p.price : 0;
+    $('plUnit').value = p ? (p.unit || 'kg') : 'kg';
+    $('plMinQty').value = p ? p.minQty : 0;
+    $('plStatus').value = p ? (p.status || 'active') : 'active';
+    $('plStart').value = p ? (p.startDate || '') : '';
+    $('plEnd').value = p ? (p.endDate || '') : '';
+    $('plRemark').value = p ? (p.remark || '') : '';
+    openModal('policyModal');
+  };
+
+  window.submitPolicy = function () {
+    var r = S.savePricePolicy({
+      id: editId || undefined,
+      name: $('plName').value,
+      customerId: $('plCustomer').value,
+      customerType: $('plCustomerType').value,
+      product: $('plProduct').value,
+      unit: $('plUnit').value,
+      price: Number($('plPrice').value) || 0,
+      minQty: Number($('plMinQty').value) || 0,
+      startDate: $('plStart').value,
+      endDate: $('plEnd').value,
+      status: $('plStatus').value,
+      remark: $('plRemark').value
+    });
+    if (!r.ok) return toast(r.message, 'error');
+    closeModal('policyModal');
+    toast(editId ? '价格政策已更新' : '价格政策已创建');
+    refresh();
+  };
+
+  window.togglePolicy = function (id) {
+    var p = S.pricePolicies().filter(function (x) { return x.id === id; })[0];
+    if (!p) return toast('价格政策不存在', 'error');
+    var r = S.savePricePolicy({
+      id: p.id, name: p.name, customerId: p.customerId, customerType: p.customerType,
+      product: p.product, unit: p.unit, price: p.price, minQty: p.minQty,
+      startDate: p.startDate, endDate: p.endDate,
+      status: p.status === 'disabled' ? 'active' : 'disabled', remark: p.remark
+    });
+    if (!r.ok) return toast(r.message, 'error');
+    toast(p.status === 'disabled' ? '已启用该价格政策' : '已停用该价格政策');
+    refresh();
+  };
+
+  window.removePolicy = function (id) {
+    if (!confirm('确认删除该价格政策？删除后不可恢复。')) return;
+    var r = S.removePricePolicy(id);
+    if (!r.ok) return toast(r.message, 'error');
+    toast('价格政策已删除');
+    refresh();
+  };
+
+  /* ---------------- 促销活动维护 ---------------- */
+  window.openPromo = function (id) {
+    editId = id || '';
+    var p = null;
+    if (id) p = S.promotions().filter(function (x) { return x.id === id; })[0];
+    if (id && !p) return toast('促销活动不存在', 'error');
+    $('promoTitle').textContent = id ? '编辑促销活动' : '新建促销活动';
+    $('pmName').value = p ? p.name : '';
+    $('pmType').value = p ? (p.type || 'fullReduction') : 'fullReduction';
+    $('pmScope').value = p ? (p.scope || '') : '';
+    $('pmStatus').value = p ? (p.status || 'active') : 'active';
+    $('pmStart').value = p ? (p.startDate || '') : '';
+    $('pmEnd').value = p ? (p.endDate || '') : '';
+    $('pmRule').value = p ? (p.rule || '') : '';
+    $('pmRemark').value = p ? (p.remark || '') : '';
+    openModal('promoModal');
+  };
+
+  window.submitPromo = function () {
+    var r = S.savePromotion({
+      id: editId || undefined,
+      name: $('pmName').value,
+      type: $('pmType').value,
+      scope: $('pmScope').value,
+      rule: $('pmRule').value,
+      startDate: $('pmStart').value,
+      endDate: $('pmEnd').value,
+      status: $('pmStatus').value,
+      remark: $('pmRemark').value
+    });
+    if (!r.ok) return toast(r.message, 'error');
+    closeModal('promoModal');
+    toast(editId ? '促销活动已更新' : '促销活动已创建');
+    refresh();
+  };
+
+  window.togglePromo = function (id) {
+    var p = S.promotions().filter(function (x) { return x.id === id; })[0];
+    if (!p) return toast('促销活动不存在', 'error');
+    var r = S.savePromotion({
+      id: p.id, name: p.name, type: p.type, scope: p.scope, rule: p.rule,
+      startDate: p.startDate, endDate: p.endDate,
+      status: p.status === 'disabled' ? 'active' : 'disabled', remark: p.remark
+    });
+    if (!r.ok) return toast(r.message, 'error');
+    toast(p.status === 'disabled' ? '已启用该促销活动' : '已停用该促销活动');
+    refresh();
+  };
+
+  window.removePromo = function (id) {
+    if (!confirm('确认删除该促销活动？删除后不可恢复。')) return;
+    var r = S.removePromotion(id);
+    if (!r.ok) return toast(r.message, 'error');
+    toast('促销活动已删除');
+    refresh();
+  };
+
+  function init() {
+    if (!S) {
+      document.querySelector('.content-wrapper').innerHTML = '<div class="empty-state"><strong>销售数据层加载失败</strong>请刷新页面后重试</div>';
+      return;
+    }
+    refresh();
+    S.subscribe(refresh);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

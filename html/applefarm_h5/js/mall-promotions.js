@@ -54,7 +54,15 @@
 
   function all() {
     if (cache) return cache;
-    var list = read();
+    var list = null;
+    /* 优先读取后台统一数据层：带 SKU 绑定 / 投放渠道 / 活动库存 */
+    if (global.MallStore && typeof global.MallStore.activePromotions === 'function') {
+      try {
+        var backend = global.MallStore.activePromotions();
+        if (backend && backend.length) list = backend;
+      } catch (e) { list = null; }
+    }
+    if (!list) list = read();
     // key 已存在但内容损坏/为空数组时视为「后台主动清空」，不静默回填默认
     if (!list && !keyExists()) {
       list = DEFAULT_PROMOTIONS.map(function (p) { return Object.assign({}, p); });

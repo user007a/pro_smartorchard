@@ -150,6 +150,17 @@ body{display:block;background:
 #R1{flex:0 0 296px}
 #R2{flex:0 0 326px}
 #R3{flex:1 1 auto;min-height:236px}
+/* 中栏：地图吸收剩余高度 / 移动作业运营固定高度 */
+#C1{flex:1 1 auto;min-height:0}
+#C2{flex:0 0 150px}
+.mob-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;flex:1;min-height:0}
+.mob{background:rgba(255,255,255,.025);border:1px solid var(--line);border-radius:12px;
+  padding:10px 12px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.mob .l{font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mob .n{font-size:22px;font-weight:700;color:var(--text-1);line-height:1.1;font-variant-numeric:tabular-nums}
+.mob .n small{font-size:11px;color:var(--text-2);margin-left:2px;font-weight:400}
+.mob.warn .n{color:var(--warn)}
+.mob.risk .n{color:var(--risk)}
 
 /* ---------- 环境实况 ---------- */
 .env-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:stretch}
@@ -459,7 +470,8 @@ body{display:block;background:
       </div>
     </div>
 
-    <!-- 中栏 地图 -->
+    <!-- 中栏 地图 + 移动作业运营 -->
+    <div class="col">
     <div class="card" id="C1">
       <div class="map-head">
         <h2 class="t"><i></i>示范基地地块总览<small>约 100 亩 · 12 地块 · 点击或回车下钻</small></h2>
@@ -483,6 +495,23 @@ body{display:block;background:
         </div>
         <div class="detail hide" id="detail" role="region" aria-live="polite" aria-label="地块详情"></div>
       </div>
+    </div>
+
+    <!-- 移动作业运营：与后台「移动端运营」共用同一数据层 -->
+    <div class="card" id="C2">
+      <div class="card-h">
+        <h3 class="t"><i></i>移动作业运营</h3>
+        <div class="meta">来源：移动端作业端 / H5 消费者端<span class="stamp" data-stamp>更新 --:--</span></div>
+      </div>
+      <div class="mob-grid">
+        <div class="mob"><div class="n" id="mobStaff">—<small>人</small></div><div class="l">在线作业人员</div></div>
+        <div class="mob warn"><div class="n" id="mobFeedback">—<small>条</small></div><div class="l">待审核反馈</div></div>
+        <div class="mob warn"><div class="n" id="mobExpert">—<small>条</small></div><div class="l">待回复咨询</div></div>
+        <div class="mob risk"><div class="n" id="mobSync">—<small>条</small></div><div class="l">待同步数据</div></div>
+        <div class="mob"><div class="n" id="mobKnowledge">—<small>条</small></div><div class="l">识别/故障知识</div></div>
+        <div class="mob"><div class="n" id="mobMessages">—<small>条</small></div><div class="l">启用中消息</div></div>
+      </div>
+    </div>
     </div>
 
     <!-- 右栏 -->
@@ -949,6 +978,30 @@ document.addEventListener('keydown',function(e){
 <script src="../applefarm_backhand/js/shared/alert-data.js"></script>
 <script src="../applefarm_backhand/js/material-store.js"></script>
 <script src="../applefarm_backhand/js/shared/harvest-store.js"></script>
+<script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
+<script>
+/* 移动作业运营：与后台「移动端运营」共用 MobileOpsStore（localStorage 同源），
+   后台审核/回复/同步后，大屏通过 subscribe + storage 事件即时刷新 */
+(function () {
+  if (!window.MobileOpsStore) return;
+  function set(id, val, unit) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = val + '<small>' + unit + '</small>';
+  }
+  function render() {
+    var s = MobileOpsStore.stats();
+    set('mobStaff', s.staff.active, '人');
+    set('mobFeedback', s.feedback.pending, '条');
+    set('mobExpert', s.expert.pending, '条');
+    set('mobSync', s.sync.pending, '条');
+    set('mobKnowledge', s.disease.total + s.faultKb.total, '条');
+    set('mobMessages', s.message.enabled, '条');
+  }
+  render();
+  MobileOpsStore.subscribe(render);
+  window.addEventListener('storage', function (e) { if (e.key) render(); });
+})();
+</script>
 <script>
 /* 本月采收量：与采收日报、后台首页共用 smartorchard_harvest_v1 */
 (function () {

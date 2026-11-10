@@ -217,6 +217,11 @@
   </div>
 
   <main class="main-content">
+    <nav class="device-tabs" aria-label="移动端运营·用户服务">
+      <a href="mb_staff_account.html">作业人员账号</a>
+      <a href="mb_feedback_review.html">意见反馈审核</a>
+      <a href="mb_expert_reply.html" class="active">专家咨询回复</a>
+    </nav>
     <div class="page-header">
       <div>
         <div class="page-title">专家咨询回复</div>
@@ -253,8 +258,6 @@
         </select>
         <select class="search-select" id="expertSelect">
           <option value="">全部专家</option>
-          <option value="王教授">王教授</option>
-          <option value="李农艺师">李农艺师</option>
         </select>
         <input type="text" class="search-input" placeholder="搜索问题标题或描述..." id="searchInput">
         <div class="search-actions">
@@ -274,6 +277,7 @@
               <th>问题标题</th>
               <th style="width:120px;">指派专家</th>
               <th style="width:110px;">状态</th>
+              <th style="width:110px;">提问人</th>
               <th style="width:140px;">提问时间</th>
               <th style="width:180px;">操作</th>
             </tr>
@@ -290,22 +294,7 @@
         <div class="page-title" style="font-size:15px;">推荐专家</div>
         <div class="page-subtitle">移动端「问专家」页展示的专家名录，与此处保持一致</div>
       </div>
-      <div style="padding:var(--space-lg) var(--space-xl);display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--space-md);">
-        <div class="expert-card">
-          <div class="expert-avatar">王</div>
-          <div>
-            <div class="expert-name">王教授</div>
-            <div class="expert-tags">农业大学果树学教授 · 苹果栽培 / 病虫害防治 / 施肥管理</div>
-          </div>
-        </div>
-        <div class="expert-card">
-          <div class="expert-avatar">李</div>
-          <div>
-            <div class="expert-name">李农艺师</div>
-            <div class="expert-tags">资深苹果种植专家 · 物候期管理 / 水肥一体化 / 采收技术</div>
-          </div>
-        </div>
-      </div>
+      <div style="padding:var(--space-lg) var(--space-xl);display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--space-md);" id="expertDirectory"></div>
     </div>
   </main>
 </div>
@@ -330,12 +319,14 @@
         <div class="detail-label">提问时间</div>
         <div class="detail-value" id="replyQTime"></div>
       </div>
+      <div class="detail-row">
+        <div class="detail-label">提问人</div>
+        <div class="detail-value" id="replyQUser"></div>
+      </div>
       <div class="modal-field" style="margin-top:var(--space-lg);">
         <label>指派专家</label>
         <select id="replyExpert">
           <option value="">请选择专家</option>
-          <option value="王教授">王教授（苹果栽培 / 病虫害防治）</option>
-          <option value="李农艺师">李农艺师（物候期 / 水肥一体化 / 采收）</option>
         </select>
       </div>
       <div class="modal-field">
@@ -354,38 +345,51 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/demo-seed.js"></script>
+<script src="js/shared/mobile-ops-store.js"></script>
 <script>
 /* ============================================================
- * 专家咨询回复
- * 数据源：localStorage['smartorchard_expert_questions']
- *   写入方 = 移动端 mb_expert.html（MobileStore.push）
- *   字段：{ id, title, desc, status, time, reply?, expert?, replyTime? }
+ * 专家咨询回复（移动端运营 · 用户服务）
+ * 数据源：MobileOpsStore / localStorage['smartorchard_expert_questions']
+ *   写入方 = 移动端 mb_expert.html（提问，source=mobile/operator=当前登录人）
+ *   专家名录 = 作业人员账号中 isExpert=true 的账号（mb_staff_accounts）
+ *   字段：{ id, title, desc, status, time, source, operator, operatorId,
+ *           expert?, reply?, replyTime?, replyBy? }
  *   status 枚举：pending 待回复 / replied 已回复
  * ============================================================ */
-var QUESTION_KEY = 'smartorchard_expert_questions';
 
 var STATUS_TEXT = {
   pending: '待回复',
   replied: '已回复'
 };
 
+/* 后台尚未标记农技专家时的兜底名录，与移动端「问专家」页保持一致 */
+var FALLBACK_EXPERTS = [
+  { name: '王教授', title: '农业大学果树学教授', tags: '苹果栽培 / 病虫害防治 / 施肥管理' },
+  { name: '李农艺师', title: '资深苹果种植专家', tags: '物候期管理 / 水肥一体化 / 采收技术' }
+];
+
 var currentId = null;
 
+function expertList() {
+  var staff = MobileOpsStore.list('staff').filter(function (s) {
+    return s.isExpert && s.status !== 'disabled';
+  });
+  if (!staff.length) return FALLBACK_EXPERTS;
+  return staff.map(function (s) {
+    return {
+      name: s.name,
+      title: s.role === '管理员' ? '平台技术专家' : s.role,
+      tags: s.expertTitle || '农技咨询'
+    };
+  });
+}
+
 function readList() {
-  try {
-    var raw = localStorage.getItem(QUESTION_KEY);
-    if (!raw) return [];
-    var v = JSON.parse(raw);
-    return Array.isArray(v) ? v : [];
-  } catch (e) {
-    return [];
-  }
+  return MobileOpsStore.list('expertQuestions');
 }
 
 function writeList(list) {
-  try {
-    localStorage.setItem(QUESTION_KEY, JSON.stringify(list));
-  } catch (e) {
+  if (!MobileOpsStore.writeList(MobileOpsStore.KEYS.expertQuestions, list)) {
     Toast.error('本地存储写入失败，答复未能保存');
   }
 }
@@ -447,6 +451,8 @@ function renderTable() {
           '<div class="cell-sub">' + esc(q.desc) + '</div>' + extra + '</td>' +
       '<td>' + (q.expert ? esc(q.expert) : '<span style="color:var(--text-tertiary);">未指派</span>') + '</td>' +
       '<td><span class="status-tag ' + esc(q.status) + '">' + (STATUS_TEXT[q.status] || q.status) + '</span></td>' +
+      '<td>' + esc(q.operator || '移动端用户') +
+          '<div class="cell-sub" style="font-size:11px;">' + esc(MobileOpsStore.SOURCE_TEXT[q.source || 'mobile']) + '</div></td>' +
       '<td class="text-mono">' + esc(q.time || '') + '</td>' +
       '<td><div class="action-btns">' +
         '<button class="action-btn detail" onclick="openReply(\'' + q.id + '\')">' + (q.status === 'replied' ? '补充回复' : '回复') + '</button>' +
@@ -478,6 +484,8 @@ function openReply(id) {
   document.getElementById('replyQTitle').textContent = target.title || '';
   document.getElementById('replyQDesc').textContent = target.desc || '';
   document.getElementById('replyQTime').textContent = target.time || '';
+  document.getElementById('replyQUser').textContent =
+    (target.operator || '移动端用户') + ' · ' + (MobileOpsStore.SOURCE_TEXT[target.source || 'mobile']);
   document.getElementById('replyExpert').value = target.expert || '';
   document.getElementById('replyContent').value = target.reply || '';
 
@@ -505,18 +513,58 @@ function submitReply() {
 
   target.expert = expert;
   target.reply = reply;
-  target.replyTime = new Date().toLocaleString('zh-CN', { hour12: false });
+  target.replyTime = MobileOpsStore.now();
+  target.replyBy = MobileOpsStore.operatorName();
   target.status = 'replied';
 
   writeList(list);
+  MobileOpsStore.audit('回复专家咨询', 'expertQuestions', target.id, expert + '：' + reply.slice(0, 40));
   closeReplyModal();
   renderTable();
   Toast.success('答复已保存，移动端可查看');
 }
 
+function renderExpertDirectory() {
+  var box = document.getElementById('expertDirectory');
+  if (!box) return;
+  box.innerHTML = expertList().map(function (e) {
+    return '<div class="expert-card">' +
+      '<div class="expert-avatar">' + esc(String(e.name).slice(0, 1)) + '</div>' +
+      '<div>' +
+        '<div class="expert-name">' + esc(e.name) + '</div>' +
+        '<div class="expert-tags">' + esc(e.title) + ' · ' + esc(e.tags) + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderExpertOptions() {
+  var list = expertList();
+  var filterSel = document.getElementById('expertSelect');
+  var replySel = document.getElementById('replyExpert');
+  var keep = filterSel.value;
+  filterSel.innerHTML = '<option value="">全部专家</option>' + list.map(function (e) {
+    return '<option value="' + esc(e.name) + '">' + esc(e.name) + '</option>';
+  }).join('');
+  filterSel.value = keep;
+  replySel.innerHTML = '<option value="">请选择专家</option>' + list.map(function (e) {
+    return '<option value="' + esc(e.name) + '">' + esc(e.name) + '（' + esc(e.tags) + '）</option>';
+  }).join('');
+}
+
 document.addEventListener('DOMContentLoaded', function () {
+  MobileOpsStore.ready();
   // 演示数据播种：仅在移动端尚未提问时写入 25 条示意咨询
   DemoSeed.ensure('expert-questions');
+  renderExpertOptions();
+  renderExpertDirectory();
+  MobileOpsStore.subscribe(function (key) {
+    if (key === MobileOpsStore.KEYS.expertQuestions) renderTable();
+    if (key === MobileOpsStore.KEYS.staff) {
+      renderExpertOptions();
+      renderExpertDirectory();
+    }
+  });
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });

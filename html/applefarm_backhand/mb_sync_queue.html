@@ -177,12 +177,21 @@
   </div>
 
   <main class="main-content">
+    <nav class="device-tabs" aria-label="移动端运营·消息与同步">
+      <a href="mb_message.html">消息推送</a>
+      <a href="mb_sync_queue.html" class="active">同步队列</a>
+    </nav>
     <div class="page-header">
       <div>
         <div class="page-title">同步队列监控</div>
         <div class="page-subtitle">展示移动端离线暂存、待上传到平台的队列积压情况</div>
       </div>
       <div class="page-actions">
+        <select class="search-select" id="statusFilter" onchange="refreshList()" style="height:34px;border-radius:8px;">
+          <option value="pending">待同步</option>
+          <option value="synced">已同步</option>
+          <option value="all">全部</option>
+        </select>
         <button class="jg-btn" onclick="refreshList()">刷新</button>
         <button class="jg-btn jg-btn-primary" id="flushAllBtn" onclick="flushAllQueue()">全部同步</button>
       </div>
@@ -250,15 +259,19 @@
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mobile-bridge.js"></script>
 <script src="js/shared/demo-seed.js"></script>
+<script src="js/shared/mobile-ops-store.js"></script>
 <script>
 /* ============================================================
- * 同步队列监控（T11）
- * 数据源：localStorage['smartorchard_sync_queue']（由 MobileBridge.syncQueue() 暴露）
+ * 同步队列监控（移动端运营 · 消息与同步）
+ * 数据源：MobileOpsStore / localStorage['smartorchard_sync_queue']
+ *        （与 MobileBridge.KEYS.syncQueue 同一键）
  * 写入方：移动端 MobileStore.enqueue()：
  *   - type 'farming_record'   记农事（payload: { plot, taskType, remark, gps... }）
  *   - type 'patrol_checkin'  巡园打卡（payload: { checkpointName, gps... }）
  *   - type 'patrol_abnormal' 巡园异常（payload: { level, desc, gps... }）
- * 联网时移动端会立即 flush 并清队列，所以本页看到的多为离线积压。
+ * 状态：pending 待同步 / synced 已同步 / failed 同步失败
+ * 说明：移动端联网时会自动 flush 并移除已上传条目；本页「全部同步」用于
+ *       后台演示补偿同步，会保留最近 50 条已同步记录便于追溯。
  * ============================================================ */
 (function () {
   'use strict';
@@ -274,6 +287,18 @@
     farming_record: '记农事',
     patrol_checkin: '巡园打卡',
     patrol_abnormal: '巡园异常'
+  };
+
+  var STATUS_TEXT = {
+    pending: '待同步',
+    synced: '已同步',
+    failed: '同步失败'
+  };
+
+  var STATUS_CLASS = {
+    pending: 'pending',
+    synced: 'passed',
+    failed: 'rejected'
   };
 
   function esc(s) {
@@ -326,50 +351,62 @@
   }
 
   function readQueue() {
-    try {
-      var arr = window.MobileBridge.syncQueue();
-      return Array.isArray(arr) ? arr : [];
-    } catch (e) {
-      return [];
-    }
+    return MobileOpsStore.list('syncQueue');
   }
 
   function writeQueue(list) {
-    try {
-      localStorage.setItem(QUEUE_KEY, JSON.stringify(list));
-      return true;
-    } catch (e) {
+    if (!MobileOpsStore.writeList(MobileOpsStore.KEYS.syncQueue, list)) {
       Toast.error('本地存储写入失败，请稍后再试');
       return false;
     }
+    return true;
   }
 
-  function renderStats(list) {
+  function pendingOf(list) {
+    return list.filter(function (it) { return it.status !== 'synced'; });
+  }
+
+  function visibleList() {
+    var f = (document.getElementById('statusFilter') || {}).value || 'pending';
+    var list = readQueue().slice().sort(function (a, b) {
+      return String(b.queuedAt || b.createdAt || '').localeCompare(String(a.queuedAt || a.createdAt || ''));
+    });
+    if (f === 'all') return list;
+    if (f === 'synced') return list.filter(function (it) { return it.status === 'synced'; });
+    return pendingOf(list);
+  }
+
+  function renderStats(all) {
+    var pending = pendingOf(all);
     var farming = 0, patrol = 0, abnormal = 0;
-    list.forEach(function (it) {
+    pending.forEach(function (it) {
       if (it.type === 'farming_record') farming++;
       else if (it.type === 'patrol_checkin') patrol++;
       else if (it.type === 'patrol_abnormal') abnormal++;
     });
-    document.getElementById('statTotal').textContent = list.length;
+    document.getElementById('statTotal').textContent = pending.length;
     document.getElementById('statFarming').textContent = farming;
     document.getElementById('statPatrol').textContent = patrol;
     document.getElementById('statAbnormal').textContent = abnormal;
 
     var btn = document.getElementById('flushAllBtn');
-    if (btn) btn.disabled = list.length === 0;
+    if (btn) btn.disabled = pending.length === 0;
   }
 
   function renderTable() {
-    var list = readQueue();
-    renderStats(list);
+    var all = readQueue();
+    renderStats(all);
 
+    var list = visibleList();
     var body = document.getElementById('queueBody');
     var empty = document.getElementById('emptyHint');
 
     if (!list.length) {
       body.innerHTML = '';
       empty.style.display = 'block';
+      empty.innerHTML = '<div class="empty-icon">✓</div><div>' +
+        (all.length ? '当前筛选条件下没有记录，试试切换状态筛选' : '当前无待同步记录，作业数据已全部上传') +
+        '</div>';
       return;
     }
     empty.style.display = 'none';
@@ -385,9 +422,13 @@
         '<td><span class="type-tag ' + esc(t) + '">' + esc(typeName) + '</span></td>' +
         '<td class="text-mono">' + esc(refId) + '</td>' +
         '<td><div class="cell-sub">' + esc(summarizePayload(it)) + '</div></td>' +
-        '<td><span class="status-tag pending">待同步</span></td>' +
+        '<td><span class="status-tag ' + (STATUS_CLASS[status] || 'pending') + '">' +
+            (STATUS_TEXT[status] || status) + '</span>' +
+            (status === 'synced' && it.syncedAt ? '<div class="cell-sub" style="font-size:11px;">' + esc(it.syncedAt) + '</div>' : '') +
+        '</td>' +
         '<td><div class="action-btns">' +
           '<button class="action-btn detail" data-detail="' + esc(it.id) + '">详情</button>' +
+          (status === 'synced' ? '' : '<button class="action-btn download" data-sync="' + esc(it.id) + '">同步</button>') +
           '<button class="action-btn danger" data-remove="' + esc(it.id) + '">删除</button>' +
         '</div></td>' +
       '</tr>';
@@ -419,6 +460,8 @@
       '<div class="detail-row"><div class="detail-label">队列 ID</div><div class="detail-value text-mono">' + esc(it.id || '') + '</div></div>' +
       '<div class="detail-row"><div class="detail-label">关联记录</div><div class="detail-value text-mono">' + esc(it.refId || '—') + '</div></div>' +
       '<div class="detail-row"><div class="detail-label">入队时间</div><div class="detail-value">' + esc(pickTime(it)) + '</div></div>' +
+      '<div class="detail-row"><div class="detail-label">同步状态</div><div class="detail-value">' +
+        esc(STATUS_TEXT[it.status || 'pending']) + (it.syncedAt ? '（' + esc(it.syncedAt) + '）' : '') + '</div></div>' +
       '<div class="detail-row"><div class="detail-label">重试次数</div><div class="detail-value">' + esc(it.retry || 0) + '</div></div>' +
       '<div class="detail-row"><div class="detail-label">完整载荷</div><div class="detail-value">' +
         '<pre class="payload-pre">' + esc(payloadText) + '</pre>' +
@@ -430,12 +473,13 @@
   /* ---- 单条删除 ---- */
   function removeOne(id) {
     var list = readQueue();
-    var hit = false;
+    var removed = null;
     for (var i = 0; i < list.length; i++) {
-      if (String(list[i].id) === String(id)) { list.splice(i, 1); hit = true; break; }
+      if (String(list[i].id) === String(id)) { removed = list.splice(i, 1)[0]; break; }
     }
-    if (!hit) { Toast.error('未找到该队列项'); return; }
+    if (!removed) { Toast.error('未找到该队列项'); return; }
     if (writeQueue(list)) {
+      MobileOpsStore.audit('删除同步队列项', 'syncQueue', id, String(removed.type || ''));
       renderTable();
       Toast.success('已移除该待同步记录');
     }
@@ -448,36 +492,67 @@
     });
   }
 
-  /* ---- 全部同步（模拟清空） ---- */
+  /* ---- 全部同步（模拟补偿上传） ---- */
   function flushAllQueue() {
     var list = readQueue();
-    if (!list.length) { Toast.info('当前队列为空，无需同步'); return; }
+    var pending = pendingOf(list);
+    if (!pending.length) { Toast.info('当前没有待同步记录'); return; }
     ConfirmDialog.show({
       title: '全部同步',
-      message: '将模拟一次同步操作，清空当前 ' + list.length + ' 条待同步记录（演示环境无真实后端）。是否继续？',
+      message: '将模拟一次上传，把当前 ' + pending.length + ' 条待同步记录标记为「已同步」（演示环境无真实后端）。是否继续？',
       onConfirm: function () {
-        if (writeQueue([])) {
+        var stamp = MobileOpsStore.now();
+        var next = list.map(function (it) {
+          if (it.status === 'synced') return it;
+          return Object.assign({}, it, { status: 'synced', syncedAt: stamp, updatedAt: stamp });
+        });
+        // 待同步全部保留 + 已同步仅保留最近 50 条，避免队列无限增长
+        var synced = next.filter(function (it) { return it.status === 'synced'; }).slice(0, 50);
+        var rest = next.filter(function (it) { return it.status !== 'synced'; });
+        if (writeQueue(rest.concat(synced))) {
+          MobileOpsStore.audit('同步队列批量上传', 'syncQueue', '', '共 ' + pending.length + ' 条');
           renderTable();
-          Toast.success('已模拟同步，队列已清空');
+          Toast.success('已同步 ' + pending.length + ' 条记录');
         }
       }
     });
   }
 
-  /* ---- 事件代理：详情/删除按钮 ---- */
+  /* ---- 单条同步 ---- */
+  function syncOne(id) {
+    var list = readQueue();
+    var hit = null;
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].id) === String(id)) { hit = list[i]; break; }
+    }
+    if (!hit) { Toast.error('未找到该队列项'); return; }
+    hit.status = 'synced';
+    hit.syncedAt = MobileOpsStore.now();
+    hit.updatedAt = hit.syncedAt;
+    if (writeQueue(list)) {
+      MobileOpsStore.audit('同步单条记录', 'syncQueue', id, hit.type);
+      renderTable();
+      Toast.success('该记录已标记为已同步');
+    }
+  }
+
+  /* ---- 事件代理：详情/同步/删除按钮 ---- */
   document.addEventListener('click', function (e) {
     var det = e.target.closest && e.target.closest('[data-detail]');
+    var syn = e.target.closest && e.target.closest('[data-sync]');
     var del = e.target.closest && e.target.closest('[data-remove]');
     if (det) openDetail(det.getAttribute('data-detail'));
+    else if (syn) syncOne(syn.getAttribute('data-sync'));
     else if (del) confirmRemoveOne(del.getAttribute('data-remove'));
   });
 
-  /* ---- 跨标签页同步 ---- */
-  window.addEventListener('storage', function (e) {
-    if (e.key === QUEUE_KEY) renderTable();
+  /* ---- 跨标签页 / 同页同步 ---- */
+  MobileOpsStore.subscribe(function (key) {
+    if (key === MobileOpsStore.KEYS.syncQueue) renderTable();
   });
 
   document.addEventListener('DOMContentLoaded', function () {
+    MobileOpsStore.ready();
     // 演示数据播种：仅在队列为空时写入 24 条离线积压记录
     DemoSeed.ensure('sync-queue');
     renderTable();

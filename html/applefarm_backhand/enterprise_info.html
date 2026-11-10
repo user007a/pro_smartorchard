@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -479,6 +479,7 @@
 <!-- ===== 轻提示 ===== -->
 <div class="toast" id="toast"><span class="toast-message" id="toastMessage"></span></div>
 
+<script src="js/shared/cert-store.js"></script>
 <script>
 var currentSection = '';
 var editData = {};
@@ -501,16 +502,25 @@ var EXPERTS = [
 ];
 
 // 企业资质（发证机构 / 发证日期 / 有效期，30 天内到期高亮；topShow 为顶部横幅展示的资质）
-var CERT_DATA = [
-  { sort: 1, name: '绿色食品认证', no: 'LB-62-2012056', org: '中国绿色食品发展中心', issueDate: '2025-08-20', expireDate: '2028-08-19', img: '../common/images/certs/cert_green_food.jpg', topShow: false },
-  { sort: 2, name: '有机产品认证', no: 'OP-2013078', org: '中国质量认证中心', issueDate: '2025-11-02', expireDate: '2026-11-01', img: '../common/images/certs/cert_organic.jpg', topShow: false },
-  { sort: 3, name: '国家级农业产业化重点龙头企业', no: 'NL-2024004', org: '农业农村部产业化办公室', issueDate: '2024-12-15', expireDate: '2027-12-14', img: '../common/images/certs/cert_national_leader.jpg', topShow: true },
-  { sort: 4, name: '地理标志保护', no: 'GI-2012010', org: '国家知识产权局', issueDate: '2026-01-10', expireDate: '2031-01-09', img: '../common/images/certs/cert_geographic.jpg', topShow: false },
-  { sort: 5, name: 'HACCP体系认证', no: 'HC-2019008', org: '中国质量认证中心', issueDate: '2025-06-30', expireDate: '2026-09-28', img: '../common/images/certs/cert_haccp.jpg', topShow: false },
-  { sort: 6, name: 'GAP良好农业规范', no: 'GAP-2019156', org: '中国质量认证中心', issueDate: '2025-09-12', expireDate: '2028-09-11', img: '../common/images/certs/cert_gap.jpg', topShow: false },
-  { sort: 7, name: '出口果园备案', no: 'EX-2015032', org: '海关总署进出口食品安全局', issueDate: '2026-02-18', expireDate: '2029-02-17', img: '../common/images/certs/cert_export.jpg', topShow: false },
-  { sort: 8, name: 'ISO9001质量体系', no: 'QMS-201845', org: '中国质量认证中心', issueDate: '2025-12-01', expireDate: '2028-11-30', img: '../common/images/certs/cert_iso9001.jpg', topShow: false }
-];
+// 数据源统一为共享数据层 CertStore（企业资质类），此处仅做视图映射，编辑后实时回写
+function certDataView() {
+  var list = CertStore.qualifications().slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
+  return list.map(function (c) {
+    return {
+      id: c.id,
+      sort: c.sort || 0,
+      name: c.type,
+      no: c.sourceNo || c.certNo,
+      certNo: c.certNo,
+      org: c.issueOrg,
+      issueDate: c.issueDate,
+      expireDate: c.validEnd,
+      scope: c.scope,
+      img: (c.attachments && c.attachments[0] && c.attachments[0].url) || '',
+      topShow: c.topShow === true
+    };
+  });
+}
 
 // 发展历程（历程序号 / 历程日期 / 历程标题 / 历程描述 / 排序号）
 var TIMELINE_DATA = [
@@ -572,7 +582,7 @@ var OPERATION_DATA = [
   { sort: 1, label: '年度总产值', value: '12860', unit: '万元' },
   { sort: 2, label: '年总产量', value: '3600', unit: '吨' },
   { sort: 3, label: '经营总面积', value: '2450', unit: '亩' },
-  { sort: 4, label: '认证证书数', value: String(CERT_DATA.length), unit: '项' },
+  { sort: 4, label: '认证证书数', value: String(CertStore.qualifications().length), unit: '项' },
   { sort: 5, label: '服务农户数', value: '3860', unit: '户' }
 ];
 
@@ -630,7 +640,7 @@ function certStatusView(expireDate) {
 function renderCerts() {
   var box = document.getElementById('cert-list');
   if (!box) return;
-  var list = CERT_DATA.slice().sort(function (a, b) { return sortOf(a) - sortOf(b); });
+  var list = certDataView();
   box.innerHTML = list.map(function (c, i) {
     var sv = certStatusView(c.expireDate);
     return '<div class="cert-item' + (sv.cls ? ' ' + sv.cls : '') + '" data-cert="' + i + '">' +
@@ -654,7 +664,7 @@ function renderBanner() {
   if (nameEl) nameEl.textContent = BANNER.name;
   if (bgEl) bgEl.src = BANNER.bg;
   if (!badgeBox) return;
-  var certBadges = CERT_DATA.filter(function (c) { return c.topShow === true; }).map(function (c) { return c.name; });
+  var certBadges = certDataView().filter(function (c) { return c.topShow === true; }).map(function (c) { return c.name; });
   badgeBox.innerHTML = certBadges.concat(BANNER.staticBadges).map(function (t) {
     return '<span class="banner-badge">' + t + '</span>';
   }).join('');
@@ -1195,11 +1205,11 @@ function editExpertTable(){
   });
 }
 
-// 资质证书
+// 资质证书（数据源：CertStore 企业资质类；保存时回写共享数据层）
 function editCertTable(){
   etOpen({
-    key: 'cert', title: '编辑资质证书', data: CERT_DATA, addLabel: '新增证书',
-    tip: '证书卡片按排序号升序展示，「顶部显示」为是的证书会在横幅展示',
+    key: 'cert', title: '编辑资质证书', data: certDataView(), addLabel: '新增证书',
+    tip: '证书卡片按排序号升序展示，「顶部显示」为是的证书会在横幅展示；保存后回写证书管理共享数据',
     columns: [
       { key: 'sort', title: '排序号', type: 'sort', width: '76px' },
       { key: 'img', title: '证书图片', type: 'image', width: '130px' },
@@ -1210,6 +1220,81 @@ function editCertTable(){
       { key: 'expireDate', title: '有效期至', type: 'date', width: '150px' },
       { key: 'topShow', title: '顶部显示', type: 'select', width: '110px', options: ['否', '是'], optionValues: [false, true] }
     ]
+  });
+}
+
+/**
+ * 资质证书表格保存回写：把视图字段合并回 CertStore 企业资质记录
+ * 新增行（无 id）按资质名称匹配类型创建新的企业资质证书
+ */
+function saveCertTableToStore(){
+  var rows = etState.rows || [];
+  var existing = CertStore.qualifications();
+  var byId = {};
+  existing.forEach(function(c){ byId[c.id] = c; });
+
+  rows.forEach(function(row){
+    var target = row.id ? byId[row.id] : null;
+    if(!target){
+      // 新增：按资质名称反查类型，缺省按绿色食品认证建档
+      var typeCode = 'green_food';
+      CertStore.CERT_TYPES.forEach(function(t){
+        if(row.name && (row.name.indexOf(t.name) === 0 || t.name.indexOf(row.name) === 0)) typeCode = t.code;
+      });
+      var created = CertStore.saveCert({
+        certNo: row.certNo || '',
+        category: 'qualification',
+        typeCode: typeCode,
+        type: row.name || CertStore.typeName(typeCode),
+        sourceNo: row.no || '',
+        issueOrg: row.org || '',
+        issueDate: row.issueDate || CertStore.today(),
+        validStart: row.issueDate || CertStore.today(),
+        validEnd: row.expireDate || CertStore.shiftDate(row.issueDate || CertStore.today(), 365),
+        scope: row.scope || '',
+        topShow: row.topShow === true,
+        sort: row.sort || 0,
+        operator: '超级用户',
+        attachments: row.img ? [{ name: (row.name || '证书') + '扫描件.jpg', url: row.img, type: 'image/jpeg', size: 0, uploadedAt: CertStore.stampNow() }] : []
+      });
+      if(!created.ok && typeof showToast === 'function') showToast(created.message, 'error');
+      return;
+    }
+    var patch = {
+      id: target.id,
+      certNo: target.certNo,
+      category: 'qualification',
+      typeCode: target.typeCode,
+      type: row.name || target.type,
+      sourceNo: row.no || '',
+      issueOrg: row.org || '',
+      issueDate: row.issueDate || target.issueDate,
+      validStart: row.issueDate || target.validStart,
+      validEnd: row.expireDate || target.validEnd,
+      scope: row.scope || target.scope,
+      topShow: row.topShow === true,
+      sort: row.sort || 0,
+      operator: '超级用户',
+      attachments: row.img
+        ? [{ name: (row.name || '证书') + '扫描件.jpg', url: row.img, type: 'image/jpeg', size: 0, uploadedAt: CertStore.stampNow() }]
+        : target.attachments
+    };
+    var res = CertStore.saveCert(patch);
+    if(!res.ok && typeof showToast === 'function') showToast(res.message, 'error');
+  });
+
+  // 表格中已删除的行同步从共享数据层移除
+  var keepIds = {};
+  rows.forEach(function(r){ if(r.id) keepIds[r.id] = 1; });
+  existing.forEach(function(c){
+    if(!keepIds[c.id]){
+      // 已生效证书不允许直接删除，改为作废并记录原因
+      if(c.status === 'active'){
+        CertStore.revoke(c.id, '资质证书台账中移除该资质记录', '超级用户');
+      } else {
+        CertStore.remove(c.id);
+      }
+    }
   });
 }
 
@@ -1328,7 +1413,7 @@ function saveSection(){
     if(key === 'biz') renderBizStructure();
     else if(key === 'staff') renderStaff();
     else if(key === 'expert') renderExperts();
-    else if(key === 'cert'){ renderCerts(); renderBanner(); }
+    else if(key === 'cert'){ saveCertTableToStore(); renderCerts(); renderBanner(); }
     else if(key === 'timeline') renderTimeline();
     else if(key === 'operation') renderOperation();
   }

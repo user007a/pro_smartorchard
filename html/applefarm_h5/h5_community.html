@@ -205,6 +205,7 @@
   </div>
 
   <script src="js/h5-auth.js"></script>
+  <script src="../applefarm_backhand/js/shared/mall-store.js"></script>
   <script>
     function navigateTo(page) { window.location.href = page; }
 
@@ -268,31 +269,56 @@
     function publishPost(text) {
       text = text || '';
       if (!text) return;
+      var author = sessionStorage.getItem('loginUser') || '我';
+      var post = {
+        id: 'P' + Date.now(),
+        author: author,
+        content: text,
+        images: [],
+        topic: '',
+        status: 'pending',
+        time: new Date().toISOString()
+      };
       try {
-        var list = readJSON('h5_community_posts', []);
-        list.unshift({
-          id: 'P' + Date.now(),
-          author: sessionStorage.getItem('loginUser') || '我',
-          content: text,
-          time: new Date().toISOString()
-        });
-        localStorage.setItem('h5_community_posts', JSON.stringify(list));
+        if (typeof MallStore !== 'undefined') {
+          var member = null;
+          var p = (typeof H5Auth.profile === 'function') ? (H5Auth.profile() || {}) : {};
+          var phone = String(p.phone || '');
+          MallStore.members().forEach(function (m) {
+            if (!member && ((author && m.userId === author) || (phone && m.phone === phone) || (author && m.nickname === author))) member = m;
+          });
+          if (member) { post.memberId = member.id; post.author = member.nickname || author; }
+          MallStore.savePost(post);
+        } else {
+          var list = readJSON('h5_community_posts', []);
+          list.unshift(post);
+          localStorage.setItem('h5_community_posts', JSON.stringify(list));
+        }
         renderUserPosts();
-        showToast('动态已发布');
+        showToast('动态已提交，审核通过后展示');
       } catch (e) {}
     }
 
-    // 渲染用户动态（含点赞/评论计数）
+    // 渲染用户动态：公开仅展示已通过，本人可见审核中的动态
     function renderUserPosts() {
       var box = document.getElementById('userFeed');
       if (!box) return;
       var posts = readJSON('h5_community_posts', []);
       var likes = readJSON('h5_community_likes', {});
       var cmts = readJSON('h5_community_comments', {});
+      var me = sessionStorage.getItem('loginUser') || '';
+      posts = posts.filter(function (p) {
+        if (!p) return false;
+        if (!p.status || p.status === 'approved') return true;
+        return p.status === 'pending' && (!me || p.author === me);
+      });
       if (!posts.length) { box.innerHTML = ''; return; }
       box.innerHTML = posts.map(function (p) {
         var lc = likes[p.id] || 0;
         var cc = cmts[p.id] ? cmts[p.id].length : 0;
+        var badge = (p.status === 'pending')
+          ? '<span class="mb-tag warning">审核中</span>'
+          : '<span class="mb-tag success">我的动态</span>';
         return '<div class="feed-card">' +
           '<div class="feed-header">' +
             '<div class="feed-avatar">🍎</div>' +
@@ -300,7 +326,7 @@
               '<div class="feed-username">' + escHtml(p.author) + '</div>' +
               '<div class="feed-time">' + fmtTime(p.time) + '</div>' +
             '</div>' +
-            '<span class="mb-tag success">我的动态</span>' +
+            badge +
           '</div>' +
           '<div class="feed-content">' + escHtml(p.content) + '</div>' +
           '<div class="feed-actions">' +

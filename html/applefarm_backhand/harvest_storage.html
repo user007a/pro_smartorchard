@@ -357,6 +357,7 @@
 <script src="js/common-functions.js"></script>
 <script src="js/export-helper.js"></script>
 <script src="js/shared/harvest-store.js"></script>
+<script src="js/shared/device-store.js"></script>
 <script>
 // 库位适温适湿区间
 const TEMP_MIN = 0, TEMP_MAX = 4;
@@ -365,7 +366,38 @@ const HUMI_MIN = 85, HUMI_MAX = 95;
 // 库存由 harvest-store.js 从「已入库处理单 − 已出库发货单」派生，本页只读不另存
 let currentStorageId = '';
 
-function allStorages() { return HarvestStore.storages(); }
+// 冷库各区温湿度偏移（同一台温控主机 + 多路探头）
+const ZONE_OFFSET = { 'A区': 0.3, 'B区': 0.6, 'C区': 0, 'D区': -0.2 };
+const ZONE_HUM_OFFSET = { 'A区': -1, 'B区': 1, 'C区': 0, 'D区': -2 };
+
+/**
+ * 仓储温湿度统一由设备台账的「冷库温控仪」派生：
+ * 温控仪离线时回退到 harvest-store 的历史快照，并在列表提示数据为陈旧值。
+ */
+function coldStorageSource() {
+  if (!window.DeviceStore) return null;
+  return DeviceStore.readingDeviceOfType('cold_storage');
+}
+
+function allStorages() {
+  const list = HarvestStore.storages();
+  const src = coldStorageSource();
+  if (!src) return list;
+  const t = Number(src.readings.storeTemp);
+  const h = Number(src.readings.storeHum);
+  return list.map(function (s) {
+    const temp = Number((t + (ZONE_OFFSET[s.zone] || 0)).toFixed(1));
+    const humi = Math.round(h + (ZONE_HUM_OFFSET[s.zone] || 0));
+    const ok = temp >= TEMP_MIN && temp <= TEMP_MAX && humi >= HUMI_MIN && humi <= HUMI_MAX;
+    return Object.assign({}, s, {
+      temp: temp,
+      humidity: humi,
+      status: ok ? 'normal' : 'warning',
+      envSource: src.device.id,
+      envDeviceName: src.device.name
+    });
+  });
+}
 
 function getStatusTag(status) {
   return '<span class="status-tag ' + HarvestStore.statusTag('storages', status) + '">' + HarvestStore.statusText('storages', status) + '</span>';
@@ -391,7 +423,8 @@ function renderStats() {
     { label: '在库批次', value: list.length, unit: '批', sub: '占用 ' + list.length + ' / ' + HarvestStore.slots().length + ' 个库位' },
     { label: '在库总量', value: totalQty.toLocaleString(), unit: 'kg', sub: '总库容 ' + capacity.toLocaleString() + ' kg' },
     { label: '库容使用率', value: usage, unit: '%', sub: usage >= 90 ? '库容紧张，建议安排出库' : '库容充足' },
-    { label: '温控预警', value: warning, unit: '个', sub: warning ? '存在超限库位，需处理' : '全部库位温湿度正常' }
+    { label: '温控预警', value: warning, unit: '个', sub: warning ? '存在超限库位，需处理'
+        : ('数据源：' + (coldStorageSource() ? coldStorageSource().device.id + ' ' + coldStorageSource().device.name : '历史快照')) }
   ];
   document.getElementById('statGrid').innerHTML = cards.map(c =>
     '<div class="stat-card"><div class="stat-label">' + c.label + '</div>' +

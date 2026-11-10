@@ -178,6 +178,12 @@
     border:1px solid var(--error-border);
   }
 
+  .status-tag.pending_assign {
+    background:var(--warning-bg);
+    color:#9a6700;
+    border:1px solid var(--warning-border);
+  }
+
   /* 在册 / 归档 分段控件 */
   .record-tabs {
     display:inline-flex;
@@ -610,9 +616,6 @@
           <div class="search-bar">
             <select class="search-select" id="baseSelect">
               <option value="">全部基地</option>
-              <option value="麦积区基地">麦积区基地</option>
-              <option value="白水基地">白水基地</option>
-              <option value="宜川基地">宜川基地</option>
             </select>
             <select class="search-select" id="statusSelect">
               <option value="">果树状态</option>
@@ -739,11 +742,15 @@
       </div>
       <div class="form-group">
         <label class="form-label">所属基地</label>
-        <select class="form-select" id="editBase">
-          <option value="麦积区基地">麦积区基地</option>
-          <option value="白水基地">白水基地</option>
-          <option value="宜川基地">宜川基地</option>
-        </select>
+        <select class="form-select" id="editBase" onchange="syncPlotOptions('edit')"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">所属地块</label>
+        <select class="form-select" id="editPlot"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">实景摄像头（设备管理通道）</label>
+        <select class="form-select" id="editCamera"></select>
       </div>
       <div class="form-group">
         <label class="form-label">状态</label>
@@ -854,11 +861,15 @@
       </div>
       <div class="form-group">
         <label class="form-label">所属基地</label>
-        <select class="form-select" id="addBase">
-          <option value="麦积区基地">麦积区基地</option>
-          <option value="白水基地">白水基地</option>
-          <option value="宜川基地">宜川基地</option>
-        </select>
+        <select class="form-select" id="addBase" onchange="syncPlotOptions('add')"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">所属地块</label>
+        <select class="form-select" id="addPlot"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">实景摄像头（设备管理通道）</label>
+        <select class="form-select" id="addCamera"></select>
       </div>
       <div class="form-group">
         <label class="form-label">状态</label>
@@ -880,109 +891,163 @@
 </div>
 
 <!-- 引入交互脚本 -->
+<script src="js/shared/adoption-store.js"></script>
+<script src="js/shared/device-store.js"></script>
 <script src="js/shared/mobile-bridge.js"></script>
 <script>
-  // Mock数据
-  const mockData = [
-    { id: '1', code: 'A001', name: '幸福树-001', variety: '花牛苹果', base: '麦积区基地 A区', status: 'adopted', adopter: '惠加宁', expireDate: '2026-12-31' },
-    { id: '2', code: 'A002', name: '幸福树-002', variety: '花牛苹果', base: '麦积区基地 A区', status: 'adopted', adopter: '黄忠坚', expireDate: '2026-11-15' },
-    { id: '3', code: 'A003', name: '幸福树-003', variety: '花牛苹果', base: '麦积区基地 A区', status: 'available', adopter: '-', expireDate: '-' },
-    { id: '4', code: 'A004', name: '幸福树-004', variety: '花牛苹果', base: '麦积区基地 A区', status: 'available', adopter: '-', expireDate: '-' },
-    { id: '5', code: 'A005', name: '幸福树-005', variety: '花牛苹果', base: '麦积区基地 A区', status: 'unavailable', adopter: '-', expireDate: '-' },
-    { id: '6', code: 'B001', name: '平安树-001', variety: '花牛苹果', base: '麦积区基地 B区', status: 'adopted', adopter: '徐水应', expireDate: '2026-09-20' },
-    { id: '7', code: 'B002', name: '平安树-002', variety: '花牛苹果', base: '麦积区基地 B区', status: 'available', adopter: '-', expireDate: '-' },
-    { id: '8', code: 'B003', name: '平安树-003', variety: '花牛苹果', base: '麦积区基地 B区', status: 'available', adopter: '-', expireDate: '-' },
-    { id: '9', code: 'B004', name: '平安树-004', variety: '花牛苹果', base: '麦积区基地 B区', status: 'adopted', adopter: '朱泉龙', expireDate: '2026-09-30' },
-    { id: '10', code: 'C001', name: '发财树-001', variety: '秦冠', base: '麦积区基地 C区', status: 'available', adopter: '-', expireDate: '-' },
-    { id: '11', code: 'C002', name: '发财树-002', variety: '秦冠', base: '麦积区基地 C区', status: 'unavailable', adopter: '-', expireDate: '-' },
-    { id: '12', code: 'C003', name: '发财树-003', variety: '秦冠', base: '麦积区基地 C区', status: 'adopted', adopter: '陈小忠', expireDate: '2026-09-15' },
-    { id: '13', code: 'D001', name: '吉祥树-001', variety: '金帅', base: '白水基地 A区', status: 'available', adopter: '-', expireDate: '-' },
-    { id: '14', code: 'D002', name: '吉祥树-002', variety: '金帅', base: '白水基地 A区', status: 'adopted', adopter: '廖春亮', expireDate: '2026-10-25' },
-    { id: '15', code: 'D003', name: '吉祥树-003', variety: '金帅', base: '白水基地 A区', status: 'available', adopter: '-', expireDate: '-' },
-    { id: '16', code: 'E001', name: '如意树-001', variety: '花牛苹果', base: '宜川基地 A区', status: 'adopted', adopter: '李建明', expireDate: '2026-12-01' },
-    { id: '17', code: 'E002', name: '如意树-002', variety: '花牛苹果', base: '宜川基地 A区', status: 'available', adopter: '-', expireDate: '-' },
-    { id: '18', code: 'E003', name: '如意树-003', variety: '花牛苹果', base: '宜川基地 A区', status: 'available', adopter: '-', expireDate: '-' },
-    { id: '19', code: 'E004', name: '如意树-004', variety: '花牛苹果', base: '宜川基地 A区', status: 'adopted', adopter: '李根', expireDate: '2026-09-30' },
-    { id: '20', code: 'F001', name: '富贵树-001', variety: '花牛苹果', base: '宜川基地 B区', status: 'unavailable', adopter: '-', expireDate: '-' },
-    { id: '21', code: 'F002', name: '富贵树-002', variety: '花牛苹果', base: '宜川基地 B区', status: 'available', adopter: '-', expireDate: '-' },
-    { id: '22', code: 'F003', name: '富贵树-003', variety: '花牛苹果', base: '宜川基地 B区', status: 'adopted', adopter: '张才孙', expireDate: '2026-09-10' },
-    { id: '23', code: 'F004', name: '富贵树-004', variety: '花牛苹果', base: '宜川基地 B区', status: 'available', adopter: '-', expireDate: '-' },
-  ];
+  /* ============================================================
+   * 数据来源：统一数据层 AdoptionStore（禁止页面内维护 mock）
+   * ============================================================ */
+  const S = window.AdoptionStore;
+
+  function toast(msg, type) {
+    var el = document.getElementById('pageToast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'pageToast';
+      el.style.cssText = 'position:fixed;top:24px;left:50%;transform:translateX(-50%) translateY(-12px);'
+        + 'padding:10px 20px;border-radius:8px;font-size:14px;z-index:3000;opacity:0;'
+        + 'transition:all .22s ease;box-shadow:0 8px 24px rgba(0,0,0,.16);background:#f6ffed;'
+        + 'border:1px solid #b7eb8f;color:#237804;';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.background = type === 'error' ? '#fff2f0' : '#f6ffed';
+    el.style.borderColor = type === 'error' ? '#ffccc7' : '#b7eb8f';
+    el.style.color = type === 'error' ? '#cf1322' : '#237804';
+    el.style.opacity = '1';
+    el.style.transform = 'translateX(-50%) translateY(0)';
+    clearTimeout(el.__t);
+    el.__t = setTimeout(function () {
+      el.style.opacity = '0';
+      el.style.transform = 'translateX(-50%) translateY(-12px)';
+    }, 2400);
+  }
+
+  function displayBase(name) {
+    var s = String(name || '').trim();
+    if (!s) return '-';
+    return /基地$/.test(s) ? s : s + '基地';
+  }
+
+  /* ---------- 基地 / 地块主数据下拉（与企业管理-地块总表同源） ---------- */
+  function fillBaseOptions(select, keepAll) {
+    if (!select) return;
+    const current = select.value;
+    const names = S.bases().map(function (b) { return b.name; });
+    select.innerHTML = (keepAll ? '<option value="">全部基地</option>' : '') +
+      names.map(function (n) { return `<option value="${n}">${n}</option>`; }).join('');
+    if (current && names.indexOf(current) >= 0) select.value = current;
+  }
+
+  function fillPlotOptions(baseName, select, selectedId) {
+    if (!select) return;
+    const plots = S.plotsOfBase(baseName);
+    select.innerHTML = plots.length
+      ? plots.map(function (p) { return `<option value="${p.id}">${p.code} · ${p.name}</option>`; }).join('')
+      : '<option value="">该基地暂无可选地块</option>';
+    if (selectedId && plots.some(function (p) { return p.id === selectedId; })) select.value = selectedId;
+  }
+
+  function syncPlotOptions(scope) {
+    const base = document.getElementById(scope + 'Base');
+    const plot = document.getElementById(scope + 'Plot');
+    const camera = document.getElementById(scope + 'Camera');
+    if (base && plot) fillPlotOptions(base.value, plot, '');
+    if (base && camera) fillCameraOptions(base.value, camera, '');
+  }
+
+  /* ---------- 实景摄像头：取设备管理的视频通道，按基地过滤 ---------- */
+  function fillCameraOptions(baseName, select, selectedCode) {
+    if (!select) return;
+    const DS = window.DeviceStore;
+    const list = DS && typeof DS.cameras === 'function'
+      ? DS.cameras().filter(function (c) { return !baseName || c.base === baseName; })
+      : [];
+    select.innerHTML = '<option value="">暂不绑定</option>' +
+      list.map(function (c) {
+        return `<option value="${c.code}">${c.code} · ${c.name}${c.status === 'online' ? '（在线）' : ''}</option>`;
+      }).join('');
+    if (selectedCode && list.some(function (c) { return c.code === selectedCode; })) {
+      select.value = selectedCode;
+    }
+  }
+
+  /* 果树池 → 本页行结构 */
+  function storeTreeRows() {
+    return S.trees().map(function (t) {
+      return {
+        id: t.id,
+        code: t.treeCode,
+        name: t.treeName || (t.treeCode + ' · ' + t.variety),
+        variety: t.variety || '-',
+        base: displayBase(t.baseName) + (t.plotName ? ' ' + t.plotName : ''),
+        status: t.status,
+        adopter: t.adopter || '-',
+        expireDate: t.expireDate || '-',
+        source: 'store',
+        remark: t.remark || '',
+        price: t.price,
+        raw: t
+      };
+    });
+  }
 
   const pageSize = 8;
   let currentPage = 1;
 
-  // 全部果树 = 基础数据 + 移动端挂牌记录（FLOW-011 跨端闭环）
+  // 全部果树 = 果树池 + 未建档的移动端挂牌 / C 端认养（待分配）
   let allTrees = [];
+  let currentEditId = '';
+  let pendingDeleteIds = [];
 
-  /* 果树编号归一（L-5）：后台基础数据为 A001/G012/Q008 风格，C 端（H5 认养 + 溯源）
-     为 A1-001 风格。本页统一归到后台既有风格——取编号中的字母前缀 + 末尾 3 位序号，
-     例：A1-001 → A001、AD-A1-001 → A001、A001 → A001。
-     只影响本页展示与查找，不改动 H5 / 溯源侧的原始数据。 */
-  function canonTreeCode(raw) {
-    var s = String(raw == null ? '' : raw).trim().replace(/^AD-/i, '').trim();
-    if (!s) return '';
-    var letters = (s.match(/^[A-Za-z]+/) || [''])[0].toUpperCase();
-    var digits = s.replace(/[^0-9]/g, '');
-    if (!digits) return letters || s;
-    var seq = digits.slice(-3);
-    while (seq.length < 3) seq = '0' + seq;
-    return letters + seq;
+  /* 移动端挂牌：编号未在果树池建档的记录以「待分配」呈现，不静默丢弃 */
+  function mobileTagRows() {
+    return S.unmatchedTags().map(function (t, i) {
+      var code = S.normalizeCode(t.treeCode || t.treeNo);
+      return {
+        id: 'TAG-' + (i + 1),
+        code: code || ('待核-' + (i + 1)),
+        name: t.treeNo || ('挂牌果树-' + (i + 1)),
+        variety: '花牛苹果',
+        base: t.plot || '麦积区基地',
+        status: 'pending_assign',
+        adopter: t.adopter || '-',
+        expireDate: t.period || '-',
+        source: 'mobile',
+        remark: '移动端挂牌待建档',
+        price: 0,
+        raw: t
+      };
+    });
   }
 
-  // 把移动端挂牌记录映射为 PC 端果树结构
-  function mobileTagRecords() {
-    if (typeof MobileBridge === 'undefined') return [];
-    return MobileBridge.adoptionTags().map((t, i) => ({
-      id: 'TAG-' + (i + 1),
-      code: canonTreeCode(t.code) || ('TAG' + String(i + 1).padStart(3, '0')),
-      name: t.treeNo || ('挂牌果树-' + (i + 1)),
-      variety: '花牛苹果',
-      base: t.plot || '麦积区基地',
-      status: 'adopted',
-      adopter: t.adopter || '-',
-      expireDate: t.period || '-',
-      source: 'mobile',
-      location: t.location || '-'
-    }));
-  }
-
-  /* C 端认养记录（localStorage['snzg_adoptions']，H5「我的认养」唯一数据源）
-     编号为 AD-A1-001 形式，本页归一到后台 A001 风格（canonTreeCode） */
-  function h5AdoptionRecords() {
-    try {
-      var raw = localStorage.getItem('snzg_adoptions');
-      if (!raw) return [];
-      var v = JSON.parse(raw);
-      if (!Array.isArray(v)) return [];
-      return v
-        .filter(function (a) { return a && typeof a === 'object'; })
-        .map(function (a, i) {
-          var code = canonTreeCode(a.id || a.treeNo);
-          return {
-            id: 'H5-' + (i + 1),
-            code: code || ('H5认养-' + (i + 1)),
-            name: a.treeName || ('C端认养果树-' + (i + 1)),
-            variety: a.variety || '花牛苹果',
-            base: a.base || a.plotArea || '麦积区基地',
-            status: 'adopted',
-            adopter: a.adopter || 'C端用户',
-            expireDate: a.expireDate || a.period || '-',
-            source: 'h5',
-            location: a.area || a.plotArea || '-'
-          };
-        });
-    } catch (e) {
-      return [];
-    }
+  /* C 端认养记录（snzg_adoptions）：编号未建档的同样以待分配呈现 */
+  function h5AdoptionRows() {
+    return S.unmatchedH5Adoptions().map(function (a, i) {
+      var code = S.normalizeCode(a.treeNo || a.id);
+      return {
+        id: 'H5-' + (i + 1),
+        code: code || ('待核-' + (i + 1)),
+        name: a.treeName || ('C端认养果树-' + (i + 1)),
+        variety: a.variety || '花牛苹果',
+        base: a.base || a.plotArea || '麦积区基地',
+        status: 'pending_assign',
+        adopter: a.adopter || 'C端用户',
+        expireDate: a.expireDate || a.period || '-',
+        source: 'h5',
+        remark: 'C端认养记录待建档',
+        price: a.fee || 0,
+        raw: a
+      };
+    });
   }
 
   function refreshAllTrees() {
-    allTrees = mockData.concat(mobileTagRecords(), h5AdoptionRecords());
+    allTrees = storeTreeRows().concat(mobileTagRows(), h5AdoptionRows());
   }
 
-  /* 统一查找（L-5）：详情 / 编辑 / 删除 / 照片等入口在「基础数据 + 移动端挂牌 + C 端认养」
-     合并结果中查找，避免只查 mockData 导致对移动端挂牌、C 端认养记录无响应。 */
+  /* 统一查找：详情 / 编辑 / 删除 / 照片等入口在合并结果中查找 */
   function findTree(id) {
     refreshAllTrees();
     return allTrees.find(function (d) { return String(d.id) === String(id); }) || null;
@@ -1037,11 +1102,13 @@
     var headRow = document.getElementById('treeHeadRow');
     if (!headRow) return;
     headRow.innerHTML = archived
-      ? '<th style="width:60px;">序号</th>'
+      ? '<th style="width:44px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>'
+        + '<th style="width:60px;">序号</th>'
         + '<th>果树编号</th><th>果树名称</th><th>品种</th><th>所属基地</th>'
         + '<th>认养状态</th><th>认养人</th><th>到期时间</th>'
         + '<th style="width:100px;">归档原因</th><th>操作</th>'
-      : '<th style="width:60px;">序号</th>'
+      : '<th style="width:44px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>'
+        + '<th style="width:60px;">序号</th>'
         + '<th>果树编号</th><th>果树名称</th><th>品种</th><th>所属基地</th>'
         + '<th>认养状态</th><th>认养人</th><th>到期时间</th>'
         + '<th>操作</th>';
@@ -1056,7 +1123,7 @@
     tbody.innerHTML = '';
 
     if (!data || !data.length) {
-      tbody.innerHTML = '<tr><td colspan="' + (archived ? 10 : 9) + '" style="text-align:center;color:var(--text-tertiary);padding:32px 0;">'
+      tbody.innerHTML = '<tr><td colspan="' + (archived ? 11 : 10) + '" style="text-align:center;color:var(--text-tertiary);padding:32px 0;">'
         + (archived ? '暂无归档果树' : '暂无在册果树') + '</td></tr>';
       return;
     }
@@ -1084,6 +1151,7 @@
       var row = document.createElement('tr');
       if (isArchived(item)) row.className = 'row-archived';
       row.innerHTML = ''
+        + '<td><input type="checkbox" class="tree-checkbox" value="' + item.id + '" onclick="updateSelectedCount()"></td>'
         + '<td>' + (__seq + 1) + '</td>'
         + codeCell
         + '<td>' + item.name + '</td>'
@@ -1206,30 +1274,58 @@
     applyView();
   }
 
-  // 恢复认养：到期时间顺延，状态置回已认养
+  // 恢复认养：到期时间顺延一年，状态置回已认养（真写回 AdoptionStore）
   function restoreAdoption(id) {
-    var item = null;
-    for (var i = 0; i < allTrees.length; i++) {
-      if (allTrees[i].id === id) { item = allTrees[i]; break; }
-    }
+    var item = findTree(id);
     if (!item) return;
     if (!confirm('确认恢复「' + item.code + ' - ' + item.name + '」的认养？到期时间将顺延一年。')) return;
 
     var future = futureDate(365);
-    item.status = 'adopted';
-    item.expireDate = future;
-
-    // 写回数据源
-    if (item.source === 'h5') {
-      patchLocalRecord('snzg_adoptions', item.code, future, true);
-    } else if (item.source === 'mobile') {
-      patchLocalRecord('smartorchard_adoption_tags', item.code, future, false);
+    try {
+      if (item.source === 'store') {
+        var raw = item.raw || {};
+        S.saveTree({
+          id: raw.id,
+          treeCode: raw.treeCode,
+          treeName: raw.treeName,
+          variety: raw.variety,
+          baseName: raw.baseName,
+          plotName: raw.plotName,
+          price: raw.price,
+          adopter: raw.adopter || item.adopter,
+          adopterPhone: raw.adopterPhone,
+          status: S.TREE_STATUS.ADOPTED,
+          startDate: raw.startDate,
+          expireDate: future,
+          duration: raw.duration,
+          growthStage: raw.growthStage,
+          progress: raw.progress,
+          remark: raw.remark
+        });
+        toast('已恢复认养，到期时间：' + future);
+      } else {
+        // 未建档记录：补录为正式果树，纳入果树池
+        S.saveTree({
+          treeCode: item.code,
+          treeName: item.name,
+          variety: item.variety,
+          baseName: item.base,
+          price: item.price || 399,
+          adopter: item.adopter === '-' ? 'C端用户' : item.adopter,
+          status: S.TREE_STATUS.ADOPTED,
+          expireDate: future,
+          duration: 1,
+          remark: item.remark
+        });
+        toast('已建档并恢复认养，到期时间：' + future);
+      }
+    } catch (e) {
+      toast(e.message || '恢复失败', 'error');
+      return;
     }
-    // source 为空 → 基础数据，已就地修改对象
 
     refreshAllTrees();
     applyView();
-    alert('已恢复认养，到期时间：' + future);
   }
 
   // 未来日期（YYYY-MM-DD）
@@ -1238,26 +1334,6 @@
     d.setDate(d.getDate() + days);
     function p(n) { return n < 10 ? '0' + n : '' + n; }
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
-  }
-
-  // 把恢复结果写回 localStorage 中的跨端记录
-  function patchLocalRecord(key, code, future, stripAdPrefix) {
-    try {
-      var raw = localStorage.getItem(key);
-      if (!raw) return;
-      var arr = JSON.parse(raw);
-      if (!Array.isArray(arr)) return;
-      for (var i = 0; i < arr.length; i++) {
-        var c = String(arr[i].code || arr[i].id || '');
-        if (stripAdPrefix) c = c.replace(/^AD-/i, '');
-        if (c === String(code)) {
-          arr[i].expireDate = future;
-          if (arr[i].period) arr[i].period = future;
-          localStorage.setItem(key, JSON.stringify(arr));
-          break;
-        }
-      }
-    } catch (e) {}
   }
 
   // 分页
@@ -1319,96 +1395,250 @@
   // 详情弹窗
   function showDetail(id) {
     const item = findTree(id);
-    if (item) {
-      const statusText = statusTextOf(item.status);
-      document.getElementById('detailContent').innerHTML = `
-        <div class="detail-row"><div class="detail-label">果树编号</div><div class="detail-value">${item.code}</div></div>
-        <div class="detail-row"><div class="detail-label">果树名称</div><div class="detail-value">${item.name}</div></div>
-        <div class="detail-row"><div class="detail-label">品种</div><div class="detail-value">${item.variety}</div></div>
-        <div class="detail-row"><div class="detail-label">所属基地</div><div class="detail-value">${item.base}</div></div>
-        <div class="detail-row"><div class="detail-label">认养状态</div><div class="detail-value"><span class="status-tag ${item.status}">${statusText}</span></div></div>
-        <div class="detail-row"><div class="detail-label">认养人</div><div class="detail-value">${item.adopter}</div></div>
-        <div class="detail-row"><div class="detail-label">到期时间</div><div class="detail-value">${item.expireDate}</div></div>
-      `;
-      showModal('detailModal');
-    }
+    if (!item) return;
+    const raw = item.raw || {};
+    const statusText = statusTextOf(item.status);
+    document.getElementById('detailContent').innerHTML = `
+      <div class="detail-row"><div class="detail-label">果树编号</div><div class="detail-value">${item.code}</div></div>
+      <div class="detail-row"><div class="detail-label">果树名称</div><div class="detail-value">${item.name}</div></div>
+      <div class="detail-row"><div class="detail-label">品种</div><div class="detail-value">${item.variety}</div></div>
+      <div class="detail-row"><div class="detail-label">所属基地</div><div class="detail-value">${item.base}</div></div>
+      <div class="detail-row"><div class="detail-label">树龄</div><div class="detail-value">${raw.treeAge ? raw.treeAge + ' 年' : '-'}</div></div>
+      <div class="detail-row"><div class="detail-label">认养价格</div><div class="detail-value">${raw.price ? '¥' + raw.price : '-'}</div></div>
+      <div class="detail-row"><div class="detail-label">认养状态</div><div class="detail-value"><span class="status-tag ${item.status}">${statusText}</span></div></div>
+      <div class="detail-row"><div class="detail-label">认养人</div><div class="detail-value">${item.adopter}</div></div>
+      <div class="detail-row"><div class="detail-label">联系电话</div><div class="detail-value">${raw.adopterPhone || '-'}</div></div>
+      <div class="detail-row"><div class="detail-label">关联订单</div><div class="detail-value">${raw.orderNo || '-'}</div></div>
+      <div class="detail-row"><div class="detail-label">认养起止</div><div class="detail-value">${(raw.startDate || '-') + ' ~ ' + (raw.expireDate || '-')}</div></div>
+      <div class="detail-row"><div class="detail-label">到期时间</div><div class="detail-value">${item.expireDate}</div></div>
+      <div class="detail-row"><div class="detail-label">备注</div><div class="detail-value">${item.remark || '-'}</div></div>
+    `;
+    showModal('detailModal');
   }
 
   // 编辑弹窗
   function showEdit(id) {
     const item = findTree(id);
-    if (item) {
-      document.getElementById('editCode').value = item.code;
-      document.getElementById('editName').value = item.name;
-      document.getElementById('editVariety').value = item.variety;
-      document.getElementById('editBase').value = item.base.includes('麦积区') ? '麦积区基地' : item.base.includes('白水') ? '白水基地' : '宜川基地';
-      document.getElementById('editStatus').value = item.status;
-      showModal('editModal');
-    }
+    if (!item) return;
+    currentEditId = item.id;
+    document.getElementById('editCode').value = item.code;
+    document.getElementById('editName').value = item.name;
+    document.getElementById('editVariety').value = item.variety;
+    const raw = item.raw || {};
+    fillBaseOptions(document.getElementById('editBase'));
+    if (raw.baseName) document.getElementById('editBase').value = raw.baseName;
+    fillPlotOptions(document.getElementById('editBase').value, document.getElementById('editPlot'), raw.plotId || '');
+    fillCameraOptions(document.getElementById('editBase').value, document.getElementById('editCamera'), raw.cameraId || '');
+    document.getElementById('editStatus').value = item.status;
+    document.getElementById('editRemark').value = item.remark || '';
+    showModal('editModal');
   }
 
   function saveEdit() {
-    alert('编辑成功！');
-    closeModal('editModal');
+    const item = findTree(currentEditId);
+    if (!item) return;
+    const raw = item.raw || {};
+    const status = document.getElementById('editStatus').value;
+    const payload = {
+      id: raw.id,
+      treeCode: item.code,
+      treeName: document.getElementById('editName').value.trim() || item.name,
+      variety: document.getElementById('editVariety').value,
+      baseName: document.getElementById('editBase').value,
+      plotId: document.getElementById('editPlot').value || '',
+      cameraId: document.getElementById('editCamera').value || '',
+      openMonitor: !!document.getElementById('editCamera').value || !!raw.openMonitor,
+      price: raw.price || 0,
+      status: status,
+      adopter: raw.adopter,
+      adopterPhone: raw.adopterPhone,
+      startDate: raw.startDate,
+      expireDate: raw.expireDate,
+      duration: raw.duration,
+      growthStage: raw.growthStage,
+      progress: raw.progress,
+      remark: document.getElementById('editRemark').value.trim()
+    };
+    if (status === S.TREE_STATUS.ADOPTED && !String(payload.adopter || '').trim()) {
+      const name = prompt('标记为已认养需填写认养人姓名：');
+      if (!name || !name.trim()) { toast('已认养果树必须填写认养人', 'error'); return; }
+      payload.adopter = name.trim();
+      const phone = prompt('请输入认养人手机号（11 位）：');
+      if (phone && !/^1\d{10}$/.test(phone.trim())) { toast('手机号格式不正确', 'error'); return; }
+      payload.adopterPhone = (phone || '').trim();
+    }
+    try {
+      S.saveTree(payload);
+      toast('果树信息已保存');
+      closeModal('editModal');
+      refreshAllTrees();
+      applyView();
+    } catch (e) {
+      toast(e.message || '保存失败', 'error');
+    }
   }
 
   // 照片弹窗
   function showPhoto(id) {
+    const item = findTree(id);
+    if (!item) return;
+    const photos = S.photosOf(item.code);
+    const box = document.getElementById('photoContent');
+    if (photos && photos.length) {
+      box.innerHTML = photos.map(function (p) {
+        return '<div class="photo-item"><img src="' + (p.url || p.src || '') + '" alt="成长照片"></div>';
+      }).join('');
+    } else {
+      box.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-tertiary);">该果树暂无成长相册照片</div>';
+    }
     showModal('photoModal');
   }
 
   // 删除弹窗
   function showDelete(id) {
-    const item = findTree(id) || {};
+    const item = findTree(id);
+    if (!item) return;
+    pendingDeleteIds = [item.id];
     document.getElementById('deleteInfo').textContent = `将删除：${item.code} - ${item.name}`;
     showModal('deleteModal');
   }
 
   function confirmDelete() {
-    alert('删除成功！');
+    if (!pendingDeleteIds.length) { closeModal('deleteModal'); return; }
+    const failed = [];
+    pendingDeleteIds.forEach(function (id) {
+      const item = findTree(id);
+      try {
+        if (item && item.source === 'store') {
+          S.removeTree(item.id);
+        } else if (item) {
+          failed.push(item.code + '（跨端记录尚未建档，无需删除）');
+        }
+      } catch (e) {
+        failed.push((item ? item.code : id) + '：' + e.message);
+      }
+    });
     closeModal('deleteModal');
+    refreshAllTrees();
+    applyView();
+    if (failed.length) toast(failed.join('；'), 'error');
+    else toast('已删除 ' + pendingDeleteIds.length + ' 条果树记录');
+    pendingDeleteIds = [];
   }
 
   // 批量删除
   function handleBatchDelete() {
     const selected = document.querySelectorAll('.tree-checkbox:checked');
     if (selected.length === 0) {
-      alert('请先选择要删除的果树');
+      toast('请先选择要删除的果树', 'error');
       return;
     }
+    pendingDeleteIds = Array.prototype.slice.call(selected).map(function (el) { return el.value; });
     document.getElementById('deleteInfo').textContent = `将删除选中的 ${selected.length} 条记录`;
     showModal('deleteModal');
   }
 
   // 新增弹窗
   function showAddModal() {
-    document.getElementById('addCode').value = '';
+    document.getElementById('addCode').value = suggestNextCode();
     document.getElementById('addName').value = '';
     document.getElementById('addVariety').value = '花牛苹果';
-    document.getElementById('addBase').value = '麦积区基地';
+    fillBaseOptions(document.getElementById('addBase'));
+    const firstBase = S.bases()[0];
+    if (firstBase) document.getElementById('addBase').value = firstBase.name;
+    fillPlotOptions(document.getElementById('addBase').value, document.getElementById('addPlot'), '');
+    fillCameraOptions(document.getElementById('addBase').value, document.getElementById('addCamera'), '');
     document.getElementById('addStatus').value = 'available';
     document.getElementById('addRemark').value = '';
     showModal('addModal');
   }
 
-  function saveAdd() {
-    alert('新增成功！');
-    closeModal('addModal');
+  // 依据现有最大编号推荐下一个编号（A1-026 形式）
+  function suggestNextCode() {
+    const prefix = 'A1-';
+    let max = 0;
+    S.trees().forEach(function (t) {
+      const m = String(t.treeCode || '').match(/^A1-(\d{3})$/);
+      if (m) max = Math.max(max, Number(m[1]));
+    });
+    return prefix + String(max + 1).padStart(3, '0');
   }
 
-  // 导出功能
+  const VARIETY_PRICE = { '花牛苹果': 399, '红富士': 459, '秦冠': 349, '金帅': 329 };
+
+  function saveAdd() {
+    const code = document.getElementById('addCode').value.trim();
+    const variety = document.getElementById('addVariety').value;
+    const status = document.getElementById('addStatus').value;
+    const payload = {
+      treeCode: code,
+      treeName: document.getElementById('addName').value.trim(),
+      variety: variety,
+      baseName: document.getElementById('addBase').value,
+      plotId: document.getElementById('addPlot').value || '',
+      cameraId: document.getElementById('addCamera').value || '',
+      openMonitor: !!document.getElementById('addCamera').value,
+      price: VARIETY_PRICE[variety] || 399,
+      status: status,
+      remark: document.getElementById('addRemark').value.trim()
+    };
+    if (status === S.TREE_STATUS.ADOPTED) {
+      const name = prompt('请输入认养人姓名：');
+      if (!name || !name.trim()) { toast('已认养果树必须填写认养人', 'error'); return; }
+      payload.adopter = name.trim();
+      const phone = prompt('请输入认养人手机号（11 位）：');
+      if (phone && !/^1\d{10}$/.test(phone.trim())) { toast('手机号格式不正确', 'error'); return; }
+      payload.adopterPhone = (phone || '').trim();
+    }
+    try {
+      S.saveTree(payload);
+      toast('新增果树成功');
+      closeModal('addModal');
+      refreshAllTrees();
+      switchTab('active');
+    } catch (e) {
+      toast(e.message || '新增失败', 'error');
+    }
+  }
+
+  // 导出功能：真实 CSV 下载
   function handleExport() {
     const selected = document.querySelectorAll('.tree-checkbox:checked');
-    if (selected.length === 0) {
-      alert('请先选择要导出的果树');
+    const rows = selected.length
+      ? Array.prototype.slice.call(selected).map(function (el) { return findTree(el.value); }).filter(Boolean)
+      : viewList.slice();
+    if (!rows.length) {
+      toast('暂无可导出的记录', 'error');
       return;
     }
-    alert(`已导出 ${selected.length} 条记录`);
+    const head = ['果树编号', '果树名称', '品种', '所属基地', '认养状态', '认养人', '联系电话', '到期时间', '备注'];
+    const lines = [head.join(',')];
+    rows.forEach(function (r) {
+      const raw = r.raw || {};
+      lines.push([
+        r.code, r.name, r.variety, r.base, statusTextOf(r.status),
+        r.adopter, raw.adopterPhone || '', r.expireDate, r.remark || ''
+      ].map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(','));
+    });
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '认养果树_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+    toast('已导出 ' + rows.length + ' 条记录');
   }
 
   // 初始化
+  fillBaseOptions(document.getElementById('baseSelect'), true);
   refreshAllTrees();
   switchTab('active');
+  S.onChange(function () {
+    refreshAllTrees();
+    applyView();
+  });
 </script>
 
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->

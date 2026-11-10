@@ -45,8 +45,14 @@
   }
   @media (max-width: 1280px) { .collection-grid { grid-template-columns: 1fr; } }
 
-  .data-table { min-width: 760px; }
+  .data-table { min-width: 860px; }
   .empty-row td { text-align: center; color: var(--text-tertiary); padding: 40px 0; }
+
+  /* 明细区标题栏 */
+  .section-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 0 4px; margin-bottom: 12px;
+  }
 
   /* 占比进度条 */
   .ratio-row { padding: 12px 0; border-bottom: 1px dashed var(--border-light); }
@@ -97,7 +103,10 @@
         <!-- 归集明细 + 来源占比 -->
         <div class="collection-grid">
           <div class="data-section">
-            <h2 class="section-title" style="padding:0 4px;">归集明细</h2>
+            <div class="section-toolbar">
+              <h2 class="section-title" style="margin:0;padding:0;border:none;">归集明细</h2>
+              <button class="btn btn-primary" onclick="openCollectionForm()">新增归集记录</button>
+            </div>
             <div class="data-table-wrapper">
               <table class="data-table">
                 <thead>
@@ -107,6 +116,7 @@
                     <th>占比</th>
                     <th>同比</th>
                     <th>合格率</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody id="tableBody"></tbody>
@@ -115,7 +125,7 @@
           </div>
 
           <div class="data-section" style="padding:24px;">
-            <h2 class="section-title">五类来源占比</h2>
+            <h2 class="section-title">来源占比</h2>
             <div id="ratioList"></div>
           </div>
         </div>
@@ -183,7 +193,7 @@
     var total = list.reduce(function(sum, x){ return sum + (x.amount || 0); }, 0);
 
     if (!list.length){
-      els.tbody.innerHTML = '<tr class="empty-row"><td colspan="5">暂无归集数据</td></tr>';
+      els.tbody.innerHTML = '<tr class="empty-row"><td colspan="6">暂无归集数据</td></tr>';
       return;
     }
 
@@ -198,6 +208,10 @@
         '<td class="num">' + fmt(ratio) + '%</td>' +
         '<td class="num ' + yoyCls + '">' + (yoy >= 0 ? '+' : '') + fmt(yoy) + '%</td>' +
         '<td class="num">' + fmt(rate) + '%</td>' +
+        '<td><div class="action-btns">' +
+          '<button class="action-btn" onclick="editCollection(\'' + x.id + '\')">编辑</button>' +
+          '<button class="action-btn" onclick="deleteCollection(\'' + x.id + '\')">删除</button>' +
+        '</div></td>' +
       '</tr>';
     }).join('');
   }
@@ -241,6 +255,73 @@
     renderRatio();
     renderChart();
   }
+
+  /* ---------------- 归集记录维护（写入共享数据层，驾驶舱同步） ---------------- */
+  var CATEGORIES = [
+    { value: '农事', label: '农事' },
+    { value: '设备', label: '设备' },
+    { value: '销售', label: '销售' },
+    { value: '溯源', label: '溯源' },
+    { value: '环境', label: '环境' },
+    { value: '其他', label: '其他' }
+  ];
+
+  function openCollectionForm(id){
+    var item = null;
+    if (id){
+      item = DataStore.collections().filter(function(x){ return x.id === id; })[0] || null;
+      if (!item){ Toast.show('归集记录不存在', 'error'); return; }
+    }
+
+    Modal.form({
+      title: item ? '编辑归集记录' : '新增归集记录',
+      submitText: item ? '保存' : '新增',
+      width: '520px',
+      values: item ? {
+        source: item.source,
+        category: item.category || '其他',
+        amount: item.amount,
+        yoy: item.yoy,
+        rate: item.rate
+      } : { category: '农事', rate: 95 },
+      fields: [
+        { name: 'source', label: '数据来源', type: 'text', required: true, placeholder: '如：智能气象站' },
+        { name: 'category', label: '归集类别', type: 'select', options: CATEGORIES },
+        { name: 'amount', label: '归集量（条）', type: 'number', min: 0, step: 1, required: true },
+        { name: 'yoy', label: '同比增长（%）', type: 'number', step: 0.1, hint: '可填负数表示同比下降' },
+        { name: 'rate', label: '合格率（%）', type: 'number', min: 0, max: 100, step: 0.1, required: true }
+      ],
+      onSubmit: function(data){
+        var res = DataStore.upsertCollection({
+          id: item ? item.id : '',
+          source: data.source,
+          category: data.category,
+          amount: data.amount,
+          yoy: data.yoy,
+          rate: data.rate
+        });
+        if (!res.ok){ Toast.show(res.message, 'error'); return false; }
+        Toast.show(item ? '归集记录已更新，驾驶舱数据已同步' : '归集记录已新增，驾驶舱数据已同步', 'success');
+        return true;
+      }
+    });
+  }
+
+  function editCollection(id){ openCollectionForm(id); }
+
+  function deleteCollection(id){
+    var item = DataStore.collections().filter(function(x){ return x.id === id; })[0];
+    if (!item) return;
+    Confirm.delete('确定删除「' + esc(item.source) + '」的归集记录吗？删除后驾驶舱归集量与合格率将同步调整。').then(function(ok){
+      if (!ok) return;
+      DataStore.removeCollection(id);
+      Toast.show('归集记录已删除', 'success');
+    });
+  }
+
+  window.openCollectionForm = openCollectionForm;
+  window.editCollection = editCollection;
+  window.deleteCollection = deleteCollection;
 
   DataStore.subscribe(function(){
     renderAll();

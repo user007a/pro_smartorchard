@@ -493,6 +493,8 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/demo-seed.js"></script>
+<script src="js/shared/adoption-store.js"></script>
+<script src="js/shared/cert-store.js"></script>
 <script>
 /* ============================================================
  * 认养证书管理（消费类凭证）
@@ -507,6 +509,7 @@
 var CERT_KEY = 'adoption_certs';
 var TPL_KEY  = 'adoption_cert_templates';
 var H5_ADOPT_KEY = 'snzg_adoptions';
+var S = window.AdoptionStore;
 
 /* 默认种子数据：首次访问写入，确保页面可独立运行 */
 var DEFAULT_TEMPLATES = [
@@ -609,20 +612,30 @@ function genCertNo() {
   return prefix + String(max + 1).padStart(6, '0');
 }
 
-/* 从 H5 认养记录读取果树编号（strip 'AD-' 前缀） */
+/* 可选果树：统一编号后合并「认养台账已认养果树」与「H5 认养记录」 */
 function readH5Trees() {
-  var list = readJSON(H5_ADOPT_KEY, []);
   var out = [];
-  list.forEach(function (a) {
-    if (!a || typeof a !== 'object') return;
-    var code = String(a.id || '').trim().replace(/^AD-/i, '');
-    if (!code) return;
+  var seen = {};
+  function push(rawCode, adopter, variety) {
+    var code = S ? S.normalizeCode(rawCode) : String(rawCode || '').replace(/^AD-/i, '');
+    if (!code || seen[code]) return;
+    seen[code] = 1;
+    var tree = S ? S.findTree(code) : null;
     out.push({
       code: code,
-      full: String(a.id || '').trim(),
-      adopter: a.adopter || a.name || '',
-      variety: a.variety || ''
+      full: 'AD-' + code,
+      adopter: adopter || (tree ? tree.adopter : ''),
+      variety: variety || (tree ? tree.variety : '')
     });
+  }
+  if (S) {
+    S.trees().filter(function (t) { return t.status === 'adopted'; }).forEach(function (t) {
+      push(t.treeCode, t.adopter, t.variety);
+    });
+  }
+  readJSON(H5_ADOPT_KEY, []).forEach(function (a) {
+    if (!a || typeof a !== 'object') return;
+    push(a.id || a.treeNo || a.treeId, a.adopter || a.name, a.variety);
   });
   return out;
 }
@@ -801,9 +814,10 @@ function closeCertEdit() {
   editingCertNo = null;
 }
 function submitCertEdit() {
-  var treeNo = (document.getElementById('certEditTree').value || '').trim();
+  var rawTreeNo = (document.getElementById('certEditTree').value || '').trim();
   var adopter = (document.getElementById('certEditAdopter').value || '').trim();
-  if (!treeNo) { Toast.warning('请选择果树编号'); return; }
+  if (!rawTreeNo) { Toast.warning('请选择果树编号'); return; }
+  var treeNo = (S && S.normalizeCode(rawTreeNo)) || rawTreeNo;
   if (!adopter) { Toast.warning('请输入认养人'); return; }
   var certNo = (document.getElementById('certEditNo').value || '').trim() || genCertNo();
   var list = readCerts();
@@ -811,41 +825,49 @@ function submitCertEdit() {
   var dup = list.filter(function (c) { return c.certNo === certNo && c.certNo !== editingCertNo; })[0];
   if (dup) { Toast.error('证书编号已存在：' + certNo); return; }
 
+  // 关联认养台账：补齐基地/地块/品种，并带上订单与金额
+  var tree = S ? S.findTree(treeNo) : null;
+  var order = S ? S.orders().filter(function (o) {
+    return o.treeCode === treeNo && ['paid', 'completed'].indexOf(o.status) >= 0;
+  })[0] : null;
+
   var data = {
     certNo: certNo,
     treeNo: treeNo,
     treeFull: 'AD-' + treeNo,
     adopter: adopter,
-    periodStart: document.getElementById('certEditPeriodStart').value || '',
-    periodEnd:   document.getElementById('certEditPeriodEnd').value || '',
-    variety:     document.getElementById('certEditVariety').value || '',
+    periodStart: document.getElementById('certEditPeriodStart').value || (order ? order.startDate : ''),
+    periodEnd:   document.getElementById('certEditPeriodEnd').value   || (order ? order.endDate : ''),
+    variety:     document.getElementById('certEditVariety').value || (tree ? tree.variety : ''),
     expectedYield: document.getElementById('certEditYield').value || '',
-    base: document.getElementById('certEditBase').value || '',
-    plot: document.getElementById('certEditPlot').value || '',
+    base: document.getElementById('certEditBase').value || (tree ? tree.baseName : ''),
+    plot: document.getElementById('certEditPlot').value || (tree ? tree.plotName : ''),
     issueDate: document.getElementById('certEditIssueDate').value || todayStr(),
     status: document.getElementById('certEditStatus').value || 'pending',
-    templateId: document.getElementById('certEditTpl').value || ''
+    templateId: document.getElementById('certEditTpl').value || '',
+    orderNo: order ? order.orderNo : '',
+    amount: order ? order.amount : 0
   };
-  if (editingCertNo) {
-    var idx = list.findIndex(function (c) { return c.certNo === editingCertNo; });
-    if (idx >= 0) {
-      var old = list[idx];
-      data.issuedBy = old.issuedBy || '';
-      data.issueTime = old.issueTime || '';
-      data.revokeReason = old.revokeReason || '';
-      data.createTime = old.createTime || new Date().toISOString();
-      list[idx] = Object.assign({}, old, data);
-    } else {
-      data.createTime = new Date().toISOString();
-      list.unshift(data);
+  /* 写入统一走 AdoptionStore：按果树编号归一 upsert，并校验果树存在于认养台账 */
+  if (S && S.saveCert) {
+    try {
+      S.saveCert(data);
+    } catch (e) {
+      Toast.error(e.message);
+      return;
     }
-    Toast.success('已保存');
   } else {
     data.createTime = new Date().toISOString();
-    list.unshift(data);
-    Toast.success('已新增');
+    if (editingCertNo) {
+      var idx = list.findIndex(function (c) { return c.certNo === editingCertNo; });
+      if (idx >= 0) list[idx] = Object.assign({}, list[idx], data);
+      else list.unshift(data);
+    } else {
+      list.unshift(data);
+    }
+    writeCerts(list);
   }
-  writeCerts(list);
+  Toast.success(editingCertNo ? '已保存' : '已新增');
   closeCertEdit();
   renderStats();
   renderCertTable();
@@ -856,8 +878,11 @@ function deleteCert(certNo) {
     title: '删除证书',
     message: '确认删除证书 ' + certNo + ' 吗？该操作不可恢复。',
     onConfirm: function () {
-      var list = readCerts().filter(function (c) { return c.certNo !== certNo; });
-      writeCerts(list);
+      if (S && S.removeCert) {
+        try { S.removeCert(certNo); } catch (e) { Toast.error(e.message); return; }
+      } else {
+        writeCerts(readCerts().filter(function (c) { return c.certNo !== certNo; }));
+      }
       Toast.success('已删除');
       renderStats();
       renderCertTable();
@@ -908,6 +933,8 @@ function openCertDetail(certNo) {
     +   '<div>品种：' + esc(c.variety || '-') + '</div>'
     +   '<div>预估产量：' + esc(c.expectedYield || '-') + '</div>'
     +   '<div>基地/地块：' + esc((c.base || '-') + (c.plot ? ' / ' + c.plot : '')) + '</div>'
+    +   '<div>关联订单：' + esc(c.orderNo || '-') + '</div>'
+    +   '<div>认养金额：' + esc(c.amount ? '¥' + Number(c.amount).toLocaleString() : '-') + '</div>'
     +   '<div>发证日期：' + esc(c.issueDate || '-') + '</div>'
     +   '<div>签发时间：' + esc(c.issueTime || '-') + '</div>'
     +   '<div>签发人：' + esc(c.issuedBy || '-') + '</div>'
@@ -966,13 +993,21 @@ function submitCertAction() {
   if (pendingAction === 'issue') {
     var issuer = (document.getElementById('certActionIssuer').value || '').trim();
     if (!issuer) { Toast.warning('请填写签发人'); return; }
-    var list = readCerts();
-    var idx = list.findIndex(function (c) { return c.certNo === pendingCertNo; });
-    if (idx < 0) return;
-    list[idx].status = 'issued';
-    list[idx].issuedBy = issuer;
-    list[idx].issueTime = formatNow();
-    writeCerts(list);
+    var cur = findCert(pendingCertNo);
+    if (!cur) return;
+    if (S && S.saveCert) {
+      try {
+        S.saveCert({ certNo: cur.certNo, treeNo: cur.treeNo, status: 'issued', issuedBy: issuer, issueTime: formatNow() });
+      } catch (e) { Toast.error(e.message); return; }
+    } else {
+      var list = readCerts();
+      var idx = list.findIndex(function (c) { return c.certNo === pendingCertNo; });
+      if (idx < 0) return;
+      list[idx].status = 'issued';
+      list[idx].issuedBy = issuer;
+      list[idx].issueTime = formatNow();
+      writeCerts(list);
+    }
     Toast.success('已签发');
     closeCertAction();
     renderStats();
@@ -980,12 +1015,20 @@ function submitCertAction() {
   } else if (pendingAction === 'revoke') {
     var reason = (document.getElementById('certActionReason').value || '').trim();
     if (!reason) { Toast.warning('请填写撤销原因'); return; }
-    var list2 = readCerts();
-    var idx2 = list2.findIndex(function (c) { return c.certNo === pendingCertNo; });
-    if (idx2 < 0) return;
-    list2[idx2].status = 'revoked';
-    list2[idx2].revokeReason = reason;
-    writeCerts(list2);
+    var cur2 = findCert(pendingCertNo);
+    if (!cur2) return;
+    if (S && S.saveCert) {
+      try {
+        S.saveCert({ certNo: cur2.certNo, treeNo: cur2.treeNo, status: 'revoked', revokeReason: reason });
+      } catch (e) { Toast.error(e.message); return; }
+    } else {
+      var list2 = readCerts();
+      var idx2 = list2.findIndex(function (c) { return c.certNo === pendingCertNo; });
+      if (idx2 < 0) return;
+      list2[idx2].status = 'revoked';
+      list2[idx2].revokeReason = reason;
+      writeCerts(list2);
+    }
     Toast.success('已撤销');
     closeCertAction();
     renderStats();

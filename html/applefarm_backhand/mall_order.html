@@ -70,6 +70,9 @@
   .status-tag.shipped { background: var(--primary-50); color: var(--primary-600); }
   .status-tag.completed { background: var(--success-bg); color: var(--success); }
   .status-tag.cancelled { background: var(--gray-100); color: var(--text-secondary); }
+  .status-tag.refunding { background: var(--warning-bg); color: var(--warning); }
+  .status-tag.refunded { background: var(--error-bg); color: var(--error); }
+  .member-chip { font-size:var(--font-size-xs);color:var(--primary-600);background:var(--primary-50);border-radius:99px;padding:2px 8px;display:inline-block;margin-top:3px; }
   .modal-overlay {
     display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.5); z-index: 1000;
@@ -168,6 +171,14 @@
         <div class="stat-value" id="statPaid">0</div>
       </div>
       <div class="stat-card">
+        <div class="stat-label">待收货</div>
+        <div class="stat-value" id="statShipped">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">退款中</div>
+        <div class="stat-value" id="statRefund" style="color:var(--warning);">0</div>
+      </div>
+      <div class="stat-card">
         <div class="stat-label">已完成</div>
         <div class="stat-value" id="statCompleted">0</div>
       </div>
@@ -198,7 +209,8 @@
               <th style="width:150px;">订单号</th>
               <th style="width:150px;">下单时间</th>
               <th>商品</th>
-              <th style="width:100px;">金额</th>
+              <th style="width:110px;">金额</th>
+              <th style="width:100px;">会员</th>
               <th style="width:90px;">支付方式</th>
               <th style="width:200px;">收货地址</th>
               <th style="width:90px;">状态</th>
@@ -261,9 +273,34 @@
   </div>
 </div>
 
+<!-- ===== 备注弹窗 ===== -->
+<div class="modal-overlay" id="remarkModal">
+  <div class="modal-box" style="max-width:520px;">
+    <div class="modal-header">
+      <h3 class="modal-title">订单备注</h3>
+      <button class="modal-close" onclick="closeModal('remarkModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-block">
+        <div class="detail-label">订单号</div>
+        <div class="detail-value" id="remarkNo">—</div>
+      </div>
+      <div class="form-field">
+        <label>备注内容</label>
+        <textarea id="remarkText" rows="4" style="width:100%;padding:10px 14px;border:1.5px solid var(--border-default);border-radius:12px;font-family:inherit;box-sizing:border-box;" placeholder="仅后台可见，如客户要求周末配送"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeModal('remarkModal')">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="confirmRemark()">保存备注</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/mall-store.js"></script>
 <script src="js/shared/demo-seed.js"></script>
 <script>
 /* ============================================================
@@ -287,10 +324,12 @@ var TABS = [
   { key: 'paid', text: '待发货' },
   { key: 'shipped', text: '待收货' },
   { key: 'completed', text: '已完成' },
+  { key: 'refunding', text: '退款中' },
+  { key: 'refunded', text: '已退款' },
   { key: 'cancelled', text: '已取消' }
 ];
 
-var STATUS_TEXT = { pending: '待付款', paid: '待发货', shipped: '待收货', completed: '已完成', cancelled: '已取消' };
+var STATUS_TEXT = { pending: '待付款', paid: '待发货', shipped: '待收货', completed: '已完成', cancelled: '已取消', refunding: '退款中', refunded: '已退款' };
 
 var COMPANY_TEXT = { sf: '顺丰速运', jd: '京东物流', yd: '圆通速递', yt: '韵达快递', zt: '中通快递' };
 
@@ -347,11 +386,20 @@ function couponText(code) {
 function statusOf(o, shipped) {
   var code = o.statusCode;
   if (!STATUS_TEXT[code]) {
-    var map = { '待付款': 'pending', '已取消': 'cancelled', '待发货': 'paid', '待收货': 'shipped', '已完成': 'completed' };
+    var map = { '待付款': 'pending', '已取消': 'cancelled', '待发货': 'paid', '待收货': 'shipped', '已完成': 'completed', '退款中': 'refunding', '已退款': 'refunded' };
     code = map[o.status] || 'pending';
   }
   if (shipped && code === 'paid') code = 'shipped';
   return code;
+}
+
+function memberName(o) {
+  var list = typeof MallStore !== 'undefined' ? MallStore.members() : [];
+  for (var i = 0; i < list.length; i++) {
+    if (o.memberId && list[i].id === o.memberId) return list[i].nickname;
+    if (o.address && list[i].phone && list[i].phone === o.address.phone) return list[i].nickname;
+  }
+  return o.memberId || '未绑定';
 }
 
 /* 构建行数据：兼容脏数据，缺字段一律给默认值 */
@@ -380,6 +428,17 @@ function buildRows() {
       invoice: !!o.invoice,
       invoiceNo: o.invoiceNo || '',
       couponCode: o.couponCode || '',
+      couponDiscount: Number(o.couponDiscount) || 0,
+      pointsUsed: Number(o.pointsUsed) || 0,
+      pointsDiscount: Number(o.pointsDiscount) || 0,
+      freight: Number(o.freight) || 0,
+      memberId: o.memberId || '',
+      memberName: memberName(o),
+      remark: o.remark || '',
+      payTxnNo: o.payTxnNo || '',
+      payTime: o.payTime || '',
+      afterSalesId: o.afterSalesId || '',
+      adoptionOrders: Array.isArray(o.adoptionOrders) ? o.adoptionOrders : [],
       address: addr,
       createdAt: o.createdAt || '',
       status: statusOf(o, !!ship),
@@ -392,22 +451,26 @@ function buildRows() {
 }
 
 function renderStats(rows) {
-  var pending = 0, paid = 0, completed = 0, amount = 0;
+  var pending = 0, paid = 0, shipped = 0, completed = 0, refund = 0, amount = 0;
   rows.forEach(function (r) {
     if (r.status === 'pending') pending++;
     else if (r.status === 'paid') paid++;
+    else if (r.status === 'shipped') shipped++;
     else if (r.status === 'completed') completed++;
-    if (r.status !== 'cancelled') amount += r.total;
+    else if (r.status === 'refunding') refund++;
+    if (r.status !== 'cancelled' && r.status !== 'refunded') amount += r.total;
   });
   document.getElementById('statTotal').textContent = rows.length;
   document.getElementById('statPending').textContent = pending;
   document.getElementById('statPaid').textContent = paid;
+  document.getElementById('statShipped').textContent = shipped;
+  document.getElementById('statRefund').textContent = refund;
   document.getElementById('statCompleted').textContent = completed;
   document.getElementById('statAmount').textContent = '¥' + amount.toLocaleString('zh-CN');
 }
 
 function renderTabs(rows) {
-  var counts = { all: rows.length, pending: 0, paid: 0, shipped: 0, completed: 0, cancelled: 0 };
+  var counts = { all: rows.length, pending: 0, paid: 0, shipped: 0, completed: 0, cancelled: 0, refunding: 0, refunded: 0 };
   rows.forEach(function (r) { counts[r.status] = (counts[r.status] || 0) + 1; });
   document.getElementById('statusTabs').innerHTML = TABS.map(function (t) {
     return '<button class="status-tab' + (currentTab === t.key ? ' active' : '') + '" onclick="switchTab(\'' + t.key + '\')">' +
@@ -462,17 +525,26 @@ function renderTable() {
       '<div><div class="goods-name">' + esc(first.name || '商品') + '</div>' +
       '<div class="goods-sub">' + esc(first.spec || first.desc || '标准装') + ' × ' + (Number(first.qty) || 1) +
         (moreCount > 0 ? ' · 另 ' + moreCount + ' 件' : '') + '</div></div></div>';
-    var btns = '<button class="action-btn detail" onclick="openDetail(\'' + esc(r.no) + '\')">查看详情</button>';
+    var btns = '<button class="action-btn detail" onclick="openDetail(\'' + esc(r.no) + '\')">详情</button>';
     if (r.status === 'paid') {
       btns += '<button class="action-btn ship" onclick="openShip(\'' + esc(r.no) + '\')">发货</button>';
     }
+    if (r.status === 'pending') {
+      btns += '<button class="action-btn delete" onclick="cancelOrder(\'' + esc(r.no) + '\')">取消</button>';
+    }
+    if (r.status === 'paid' || r.status === 'shipped' || r.status === 'completed') {
+      btns += '<button class="action-btn delete" onclick="refundOrder(\'' + esc(r.no) + '\')">退款</button>';
+    }
+    btns += '<button class="action-btn detail" onclick="openRemark(\'' + esc(r.no) + '\')">备注</button>';
     return '<tr>' +
       '<td class="checkbox-col">' + (i + 1) + '</td>' +
       '<td class="text-mono"><strong>' + esc(r.no) + '</strong>' +
-        (r.invoice ? '<div class="goods-sub">已申请发票</div>' : '') + '</td>' +
+        (r.invoice ? '<div class="goods-sub">已申请发票</div>' : '') +
+        (r.remark ? '<div class="goods-sub">备注：' + esc(r.remark) + '</div>' : '') + '</td>' +
       '<td class="text-mono" style="font-size:var(--font-size-xs);">' + esc(fmtTime(r.createdAt)) + '</td>' +
       '<td>' + goods + '</td>' +
       '<td class="amount-cell">¥' + r.total.toLocaleString('zh-CN') + '</td>' +
+      '<td><span class="member-chip">' + esc(r.memberName) + '</span></td>' +
       '<td style="font-size:var(--font-size-sm);">' + esc(r.payment) + '</td>' +
       '<td><div class="addr-cell">' + addrText(r) + '</div></td>' +
       '<td><span class="status-tag ' + esc(r.status) + '">' + (STATUS_TEXT[r.status] || r.status) + '</span></td>' +
@@ -531,7 +603,13 @@ function openDetail(no) {
       '<div class="detail-value" style="padding:8px 12px;">' + goodsHtml + '</div></div>' +
     '<div class="detail-block"><div class="detail-label">金额构成</div>' +
       '<div class="detail-value">商品金额 ¥' + r.subtotal.toLocaleString('zh-CN') +
-      ' − 优惠 ¥' + r.discount.toLocaleString('zh-CN') + ' = 实付 <strong>¥' + r.total.toLocaleString('zh-CN') + '</strong></div></div>' +
+      '<br>优惠券抵扣 ¥' + r.couponDiscount.toLocaleString('zh-CN') +
+      '<br>积分抵扣 ¥' + r.pointsDiscount.toLocaleString('zh-CN') + '（' + r.pointsUsed + ' 积分）' +
+      '<br>运费 ¥' + r.freight.toLocaleString('zh-CN') +
+      '<br>优惠合计 − ¥' + r.discount.toLocaleString('zh-CN') + ' = 实付 <strong>¥' + r.total.toLocaleString('zh-CN') + '</strong></div></div>' +
+    '<div class="detail-block"><div class="detail-label">会员归属</div>' +
+      '<div class="detail-value">' + esc(r.memberName) + (r.memberId ? '（' + esc(r.memberId) + '）' : '') +
+      '<br><span style="color:var(--text-tertiary);font-size:var(--font-size-xs);">已按手机号/会员 ID 与会员档案自动关联</span></div></div>' +
     '<div class="detail-block"><div class="detail-label">收货地址快照</div>' +
       '<div class="detail-value">' + (r.address ? (esc(r.address.name || '') + ' ' + esc(r.address.phone || '') +
         '<br>' + esc([r.address.region, r.address.detail].filter(Boolean).join(' '))) : '该订单未记录地址快照') + '</div></div>' +
@@ -540,10 +618,79 @@ function openDetail(no) {
     '<div class="detail-block"><div class="detail-label">发票信息</div>' +
       '<div class="detail-value">' + (r.invoice ? '已申请发票' + (r.invoiceNo ? '（发票号 ' + esc(r.invoiceNo) + '）' : '') : '未申请发票') + '</div></div>' +
     '<div class="detail-block"><div class="detail-label">支付与下单</div>' +
-      '<div class="detail-value">支付方式：' + esc(r.payment) + '<br>下单时间：' + esc(fmtTime(r.createdAt)) + '</div></div>' +
+      '<div class="detail-value">支付方式：' + esc(r.payment) +
+      '<br>支付流水：' + esc(r.payTxnNo || '未记录') +
+      '<br>支付时间：' + (r.payTime ? esc(fmtTime(r.payTime)) : '未记录') +
+      '<br>下单时间：' + esc(fmtTime(r.createdAt)) + '</div></div>' +
+    '<div class="detail-block"><div class="detail-label">订单备注</div>' +
+      '<div class="detail-value">' + (r.remark ? esc(r.remark) : '无') + '</div></div>' +
+    (r.adoptionOrders.length ? '<div class="detail-block"><div class="detail-label">关联认养订单</div>' +
+      '<div class="detail-value">' + r.adoptionOrders.map(esc).join('<br>') + '</div></div>' : '') +
     '<div class="detail-block"><div class="detail-label">物流信息</div>' + shipHtml + '</div>';
 
   document.getElementById('detailModal').classList.add('show');
+}
+
+/* 取消订单：仅待付款可取消 */
+function cancelOrder(no) {
+  var r = findByNo(no);
+  if (!r) { Toast.error('未找到该订单'); return; }
+  if (r.status !== 'pending') { Toast.warning('仅待付款订单可以取消'); return; }
+  ConfirmDialog.show({
+    title: '取消订单',
+    message: '确定取消订单 ' + no + ' 吗？取消后不可恢复。',
+    confirmText: '确认取消',
+    danger: true,
+    onConfirm: function () {
+      var res = MallStore.cancelOrder(no, '后台管理员取消');
+      if (!res.ok) { Toast.error(res.error || '取消失败'); return; }
+      renderTable();
+      Toast.success('订单已取消');
+    }
+  });
+}
+
+/* 退款：创建售后单并推进订单为已退款 */
+function refundOrder(no) {
+  var r = findByNo(no);
+  if (!r) { Toast.error('未找到该订单'); return; }
+  var reason = window.prompt('请填写退款原因', '客户申请退款');
+  if (reason === null) return;
+  reason = reason.trim();
+  if (!reason) { Toast.warning('退款原因不能为空'); return; }
+  var created = MallStore.saveAfterSale({
+    orderNo: no,
+    memberId: r.memberId,
+    type: 'refund',
+    reason: reason,
+    amount: r.total,
+    status: 'pending',
+    handler: '后台管理员'
+  });
+  if (!created.ok) { Toast.error(created.error || '售后单创建失败'); return; }
+  var res = MallStore.updateAfterSale(created.data.id, { status: 'refunded', remark: reason });
+  if (!res.ok) { Toast.error(res.error || '退款失败'); return; }
+  renderTable();
+  Toast.success('退款已完成，订单状态更新为已退款');
+}
+
+/* 订单备注 */
+function openRemark(no) {
+  var r = findByNo(no);
+  if (!r) { Toast.error('未找到该订单'); return; }
+  currentNo = no;
+  document.getElementById('remarkNo').textContent = no;
+  document.getElementById('remarkText').value = r.remark || '';
+  document.getElementById('remarkModal').classList.add('show');
+}
+
+function confirmRemark() {
+  var text = document.getElementById('remarkText').value.trim();
+  var res = MallStore.updateOrder(currentNo, { remark: text });
+  if (!res.ok) { Toast.error(res.error || '备注保存失败'); return; }
+  closeModal('remarkModal');
+  renderTable();
+  Toast.success('备注已保存');
 }
 
 /* 发货：写 h5_sales_orders + 推进 h5_orders 状态为「待收货」 */
@@ -563,33 +710,17 @@ function confirmShip() {
   if (!tracking) { Toast.warning('请填写运单号'); return; }
   var no = currentNo;
   var company = document.getElementById('shipCompany').value;
-  var shippedAt = new Date().toISOString();
-
-  var ships = readArr(SHIP_KEY).filter(function (s) { return !(s && (s.orderNo === no)); });
-  ships.unshift({ orderNo: no, tracking: tracking, company: company, shippedAt: shippedAt });
-  writeArr(SHIP_KEY, ships);
-
-  var orders = readArr(ORDERS_KEY);
-  var hit = false;
-  orders.forEach(function (o) {
-    if (!o || (o.no || o.id) !== no) return;
-    // 待付款订单在发货时一并推进为待发货，与 sales_order.html 行为一致
-    if (o.statusCode === 'pending' || o.status === '待付款') { o.statusCode = 'paid'; o.status = '待发货'; }
-    if (o.statusCode === 'paid' || o.status === '待发货') { o.statusCode = 'shipped'; o.status = '待收货'; hit = true; }
-    if (!Array.isArray(o.logistics)) o.logistics = [];
-    o.logistics.push({ company: company, tracking: tracking, shippedAt: shippedAt });
-  });
-  if (hit) writeArr(ORDERS_KEY, orders);
-
+  var res = MallStore.shipOrder(no, company, tracking);
+  if (!res.ok) { Toast.error(res.error || '发货失败'); return; }
   closeModal('shipModal');
   renderTable();
-  if (hit) Toast.success('已发货，运单号：' + tracking);
-  else Toast.warning('物流已记录，但订单状态未推进（可能已取消）');
+  Toast.success('已发货，运单号：' + tracking);
 }
 
 document.addEventListener('DOMContentLoaded', function () {
   // 演示数据播种：仅在 H5 尚未产生订单时写入 25 条示意订单 + 对应运单
   DemoSeed.ensure('c-orders');
+  if (typeof MallStore !== 'undefined') MallStore.migrate();
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });

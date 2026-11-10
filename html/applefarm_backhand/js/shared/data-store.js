@@ -99,6 +99,17 @@
 
   function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
 
+  // 归集记录 / 里程碑自增编号（DC01、MS01 …）
+  function nextId(list, prefix){
+    var max = 0;
+    list.forEach(function(x){
+      var m = String(x.id || '').match(new RegExp('^' + prefix + '(\\d+)$'));
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+    var n = max + 1;
+    return prefix + (n < 10 ? '0' + n : String(n));
+  }
+
   function defaults(){
     return {
       sources: deepClone(DEFAULT_SOURCES),
@@ -222,6 +233,92 @@
       if (idx >= 0) d.models[idx] = Object.assign({}, d.models[idx], item);
       else d.models.push(item);
       broadcast('model:' + item.id);
+      return true;
+    },
+
+    /* ---- 数据归集维护（归集明细 → 驾驶舱累计归集量/合格率/占比） ---- */
+    upsertCollection: function(item){
+      var d = ensure();
+      item = item || {};
+      var source = String(item.source || '').trim();
+      var amount = Number(item.amount);
+      var yoy = Number(item.yoy);
+      var rate = Number(item.rate);
+      if (!source) return { ok:false, message:'请填写数据来源' };
+      if (!isFinite(amount) || amount < 0) return { ok:false, message:'归集量需为不小于 0 的数字' };
+      if (!isFinite(rate) || rate < 0 || rate > 100) return { ok:false, message:'合格率需在 0 ~ 100 之间' };
+      if (!isFinite(yoy)) yoy = 0;
+      var dup = d.collections.filter(function(x){ return x.source === source && x.id !== item.id; })[0];
+      if (dup) return { ok:false, message:'数据来源「' + source + '」已存在' };
+
+      var idx = d.collections.findIndex(function(x){ return x.id === item.id; });
+      var payload = {
+        id: item.id || nextId(d.collections, 'DC'),
+        source: source,
+        amount: Math.round(amount),
+        yoy: Math.round(yoy * 10) / 10,
+        rate: Math.round(rate * 10) / 10,
+        category: String(item.category || '其他').trim() || '其他'
+      };
+      if (idx >= 0) d.collections[idx] = Object.assign({}, d.collections[idx], payload);
+      else d.collections.push(payload);
+      broadcast('collection:' + payload.id);
+      return { ok:true, item: payload };
+    },
+    removeCollection: function(id){
+      var d = ensure();
+      d.collections = d.collections.filter(function(x){ return x.id !== id; });
+      broadcast('collection-remove:' + id);
+      return true;
+    },
+
+    /* ---- 提质增效维护（成效项 → 驾驶舱提质增效对比） ---- */
+    updateAchievement: function(id, patch){
+      var d = ensure();
+      var item = d.achievements.filter(function(x){ return x.id === id; })[0];
+      if (!item) return { ok:false, message:'成效项不存在' };
+      patch = patch || {};
+      var before = patch.before === undefined ? Number(item.before) : Number(patch.before);
+      var after = patch.after === undefined ? Number(item.after) : Number(patch.after);
+      if (!isFinite(before) || before <= 0) return { ok:false, message:'实施前基准需大于 0' };
+      if (!isFinite(after) || after < 0) return { ok:false, message:'实施后数值需为不小于 0 的数字' };
+      item.before = Math.round(before * 10) / 10;
+      item.after = Math.round(after * 10) / 10;
+      // 变化幅度统一由实施前后推导，避免与大屏口径不一致
+      item.delta = Math.round((item.after - item.before) * 10) / 10;
+      if (patch.desc !== undefined) item.desc = String(patch.desc || '').trim();
+      broadcast('achievement:' + id);
+      return { ok:true, item: item };
+    },
+
+    /* ---- 数字化里程碑维护（里程碑 → 驾驶舱成果时间轴） ---- */
+    upsertMilestone: function(item){
+      var d = ensure();
+      item = item || {};
+      var date = String(item.date || '').trim();
+      var title = String(item.title || '').trim();
+      if (!/^\d{4}-\d{2}(-\d{2})?$/.test(date)) return { ok:false, message:'日期格式应为 YYYY-MM 或 YYYY-MM-DD' };
+      if (!title) return { ok:false, message:'请填写里程碑标题' };
+
+      var idx = d.milestones.findIndex(function(x){ return x.id === item.id; });
+      var payload = {
+        id: item.id || nextId(d.milestones, 'MS'),
+        date: date,
+        title: title,
+        desc: String(item.desc || '').trim(),
+        status: item.status || 'done'
+      };
+      if (idx >= 0) d.milestones[idx] = Object.assign({}, d.milestones[idx], payload);
+      else d.milestones.push(payload);
+      // 统一按时间升序存储，驾驶舱时间轴与后台页签口径一致
+      d.milestones.sort(function(a, b){ return String(a.date).localeCompare(String(b.date)); });
+      broadcast('milestone:' + payload.id);
+      return { ok:true, item: payload };
+    },
+    removeMilestone: function(id){
+      var d = ensure();
+      d.milestones = d.milestones.filter(function(x){ return x.id !== id; });
+      broadcast('milestone-remove:' + id);
       return true;
     },
 

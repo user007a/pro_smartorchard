@@ -829,7 +829,12 @@ const MENU_CONFIG = [
     { id: 'adoption-harvest', label: '认养采收', path: 'adoption_harvest.html' },
     { id: 'adoption-order', label: '认养订单', path: 'adoption_order.html' },
     { id: 'sales-order', label: '销售订单', path: 'sales_order.html' },
+    { id: 'sales-shipment', label: '发货与物流', path: 'sales_shipment.html' },
     { id: 'sales-customer', label: '客户管理', path: 'sales_customer.html' },
+    { id: 'sales-aftersale', label: '售后与退款', path: 'sales_aftersale.html' },
+    { id: 'sales-price', label: '价格与促销', path: 'sales_price.html' },
+    { id: 'sales-target', label: '销售目标', path: 'sales_target.html' },
+    { id: 'sales-statement', label: '客户对账单', path: 'sales_statement.html' },
     { id: 'sales-statistics', label: '销售统计', path: 'sales_statistics.html' },
   ]},
 
@@ -868,10 +873,6 @@ const MENU_CONFIG = [
 
   { id: 'dataops', icon: 'database', label: '数据运营', children: [
     { id: 'data-source', label: '数据源接入', path: 'data_source.html' },
-  ]},
-
-  { id: 'tools', icon: 'book-open', label: '农事工具', children: [
-    { id: 'guide-calculator', label: '农事计算器', path: 'guide_calculator.html' },
   ]},
 ];
 
