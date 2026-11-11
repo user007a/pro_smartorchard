@@ -1,0 +1,49 @@
+# ── 阶段 1：依赖安装 ────────────────────────────────
+FROM node:20-alpine AS builder
+
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
+    NPM_CONFIG_FUND=false \
+    NPM_CONFIG_AUDIT=false
+
+WORKDIR /build
+
+# 先拷贝依赖清单，利用 Docker 层缓存：只有 package.json 变化才重装依赖
+COPY server/package.json server/package-lock.json* ./
+
+RUN npm install --omit=dev --no-audit --no-fund
+
+# ── 阶段 2：运行镜像 ────────────────────────────────
+FROM node:20-alpine AS runtime
+
+ENV NODE_ENV=production \
+    TZ=Asia/Shanghai
+
+WORKDIR /app
+
+# curl 用于容器健康检查；tzdata 用于时区（数据库时间按 Asia/Shanghai）
+RUN apk add --no-cache curl tzdata \
+    && addgroup -g 1001 appuser \
+    && adduser -u 1001 -G appuser -S appuser
+
+COPY --from=builder /build/node_modules ./node_modules
+COPY server/package.json ./
+COPY server/app.js ./
+COPY server/resources.js ./
+COPY server/config ./config
+COPY server/middleware ./middleware
+COPY server/routes ./routes
+COPY server/utils ./utils
+COPY server/db ./db
+
+# 上传目录：文件落到宿主机 volume，容器重建不丢
+RUN mkdir -p /app/uploads && chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 3000
+
+# 健康检查：/api/health 是公开接口，无需鉴权
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
+    CMD curl -fsS http://127.0.0.1:3000/api/health || exit 1
+
+CMD ["node", "app.js"]

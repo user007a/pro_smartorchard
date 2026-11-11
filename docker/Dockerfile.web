@@ -1,0 +1,13 @@
+# ── 前端静态托管（Nginx）────────────────────────────
+# 前端是纯静态 HTML/CSS/JS，无需构建，直接由 Nginx 托管。
+FROM nginx:1.27-alpine AS runtime
+
+ENV TZ=Asia/Shanghai
+
+# 用 127.0.0.1 而非 localhost：alpine 下 localhost 优先解析到 ::1，
+# 而 nginx 仅监听 IPv4，会导致健康检查一直 Connection refused。
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q --spider http://127.0.0.1/portal.html || exit 1
+
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY html /usr/share/nginx/html

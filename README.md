@@ -34,17 +34,71 @@
 
 ---
 
-## 三、本地启动（三步）
+## 三、一键启动（推荐：Docker）
+
+### 你只需要一条命令
+
+```bash
+docker compose up -d
+```
+
+首次启动会自动完成：构建镜像 → 创建 MySQL 数据卷 → **建库建表（131 张表）→ 灌入种子数据** → 启动后端与前端。
+
+等待约 1~2 分钟后访问：
+
+| 地址 | 内容 |
+|---|---|
+| **http://localhost:8080/portal.html** | **统一门户（四端入口，从这里进）** |
+| http://localhost:8080/applefarm_backhand/login.html | 后台登录 |
+| http://localhost:8080/applefarm_mobile/mb_login.html | 移动端登录 |
+| http://localhost:8080/applefarm_h5/index.html | H5 消费者端 |
+| http://localhost:8080/applefarm_dataanlye/da_dashboard.html | 数据大屏 |
+| http://localhost:8080/api/health | 健康检查 |
+
+> 页面与接口同源（都走 Nginx），前端无需任何配置。
+
+### 常用命令
+
+```bash
+docker compose ps              # 查看三个容器状态
+docker compose logs -f api     # 看后端日志
+docker compose restart api     # 只重启后端
+docker compose down            # 停止（保留数据）
+docker compose down -v         # 停止并清空数据（下次启动会重新灌种子）
+docker compose up -d --build   # 代码改了之后重新构建
+```
+
+### 端口说明
+
+| 容器 | 端口 | 说明 |
+|---|---|---|
+| so-web | **8080** | 前端入口（Nginx），日常用这个 |
+| so-api | 3000 | 后端接口直连（一般不需要直接访问） |
+| so-mysql | 3306 | 数据库，可用 Navicat 等工具连接 |
+
+### 修改数据库密码
+
+项目根目录建 `.env` 文件（已被 `.gitignore` 排除，不会入库）：
+
+```
+MYSQL_ROOT_PASSWORD=你的密码
+MYSQL_DATABASE=smartorchard
+JWT_SECRET=换成随机长字符串
+```
+
+改完执行 `docker compose up -d` 生效。**注意：已存在的数据卷不会被密码变更影响，需 `docker compose down -v` 重建。**
+
+---
+
+## 四、本地开发启动（不用 Docker）
+
+适合改代码时用热重载调试。
 
 ### 第 1 步：准备 MySQL
 
-任选一种：
-
-- **用 Docker（推荐）**
-  ```bash
-  docker run -d --name so-mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:8.0
-  ```
-- 已有 MySQL 8.0 则跳过，记住账号密码即可。
+```bash
+docker run -d --name so-mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:8.0
+```
 
 ### 第 2 步：建库灌数据
 
@@ -63,7 +117,7 @@ docker exec -i so-mysql mysql -uroot -proot smartorchard_dev < server/db/seed.sq
 cd server
 npm install
 cp .env.example .env      # 按实际情况改 DB_PASSWORD / DB_NAME
-npm start
+npm run dev               # 或 npm start
 ```
 
 启动后访问：
@@ -71,14 +125,14 @@ npm start
 | 地址 | 内容 |
 |---|---|
 | http://127.0.0.1:3000/html/portal.html | 统一门户（四端入口） |
-| http://127.0.0.1:3000/html/applefarm_backhand/login.html | 后台登录 |
+| http://127.0.0.1:3000/applefarm_backhand/login.html | 后台登录 |
 | http://127.0.0.1:3000/api/health | 健康检查 |
 
 > 后端同时托管前端静态文件，所以**页面和接口同源**，不需要额外起静态服务器。
 
 ---
 
-## 四、演示账号
+## 五、演示账号
 
 | 端 | 入口 | 账号 | 密码 |
 |---|---|---|---|
@@ -88,7 +142,7 @@ npm start
 
 ---
 
-## 五、目录结构
+## 六、目录结构
 
 ```
 pro_smartorchard/
@@ -99,7 +153,7 @@ pro_smartorchard/
 │   ├── store与数据表映射规范.md   前后端打通模板
 │   └── ...
 ├── html/          四端前端页面 + common 公共资源
-│   ├── portal.html
+│   ├── index.html  portal.html
 │   ├── applefarm_backhand/        PC 后台
 │   ├── applefarm_mobile/          移动工作端
 │   ├── applefarm_h5/              H5 消费者端
@@ -113,12 +167,17 @@ pro_smartorchard/
 │   ├── utils/table-meta.js        表结构元数据（动态判断列是否存在）
 │   ├── resources.js               资源白名单与敏感字段保护
 │   └── db/                        schema.sql + seed.sql（单一数据源）
-└── docker/        Docker 编排（开发中）
+├── docker/        Docker 镜像与配置
+│   ├── Dockerfile.api             后端镜像（node:20-alpine）
+│   ├── Dockerfile.web             前端镜像（nginx:1.27-alpine）
+│   └── nginx.conf                 Nginx 配置（静态托管 + /api 反代）
+├── docker-compose.yml             三容器编排（web + api + mysql）
+└── .dockerignore                  构建上下文排除清单
 ```
 
 ---
 
-## 六、数据层铁律（改代码前必读）
+## 七、数据层铁律（改代码前必读）
 
 完整规则见 [`docs/数据设计约定.md`](docs/数据设计约定.md)，要点：
 
@@ -133,7 +192,7 @@ pro_smartorchard/
 
 ---
 
-## 七、前端如何接后端（策略 A：出入口映射）
+## 八、前端如何接后端（策略 A：出入口映射）
 
 界面代码**一行不改**，只把 store 的两个出入口换成 API：
 
@@ -150,7 +209,7 @@ pro_smartorchard/
 
 ---
 
-## 八、后端接口一览
+## 九、后端接口一览
 
 | 接口 | 说明 | 鉴权 |
 |---|---|---|
@@ -171,28 +230,36 @@ pro_smartorchard/
 
 ---
 
-## 九、常见问题
+## 十、常见问题
 
 **Q：改了 `schema.sql` 后页面没变化？**
 A：需要重新导库。`schema.sql` 里的 `DROP TABLE IF EXISTS` 会重建表，数据会被清空，需再跑一遍 `seed.sql`。
+Docker 环境下执行 `docker compose down -v && docker compose up -d` 即可重建。
 
 **Q：页面提示"网络请求失败"？**
-A：后端没启动，或 `.env` 里数据库配置不对。先访问 `/api/health` 确认后端活着。
+A：后端没启动，或数据库配置不对。先访问 `/api/health` 确认后端活着；
+`docker compose logs api` 看后端日志。
 
 **Q：数据没进数据库？**
 A：检查浏览器控制台。若 `DeviceStore.isBackendReady()` 为 false，说明后端桥接未启用（通常是未登录），此时数据仍存 localStorage。
 
+**Q：接口报错但看不到原因？**
+A：后端已做错误脱敏，不会暴露表名和 SQL。详细信息在 `docker compose logs api` 里。
+
 **Q：密码字段安全吗？**
 A：`sf_user` / `sf_mall_member` 用 bcrypt 哈希，`sf_mb_staff_account` 用 SHA-256 摘要。库中**不存明文**。
 
+**Q：换了数据库密码，旧数据还在吗？**
+A：在。密码由 MySQL 镜像的环境变量决定，只在首次创建数据卷时生效。需 `docker compose down -v` 重建（会清空数据）。
+
 ---
 
-## 十、当前进度
+## 十一、当前进度
 
 | 阶段 | 状态 |
 |---|---|
 | 数据设计约定 / ER 图 / 目录规划 | ✅ 完成 |
 | 131 张表建表 + 种子数据 | ✅ 完成 |
 | Node 后端骨架 + 三端登录 + 通用 CRUD | ✅ 完成 |
-| 前端数据层打通 | 🔄 设备模块样板已完成，其余模块待铺开 |
-| Docker 一键部署 | 🔄 待完成 |
+| **Docker 一键部署** | ✅ **完成**（自动建库灌数，页面与接口同源） |
+| 前端数据层打通 | 🔄 设备模块样板已完成，其余 15 个模块待铺开 |

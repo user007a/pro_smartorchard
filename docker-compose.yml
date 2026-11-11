@@ -1,0 +1,104 @@
+name: pro_smartorchard
+
+# ============================================================
+# 智慧果园平台 · 一键部署
+# --------------------------------------------------------------
+# 启动：  docker compose up -d
+# 访问：  http://localhost:8080/portal.html
+# 停止：  docker compose down
+# 重建：  docker compose down && docker compose up -d --build
+#
+# 三个容器：
+#   web    Nginx 托管四端静态页面 + 反向代理 /api
+#   api    Node.js + Express 后端
+#   mysql  MySQL 8.0（数据持久化到 volume）
+# ============================================================
+
+services:
+  # ── 前端（Nginx 静态托管 + API 反代）─────────────────
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    image: pro_smartorchard/web:latest
+    container_name: so-web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - so-net
+
+  # ── 后端（Node.js + Express）────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    image: pro_smartorchard/api:latest
+    container_name: so-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Shanghai
+      PORT: 3000
+      # 数据库连接：走容器服务名，不走 127.0.0.1
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      DB_NAME: ${MYSQL_DATABASE:-smartorchard}
+      DB_POOL_SIZE: 10
+      # 生产环境务必替换为随机字符串
+      JWT_SECRET: ${JWT_SECRET:-smartorchard-dev-secret-change-me}
+      JWT_EXPIRES_IN: 7d
+    ports:
+      - "3000:3000"
+    volumes:
+      # 上传文件持久化：容器重建不丢
+      - api-uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - so-net
+
+  # ── 数据库（MySQL 8.0）──────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: so-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+      - --max_connections=500
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-smartorchard}
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    volumes:
+      # 数据库数据持久化
+      - mysql-data:/var/lib/mysql
+      # 首次启动自动建库灌数（按文件名顺序执行）
+      - ./server/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./server/db/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - so-net
+
+networks:
+  so-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  api-uploads:
