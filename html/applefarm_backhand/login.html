@@ -418,6 +418,7 @@
 <!-- 底部版权 -->
 <div class="copyright">© 2023-2026 湖南智农数果科技有限公司  All Rights Reserved</div>
 
+<script src="../common/js/api.js"></script>
 <script>
   // ===== 浮动粒子 =====
   (function initParticles() {
@@ -597,10 +598,45 @@
     // 显示加载状态
     loginBtn.classList.add('loading');
 
-    // 模拟登录请求（1.2 秒）
-    setTimeout(function() {
-      loginBtn.classList.remove('loading');
+    // 优先尝试后端登录（真实 MySQL 鉴权）；后端不可用时回退本地账号库
+    if (typeof Api !== 'undefined' && Api.login) {
+      Api.login({ username: username, password: password }).then(function (res) {
+        loginBtn.classList.remove('loading');
+        if (res && res.ok && res.data) {
+          // 后端登录成功
+          clearFail(username);
+          sessionStorage.setItem(SESSION_KEY, '1');
+          sessionStorage.setItem(USER_KEY, JSON.stringify({
+            username: res.data.user.username,
+            realName: res.data.user.realName,
+            role: '管理员',
+            loginAt: Date.now()
+          }));
+          if (document.getElementById('rememberMe').checked) {
+            localStorage.setItem(REMEMBER_KEY, JSON.stringify({
+              username: username, password: encodeB64(password),
+              expireAt: Date.now() + REMEMBER_DAYS * 24 * 60 * 60 * 1000
+            }));
+          }
+          window.location.href = 'index.html';
+          return;
+        }
+        if (res && res._unauthorized) {
+          setError('账号或密码错误');
+          return;
+        }
+        // 后端不可用/未返回 → 回退本地账号库
+        localLogin();
+      }).catch(function () {
+        loginBtn.classList.remove('loading');
+        localLogin();
+      });
+    } else {
+      localLogin();
+    }
 
+    function localLogin() {
+      loginBtn.classList.remove('loading');
       // 鉴权：账号是否存在（内置账号库 + 用户设置覆盖表）
       const accounts = getAccountMap();
       const user = accounts[username];
@@ -610,50 +646,34 @@
         passwordError.classList.remove('show');
         return;
       }
-      // 账号是否停用
       if (user.disabled) {
         usernameError.classList.remove('show');
         setError('账号已停用，请联系管理员');
         return;
       }
-      // 密码校验
       if (user.password !== password) {
         const rec = bumpFail(username);
         usernameError.classList.remove('show');
         const left = MAX_ATTEMPTS - rec.count;
-        if (left > 0) {
-          setError('密码错误，还剩 ' + left + ' 次尝试机会');
-        } else {
-          setError('账号已锁定 15 分钟');
-        }
+        if (left > 0) setError('密码错误，还剩 ' + left + ' 次尝试机会');
+        else setError('账号已锁定 15 分钟');
         return;
       }
-
-      // 登录成功
       clearFail(username);
-      // 记住密码：写入用户名 + 密码(Base64) + 7 天免登录有效期
       if (document.getElementById('rememberMe').checked) {
         localStorage.setItem(REMEMBER_KEY, JSON.stringify({
-          username: username,
-          password: encodeB64(password),
+          username: username, password: encodeB64(password),
           expireAt: Date.now() + REMEMBER_DAYS * 24 * 60 * 60 * 1000
         }));
       } else {
         localStorage.removeItem(REMEMBER_KEY);
       }
-
-      // 记录登录状态（含真实姓名与角色）
       sessionStorage.setItem(SESSION_KEY, '1');
       sessionStorage.setItem(USER_KEY, JSON.stringify({
-        username: username,
-        realName: user.realName,
-        role: user.role,
-        loginAt: Date.now()
+        username: username, realName: user.realName, role: user.role, loginAt: Date.now()
       }));
-
-      // 登录成功，直接进入系统首页
       window.location.href = 'index.html';
-    }, 1200);
+    }
   }
 
   // ===== 页面加载：7 天免登录 / 回填记住的账号密码 =====

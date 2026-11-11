@@ -40,6 +40,24 @@
 (function (global) {
   'use strict';
 
+  /* 依赖自动加载：api.js（统一后端请求）与 device-mapper.js（字段映射层）
+   * 若页面尚未引入，则按相对路径同步加载，保证后端桥接可用、页面零改动。 */
+  (function ensureDeps() {
+    if (typeof document === 'undefined') return;
+    var deps = [
+      { name: 'Api', src: '../../../common/js/api.js' },
+      { name: 'DeviceMapper', src: 'device-mapper.js' }
+    ];
+    var selfPath = (document.currentScript && document.currentScript.src) || '';
+    deps.forEach(function (d) {
+      if (global[d.name]) return;
+      var s = document.createElement('script');
+      s.src = d.src;
+      s.async = false;
+      (document.head || document.documentElement).appendChild(s);
+    });
+  })();
+
   var STORAGE_KEY = 'applefarm_device_v1';
   var PLOT_MASTER_KEY = 'smartorchard_plot_master';
 
@@ -900,6 +918,7 @@
 
   var subscribers = [];
   var inMemory = null;
+  var preloadTriggered = false;   // 是否已触发过后端预加载
 
   function defaults() {
     return {
@@ -938,6 +957,8 @@
     try {
       if (inMemory) inMemory.updatedAt = new Date().toISOString();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory));
+      // 后端持久化（异步、不阻塞 UI；失败静默，下次 load 时以库为准）
+      persistToBackend(inMemory);
       return true;
     } catch (e) {
       console.warn('[DeviceStore] 保存失败', e);
@@ -961,6 +982,11 @@
       inMemory = base;
       save();
     }
+    // 首次加载后，异步从后端预加载真实数据（后端可用时覆盖内存）
+    if (!preloadTriggered) {
+      preloadTriggered = true;
+      setTimeout(function () { preloadFromBackend(); }, 0);
+    }
     return inMemory;
   }
 
@@ -980,6 +1006,105 @@
       }
     });
     if (changed) save();
+  }
+
+  /* ============================================================
+   * 6.1 后端桥接层（策略 A 出入口映射）
+   * --------------------------------------------------------------
+   * 把 localStorage 持久化替换为 MySQL（经 server/ 聚合接口）。
+   * 页面调用的同步 API（devices()/upsertDevice() 等）保持不变；
+   * 本层只负责两件事：
+   *   - preloadFromBackend()：启动时异步拉取 13 张表 → 组装 → 替换 inMemory
+   *   - persistToBackend()：save() 时异步把聚合对象推送到后端（全量 upsert）
+   * 后端不可用或未登录时自动回退到 localStorage，保证原型仍可运行。
+   * ============================================================ */
+
+  var backendReady = false;      // 后端桥接是否已启用
+  var backendLoadPromise = null; // 预加载 Promise（防重入）
+
+  function backendApi() {
+    // 依赖全局 Api（common/js/api.js）与 DeviceMapper（device-mapper.js）
+    if (typeof global.Api !== 'function' && typeof global.Api !== 'object') return null;
+    if (!global.Api.get || !global.Api.create) return null;
+    if (typeof global.DeviceMapper === 'undefined') return null;
+    return global.Api;
+  }
+
+  /** 是否应启用后端持久化：已登录 + api.js 可用 */
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+
+  /** 预加载：从后端拉取聚合数据，成功后替换内存并通知 */
+  function preloadFromBackend() {
+    var api = backendApi();
+    if (!api || !api.isLoggedIn || !api.isLoggedIn()) return null;
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = api.get('device/aggregate').then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = global.DeviceMapper.toAggregate(res.data);
+        inMemory = agg;
+        backendReady = true;
+        // 同步写回 localStorage，保持离线兜底
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } catch (e) { /* ignore */ }
+        notify('backend-sync');
+      } else if (res && res._unauthorized) {
+        backendReady = false;
+      }
+      return res;
+    }).catch(function (err) {
+      console.warn('[DeviceStore] 后端预加载失败，回退本地缓存', err);
+      backendReady = false;
+      return { ok: false, message: err && err.message };
+    }).finally(function () {
+      backendLoadPromise = null;
+    });
+    return backendLoadPromise;
+  }
+
+  /** 持久化：把聚合对象全量推送到后端（防抖，合并连续写） */
+  var persistTimer = null;
+  var persistPending = null;
+  function persistToBackend(agg) {
+    var api = backendApi();
+    if (!api || !api.isLoggedIn || !api.isLoggedIn()) return;
+    // 记录待持久化对象（浅引用即可，持久化时再序列化）
+    persistPending = agg;
+    if (persistTimer) return; // 已排队，等待合并
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      var snapshot = persistPending;
+      persistPending = null;
+      if (!snapshot) return;
+      var ctx = global.DeviceMapper.buildContext(global.DeviceStore._refs);
+      var payload = global.DeviceMapper.fromAggregate(snapshot, ctx);
+      api.create('device/aggregate', payload).then(function (res) {
+        if (res && res.ok) {
+          backendReady = true;
+          // 持久化成功后，重新拉取 refs 供后续外键解析（base/plot 可能新增）
+          refreshRefs();
+        } else if (res && res._unauthorized) {
+          backendReady = false;
+        } else {
+          console.warn('[DeviceStore] 后端持久化失败', res && res.message);
+        }
+      }).catch(function (err) {
+        console.warn('[DeviceStore] 后端持久化异常', err);
+      });
+    }, 300);
+  }
+
+  /** 拉取并缓存外键 refs（base/plot），供 save 时解析外键 */
+  function refreshRefs() {
+    var api = backendApi();
+    if (!api || !api.get) return;
+    api.get('device/aggregate', { refs_only: 1 }).then(function (res) {
+      if (res && res.ok && res.data && res.data.refs) {
+        global.DeviceStore._refs = res.data.refs;
+      }
+    }).catch(function () { /* ignore */ });
   }
 
   function notify(reason) {
@@ -2104,6 +2229,24 @@
       inMemory = defaults();
       save();
       broadcast('reset');
+    },
+
+    /* ---- 后端桥接（策略 A）---- */
+    _refs: null,
+    preloadFromBackend: preloadFromBackend,
+    isBackendReady: function () { return backendReady; },
+    persistNow: function () {
+      // 立即把当前内存持久化到后端（供测试/手动触发）
+      if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
+      var snapshot = inMemory;
+      if (!snapshot || !backendEnabled()) return Promise.resolve({ ok: false, message: '后端未启用' });
+      var api = backendApi();
+      var ctx = global.DeviceMapper.buildContext(global.DeviceStore._refs);
+      var payload = global.DeviceMapper.fromAggregate(snapshot, ctx);
+      return api.create('device/aggregate', payload).then(function (res) {
+        if (res && res.ok) { backendReady = true; refreshRefs(); }
+        return res;
+      });
     },
 
     _syncFromExternal: function () {
