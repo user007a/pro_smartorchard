@@ -41,25 +41,74 @@
   'use strict';
 
   /* 依赖自动加载：api.js（统一后端请求）与 device-mapper.js（字段映射层）
-   * 若页面尚未引入，则按相对路径同步加载，保证后端桥接可用、页面零改动。 */
-  (function ensureDeps() {
-    if (typeof document === 'undefined') return;
+   * 若页面尚未引入，则自动注入，保证后端桥接可用、页面零改动。
+   *
+   * 关键：注入 script 的 src 是相对【文档 URL】解析的，不是相对本脚本位置。
+   * 本文件被 25 个不同层级的页面引用（后台/移动/H5/大屏），若写死相对路径，
+   * 换到另一层级就会 404，导致后端桥接静默失效、回退 localStorage。
+   * 因此这里基于 document.currentScript.src 算出本脚本所在目录再拼接。 */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, ''); // 去掉文件名，保留目录
     var deps = [
-      { name: 'Api', src: '../../../common/js/api.js' },
-      { name: 'DeviceMapper', src: 'device-mapper.js' }
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'DeviceMapper', src: baseDir + 'device-mapper.js' }
     ];
-    var selfPath = (document.currentScript && document.currentScript.src) || '';
-    deps.forEach(function (d) {
-      if (global[d.name]) return;
-      var s = document.createElement('script');
-      s.src = d.src;
-      s.async = false;
-      (document.head || document.documentElement).appendChild(s);
-    });
+    var pending = deps.filter(function (d) { return !global[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src;
+        s.async = false;
+        s.onload = resolve;
+        s.onerror = resolve; // 依赖加载失败不阻塞原型运行
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
   })();
 
   var STORAGE_KEY = 'applefarm_device_v1';
   var PLOT_MASTER_KEY = 'smartorchard_plot_master';
+
+  /**
+   * 待同步到后端的删除清单
+   * --------------------------------------------------------------
+   * store 的删除动作是「从内存数组里移除」，若不做记录，
+   * 后端收到的就是一份「少了一条」的完整数据，无法区分
+   * 「删除了」与「本来就没有」，逻辑删除就永远触发不了。
+   *
+   * key 为聚合对象的子数组名（devices / accesses / gateways …），
+   * value 为被删记录的业务编号数组。
+   */
+  var pendingDeletes = {};
+
+  /** 记录一次删除（供持久化时输出到后端 deleted 字段） */
+  function markDeleted(listName, id) {
+    if (!id) return;
+    (pendingDeletes[listName] = pendingDeletes[listName] || []).push(id);
+  }
+
+  /** 取走删除清单（持久化成功后调用 clearDeleted 真正清空） */
+  function takeDeleted() {
+    var out = {};
+    Object.keys(pendingDeletes).forEach(function (k) {
+      if (pendingDeletes[k] && pendingDeletes[k].length) out[k] = pendingDeletes[k].slice();
+    });
+    return out;
+  }
+
+  /** 持久化成功后清空已处理的删除清单，避免重复删除 */
+  function clearDeleted(sent) {
+    Object.keys(sent || {}).forEach(function (k) {
+      pendingDeletes[k] = (pendingDeletes[k] || []).filter(function (id) {
+        return sent[k].indexOf(id) === -1;
+      });
+      if (!pendingDeletes[k].length) delete pendingDeletes[k];
+    });
+  }
 
   /* ============================================================
    * 1. 设备类型与物模型字典（全模块唯一权威）
@@ -1037,16 +1086,21 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
 
-  /** 预加载：从后端拉取聚合数据，成功后替换内存并通知 */
+  /** 预加载：从后端拉取聚合数据，成功后替换内存并通知
+   *  必须等依赖（Api / DeviceMapper）加载完成后再发起，否则映射层未就绪会静默失败。 */
   function preloadFromBackend() {
-    var api = backendApi();
-    if (!api || !api.isLoggedIn || !api.isLoggedIn()) return null;
     if (backendLoadPromise) return backendLoadPromise;
-    backendLoadPromise = api.get('device/aggregate').then(function (res) {
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('device/aggregate');
+    }).then(function (res) {
       if (res && res.ok && res.data) {
         var agg = global.DeviceMapper.toAggregate(res.data);
         inMemory = agg;
         backendReady = true;
+        // 缓存外键字典（base/plot），供后续保存时把名称解析为自增 id
+        global.DeviceStore._refs = res.data.refs || null;
         // 同步写回 localStorage，保持离线兜底
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } catch (e) { /* ignore */ }
         notify('backend-sync');
@@ -1068,8 +1122,6 @@
   var persistTimer = null;
   var persistPending = null;
   function persistToBackend(agg) {
-    var api = backendApi();
-    if (!api || !api.isLoggedIn || !api.isLoggedIn()) return;
     // 记录待持久化对象（浅引用即可，持久化时再序列化）
     persistPending = agg;
     if (persistTimer) return; // 已排队，等待合并
@@ -1078,18 +1130,27 @@
       var snapshot = persistPending;
       persistPending = null;
       if (!snapshot) return;
-      var ctx = global.DeviceMapper.buildContext(global.DeviceStore._refs);
-      var payload = global.DeviceMapper.fromAggregate(snapshot, ctx);
-      api.create('device/aggregate', payload).then(function (res) {
-        if (res && res.ok) {
-          backendReady = true;
-          // 持久化成功后，重新拉取 refs 供后续外键解析（base/plot 可能新增）
-          refreshRefs();
-        } else if (res && res._unauthorized) {
-          backendReady = false;
-        } else {
-          console.warn('[DeviceStore] 后端持久化失败', res && res.message);
-        }
+      // 等依赖（Api / DeviceMapper）就绪后再推送，避免映射层缺失导致写入丢失
+      Promise.resolve(depsReady).then(function () {
+        var api = backendApi();
+        if (!api || !api.isLoggedIn || !api.isLoggedIn()) return null;
+        var ctx = global.DeviceMapper.buildContext(global.DeviceStore._refs);
+        var payload = global.DeviceMapper.fromAggregate(snapshot, ctx);
+        // 带上待删除清单（业务编号数组），后端据此做逻辑删除
+        var deletedPayload = takeDeleted();
+        payload.deleted = deletedPayload;
+        return api.create('device/aggregate', payload).then(function (res) {
+          if (res && res.ok) {
+            backendReady = true;
+            clearDeleted(deletedPayload);
+            // 持久化成功后，重新拉取 refs 供后续外键解析（base/plot 可能新增）
+            refreshRefs();
+          } else if (res && res._unauthorized) {
+            backendReady = false;
+          } else {
+            console.warn('[DeviceStore] 后端持久化失败', res && res.message);
+          }
+        });
       }).catch(function (err) {
         console.warn('[DeviceStore] 后端持久化异常', err);
       });
@@ -1098,12 +1159,14 @@
 
   /** 拉取并缓存外键 refs（base/plot），供 save 时解析外键 */
   function refreshRefs() {
-    var api = backendApi();
-    if (!api || !api.get) return;
-    api.get('device/aggregate', { refs_only: 1 }).then(function (res) {
-      if (res && res.ok && res.data && res.data.refs) {
-        global.DeviceStore._refs = res.data.refs;
-      }
+    Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.get) return null;
+      return api.get('device/aggregate').then(function (res) {
+        if (res && res.ok && res.data && res.data.refs) {
+          global.DeviceStore._refs = res.data.refs;
+        }
+      });
     }).catch(function () { /* ignore */ });
   }
 
@@ -1806,7 +1869,10 @@
 
   function remove(listName, id) {
     var d = ensure();
+    var existed = d[listName].some(function (x) { return x.id === id; });
+    if (!existed) return false;
     d[listName] = d[listName].filter(function (x) { return x.id !== id; });
+    markDeleted(listName, id);
     broadcast(listName + '-remove:' + id);
     return true;
   }
@@ -1963,8 +2029,14 @@
       if (!hit) return false;
       d.devices = d.devices.filter(function (x) { return x.id !== id; });
       // 联动清理接入配置与视频通道引用
+      var removedAccess = d.access.filter(function (x) { return x.deviceId === id; });
+      var removedCamera = d.cameras.filter(function (x) { return x.deviceId === id; });
       d.access = d.access.filter(function (x) { return x.deviceId !== id; });
       d.cameras = d.cameras.filter(function (x) { return x.deviceId !== id; });
+      // 记录删除清单，供持久化时通知后端做逻辑删除
+      markDeleted('devices', id);
+      removedAccess.forEach(function (x) { markDeleted('accesses', x.id); });
+      removedCamera.forEach(function (x) { markDeleted('videos', x.id); });
       addAudit('delete', 'device', id, '删除设备「' + hit.name + '」', clone(hit), null);
       broadcast('device-remove:' + id);
       return true;

@@ -23,6 +23,10 @@ CREATE TABLE `sf_dict` (
   `dict_value`  VARCHAR(500) NOT NULL                COMMENT '字典值（逗号分隔的枚举项，如 特级,一级,二级,等外）',
   `sort_order`  INT          NOT NULL DEFAULT 0      COMMENT '排序',
   `dict_status` VARCHAR(20)  NOT NULL DEFAULT 'active' COMMENT '状态：active/disabled',
+  `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`  TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除：0=正常 1=已删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_dict_code` (`dict_code`)
@@ -36,6 +40,8 @@ CREATE TABLE `sf_file` (
   `file_size`   BIGINT       NOT NULL DEFAULT 0      COMMENT '大小（字节）',
   `store_path`  VARCHAR(500) NOT NULL                COMMENT '实际存储路径',
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted`  TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文件';
 
@@ -49,6 +55,8 @@ CREATE TABLE `sf_operation_log` (
   `detail`      TEXT                                 COMMENT '详情',
   `ip`          VARCHAR(50)  DEFAULT NULL            COMMENT '来源 IP',
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted`  TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_log_user` (`user_id`),
   KEY `idx_log_module` (`module`)
@@ -96,6 +104,8 @@ CREATE TABLE `sf_enterprise_biz` (
   `m2_label`    VARCHAR(50)  DEFAULT NULL            COMMENT '指标2名称',
   `m2_value`    VARCHAR(50)  DEFAULT NULL            COMMENT '指标2数值',
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`  TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业业务结构';
@@ -110,6 +120,8 @@ CREATE TABLE `sf_enterprise_staff` (
   `role_type`     VARCHAR(50) NOT NULL                COMMENT '角色分类（→ sf_dict：管理/销售/技术/作业/后勤/其他）',
   `count`         INT         NOT NULL DEFAULT 0      COMMENT '人员数量',
   `created_at`    DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`    TINYINT     NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业人员规模';
@@ -128,6 +140,8 @@ CREATE TABLE `sf_enterprise_expert` (
   `join_date`      DATE         DEFAULT NULL            COMMENT '加入日期',
   `description`    TEXT                                 COMMENT '简介',
   `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`     TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业专家团队';
@@ -148,6 +162,8 @@ CREATE TABLE `sf_enterprise_cert` (
   `top_show`       TINYINT      NOT NULL DEFAULT 0      COMMENT '顶部显示：0=否 1=是',
   `cert_status`    VARCHAR(20)  NOT NULL DEFAULT 'active' COMMENT '状态：active/expired/revoked',
   `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`     TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_cert_enterprise` (`enterprise_id`)
@@ -164,6 +180,8 @@ CREATE TABLE `sf_enterprise_timeline` (
   `title`         VARCHAR(100) NOT NULL                COMMENT '标题',
   `description`   TEXT                                 COMMENT '描述',
   `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`    TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业发展历程';
@@ -179,6 +197,8 @@ CREATE TABLE `sf_enterprise_operation` (
   `value`         DECIMAL(16,2) DEFAULT NULL            COMMENT '经营数值',
   `unit`          VARCHAR(20)   DEFAULT NULL            COMMENT '单位（万元/吨/亩/项/户）',
   `created_at`    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`    TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业经营数据';
@@ -272,6 +292,8 @@ CREATE TABLE `sf_vr_scene` (
   `pitch`       DECIMAL(6,2) DEFAULT 0               COMMENT '初始俯仰角',
   `hfov`        DECIMAL(6,2) DEFAULT 100             COMMENT '视场角',
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`  TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='VR全景场景';
@@ -289,6 +311,8 @@ CREATE TABLE `sf_vr_hotspot` (
   `yaw`         DECIMAL(6,2) DEFAULT 0               COMMENT '水平角',
   `hotspot_status` VARCHAR(20) DEFAULT 'normal'      COMMENT '状态：normal/warning/danger',
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`  TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_hotspot_scene` (`scene_id`)
@@ -637,6 +661,8 @@ CREATE TABLE `sf_storage_env_record` (
   `humidity`     DECIMAL(6,2)  DEFAULT NULL            COMMENT '湿度(%)',
   `judge`        VARCHAR(20)   DEFAULT NULL            COMMENT '判定（正常/异常）',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_storage_env_location` (`location_id`)
@@ -938,6 +964,8 @@ CREATE TABLE `sf_trace_blockchain` (
   `chain_time`   DATETIME      DEFAULT NULL            COMMENT '上链时间',
   `verify_status` VARCHAR(20)  DEFAULT NULL            COMMENT '验证状态（通过/未通过/验证中）',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_trace_blockchain_code` (`trace_code`)
@@ -954,6 +982,8 @@ CREATE TABLE `sf_trace_query_log` (
   `region`       VARCHAR(100)  DEFAULT NULL            COMMENT '地区',
   `ip`           VARCHAR(50)   DEFAULT NULL            COMMENT 'IP',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_trace_query_code` (`trace_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='溯源查询记录';
@@ -1160,6 +1190,8 @@ CREATE TABLE `sf_adoption_photo` (
   `stage`        VARCHAR(50)   DEFAULT NULL            COMMENT '成长阶段',
   `shoot_time`   DATETIME      DEFAULT NULL            COMMENT '拍摄时间',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_adoption_photo_tree` (`tree_id`)
@@ -1376,6 +1408,7 @@ CREATE TABLE `sf_device_measure` (
   `precision`    VARCHAR(20)   DEFAULT NULL            COMMENT '精度',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_device_measure_key` (`device_type_id`, `measure_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='物模型测点';
@@ -1617,6 +1650,8 @@ CREATE TABLE `sf_device_log` (
   `handler`      VARCHAR(100)  DEFAULT NULL            COMMENT '处理人',
   `handle_time`  DATETIME      DEFAULT NULL            COMMENT '处理时间',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_device_log_device` (`device_id`),
   KEY `idx_device_log_time` (`log_time`)
@@ -1636,6 +1671,8 @@ CREATE TABLE `sf_device_audit` (
   `before_data`  TEXT          DEFAULT NULL            COMMENT '变更前（JSON）',
   `after_data`   TEXT          DEFAULT NULL            COMMENT '变更后（JSON）',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_device_audit_time` (`operate_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设备操作审计';
@@ -1825,6 +1862,8 @@ CREATE TABLE `sf_performance_task` (
   `quality_score` DECIMAL(5,2) DEFAULT NULL            COMMENT '质量评分',
   `status`       VARCHAR(20)   DEFAULT NULL            COMMENT '状态',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_performance_task_perf` (`performance_id`)
@@ -2045,6 +2084,8 @@ CREATE TABLE `sf_sales_receipt` (
   `pay_way`      VARCHAR(50)   DEFAULT NULL            COMMENT '方式',
   `receipt_time` DATETIME      DEFAULT NULL            COMMENT '收款时间',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_sales_receipt_code` (`receipt_code`),
@@ -2180,6 +2221,7 @@ CREATE TABLE `sf_model_threshold` (
   `unit`         VARCHAR(20)   DEFAULT NULL            COMMENT '单位',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_model_threshold_key` (`threshold_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模型阈值配置';
@@ -2496,6 +2538,7 @@ CREATE TABLE `sf_mall_level_rule` (
   `points_offset_ratio` DECIMAL(5,2) DEFAULT NULL      COMMENT '积分抵扣比例',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_mall_level_rule_level` (`level`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会员等级规则';
@@ -2632,6 +2675,7 @@ CREATE TABLE `sf_mb_sync_queue` (
   `status`       VARCHAR(20)   NOT NULL DEFAULT 'pending' COMMENT '状态：pending/synced/failed',
   `created_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at`   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted`   TINYINT       NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_mb_sync_queue_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同步队列';
@@ -2736,6 +2780,8 @@ CREATE TABLE `sf_dept` (
   `email`       VARCHAR(100) DEFAULT NULL            COMMENT '邮箱',
   `dept_status` VARCHAR(20)  NOT NULL DEFAULT 'active' COMMENT '状态：active/disabled',
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`  TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除：0=正常 1=已删除',
   PRIMARY KEY (`id`),
   KEY `idx_dept_parent` (`parent_id`)
@@ -2750,6 +2796,8 @@ CREATE TABLE `sf_post` (
   `post_status` VARCHAR(20)  NOT NULL DEFAULT 'active' COMMENT '状态',
   `remark`      VARCHAR(255) DEFAULT NULL            COMMENT '备注',
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`  TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_post_code` (`post_code`)
@@ -2763,6 +2811,8 @@ CREATE TABLE `sf_role` (
   `description` VARCHAR(255) DEFAULT NULL            COMMENT '描述',
   `role_status` VARCHAR(20)  NOT NULL DEFAULT 'active' COMMENT '状态',
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`  TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_role_code` (`role_code`)
@@ -2804,6 +2854,8 @@ CREATE TABLE `sf_menu` (
   `menu_status` VARCHAR(20)  NOT NULL DEFAULT 'normal' COMMENT '状态',
   `sort_order`  INT          NOT NULL DEFAULT 0      COMMENT '排序',
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
   `is_deleted`  TINYINT      NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_menu_parent` (`parent_id`)
@@ -2814,6 +2866,9 @@ CREATE TABLE `sf_role_menu` (
   `id`          BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
   `role_id`     BIGINT NOT NULL                COMMENT '角色',
   `menu_id`     BIGINT NOT NULL                COMMENT '菜单',
+  `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted`  TINYINT  NOT NULL DEFAULT 0    COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_rm_role` (`role_id`),
   KEY `idx_rm_menu` (`menu_id`)
@@ -2825,6 +2880,9 @@ CREATE TABLE `sf_permission` (
   `menu_id`     BIGINT      DEFAULT NULL            COMMENT '所属菜单',
   `perm_code`   VARCHAR(50) NOT NULL                COMMENT '权限点：view/add/edit/delete/export',
   `perm_name`   VARCHAR(50) NOT NULL                COMMENT '权限名',
+  `created_at`  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted`  TINYINT     NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_perm_menu` (`menu_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限点';
@@ -2858,6 +2916,7 @@ CREATE TABLE `sf_notification` (
   `enabled`    TINYINT     NOT NULL DEFAULT 1      COMMENT '是否开启：0=关 1=开',
   `created_at` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` TINYINT     NOT NULL DEFAULT 0      COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_notice_user_code` (`user_id`, `notice_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知设置';

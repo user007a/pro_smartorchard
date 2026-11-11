@@ -26,7 +26,10 @@ const SENSITIVE_FIELDS = {
 // 允许的资源名列表（与表名一一对应，去 sf_ 前缀）
 // 若需要额外限制某张表（如只读），可在这里做特殊标记
 const READONLY_RESOURCES = new Set([
-  'operation_log', // 操作日志只读
+  'operation_log',   // 操作日志只读
+  'device_log',      // 设备日志只读（追加型）
+  'device_audit',    // 设备操作审计只读（追加型）
+  'trace_query_log', // 溯源查询记录只读（追加型）
 ]);
 
 /**

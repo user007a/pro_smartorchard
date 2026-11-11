@@ -14,6 +14,7 @@
  */
 const express = require('express');
 const { query, execute } = require('../config/db');
+const { hasSoftDelete, softDeleteByCode } = require('../utils/table-meta');
 
 const router = express.Router();
 
@@ -33,12 +34,12 @@ const CODE_COLUMN = {
   device_command: 'command_code',
 };
 
-/** 无逻辑删除列的表（追加型 / 子表） */
-const NO_SOFT_DELETE = new Set(['sf_device_measure', 'sf_device_log', 'sf_device_audit']);
-
-/** 批量查询某张表全部行（按 id 升序，保证稳定顺序）；有 is_deleted 列则过滤 */
+/**
+ * 批量查询某张表全部行（按 id 升序，保证稳定顺序）
+ * 逻辑删除过滤条件由表结构动态决定（utils/table-meta），新增表无需改代码。
+ */
 async function fetchAll(table) {
-  const where = NO_SOFT_DELETE.has(table) ? '' : ' WHERE `is_deleted` = 0';
+  const where = (await hasSoftDelete(table)) ? ' WHERE `is_deleted` = 0' : '';
   return query('SELECT * FROM `' + table + '`' + where + ' ORDER BY `id` ASC');
 }
 
@@ -49,8 +50,9 @@ function makeIdResolver(table, codeCol) {
     if (code === null || code === undefined || code === '') return null;
     const key = String(code);
     if (cache.has(key)) return cache.get(key);
+    const filter = (await hasSoftDelete(table)) ? ' AND `is_deleted` = 0' : '';
     const rows = await query(
-      'SELECT `id` FROM `' + table + '` WHERE `' + codeCol + '` = ? AND `is_deleted` = 0 LIMIT 1',
+      'SELECT `id` FROM `' + table + '` WHERE `' + codeCol + '` = ?' + filter + ' LIMIT 1',
       [key]
     );
     const id = rows.length ? rows[0].id : null;
@@ -219,6 +221,7 @@ router.post('/aggregate', async (req, res, next) => {
         delete data.created_at;
         delete data.updated_at;
         delete data.is_deleted;
+        const soft = await hasSoftDelete(table);
         if (extraResolvers) {
           for (const [field, resolver] of Object.entries(extraResolvers)) {
             if (data[field] !== undefined && data[field] !== null && typeof data[field] !== 'number') {
@@ -236,6 +239,11 @@ router.post('/aggregate', async (req, res, next) => {
           for (const [k, v] of Object.entries(data)) {
             sets.push('`' + k + '` = ?');
             vals.push(norm(v));
+          }
+          // 逻辑删除表：记录被软删后重新入库时自动恢复（is_deleted 归 0）
+          if (soft) {
+            sets.push('`is_deleted` = 0');
+            vals.push(0);
           }
           if (sets.length) {
             await execute('UPDATE `' + table + '` SET ' + sets.join(', ') + ' WHERE `id` = ?', [...vals, id]);
@@ -345,6 +353,10 @@ async function upsertById(table, rows, extraResolvers) {
         for (const [k, v] of Object.entries(data)) {
           sets.push('`' + k + '` = ?'); vals.push(norm(v));
         }
+        // 逻辑删除表：记录被软删后重新入库时自动恢复（is_deleted 归 0）
+        if (await hasSoftDelete(table)) {
+          sets.push('`is_deleted` = 0'); vals.push(0);
+        }
         if (sets.length) {
           await execute('UPDATE `' + table + '` SET ' + sets.join(', ') + ' WHERE `id` = ?', [...vals, id]);
           n++;
@@ -405,7 +417,7 @@ async function upsertMeasures(measures, deviceTypes, resolveType) {
   return n;
 }
 
-/** 逻辑删除 */
+/** 逻辑删除（按业务编号软删，逻辑删除列是否存在由表结构动态决定） */
 async function applyDeletes(deleted) {
   const map = {
     devices: ['sf_device', 'device_code'],
@@ -423,13 +435,7 @@ async function applyDeletes(deleted) {
   for (const [key, [table, codeCol]] of Object.entries(map)) {
     const codes = deleted[key];
     if (!Array.isArray(codes) || !codes.length) continue;
-    for (const code of codes) {
-      const r = await execute(
-        'UPDATE `' + table + '` SET `is_deleted` = 1 WHERE `' + codeCol + '` = ? AND `is_deleted` = 0',
-        [code]
-      );
-      n += r.affectedRows;
-    }
+    n += await softDeleteByCode(table, codeCol, codes);
   }
   return n;
 }

@@ -778,7 +778,9 @@
       device_types: (agg.models || []).map(modelToRow),
       audits: (agg.audits || []).map(auditToRow),
       // 物模型测点：每个 model 的 points 拆成一条 measure（带 _typeCode）
-      measures: []
+      measures: [],
+      // 待逻辑删除的业务编号（由 store 记录，缺失会导致删除不落库）
+      deleted: agg.deleted || {}
     };
     (agg.models || []).forEach(function (m) {
       (m.points || []).forEach(function (p) {

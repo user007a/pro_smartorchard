@@ -27,24 +27,9 @@ const {
   isReadableField,
   READONLY_RESOURCES,
 } = require('../resources');
+const { getColumns: getTableColumns, hasSoftDelete } = require('../utils/table-meta');
 
 const router = express.Router();
-
-/**
- * 获取某张表的字段清单（运行时从 information_schema 读取，带缓存）
- */
-const tableColumnsCache = new Map();
-async function getTableColumns(table) {
-  if (tableColumnsCache.has(table)) return tableColumnsCache.get(table);
-  const rows = await query(
-    'SELECT COLUMN_NAME AS col FROM information_schema.COLUMNS ' +
-      'WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION',
-    [process.env.DB_NAME || 'smartorchard', table]
-  );
-  const cols = rows.map((r) => r.col);
-  tableColumnsCache.set(table, cols);
-  return cols;
-}
 
 /**
  * 从请求体中过滤出可写字段，返回 { columns, values, placeholders }
@@ -84,9 +69,10 @@ router.get('/:resource', async (req, res, next) => {
     const size = Math.min(500, Math.max(1, parseInt(req.query.size, 10) || 20));
     const offset = (page - 1) * size;
 
-    // 默认过滤逻辑删除
-    const where = ['`is_deleted` = 0'];
+    // 默认过滤逻辑删除；表若无 is_deleted 列（追加型子表）则不过滤
+    const where = [];
     const params = [];
+    if (await hasSoftDelete(table)) where.push('`is_deleted` = 0');
 
     // 关键词搜索：对字符串字段做模糊匹配
     if (req.query.keyword) {
@@ -155,7 +141,8 @@ router.get('/:resource/:id', async (req, res, next) => {
     const selectSql = selectCols.map((c) => '`' + c + '`').join(', ');
 
     const rows = await query(
-      'SELECT ' + selectSql + ' FROM `' + table + '` WHERE `id` = ? AND `is_deleted` = 0',
+      'SELECT ' + selectSql + ' FROM `' + table + '` WHERE `id` = ?' +
+        (await hasSoftDelete(table) ? ' AND `is_deleted` = 0' : ''),
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ ok: false, message: '记录不存在' });
@@ -227,7 +214,8 @@ router.put('/:resource/:id', async (req, res, next) => {
 
     values.push(req.params.id);
     const result = await execute(
-      'UPDATE `' + table + '` SET ' + sets.join(', ') + ' WHERE `id` = ? AND `is_deleted` = 0',
+      'UPDATE `' + table + '` SET ' + sets.join(', ') + ' WHERE `id` = ?' +
+        (await hasSoftDelete(table) ? ' AND `is_deleted` = 0' : ''),
       values
     );
 
@@ -247,6 +235,11 @@ router.delete('/:resource/:id', async (req, res, next) => {
     if (!table) return res.status(404).json({ ok: false, message: '资源不存在' });
     if (READONLY_RESOURCES.has(req.params.resource)) {
       return res.status(403).json({ ok: false, message: '该资源只读' });
+    }
+
+    // 逻辑删除是铁律：无 is_deleted 列的表（追加型子表）不允许删除
+    if (!(await hasSoftDelete(table))) {
+      return res.status(400).json({ ok: false, message: '该表不支持删除（无逻辑删除字段）' });
     }
 
     const result = await execute(
