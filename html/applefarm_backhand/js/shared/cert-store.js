@@ -45,6 +45,130 @@
   var USAGE_RECORD_KEY = 'smartorchard_material_usage_records';
 
   /* ============================================================
+   * 后端桥接依赖自动加载（策略 A：出入口映射）
+   * ------------------------------------------------------------
+   * 依赖：common/js/api.js（统一请求）与 cert-mapper.js（映射层）。
+   * 基于 document.currentScript.src 计算本脚本目录再拼接，避免跨层级 404。
+   * ============================================================ */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, ''); // 去掉文件名，保留目录
+    var deps = [
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'CertMapper', src: baseDir + 'cert-mapper.js' }
+    ];
+    var pending = deps.filter(function (d) { return !global[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src;
+        s.async = false;
+        s.onload = resolve;
+        s.onerror = resolve; // 依赖加载失败不阻塞原型运行
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
+  })();
+
+  /* 后端桥接状态 */
+  var backendReady = false;
+  var backendLoadPromise = null;
+  var persistTimer = null;
+  var persistPending = null;
+
+  function backendApi() {
+    if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
+    if (!global.Api.get || !global.Api.create) return null;
+    if (typeof global.CertMapper === 'undefined') return null;
+    return global.Api;
+  }
+
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+
+  /** 从后端聚合接口拉取证书数据，成功后合并进内存并通知 */
+  function preloadFromBackend() {
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('cert/aggregate');
+    }).then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = global.CertMapper.toAggregate(res.data);
+        var list = agg.certs || [];
+        if (list.length) {
+          var base = defaults();
+          // 后端数据合并进 store 内存（保留 DEFAULT_DATA 里的派生/展示兜底字段）
+          var merged = list.map(function (c, i) {
+            var tpl = base.certs[i] || {};
+            return mergeCert(tpl, c);
+          });
+          inMemory = { version: VERSION, certs: merged };
+          save(); // 回写 localStorage，保持兜底副本同步
+          notify('backend-loaded');
+          backendReady = true;
+        }
+      }
+      return res;
+    }).catch(function (e) {
+      console.warn('[CertStore] 后端预加载失败，降级 localStorage', e);
+      return { ok: false, message: e && e.message };
+    });
+  }
+
+  /** 合并：以默认模板补齐派生/展示字段，后端字段优先 */
+  function mergeCert(tpl, backend) {
+    var out = clone(tpl || {});
+    if (!backend) return out;
+    Object.keys(backend).forEach(function (k) {
+      if (backend[k] !== undefined && backend[k] !== null && backend[k] !== '') {
+        out[k] = backend[k];
+      } else if (backend[k] === null && k === 'attachments') {
+        out[k] = [];
+      }
+    });
+    // 后端无 auditLogs，保留默认模板的初始化日志
+    if (!out.auditLogs || !out.auditLogs.length) {
+      out.auditLogs = [{ at: backend.createdAt || stampNow(), actor: backend.operator || '系统', action: '建档', detail: '导入' + (backend.type || '') }];
+    }
+    return out;
+  }
+
+  /** 从后端数据映射回 store 结构（供 preload 用，已由 toAggregate 完成） */
+
+  /** 持久化到后端：防抖 300ms，全量 upsert sf_cert */
+  function persistToBackend() {
+    var api = backendApi();
+    if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
+    var agg = {
+      version: VERSION,
+      certs: clone(ensure().certs || []),
+      deleted: { certs: persistPending && persistPending.deleted ? persistPending.deleted : [] },
+    };
+    var body = global.CertMapper.fromAggregate(agg);
+    return api.create('cert/aggregate', body);
+  }
+
+  /** 调度后端持久化（防抖） */
+  function schedulePersist(reason) {
+    if (!backendEnabled()) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      persistToBackend().catch(function (e) {
+        console.warn('[CertStore] 后端持久化失败', e);
+      });
+    }, 300);
+  }
+
+  /* ============================================================
    * 枚举字典
    * ============================================================ */
 
@@ -393,6 +517,8 @@
       inMemory = defaults();
       save();
     }
+    // 触发后端预加载（异步，不阻塞首次渲染；未登录时静默降级）
+    preloadFromBackend();
     return inMemory;
   }
 
@@ -405,6 +531,8 @@
   function commit(reason) {
     var ok = save();
     notify(reason);
+    // 后端持久化（防抖，未登录/依赖未就绪时静默跳过）
+    schedulePersist(reason);
     try {
       window.dispatchEvent(new CustomEvent('certStoreChange', { detail: { reason: reason, saved: ok } }));
     } catch (e) {}

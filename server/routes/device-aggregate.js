@@ -242,7 +242,7 @@ router.post('/aggregate', async (req, res, next) => {
           }
           // 逻辑删除表：记录被软删后重新入库时自动恢复（is_deleted 归 0）
           if (soft) {
-            sets.push('`is_deleted` = 0');
+            sets.push('`is_deleted` = ?');
             vals.push(0);
           }
           if (sets.length) {
@@ -355,7 +355,7 @@ async function upsertById(table, rows, extraResolvers) {
         }
         // 逻辑删除表：记录被软删后重新入库时自动恢复（is_deleted 归 0）
         if (await hasSoftDelete(table)) {
-          sets.push('`is_deleted` = 0'); vals.push(0);
+          sets.push('`is_deleted` = ?'); vals.push(0);
         }
         if (sets.length) {
           await execute('UPDATE `' + table + '` SET ' + sets.join(', ') + ' WHERE `id` = ?', [...vals, id]);

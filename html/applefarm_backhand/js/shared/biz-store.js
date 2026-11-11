@@ -26,6 +26,89 @@
 (function(global){
   'use strict';
 
+  /* ============================================================
+   * 后端桥接依赖自动加载（策略 A：出入口映射）
+   * ============================================================ */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, '');
+    var deps = [
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'BizMapper', src: baseDir + 'biz-mapper.js' }
+    ];
+    var pending = deps.filter(function (d) { return !global[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src; s.async = false; s.onload = resolve; s.onerror = resolve;
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
+  })();
+
+  var backendLoadPromise = null;
+  var persistTimer = null;
+
+  function backendApi() {
+    if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
+    if (!global.Api.get || !global.Api.create) return null;
+    if (typeof global.BizMapper === 'undefined') return null;
+    return global.Api;
+  }
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+  function preloadFromBackend() {
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('biz/aggregate');
+    }).then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = global.BizMapper.toAggregate(res.data);
+        var e = ensure();
+        if (agg.revenueMix && agg.revenueMix.length) e.revenueMix = agg.revenueMix;
+        if (agg.costStructure && agg.costStructure.length) e.costStructure = agg.costStructure;
+        if (agg.baseProfit && agg.baseProfit.length) e.baseProfit = agg.baseProfit;
+        if (agg.metrics && agg.metrics.length) e.metrics = agg.metrics;
+        if (agg.receivable && agg.receivable.aging && agg.receivable.aging.length) e.receivable.aging = agg.receivable.aging;
+        if (agg.customerRank && agg.customerRank.length) e.customerRank = agg.customerRank;
+        save();
+        notify('backend-loaded');
+      }
+      return res;
+    }).catch(function (err) {
+      console.warn('[BizStore] 后端预加载失败，降级 localStorage', err);
+      return { ok: false, message: err && err.message };
+    });
+  }
+  function persistToBackend() {
+    var api = backendApi();
+    if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
+    var e = ensure();
+    var agg = {
+      revenueMix: e.revenueMix || [], costStructure: e.costStructure || [],
+      baseProfit: e.baseProfit || [], metrics: e.metrics || [],
+      receivable: { aging: (e.receivable && e.receivable.aging) || [] }, customerRank: e.customerRank || [],
+    };
+    var body = global.BizMapper.fromAggregate(agg);
+    return api.create('biz/aggregate', body);
+  }
+  function schedulePersist(reason) {
+    if (!backendEnabled()) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      persistToBackend().catch(function (e) { console.warn('[BizStore] 后端持久化失败', e); });
+    }, 300);
+  }
+
   var STORAGE_KEY = 'applefarm_biz_v1';
 
   var DEFAULT_DATA = {
@@ -183,6 +266,7 @@
       inMemory = deepClone(DEFAULT_DATA);
       save();
     }
+    if (typeof depsReady !== 'undefined') preloadFromBackend();
     return inMemory;
   }
 
@@ -198,6 +282,7 @@
     try {
       window.dispatchEvent(new CustomEvent('bizStoreChange', { detail:{ reason: reason } }));
     } catch(e){}
+    if (typeof schedulePersist === 'function') schedulePersist(reason);
   }
 
   /* ---------------- 对外 API ---------------- */

@@ -11,6 +11,85 @@
 (function (global) {
   'use strict';
 
+  /* ============================================================
+   * 后端桥接依赖自动加载（策略 A：出入口映射）
+   * ============================================================ */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, '');
+    var deps = [
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'AdoptionMapper', src: baseDir + 'adoption-mapper.js' }
+    ];
+    var pending = deps.filter(function (d) { return !global[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src; s.async = false; s.onload = resolve; s.onerror = resolve;
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
+  })();
+
+  var backendLoadPromise = null;
+  var persistTimer = null;
+
+  function backendApi() {
+    if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
+    if (!global.Api.get || !global.Api.create) return null;
+    if (typeof global.AdoptionMapper === 'undefined') return null;
+    return global.Api;
+  }
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+  function preloadFromBackend() {
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('adoption/aggregate');
+    }).then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = global.AdoptionMapper.toAggregate(res.data);
+        var e = ensure();
+        ['trees', 'orders', 'harvests', 'farmings'].forEach(function (k) {
+          if (agg[k] && agg[k].length) e[k] = agg[k];
+        });
+        save();
+        notify('backend-loaded');
+      }
+      return res;
+    }).catch(function (err) {
+      console.warn('[AdoptionStore] 后端预加载失败，降级 localStorage', err);
+      return { ok: false, message: err && err.message };
+    });
+  }
+  function persistToBackend() {
+    var api = backendApi();
+    if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
+    var e = ensure();
+    var agg = {
+      trees: e.trees || [], orders: e.orders || [], harvests: e.harvests || [], farmings: e.farmings || [],
+      certs: [], deleted: {},
+    };
+    var body = global.AdoptionMapper.fromAggregate(agg);
+    return api.create('adoption/aggregate', body);
+  }
+  function schedulePersist(reason) {
+    if (!backendEnabled()) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      persistToBackend().catch(function (e) { console.warn('[AdoptionStore] 后端持久化失败', e); });
+    }, 300);
+  }
+
   var STORAGE_KEY = 'applefarm_adoption_v1';
   var VERSION = 1;
 
@@ -533,12 +612,14 @@
       save();
       publishBrowsePool();
     }
+    if (typeof depsReady !== 'undefined') preloadFromBackend();
     return inMemory;
   }
 
   function commit(reason) {
     var ok = save();
     if (ok) notify(reason || 'commit');
+    if (typeof schedulePersist === 'function' && reason !== 'backend-loaded') schedulePersist(reason);
     return ok;
   }
 

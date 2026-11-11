@@ -35,6 +35,113 @@
   var TRACE_CODE_KEY = 'smartorchard_trace_codes';
 
   /* ============================================================
+   * 后端桥接依赖自动加载（策略 A：出入口映射）
+   * ------------------------------------------------------------
+   * 依赖：common/js/api.js（统一请求）与 harvest-mapper.js（映射层）。
+   * 基于 document.currentScript.src 计算本脚本目录再拼接，避免跨层级 404。
+   * ============================================================ */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, ''); // 去掉文件名，保留目录
+    var deps = [
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'HarvestMapper', src: baseDir + 'harvest-mapper.js' }
+    ];
+    var pending = deps.filter(function (d) { return !global[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src;
+        s.async = false;
+        s.onload = resolve;
+        s.onerror = resolve; // 依赖加载失败不阻塞原型运行
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
+  })();
+
+  /* 后端桥接状态 */
+  var backendReady = false;
+  var backendLoadPromise = null;
+  var persistTimer = null;
+
+  function backendApi() {
+    if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
+    if (!global.Api.get || !global.Api.create) return null;
+    if (typeof global.HarvestMapper === 'undefined') return null;
+    return global.Api;
+  }
+
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+
+  /** 从后端聚合接口拉取采收数据，成功后合并进内存并通知 */
+  function preloadFromBackend() {
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('harvest/aggregate');
+    }).then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = global.HarvestMapper.toAggregate(res.data);
+        // 后端数据合并进 store 内存（空数组时保留默认种子兜底）
+        var base = defaults();
+        var keys = ['plans', 'records', 'processes', 'shipments'];
+        var merged = {};
+        keys.forEach(function (k) {
+          var backList = agg[k];
+          merged[k] = (backList && backList.length) ? backList : base[k];
+        });
+        inMemory = merged;
+        // storages 为派生数据，由 processes + shipments 重算
+        rebuildStorages();
+        save();
+        notify('backend-loaded');
+        backendReady = true;
+      }
+      return res;
+    }).catch(function (e) {
+      console.warn('[HarvestStore] 后端预加载失败，降级 localStorage', e);
+      return { ok: false, message: e && e.message };
+    });
+  }
+
+  /** 持久化到后端：防抖 300ms，全量 upsert 4 张表 */
+  function persistToBackend() {
+    var api = backendApi();
+    if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
+    var ctx = { baseIdByName: {}, plotIdByCode: {}, planIdByCode: {}, processIdByCode: {} };
+    var agg = {
+      plans: clone(ensure().plans || []),
+      records: clone(ensure().records || []),
+      processes: clone(ensure().processes || []),
+      shipments: clone(ensure().shipments || []),
+      deleted: {},
+    };
+    var body = global.HarvestMapper.fromAggregate(agg, ctx);
+    return api.create('harvest/aggregate', body);
+  }
+
+  /** 调度后端持久化（防抖） */
+  function schedulePersist(reason) {
+    if (!backendEnabled()) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      persistToBackend().catch(function (e) {
+        console.warn('[HarvestStore] 后端持久化失败', e);
+      });
+    }, 300);
+  }
+
+  /* ============================================================
    * 枚举字典
    * ============================================================ */
 
@@ -688,6 +795,8 @@
       save();
     }
     recompute();
+    // 触发后端预加载（异步，不阻塞首次渲染；未登录时静默降级）
+    preloadFromBackend();
     return inMemory;
   }
 
@@ -709,6 +818,8 @@
   function commit(reason) {
     var ok = save();
     notify(reason);
+    // 后端持久化（防抖，未登录/依赖未就绪时静默跳过）
+    schedulePersist(reason);
     try {
       window.dispatchEvent(new CustomEvent('harvestStoreChange', { detail: { reason: reason, saved: ok } }));
     } catch (e) {}

@@ -24,6 +24,92 @@
 window.MobileOpsStore = (function () {
   'use strict';
 
+  /* ============================================================
+   * 后端桥接依赖自动加载（策略 A：出入口映射）
+   * ============================================================ */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, '');
+    var deps = [
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'MobileOpsMapper', src: baseDir + 'mobile-ops-mapper.js' }
+    ];
+    var pending = deps.filter(function (d) { return !window[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src; s.async = false; s.onload = resolve; s.onerror = resolve;
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
+  })();
+
+  var backendLoadPromise = null;
+  var persistTimer = null;
+
+  function backendApi() {
+    if (typeof window.Api !== 'object' && typeof window.Api !== 'function') return null;
+    if (!window.Api.get || !window.Api.create) return null;
+    if (typeof window.MobileOpsMapper === 'undefined') return null;
+    return window.Api;
+  }
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+  function preloadFromBackend() {
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('mobile-ops/aggregate');
+    }).then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = window.MobileOpsMapper.toAggregate(res.data);
+        var map = {
+          feedbacks: agg.feedbacks, expertQuestions: agg.expertQuestions, staff: agg.staff,
+          messages: agg.messages, news: agg.news, syncQueue: agg.syncQueue,
+          diseaseRules: agg.diseaseRules, faultKb: agg.faultKb,
+        };
+        Object.keys(map).forEach(function (k) {
+          if (map[k] && map[k].length) writeList(KEYS[k], map[k]);
+        });
+        if ((agg.aiCategories && agg.aiCategories.length) || (agg.aiQuestions && agg.aiQuestions.length)) {
+          writeObj(KEYS.aiConfig, { categories: agg.aiCategories || [], hotQuestions: agg.aiQuestions || [] });
+        }
+      }
+      return res;
+    }).catch(function (err) {
+      console.warn('[MobileOpsStore] 后端预加载失败，降级 localStorage', err);
+      return { ok: false, message: err && err.message };
+    });
+  }
+  function persistToBackend() {
+    var api = backendApi();
+    if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
+    var ai = readObj(KEYS.aiConfig) || {};
+    var agg = {
+      feedbacks: readList(KEYS.feedbacks), expertQuestions: readList(KEYS.expertQuestions),
+      staff: readList(KEYS.staff), messages: readList(KEYS.messages), news: readList(KEYS.news),
+      syncQueue: readList(KEYS.syncQueue), diseaseRules: readList(KEYS.diseaseRules), faultKb: readList(KEYS.faultKb),
+      aiCategories: ai.categories || [], aiQuestions: ai.hotQuestions || [], deleted: {},
+    };
+    var body = window.MobileOpsMapper.fromAggregate(agg);
+    return api.create('mobile-ops/aggregate', body);
+  }
+  function schedulePersist(reason) {
+    if (!backendEnabled()) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      persistToBackend().catch(function (e) { console.warn('[MobileOpsStore] 后端持久化失败', e); });
+    }, 300);
+  }
+
   var KEYS = {
     feedbacks: 'smartorchard_feedbacks',
     expertQuestions: 'smartorchard_expert_questions',
@@ -71,6 +157,7 @@ window.MobileOpsStore = (function () {
     try {
       localStorage.setItem(key, JSON.stringify(value));
       emit(key);
+      if (typeof schedulePersist === 'function') schedulePersist(key);
       return true;
     } catch (e) {
       return false;
@@ -714,6 +801,12 @@ window.MobileOpsStore = (function () {
     toggleNews: toggleNews,
     toggleNewsTop: toggleNewsTop,
     removeNews: removeNews,
-    increaseNewsView: increaseNewsView
+    increaseNewsView: increaseNewsView,
+    _preload: function () { if (typeof preloadFromBackend === 'function') preloadFromBackend(); }
   };
 })();
+
+// 异步触发后端预加载
+setTimeout(function () {
+  try { window.MobileOpsStore._preload(); } catch (e) {}
+}, 0);

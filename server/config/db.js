@@ -33,9 +33,15 @@ async function query(sql, params) {
 
 /**
  * 执行 SQL（返回结果集元信息，适合 INSERT/UPDATE/DELETE）
+ *
+ * 注意：这里刻意用 pool.query 而非 pool.execute（预处理语句）。
+ * mysql2 的 execute 会对 BIGINT 等类型做预处理类型推断，number 参数
+ * 在「WHERE id = ?」等场景下会匹配不到行（affectedRows=0 但实际未生效），
+ * 属于 mysql2 3.x 的已知坑。query 走文本插值转义，类型安全、行为一致，
+ * 返回结构（affectedRows/insertId）与 execute 相同，对调用方无感知。
  */
 async function execute(sql, params) {
-  const [result] = await pool.execute(sql, params);
+  const [result] = await pool.query(sql, params);
   return result;
 }
 

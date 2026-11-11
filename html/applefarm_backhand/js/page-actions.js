@@ -267,6 +267,15 @@ function bindEnterpriseFormInteractions(modal) {
 function certStore() {
   return (typeof window !== 'undefined' && window.CertStore) ? window.CertStore : null;
 }
+function enterpriseStore() {
+  return (typeof window !== 'undefined' && window.EnterpriseStore) ? window.EnterpriseStore : null;
+}
+function baseLedgerList() {
+  const S = enterpriseStore();
+  if (!S) return [];
+  if (typeof S.baseLedger === 'function') return S.baseLedger();
+  return [];
+}
 function getCert(id) {
   const S = certStore();
   return S ? S.get(id) : null;
@@ -808,8 +817,8 @@ const PageActions = (function() {
     
     switch(currentPage) {
       case 'enterprise':
-        data = mockData.enterprises.filter(e => 
-          e.name.includes(keyword) || e.id.includes(keyword) || e.code.includes(keyword) || e.manager.includes(keyword)
+        data = baseLedgerList().filter(e => 
+          (e.name || '').includes(keyword) || (e.id || '').includes(keyword) || (e.code || '').includes(keyword) || (e.manager || '').includes(keyword)
         );
         break;
       case 'plot':
@@ -835,7 +844,7 @@ const PageActions = (function() {
 
     switch(currentPage) {
       case 'enterprise':
-        data = mockData.enterprises.find(e => e.id === id);
+        data = baseLedgerList().find(e => e.id === id || e.code === id);
         fields = [
           { label: '基地编号', name: 'code' },
           { label: '基地名称', name: 'name' },
@@ -880,7 +889,7 @@ const PageActions = (function() {
 
     switch(currentPage) {
       case 'enterprise':
-        data = mockData.enterprises.find(e => e.id === id);
+        data = baseLedgerList().find(e => e.id === id || e.code === id);
         fields = [
           { name: 'code', label: '基地编号', type: 'text', required: true },
           { name: 'name', label: '基地名称', type: 'text', required: true },
@@ -898,7 +907,7 @@ const PageActions = (function() {
         data = mockData.plots.find(p => p.id === id);
         fields = [
           { name: 'name', label: '地块名称', type: 'text', required: true },
-          { name: 'enterprise', label: '所属基地', type: 'select', options: mockData.enterprises.map(e => ({ value: e.name, label: e.name })) },
+          { name: 'enterprise', label: '所属基地', type: 'select', options: baseLedgerList().map(e => ({ value: e.name, label: e.name })) },
           { name: 'variety', label: '品种', type: 'select', required: true, options: [
             { value: '花牛苹果', label: '花牛苹果' },
             { value: '红富士', label: '红富士' },
@@ -966,6 +975,14 @@ const PageActions = (function() {
     }
     Confirm.delete().then((confirmed) => {
       if (confirmed) {
+        const currentPage = document.body.dataset.activePage;
+        if (currentPage === 'enterprise') {
+          const S = enterpriseStore();
+          if (S && typeof S.removeBase === 'function') {
+            const res = S.removeBase(id);
+            if (!res.ok) { Toast.show(res.message || '删除失败', 'error'); return; }
+          }
+        }
         const row = document.querySelector(`tr[data-id="${id}"]`);
         if (row) {
           row.remove();
@@ -1076,6 +1093,17 @@ const PageActions = (function() {
       width: currentPage === 'plot' ? '580px' : '640px',
       onRender: bindEnterpriseFormInteractions,
       onSubmit: (formData) => {
+        if (currentPage === 'enterprise') {
+          const S = enterpriseStore();
+          if (!S || typeof S.saveBase !== 'function') {
+            Toast.show('数据层未就绪，请刷新页面后重试', 'error');
+            return false;
+          }
+          const res = S.saveBase(formData);
+          if (!res.ok) { Toast.show(res.message || '创建失败', 'error'); return false; }
+          Toast.show('基地已创建：' + formData.name, 'success');
+          return true;
+        }
         Toast.show('创建成功', 'success');
         return true;
       }
@@ -1090,7 +1118,7 @@ const PageActions = (function() {
       if (typeof window.printCertList === 'function') window.printCertList();
       return;
     }
-    const data = currentPage === 'enterprise' ? mockData.enterprises : mockData.plots;
+    const data = currentPage === 'enterprise' ? baseLedgerList() : mockData.plots;
 
     const headers = currentPage === 'enterprise' ? ['基地编号', '基地名称', '地址', '面积(亩)', '负责人', '联系电话', '状态'] :
                     ['地块编号', '地块名称', '所属基地', '品种', '面积(亩)', '种植年份', '负责人', '状态'];

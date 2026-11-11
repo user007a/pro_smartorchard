@@ -375,6 +375,8 @@
 
 <script src="js/components/modal.js"></script>
 <script src="js/components/confirm.js"></script>
+<script src="js/shared/enterprise-store.js"></script>
+<script src="js/shared/enterprise-mapper.js"></script>
 <script src="js/page-actions.js"></script>
 <script>
 // 分页组件（与农事计划一致）
@@ -429,8 +431,13 @@ const Pagination = {
   }
 };
 
-// Mock数据 - 企业基地信息（与 page-actions.js 共用同一份数据源，保证列表与弹窗一致）
-const mockData = PageActions.mockData.enterprises;
+// 基地台账数据源：统一来自 EnterpriseStore（后端 sf_base 表），不再使用 mock
+function getBaseLedger() {
+  return (window.EnterpriseStore && typeof window.EnterpriseStore.baseLedger === 'function')
+    ? window.EnterpriseStore.baseLedger()
+    : [];
+}
+let mockData = getBaseLedger();
 
 // 获取规模类型
 function getScaleType(area) {
@@ -485,8 +492,8 @@ function fillManagerOptions() {
 }
 
 // 页面初始化
-document.addEventListener('DOMContentLoaded', function() {
-  PageActions.init('enterprise');
+function renderBaseList() {
+  mockData = getBaseLedger();
   fillManagerOptions();
   Pagination.init({
     currentPage: 1,
@@ -495,6 +502,15 @@ document.addEventListener('DOMContentLoaded', function() {
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderRow
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  PageActions.init('enterprise');
+  renderBaseList();
+  // 订阅 EnterpriseStore 变更（后端预加载完成 / 增删改后自动刷新列表）
+  window.addEventListener('enterpriseStoreChange', function() {
+    renderBaseList();
   });
 });
 

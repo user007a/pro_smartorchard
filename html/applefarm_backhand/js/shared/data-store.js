@@ -31,6 +31,85 @@
 (function(global){
   'use strict';
 
+  /* ============================================================
+   * 后端桥接依赖自动加载（策略 A：出入口映射）
+   * ============================================================ */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, '');
+    var deps = [
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'DataMapper', src: baseDir + 'data-mapper.js' }
+    ];
+    var pending = deps.filter(function (d) { return !global[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src; s.async = false; s.onload = resolve; s.onerror = resolve;
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
+  })();
+
+  var backendLoadPromise = null;
+  var persistTimer = null;
+
+  function backendApi() {
+    if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
+    if (!global.Api.get || !global.Api.create) return null;
+    if (typeof global.DataMapper === 'undefined') return null;
+    return global.Api;
+  }
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+  function preloadFromBackend() {
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('data/aggregate');
+    }).then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = global.DataMapper.toAggregate(res.data);
+        var e = ensure();
+        ['sources', 'collections', 'models', 'achievements', 'milestones', 'highlights'].forEach(function (k) {
+          if (agg[k] && agg[k].length) e[k] = agg[k];
+        });
+        save();
+        notify('backend-loaded');
+      }
+      return res;
+    }).catch(function (err) {
+      console.warn('[DataStore] 后端预加载失败，降级 localStorage', err);
+      return { ok: false, message: err && err.message };
+    });
+  }
+  function persistToBackend() {
+    var api = backendApi();
+    if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
+    var e = ensure();
+    var agg = {
+      sources: e.sources || [], collections: e.collections || [], models: e.models || [],
+      achievements: e.achievements || [], milestones: e.milestones || [], highlights: e.highlights || [], deleted: {},
+    };
+    var body = global.DataMapper.fromAggregate(agg);
+    return api.create('data/aggregate', body);
+  }
+  function schedulePersist(reason) {
+    if (!backendEnabled()) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      persistToBackend().catch(function (e) { console.warn('[DataStore] 后端持久化失败', e); });
+    }, 300);
+  }
+
   var STORAGE_KEY = 'applefarm_data_ops_v1';
 
   /* ---------------- 默认数据 ---------------- */
@@ -174,6 +253,7 @@
       inMemory = base;
       save();
     }
+    if (typeof depsReady !== 'undefined') preloadFromBackend();
     return inMemory;
   }
 
@@ -190,6 +270,7 @@
     try {
       window.dispatchEvent(new CustomEvent('dataStoreChange', { detail:{ reason: reason } }));
     } catch(e){}
+    if (typeof schedulePersist === 'function') schedulePersist(reason);
   }
 
   /* ---------------- 口径与派生计算 ---------------- */

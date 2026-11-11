@@ -9,6 +9,224 @@
   var STORAGE_KEY = 'applefarm_enterprise_v1';
   var VERSION = 2;
 
+  /* ============================================================
+   * 后端桥接依赖自动加载（策略 A：出入口映射）
+   * ------------------------------------------------------------
+   * 依赖：common/js/api.js（统一请求）与 enterprise-mapper.js（映射层）。
+   * 基于 document.currentScript.src 计算本脚本目录再拼接，避免跨层级 404。
+   * ============================================================ */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, ''); // 去掉文件名，保留目录
+    var deps = [
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'EnterpriseMapper', src: baseDir + 'enterprise-mapper.js' }
+    ];
+    var pending = deps.filter(function (d) { return !global[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src;
+        s.async = false;
+        s.onload = resolve;
+        s.onerror = resolve; // 依赖加载失败不阻塞原型运行
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
+  })();
+
+  /* 后端桥接状态 */
+  var backendReady = false;
+  var backendLoadPromise = null;
+  var persistTimer = null;
+  var persistPending = null;
+
+  function backendApi() {
+    if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
+    if (!global.Api.get || !global.Api.create) return null;
+    if (typeof global.EnterpriseMapper === 'undefined') return null;
+    return global.Api;
+  }
+
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+
+  /** 从后端聚合接口拉取企业数据，成功后合并进内存并通知 */
+  function preloadFromBackend() {
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('enterprise/aggregate');
+    }).then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = global.EnterpriseMapper.toAggregate(res.data);
+        // 后端数据合并进 store 内存（保留 DEFAULT_DATA 里的派生/展示兜底字段）
+        memory = mergeDefaults(DEFAULT_DATA, backendAggToStore(agg));
+        backendReady = true;
+        global.EnterpriseStore._refs = res.data.refs || null;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(memory)); } catch (e) { /* ignore */ }
+        broadcast('backend-sync');
+      } else if (res && res._unauthorized) {
+        backendReady = false;
+      }
+      return res;
+    }).catch(function (err) {
+      console.warn('[EnterpriseStore] 后端预加载失败，回退本地缓存', err);
+      backendReady = false;
+      return { ok: false, message: err && err.message };
+    }).finally(function () {
+      backendLoadPromise = null;
+    });
+    return backendLoadPromise;
+  }
+
+  /** 把 mapper 产出的聚合对象映射回 store 的 DEFAULT_DATA 结构 */
+  function backendAggToStore(agg) {
+    var out = clone(DEFAULT_DATA);
+    if (agg.enterprise) {
+      out.profile = {
+        name: agg.enterprise.name || out.profile.name,
+        brand: out.profile.brand,
+        location: out.profile.location,
+        foundedDate: agg.enterprise.establishDate || out.profile.foundedDate,
+        positioning: out.profile.positioning,
+        vision: out.profile.vision,
+      };
+      out.enterprise = agg.enterprise; // 保留完整企业字段，供信息页使用
+    }
+    if (agg.business && agg.business.length) {
+      out.business = agg.business.map(function (b) {
+        return { name: b.name, icon: b.icon || '🌿' };
+      });
+    }
+    if (agg.staff && agg.staff.length) {
+      out.staff = agg.staff.map(function (s) {
+        return { k: s.role, v: s.count, c: STAFF_COLOR[s.role] || '#38D6FF' };
+      });
+    }
+    if (agg.experts && agg.experts.length) {
+      out.experts = agg.experts.map(function (e) {
+        return { name: e.name, title: e.title };
+      });
+    }
+    if (agg.timelines && agg.timelines.length) {
+      out.timeline = agg.timelines.map(function (t) {
+        return { year: t.year, title: t.title, short: t.short };
+      });
+    }
+    if (agg.operations && agg.operations.length) {
+      // operation 表是 label/value/unit 结构，映射回 operation 关键指标
+      var op = {};
+      agg.operations.forEach(function (o) {
+        if (o.label === '年度总产值') op.totalOutputValue = o.value;
+        else if (o.label === '年总产量') op.totalOutput = o.value;
+        else if (o.label === '核心区面积') op.coreArea = o.value;
+        else if (o.label === '服务农户') op.serviceHouseholds = o.value;
+      });
+      if (Object.keys(op).length) out.operation = mergeDefaults(out.operation, op);
+    }
+    if (agg.bases && agg.bases.length) {
+      out.bases = agg.bases.map(function (b) {
+        return { id: b.id, name: b.name, area: b.area, plots: b.plots, x: b.x, y: b.y, star: b.star || 0 };
+      });
+    }
+    if (agg.plots && agg.plots.length) {
+      out.plots = agg.plots; // 地块台账（新增，供 enterprise_plot 页使用）
+    }
+    return out;
+  }
+
+  /** 把 store 内存对象转成 mapper 需要的聚合对象，推送后端 */
+  function storeToBackendAgg(data) {
+    return {
+      enterprise: data.enterprise || {
+        name: data.profile.name,
+        establishDate: data.profile.foundedDate,
+      },
+      business: (data.business || []).map(function (b, i) {
+        return { id: i + 1, name: b.name, icon: b.icon };
+      }),
+      staff: (data.staff || []).map(function (s, i) {
+        return { id: i + 1, role: s.k, count: s.v };
+      }),
+      experts: (data.experts || []).map(function (e, i) {
+        return { id: i + 1, name: e.name, title: e.title };
+      }),
+      timelines: (data.timeline || []).map(function (t, i) {
+        return { id: i + 1, year: t.year, title: t.title, short: t.short };
+      }),
+      operations: operationToRows(data.operation),
+      bases: (data.bases || []).map(function (b) {
+        return { id: b.id, name: b.name, area: b.area };
+      }),
+      plots: (data.plots || []).map(function (p) {
+        return { id: p.id, name: p.name, baseId: p.baseId, area: p.area };
+      }),
+      deleted: {},
+    };
+  }
+
+  function operationToRows(op) {
+    if (!op) return [];
+    var rows = [];
+    if (op.totalOutputValue != null) rows.push({ id: 1, label: '年度总产值', value: op.totalOutputValue, unit: '万元' });
+    if (op.totalOutput != null) rows.push({ id: 2, label: '年总产量', value: op.totalOutput, unit: '吨' });
+    if (op.coreArea != null) rows.push({ id: 3, label: '核心区面积', value: op.coreArea, unit: '亩' });
+    if (op.serviceHouseholds != null) rows.push({ id: 4, label: '服务农户', value: op.serviceHouseholds, unit: '户' });
+    return rows;
+  }
+
+  /** 持久化到后端（防抖，合并连续写） */
+  function persistToBackend(data) {
+    persistPending = data;
+    if (persistTimer) return;
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      var snapshot = persistPending;
+      persistPending = null;
+      if (!snapshot) return;
+      Promise.resolve(depsReady).then(function () {
+        var api = backendApi();
+        if (!api || !api.isLoggedIn || !api.isLoggedIn()) return null;
+        var ctx = global.EnterpriseMapper.buildContext(global.EnterpriseStore._refs);
+        var payload = global.EnterpriseMapper.fromAggregate(storeToBackendAgg(snapshot), ctx);
+        return api.create('enterprise/aggregate', payload).then(function (res) {
+          if (res && res.ok) {
+            backendReady = true;
+            refreshRefs();
+          } else if (res && res._unauthorized) {
+            backendReady = false;
+          } else {
+            console.warn('[EnterpriseStore] 后端持久化失败', res && res.message);
+          }
+        });
+      }).catch(function (err) {
+        console.warn('[EnterpriseStore] 后端持久化异常', err);
+      });
+    }, 300);
+  }
+
+  function refreshRefs() {
+    Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.get) return null;
+      return api.get('enterprise/aggregate').then(function (res) {
+        if (res && res.ok && res.data && res.data.refs) {
+          global.EnterpriseStore._refs = res.data.refs;
+        }
+      });
+    }).catch(function () { /* ignore */ });
+  }
+
+  var STAFF_COLOR = { '管理': '#38D6FF', '技术': '#2E8FE8', '作业': '#31C9E8', '销售': '#4E7FD6', '后勤': '#8AA0BE', '其他': '#8AA0BE' };
+
   var DEFAULT_DATA = {
     version: VERSION,
     fiscalYear: '2026',
@@ -41,14 +259,14 @@
     },
     certSeedCount: 10,
     bases: [
-      { id: 'MJ', name: '麦积基地', area: 520, plots: 32, x: 300, y: 150, star: 1 },
-      { id: 'QZ', name: '秦州基地', area: 430, plots: 24, x: 424, y: 196, star: 0 },
-      { id: 'QA', name: '秦安基地', area: 380, plots: 21, x: 216, y: 214, star: 0 },
-      { id: 'GG', name: '甘谷基地', area: 310, plots: 17, x: 136, y: 250, star: 0 },
-      { id: 'ZC', name: '张川基地', area: 240, plots: 13, x: 120, y: 140, star: 0 },
-      { id: 'QS', name: '清水基地', area: 190, plots: 10, x: 576, y: 120, star: 0 },
-      { id: 'LX', name: '陇西基地', area: 220, plots: 6, x: 722, y: 164, star: 0 },
-      { id: 'WS', name: '武山基地', area: 160, plots: 3, x: 474, y: 288, star: 0 }
+      { id: 'MJ', name: '麦积基地', area: 520, plots: 32, x: 300, y: 150, star: 1, baseStatus: 'active', address: '甘肃省天水市麦积区', managerName: '惠加宁', phone: '133-0791-2585', baseImages: [] },
+      { id: 'QZ', name: '秦州基地', area: 430, plots: 24, x: 424, y: 196, star: 0, baseStatus: 'active', address: '甘肃省天水市秦州区', managerName: '黄忠坚', phone: '139-7941-2180', baseImages: [] },
+      { id: 'QA', name: '秦安基地', area: 380, plots: 21, x: 216, y: 214, star: 0, baseStatus: 'active', address: '甘肃省天水市秦安县', managerName: '徐水应', phone: '138-7941-8637', baseImages: [] },
+      { id: 'GG', name: '甘谷基地', area: 310, plots: 17, x: 136, y: 250, star: 0, baseStatus: 'active', address: '甘肃省天水市甘谷县', managerName: '陈小忠', phone: '187-7941-7899', baseImages: [] },
+      { id: 'ZC', name: '张川基地', area: 240, plots: 13, x: 120, y: 140, star: 0, baseStatus: 'active', address: '甘肃省天水市张家川县', managerName: '朱泉龙', phone: '182-9645-2648', baseImages: [] },
+      { id: 'QS', name: '清水基地', area: 190, plots: 10, x: 576, y: 120, star: 0, baseStatus: 'active', address: '甘肃省天水市清水县', managerName: '廖春亮', phone: '137-6767-9075', baseImages: [] },
+      { id: 'LX', name: '陇西基地', area: 220, plots: 6, x: 722, y: 164, star: 0, baseStatus: 'active', address: '甘肃省定西市陇西县', managerName: '李建明', phone: '139-7043-2567', baseImages: [] },
+      { id: 'WS', name: '武山基地', area: 160, plots: 3, x: 474, y: 288, star: 0, baseStatus: 'active', address: '甘肃省天水市武山县', managerName: '李根', phone: '130-3058-7809', baseImages: [] }
     ],
     plotHealth: [
       { k: '健康', v: 98, c: '#2bd46e' },
@@ -168,8 +386,17 @@
 
   var memory = null;
 
+  var preloadTriggered = false;
+
   function ensure() {
     if (!memory) memory = readStore();
+    // 首次调用时异步触发后端预加载（登录态 + 依赖就绪才生效，失败回退本地缓存）
+    if (!preloadTriggered && backendEnabled()) {
+      preloadTriggered = true;
+      Promise.resolve(depsReady).then(function () {
+        preloadFromBackend();
+      });
+    }
     return memory;
   }
 
@@ -194,6 +421,8 @@
       return { ok: false, error: '本地存储写入失败，请检查浏览器存储空间或隐私模式' };
     }
     memory = next;
+    // 后端持久化（防抖），登录态 + 依赖就绪才生效，失败静默回退本地缓存
+    if (backendEnabled()) persistToBackend(next);
     broadcast(reason || 'update');
     return { ok: true, data: clone(next) };
   }
@@ -212,6 +441,64 @@
 
   function bases() {
     return clone(ensure().bases);
+  }
+
+  /** 基地台账（对齐 enterprise_base.html 的字段口径） */
+  function baseLedger() {
+    return clone(ensure().bases).map(function (b) {
+      return {
+        id: b.id,
+        code: b.id,                     // 台账用 code 作编号（MJ/QZ...）
+        name: b.name,
+        address: b.address || '',
+        area: b.area,
+        manager: b.managerName || '',
+        phone: b.phone || '',
+        status: b.baseStatus || 'active',
+        baseImages: b.baseImages || [],
+      };
+    });
+  }
+
+  /** 新增/更新基地（台账 CRUD） */
+  function saveBase(item) {
+    var next = ensure();
+    var list = next.bases || [];
+    var code = item.code || item.id;
+    if (!code) return { ok: false, message: '缺少基地编号' };
+    if (!item.name) return { ok: false, message: '缺少基地名称' };
+    var idx = -1;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === code || list[i].code === code) { idx = i; break; }
+    }
+    var row = {
+      id: code, code: code, name: item.name,
+      area: Number(item.area) || 0,
+      baseStatus: item.status || item.baseStatus || 'active',
+      address: item.address || '',
+      managerId: item.managerId || null,
+      managerName: item.manager || item.managerName || '',
+      phone: item.phone || '',
+      baseImages: item.baseImages || [],
+      plots: (idx >= 0 ? list[idx].plots : 0) || 0,
+      x: (idx >= 0 ? list[idx].x : 0) || 0,
+      y: (idx >= 0 ? list[idx].y : 0) || 0,
+      star: (idx >= 0 ? list[idx].star : 0) || 0,
+    };
+    if (idx >= 0) list[idx] = row; else list.push(row);
+    var r = persist(next, 'base-save');
+    return { ok: !!r.ok, data: row, message: r.ok ? '已保存' : r.error };
+  }
+
+  /** 删除基地（台账 CRUD） */
+  function removeBase(id) {
+    var next = ensure();
+    var list = next.bases || [];
+    var before = list.length;
+    next.bases = list.filter(function (b) { return b.id !== id && b.code !== id; });
+    if (next.bases.length === before) return { ok: false, message: '基地不存在' };
+    var r = persist(next, 'base-remove');
+    return { ok: !!r.ok, message: r.ok ? '已删除' : r.error };
   }
 
   function plotHealth() {
@@ -435,8 +722,13 @@
     VERSION: VERSION,
     data: data,
     profile: profile,
+    enterprise: function () { return clone(ensure().enterprise || null); },
     operation: operation,
     bases: bases,
+    baseLedger: baseLedger,
+    saveBase: saveBase,
+    removeBase: removeBase,
+    plots: function () { return clone(ensure().plots || []); },
     plotHealth: plotHealth,
     staff: staff,
     staffTotal: staffTotal,

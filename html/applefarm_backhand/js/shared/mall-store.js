@@ -11,6 +11,99 @@
 (function (window) {
   'use strict';
 
+  /* ============================================================
+   * 后端桥接依赖自动加载（策略 A：出入口映射）
+   * ============================================================ */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, '');
+    var deps = [
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'MallMapper', src: baseDir + 'mall-mapper.js' }
+    ];
+    var pending = deps.filter(function (d) { return !window[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src; s.async = false; s.onload = resolve; s.onerror = resolve;
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
+  })();
+
+  var backendLoadPromise = null;
+  var persistTimer = null;
+
+  function backendApi() {
+    if (typeof window.Api !== 'object' && typeof window.Api !== 'function') return null;
+    if (!window.Api.get || !window.Api.create) return null;
+    if (typeof window.MallMapper === 'undefined') return null;
+    return window.Api;
+  }
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+  function preloadFromBackend() {
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('mall/aggregate');
+    }).then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = window.MallMapper.toAggregate(res.data);
+        if (agg.products.length) safeWrite(KEYS.products, agg.products);
+        if (agg.promotions.length) safeWrite(KEYS.promotions, agg.promotions);
+        if (agg.coupons.length) safeWrite(KEYS.coupons, agg.coupons);
+        if (agg.claims.length) safeWrite(KEYS.claims, agg.claims);
+        if (agg.members.length) safeWrite(KEYS.members, agg.members);
+        if (agg.orders.length) safeWrite(KEYS.orders, agg.orders);
+        if (agg.afterSales.length) safeWrite(KEYS.afterSales, agg.afterSales);
+        if (agg.invoices.length) safeWrite(KEYS.invoices, agg.invoices);
+        if (agg.posts.length) safeWrite(KEYS.posts, agg.posts);
+        var st = settings();
+        if (agg.categories.length) st.categories = agg.categories;
+        if (agg.varieties.length) st.varieties = agg.varieties;
+        if (agg.freight.length) st.freight = agg.freight;
+        if (agg.levelRules.length) st.levelRules = agg.levelRules;
+        if (agg.banners.length) { st.home = st.home || {}; st.home.banners = agg.banners; }
+        if (agg.notices.length) st.notices = agg.notices;
+        safeWrite(KEYS.settings, st);
+      }
+      return res;
+    }).catch(function (err) {
+      console.warn('[MallStore] 后端预加载失败，降级 localStorage', err);
+      return { ok: false, message: err && err.message };
+    });
+  }
+  function persistToBackend() {
+    var api = backendApi();
+    if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
+    var st = settings();
+    var agg = {
+      products: products(), promotions: promotions(), coupons: coupons(), claims: claims(),
+      members: members(), orders: orders(), afterSales: afterSales(), invoices: invoices(), posts: posts(),
+      categories: st.categories || [], varieties: st.varieties || [], freight: st.freight || [],
+      levelRules: st.levelRules || [], banners: (st.home && st.home.banners) || [], notices: st.notices || [],
+      deleted: {},
+    };
+    var body = window.MallMapper.fromAggregate(agg);
+    return api.create('mall/aggregate', body);
+  }
+  function schedulePersist(reason) {
+    if (!backendEnabled()) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      persistToBackend().catch(function (e) { console.warn('[MallStore] 后端持久化失败', e); });
+    }, 300);
+  }
+
   var VERSION = 2;
   var KEYS = {
     products: 'mall_products',
@@ -53,6 +146,7 @@
   function safeWrite(key, value) {
     try {
       localStorage.setItem(key, JSON.stringify(value));
+      if (typeof schedulePersist === 'function') schedulePersist(key);
       return { ok: true, data: value };
     } catch (e) {
       try { console.error('[MallStore] 写入失败', key, e); } catch (ignore) {}
@@ -827,4 +921,5 @@
   window.MallMetrics = window.MallStore.metrics;
 
   try { migrate(); } catch (e) { try { console.warn('[MallStore] 迁移失败', e); } catch (ignore) {} }
+  if (typeof depsReady !== 'undefined') preloadFromBackend();
 })(window);

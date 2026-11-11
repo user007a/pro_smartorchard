@@ -13,6 +13,87 @@
 (function (global) {
   'use strict';
 
+  /* ============================================================
+   * 后端桥接依赖自动加载（策略 A：出入口映射）
+   * ============================================================ */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, '');
+    var deps = [
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'SalesMapper', src: baseDir + 'sales-mapper.js' }
+    ];
+    var pending = deps.filter(function (d) { return !global[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src; s.async = false; s.onload = resolve; s.onerror = resolve;
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
+  })();
+
+  var backendLoadPromise = null;
+  var persistTimer = null;
+
+  function backendApi() {
+    if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
+    if (!global.Api.get || !global.Api.create) return null;
+    if (typeof global.SalesMapper === 'undefined') return null;
+    return global.Api;
+  }
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+  function preloadFromBackend() {
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('sales/aggregate');
+    }).then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = global.SalesMapper.toAggregate(res.data);
+        var e = ensure();
+        var keys = ['customers', 'orders', 'payments', 'shipments', 'afterSales', 'pricePolicies', 'promotions', 'targets', 'statements'];
+        keys.forEach(function (k) {
+          if (agg[k] && agg[k].length) e[k] = agg[k];
+        });
+        writeJSON(STORAGE_KEY, e);
+        notify('backend-loaded');
+      }
+      return res;
+    }).catch(function (err) {
+      console.warn('[SalesStore] 后端预加载失败，降级 localStorage', err);
+      return { ok: false, message: err && err.message };
+    });
+  }
+  function persistToBackend() {
+    var api = backendApi();
+    if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
+    var e = ensure();
+    var agg = {
+      customers: e.customers || [], orders: e.orders || [], payments: e.payments || [],
+      shipments: e.shipments || [], afterSales: e.afterSales || [], pricePolicies: e.pricePolicies || [],
+      promotions: e.promotions || [], targets: e.targets || [], statements: e.statements || [], deleted: {},
+    };
+    var body = global.SalesMapper.fromAggregate(agg);
+    return api.create('sales/aggregate', body);
+  }
+  function schedulePersist(reason) {
+    if (!backendEnabled()) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      persistToBackend().catch(function (e) { console.warn('[SalesStore] 后端持久化失败', e); });
+    }, 300);
+  }
+
   var STORAGE_KEY = 'applefarm_sales_v1';
   var VERSION = 1;
   var DAY = 86400000;
@@ -221,6 +302,7 @@
   function persist(reason) {
     if (!writeJSON(STORAGE_KEY, db)) return false;
     notify(reason || 'change');
+    if (typeof schedulePersist === 'function') schedulePersist(reason);
     return true;
   }
 
@@ -710,6 +792,7 @@
     }
     db = buildSeedState();
     writeJSON(STORAGE_KEY, db);
+    if (typeof depsReady !== 'undefined') preloadFromBackend();
     return db;
   }
 

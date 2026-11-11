@@ -12,6 +12,119 @@
 (function (global) {
   'use strict';
 
+  /* ============================================================
+   * 后端桥接依赖自动加载（策略 A：出入口映射）
+   * ------------------------------------------------------------
+   * 依赖：common/js/api.js（统一请求）与 trace-mapper.js（映射层）。
+   * 基于 document.currentScript.src 计算本脚本目录再拼接，避免跨层级 404。
+   * ============================================================ */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, '');
+    var deps = [
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'TraceMapper', src: baseDir + 'trace-mapper.js' }
+    ];
+    var pending = deps.filter(function (d) { return !global[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src;
+        s.async = false;
+        s.onload = resolve;
+        s.onerror = resolve;
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
+  })();
+
+  var backendReady = false;
+  var backendLoadPromise = null;
+  var persistTimer = null;
+
+  function backendApi() {
+    if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
+    if (!global.Api.get || !global.Api.create) return null;
+    if (typeof global.TraceMapper === 'undefined') return null;
+    return global.Api;
+  }
+
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+
+  /** 从后端聚合接口拉取溯源数据，成功后合并进内存并通知 */
+  function preloadFromBackend() {
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('trace/aggregate');
+    }).then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = global.TraceMapper.toAggregate(res.data);
+        var d = ensure();
+        // 后端数据合并进 store 内存（空数组时保留默认种子兜底）
+        d.batches = (agg.batches && agg.batches.length) ? agg.batches : d.batches;
+        d.codes = (agg.codes && agg.codes.length) ? agg.codes : d.codes;
+        d.events = (agg.events && agg.events.length) ? agg.events : d.events;
+        d.scans = (agg.scans && agg.scans.length) ? agg.scans : d.scans;
+        d.labelTemplates = (agg.labelTemplates && agg.labelTemplates.length) ? agg.labelTemplates : d.labelTemplates;
+        d.inspections = (agg.inspections && agg.inspections.length) ? agg.inspections : d.inspections;
+        d.labelStock = (agg.labelStock && Object.keys(agg.labelStock).length) ? agg.labelStock : d.labelStock;
+        d.printJobs = (agg.printJobs && agg.printJobs.length) ? agg.printJobs : d.printJobs;
+        d.recalls = (agg.recalls && agg.recalls.length) ? agg.recalls : d.recalls;
+        d.showTemplates = (agg.showTemplates && agg.showTemplates.length) ? agg.showTemplates : d.showTemplates;
+        save();
+        commit('backend-loaded');
+        backendReady = true;
+      }
+      return res;
+    }).catch(function (e) {
+      console.warn('[TraceStore] 后端预加载失败，降级 localStorage', e);
+      return { ok: false, message: e && e.message };
+    });
+  }
+
+  /** 持久化到后端：防抖 300ms，全量 upsert 8 张表 */
+  function persistToBackend() {
+    var api = backendApi();
+    if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
+    var d = ensure();
+    var agg = {
+      batches: clone(d.batches || []),
+      codes: clone(d.codes || []),
+      events: clone(d.events || []),
+      scans: clone(d.scans || []),
+      labelTemplates: clone(d.labelTemplates || []),
+      inspections: clone(d.inspections || []),
+      labelStock: clone(d.labelStock || {}),
+      printJobs: clone(d.printJobs || []),
+      recalls: clone(d.recalls || []),
+      showTemplates: clone(d.showTemplates || []),
+      deleted: {},
+    };
+    var body = global.TraceMapper.fromAggregate(agg);
+    return api.create('trace/aggregate', body);
+  }
+
+  /** 调度后端持久化（防抖） */
+  function schedulePersist(reason) {
+    if (!backendEnabled()) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      persistToBackend().catch(function (e) {
+        console.warn('[TraceStore] 后端持久化失败', e);
+      });
+    }, 300);
+  }
+
   var VERSION = 3;
   var KEY = 'smartorchard_trace_v1';
   var LEGACY_BATCH_KEY = 'smartorchard_trace_batches';
@@ -479,6 +592,19 @@
   }
 
   function seedTemplates() { return clone(TEMPLATE_SEED); }
+
+  /* 溯源展示模板（C端履历展示模板，区别于标签打印模板） */
+  var SHOW_TEMPLATE_SEED = [
+    { id: 'ST-001', name: '标准版履历模板', product: '花牛苹果', modules: ['基地介绍','种植管理','施肥喷药','农残检测','采摘入库'], boundBatches: ['PC-20260901-001'], createTime: '2026-08-25', status: 'active', desc: '适用于一般批次溯源，包含核心农事与检测环节' },
+    { id: 'ST-002', name: '精简版履历模板', product: '花牛苹果', modules: ['基地介绍','采摘入库'], boundBatches: ['PC-20260911-011'], createTime: '2026-08-28', status: 'active', desc: '精简展示，仅保留产地与采收信息' },
+    { id: 'ST-003', name: '有机认证版模板', product: '花牛苹果', modules: ['基地介绍','种植管理','施肥喷药','农残检测','企业认证'], boundBatches: ['PC-20260902-002'], createTime: '2026-09-02', status: 'active', desc: '有机产品专用，突出检测与认证' },
+    { id: 'ST-004', name: '礼盒装版模板', product: '礼盒装苹果', modules: ['基地介绍','采摘入库','冷链配送'], boundBatches: [], createTime: '2026-09-03', status: 'active', desc: '礼品套装专用模板' },
+    { id: 'ST-005', name: '认养农业版模板', product: '花牛苹果', modules: ['基地介绍','种植管理','采摘入库'], boundBatches: [], createTime: '2026-09-13', status: 'active', desc: '认养果树所产果实使用' },
+    { id: 'ST-006', name: '秦冠专属版模板', product: '秦冠苹果', modules: ['基地介绍','种植管理','采摘入库'], boundBatches: ['PC-20260920-020'], createTime: '2026-09-18', status: 'active', desc: '秦冠品种专用' },
+    { id: 'ST-007', name: '金帅专属版模板', product: '金帅苹果', modules: ['基地介绍','种植管理','采摘入库'], boundBatches: ['PC-20260910-010'], createTime: '2026-09-08', status: 'active', desc: '金帅品种专用' },
+    { id: 'ST-008', name: '果园直发版模板', product: '花牛苹果', modules: ['基地介绍','采摘入库','冷链配送'], boundBatches: [], createTime: '2026-09-19', status: 'active', desc: '果园直发批次使用' }
+  ];
+  function seedShowTemplates() { return clone(SHOW_TEMPLATE_SEED); }
   function seedStock() {
     var stored = readJSON(MOBILE_LABEL_STOCK_KEY, null);
     if (stored && typeof stored === 'object' && !Array.isArray(stored)) return clone(stored);
@@ -664,6 +790,7 @@
       printJobs: printJobs,
       events: events,
       scans: scans,
+      showTemplates: seedShowTemplates(),
       auditLogs: seedAudit(),
       recalls: seedRecalls(),
       channelAlerts: seedChannelAlerts(),
@@ -765,6 +892,7 @@
       if (!inMemory.labelReservations) inMemory.labelReservations = [];
       if (!inMemory.printJobs) inMemory.printJobs = seedPrintJobs();
       if (!inMemory.recalls) inMemory.recalls = seedRecalls();
+      if (!inMemory.showTemplates) inMemory.showTemplates = seedShowTemplates();
       if (!inMemory.channelAlerts) inMemory.channelAlerts = seedChannelAlerts();
       if (!inMemory.regulatoryReports) inMemory.regulatoryReports = seedRegulatoryReports();
       if (!inMemory.apiKeys) inMemory.apiKeys = seedApiKeys();
@@ -776,6 +904,10 @@
     }
     inMemory = buildSeed();
     save();
+    // 首次初始化后尝试从后端预加载（异步，不阻塞）
+    if (typeof depsReady !== 'undefined') {
+      preloadFromBackend();
+    }
     return inMemory;
   }
   function commit(reason) {
@@ -786,6 +918,10 @@
     try {
       global.dispatchEvent(new CustomEvent('traceStoreChange', { detail: { reason: reason, saved: ok } }));
     } catch (e) {}
+    // 变更后调度后端持久化（防抖）
+    if (typeof schedulePersist === 'function' && reason !== 'backend-loaded') {
+      schedulePersist(reason);
+    }
     return ok;
   }
   function subscribe(fn) {
@@ -1373,6 +1509,37 @@
    * 标签 / 库存 / 打印
    * ============================================================ */
   function templates() { return clone(ensure().labelTemplates || []); }
+
+  /* 溯源展示模板 CRUD */
+  function showTemplates() { return clone(ensure().showTemplates || []); }
+  function showTemplate(id) {
+    var list = ensure().showTemplates || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id || list[i].name === id) return clone(list[i]);
+    return null;
+  }
+  function saveShowTemplate(obj) {
+    var d = ensure();
+    if (!obj || !obj.name) return { ok: false, message: '请填写模板名称' };
+    var idx = -1;
+    for (var i = 0; i < d.showTemplates.length; i++) if (d.showTemplates[i].id === obj.id) { idx = i; break; }
+    if (idx >= 0) {
+      d.showTemplates[idx] = Object.assign({}, d.showTemplates[idx], obj);
+      commit('show-template');
+      return { ok: true, template: clone(d.showTemplates[idx]) };
+    }
+    var rec = Object.assign({ id: obj.id || ('ST-' + (d.showTemplates.length + 1)), createTime: nowStr().slice(0, 10) }, obj);
+    d.showTemplates.unshift(rec);
+    commit('show-template');
+    return { ok: true, template: clone(rec) };
+  }
+  function removeShowTemplate(id) {
+    var d = ensure();
+    var before = d.showTemplates.length;
+    d.showTemplates = d.showTemplates.filter(function (t) { return t.id !== id; });
+    if (d.showTemplates.length === before) return { ok: false, message: '模板不存在' };
+    commit('show-template');
+    return { ok: true };
+  }
   function template(id) {
     var list = ensure().labelTemplates || [];
     for (var i = 0; i < list.length; i++) if (list[i].id === id || list[i].name === id) return clone(list[i]);
@@ -1718,6 +1885,9 @@
     releaseReservation: releaseReservation, consumeStock: consumeStock,
     printJobs: printJobs, createPrintJob: createPrintJob,
     reprintJob: reprintJob, scrapJob: scrapJob,
+    // 溯源展示模板
+    showTemplates: showTemplates, showTemplate: showTemplate,
+    saveShowTemplate: saveShowTemplate, removeShowTemplate: removeShowTemplate,
     // 环境 / 配置 / 审计
     environmentOf: environmentOf, config: config, saveConfig: saveConfig,
     audit: audit, auditLogs: function () { return clone(ensure().auditLogs || []); },

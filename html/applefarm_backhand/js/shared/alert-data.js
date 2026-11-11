@@ -38,6 +38,82 @@
 (function(global){
   'use strict';
 
+  /* ============================================================
+   * 后端桥接依赖自动加载（策略 A：出入口映射）
+   * ============================================================ */
+  var depsReady = (function ensureDeps() {
+    if (typeof document === 'undefined') return Promise.resolve();
+    var selfEl = document.currentScript;
+    if (!selfEl || !selfEl.src) return Promise.resolve();
+    var baseDir = selfEl.src.replace(/[^\/]*$/, '');
+    var deps = [
+      { name: 'Api', src: baseDir + '../../../common/js/api.js' },
+      { name: 'AlertMapper', src: baseDir + 'alert-mapper.js' }
+    ];
+    var pending = deps.filter(function (d) { return !global[d.name]; });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(pending.map(function (d) {
+      return new Promise(function (resolve) {
+        var s = document.createElement('script');
+        s.src = d.src; s.async = false; s.onload = resolve; s.onerror = resolve;
+        (document.head || document.documentElement).appendChild(s);
+      });
+    })).then(function () { return true; });
+  })();
+
+  var backendLoadPromise = null;
+  var persistTimer = null;
+
+  function backendApi() {
+    if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
+    if (!global.Api.get || !global.Api.create) return null;
+    if (typeof global.AlertMapper === 'undefined') return null;
+    return global.Api;
+  }
+  function backendEnabled() {
+    var api = backendApi();
+    if (!api) return false;
+    try { return !!api.isLoggedIn(); } catch (e) { return false; }
+  }
+  function preloadFromBackend() {
+    if (backendLoadPromise) return backendLoadPromise;
+    backendLoadPromise = Promise.resolve(depsReady).then(function () {
+      var api = backendApi();
+      if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
+      return api.get('alert/aggregate');
+    }).then(function (res) {
+      if (res && res.ok && res.data) {
+        var agg = global.AlertMapper.toAggregate(res.data);
+        var e = ensureLoaded();
+        if (agg.alerts && agg.alerts.length) e.alerts = agg.alerts;
+        if (agg.rules && agg.rules.length) e.rules = agg.rules;
+        if (agg.reports && agg.reports.length) e.reports = agg.reports;
+        saveToStorage();
+        notify('backend-loaded');
+      }
+      return res;
+    }).catch(function (err) {
+      console.warn('[AlertStore] 后端预加载失败，降级 localStorage', err);
+      return { ok: false, message: err && err.message };
+    });
+  }
+  function persistToBackend() {
+    var api = backendApi();
+    if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
+    var e = ensureLoaded();
+    var agg = { alerts: e.alerts || [], rules: e.rules || [], reports: e.reports || [], deleted: {} };
+    var body = global.AlertMapper.fromAggregate(agg);
+    return api.create('alert/aggregate', body);
+  }
+  function schedulePersist(reason) {
+    if (!backendEnabled()) return;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(function () {
+      persistTimer = null;
+      persistToBackend().catch(function (e) { console.warn('[AlertStore] 后端持久化失败', e); });
+    }, 300);
+  }
+
   var STORAGE_KEY = 'applefarm_alert_state_v1';
   var BACKUP_KEY = 'applefarm_alert_state_v1_backup_v1';
   var VERSION = 3;
@@ -744,6 +820,7 @@
     return {
       alerts: deepClone(DEFAULT_ALERTS).map(migrateAlert),
       rules: deepClone(DEFAULT_RULES),
+      reports: [],
       config: readConfig()
     };
   }
@@ -753,6 +830,7 @@
     var stored = loadFromStorage();
     inMemory = stored && stored.alerts && stored.alerts.length ? stored : defaultState();
     if (!stored) saveToStorage();
+    if (typeof depsReady !== 'undefined') preloadFromBackend();
     return inMemory;
   }
 
@@ -770,6 +848,7 @@
         var evt = new CustomEvent('alertStoreChange', { detail: { reason: reason } });
         global.dispatchEvent(evt);
       } catch(e){}
+      if (typeof schedulePersist === 'function' && reason !== 'backend-loaded') schedulePersist(reason);
     } catch(e){ console.warn('[AlertStore] broadcast error', e); }
   }
 
@@ -1469,6 +1548,34 @@
       rule.updatedAt = nowStamp();
       broadcast('rule:' + rule.id);
       return { ok:true, message: rule.statusText };
+    },
+
+    // ---------- 内部报告 ----------
+    reports: function(){
+      return deepClone(ensureLoaded().reports || []);
+    },
+    report: function(id){
+      var r = (ensureLoaded().reports || []).find(function(x){ return x.id === id; });
+      return r ? deepClone(r) : null;
+    },
+    saveReport: function(report){
+      var state = ensureLoaded();
+      if (!report || !report.title) return { ok:false, message:'报告标题不能为空' };
+      var id = report.id || ('RPT' + String(Date.now()).slice(-6));
+      var idx = (state.reports || []).findIndex(function(x){ return x.id === id; });
+      var payload = deepClone(report);
+      payload.id = id;
+      if (idx >= 0) state.reports[idx] = payload; else state.reports.unshift(payload);
+      broadcast('report:' + id);
+      return { ok:true, id:id, message: idx >= 0 ? '报告已更新' : '报告已生成' };
+    },
+    removeReport: function(id){
+      var state = ensureLoaded();
+      var before = (state.reports || []).length;
+      state.reports = (state.reports || []).filter(function(x){ return x.id !== id; });
+      if (state.reports.length === before) return { ok:false, message:'报告不存在' };
+      broadcast('report-removed:' + id);
+      return { ok:true, message:'报告已删除' };
     },
 
     // ---------- 配置 ----------

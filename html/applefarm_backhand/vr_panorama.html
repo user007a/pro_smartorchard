@@ -284,6 +284,8 @@
   <span id="toastMessage">操作成功</span>
 </div>
 
+<script src="js/shared/vr-store.js"></script>
+<script src="js/shared/vr-mapper.js"></script>
 <script>
 const IMG = '../applefarm_h5/images/';
 const ORCHARD_IMGS = [
@@ -353,21 +355,13 @@ const TYPE_MAP = {
   viewpoint: '观景台'
 };
 
-const mockData = [
-  { id: 1,  code: 'VR-001', name: '天水麦积区基地 · 园区主入口', base: '天水麦积区基地', plotCode: '', plotName: '', type: 'entrance', status: 'published', image: ORCHARD_IMGS[0], date: '2026-09-15', resolution: '12000×6000', desc: '果园主入口处全景展示，含游客服务中心与分拣区方位指引', views: 2456 },
-  { id: 2,  code: 'VR-002', name: '天水麦积区基地 · 东区1号地', base: '天水麦积区基地', plotCode: 'D-001', plotName: '东区1号地', type: 'plot', status: 'published', image: ORCHARD_IMGS[1], date: '2026-09-16', resolution: '12000×6000', desc: '花牛苹果成龄园全貌，可查看树势与滴灌管路', views: 1892 },
-  { id: 3,  code: 'VR-003', name: '天水麦积区基地 · 分选包装车间', base: '天水麦积区基地', plotCode: '', plotName: '', type: 'workshop', status: 'published', image: ORCHARD_IMGS[2], date: '2026-09-17', resolution: '10000×5000', desc: '果品分选包装生产线全景，含分级设备与装箱工位', views: 3201 },
-  { id: 4,  code: 'VR-004', name: '天水麦积区基地 · 冷链仓储中心', base: '天水麦积区基地', plotCode: '', plotName: '', type: 'storage', status: 'processing', image: ORCHARD_IMGS[3], date: '2026-09-18', resolution: '10000×5000', desc: '冷库货架与温控设备全景，拼接处理中', views: 0 },
-  { id: 5,  code: 'VR-005', name: '天水麦积区基地 · 东区观景台', base: '天水麦积区基地', plotCode: 'D-002', plotName: '东区2号地', type: 'viewpoint', status: 'published', image: ORCHARD_IMGS[4], date: '2026-09-19', resolution: '14000×7000', desc: '观景台俯瞰东区连片果园，可见梯田与防风林带', views: 2134 },
-  { id: 6,  code: 'VR-006', name: '天水秦州基地 · 园区主入口', base: '天水秦州基地', plotCode: '', plotName: '', type: 'entrance', status: 'published', image: ORCHARD_IMGS[5], date: '2026-09-20', resolution: '12000×6000', desc: '秦州基地入口道路与门禁系统全景', views: 1823 },
-  { id: 7,  code: 'VR-007', name: '天水秦州基地 · 北区1号地', base: '天水秦州基地', plotCode: 'D-004', plotName: '北区1号地', type: 'plot', status: 'draft', image: ORCHARD_IMGS[6], date: '2026-09-21', resolution: '12000×6000', desc: '花牛苹果老园全景，待补充点位标注', views: 0 },
-  { id: 8,  code: 'VR-008', name: '天水甘谷基地 · 南区1号地', base: '天水甘谷基地', plotCode: 'D-005', plotName: '南区1号地', type: 'plot', status: 'published', image: ORCHARD_IMGS[7], date: '2026-09-22', resolution: '12000×6000', desc: '甘谷基地南区果园全景，可对照病虫害巡检记录', views: 1678 },
-  { id: 9,  code: 'VR-009', name: '天水甘谷基地 · 果园观景台', base: '天水甘谷基地', plotCode: 'D-012', plotName: '西区3号地', type: 'viewpoint', status: 'offline', image: ORCHARD_IMGS[8], date: '2026-09-23', resolution: '14000×7000', desc: '因观景台改造暂时下架，改造完成后重新发布', views: 1425 },
-  { id: 10, code: 'VR-010', name: '青岛莱西基地 · 园区主入口', base: '青岛莱西基地', plotCode: '', plotName: '', type: 'entrance', status: 'published', image: ORCHARD_IMGS[9], date: '2026-09-24', resolution: '12000×6000', desc: '莱西基地主入口与展示牌全景', views: 1173 },
-  { id: 11, code: 'VR-011', name: '青岛莱西基地 · 冷链仓储中心', base: '青岛莱西基地', plotCode: '', plotName: '', type: 'storage', status: 'processing', image: ORCHARD_IMGS[10], date: '2026-09-25', resolution: '10000×5000', desc: '气调库与分拣区全景，正在转码为移动端切片', views: 0 },
-  { id: 12, code: 'VR-012', name: '天水麦积区基地 · 东区2号地', base: '天水麦积区基地', plotCode: 'D-002', plotName: '东区2号地', type: 'plot', status: 'draft', image: ORCHARD_IMGS[11], date: '2026-09-26', resolution: '12000×6000', desc: '东区2号地树势记录全景，尚未发布', views: 0 }
-];
-
+// VR 场景数据源：统一来自 VrStore（后端 sf_vr_scene 表），不再使用 mock
+function getScenes() {
+  return (window.VrStore && typeof window.VrStore.scenes === 'function')
+    ? window.VrStore.scenes()
+    : [];
+}
+let mockData = getScenes();
 let filteredData = [...mockData];
 let currentEditId = null;
 let pendingFile = null;
@@ -386,7 +380,13 @@ function getPlotsByBase(baseName) {
 
 document.addEventListener('DOMContentLoaded', function() {
   fillBaseOptions();
-  renderScenes();
+  function renderSceneList() {
+    mockData = getScenes();
+    filteredData = mockData.slice();
+    renderScenes();
+  }
+  renderSceneList();
+  window.addEventListener('vrStoreChange', renderSceneList);
   bindUploadArea();
 
   const nameInput = document.getElementById('editName');
@@ -473,10 +473,10 @@ function renderScenes() {
           </dl>
         </div>
         <div class="scene-actions">
-          <button class="action-btn detail" onclick="previewScene(${item.id})">预览</button>
-          <button class="action-btn edit" onclick="editScene(${item.id})">编辑</button>
-          <button class="action-btn" onclick="togglePublish(${item.id})">${item.status === 'published' ? '下架' : '发布'}</button>
-          <button class="action-btn delete" onclick="confirmDelete(${item.id})">删除</button>
+          <button class="action-btn detail" onclick="previewScene('${item.id}')">预览</button>
+          <button class="action-btn edit" onclick="editScene('${item.id}')">编辑</button>
+          <button class="action-btn" onclick="togglePublish('${item.id}')">${item.status === 'published' ? '下架' : '发布'}</button>
+          <button class="action-btn delete" onclick="confirmDelete('${item.id}')">删除</button>
         </div>
       </article>
     `;
@@ -706,22 +706,23 @@ function saveEdit() {
   }
 
   if (currentEditId) {
-    const item = mockData.find(d => d.id === currentEditId);
-    Object.assign(item, payload);
+    const S = window.VrStore;
+    if (S && typeof S.saveScene === 'function') {
+      const res = S.saveScene(Object.assign({ id: currentEditId, code: currentEditId }, payload));
+      if (!res.ok) { showToast(res.message || '保存失败', 'error'); return; }
+    }
     showToast('场景已保存');
   } else {
-    const nextId = mockData.reduce((max, d) => Math.max(max, d.id), 0) + 1;
-    const nextCode = 'VR-' + String(nextId).padStart(3, '0');
-    mockData.unshift({
-      id: nextId,
-      code: nextCode,
-      views: 0,
-      ...payload
-    });
+    const nextCode = 'VR-' + String(mockData.length + 1).padStart(3, '0');
+    const S = window.VrStore;
+    if (S && typeof S.saveScene === 'function') {
+      S.saveScene(Object.assign({ id: nextCode, code: nextCode, views: 0 }, payload));
+    }
     showToast('全景已上传，当前为' + (STATUS_MAP[status] || STATUS_MAP.draft).text + '状态');
   }
 
   closeModal('editModal');
+  mockData = getScenes();
   searchData();
 }
 
@@ -729,7 +730,10 @@ function togglePublish(id) {
   const item = mockData.find(d => d.id === id);
   if (!item) return;
   item.status = item.status === 'published' ? 'offline' : 'published';
+  const S = window.VrStore;
+  if (S && typeof S.saveScene === 'function') S.saveScene(item);
   showToast(item.status === 'published' ? '场景已发布' : '场景已下架');
+  mockData = getScenes();
   searchData();
 }
 
@@ -742,10 +746,11 @@ function confirmDelete(id) {
 }
 
 function doDelete() {
-  const index = mockData.findIndex(d => d.id === pendingDeleteId);
-  if (index > -1) mockData.splice(index, 1);
+  const S = window.VrStore;
+  if (S && typeof S.removeScene === 'function') S.removeScene(pendingDeleteId);
   closeModal('confirmModal');
   showToast('场景已删除');
+  mockData = getScenes();
   searchData();
 }
 
