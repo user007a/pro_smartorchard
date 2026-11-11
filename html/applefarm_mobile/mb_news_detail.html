@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>智慧果园 - 资讯详情</title>
+  <link rel="stylesheet" href="css/mobile-design-system.css">
+  <!-- 共享数据层 -->
+  <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
+  <style>
+    /* ========== 资讯详情页专属样式 ========== */
+
+    /* --- 顶部返回栏 --- */
+    .nd-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--bg-white);
+      border-bottom: 1px solid var(--border);
+    }
+    .nd-back {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: var(--primary-50);
+      color: var(--primary-700);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .nd-back:active { transform: scale(0.94); }
+    .nd-topbar-title {
+      font-size: var(--font-lg);
+      font-weight: 600;
+      color: var(--text);
+    }
+    .nd-share {
+      margin-left: auto;
+      border: none;
+      background: none;
+      color: var(--primary-600);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+    }
+
+    /* --- 提示条 --- */
+    .nd-tip {
+      margin: 12px 16px 0;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--warning-light);
+      color: var(--warning-dark);
+      font-size: var(--font-xs);
+      line-height: 1.5;
+      display: none;
+    }
+
+    /* --- 封面 --- */
+    .nd-cover {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      display: block;
+      background: var(--primary-50);
+    }
+    .nd-cover-ph {
+      width: 100%;
+      height: 130px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--font-sm);
+      color: rgba(255, 255, 255, 0.92);
+      letter-spacing: 3px;
+    }
+
+    /* --- 正文区 --- */
+    .nd-body {
+      background: var(--bg-white);
+      padding: 18px 16px 24px;
+    }
+    .nd-title {
+      font-size: var(--font-xl);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+    .nd-meta {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .nd-meta span { display: inline-flex; align-items: center; gap: 4px; }
+    .nd-cat {
+      font-size: var(--font-xs);
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      font-weight: 500;
+    }
+    .nd-cat.notice     { background: var(--primary-50); color: var(--primary-700); }
+    .nd-cat.training   { background: var(--primary-100); color: var(--primary-800); }
+    .nd-cat.technology { background: var(--info-light); color: var(--info-dark); }
+    .nd-cat.policy     { background: var(--warning-light); color: var(--warning-dark); }
+
+    .nd-summary {
+      background: var(--primary-50);
+      border-left: 3px solid var(--primary-500);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      font-size: var(--font-sm);
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .nd-content {
+      font-size: var(--font-base);
+      color: var(--text-primary);
+      line-height: 1.85;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+    .nd-content:empty::after {
+      content: '暂无正文内容';
+      color: var(--text-tertiary);
+      font-size: var(--font-sm);
+    }
+
+    /* --- 上下篇导航 --- */
+    .nd-nav {
+      display: flex;
+      gap: 10px;
+      margin: 24px 16px 0;
+    }
+    .nd-nav-item {
+      flex: 1;
+      min-width: 0;
+      background: var(--bg-white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 12px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .nd-nav-item:active { background: var(--primary-50); }
+    .nd-nav-item.disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+    .nd-nav-label {
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+      margin-bottom: 4px;
+    }
+    .nd-nav-title {
+      font-size: var(--font-sm);
+      color: var(--text-primary);
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+  </style>
+</head>
+<body>
+  <div class="mb-app">
+    <!-- 顶部返回栏 -->
+    <div class="nd-topbar">
+      <button class="nd-back" type="button" onclick="goBack()" aria-label="返回">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      </button>
+      <div class="nd-topbar-title">资讯详情</div>
+      <button class="nd-share" type="button" onclick="shareNews()" aria-label="分享">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      </button>
+    </div>
+
+    <!-- 提示条 -->
+    <div class="nd-tip" id="tipBar"></div>
+
+    <!-- 封面 -->
+    <div id="coverBox"></div>
+
+    <!-- 正文 -->
+    <div class="nd-body">
+      <h1 class="nd-title" id="ndTitle">资讯标题</h1>
+      <div class="nd-meta" id="ndMeta"></div>
+      <div class="nd-summary" id="ndSummary" style="display:none;"></div>
+      <div class="nd-content" id="ndContent"></div>
+    </div>
+
+    <!-- 上下篇导航 -->
+    <div class="nd-nav" id="ndNav">
+      <div class="nd-nav-item disabled" id="navPrev">
+        <div class="nd-nav-label">上一篇</div>
+        <div class="nd-nav-title" id="navPrevTitle">没有了</div>
+      </div>
+      <div class="nd-nav-item disabled" id="navNext">
+        <div class="nd-nav-label">下一篇</div>
+        <div class="nd-nav-title" id="navNextTitle">没有了</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+     * 资讯详情页（移动工作端）
+     * 数据源：localStorage['mb_news']（后台「资讯管理」维护）
+     *   按 ?id= 定位资讯；未命中时回落列表首条并给出提示
+     *   进入详情后阅读量 +1，按 sessionStorage 会话去重
+     * ============================================================ */
+
+    var NEWS_KEY = 'mb_news';
+
+    var CAT_THEME = {
+      notice:     { bg: 'linear-gradient(135deg,#46c365,#1a8a3c)', text: '公告' },
+      training:   { bg: 'linear-gradient(135deg,#7bc96f,#3f9142)', text: '培训' },
+      technology: { bg: 'linear-gradient(135deg,#4aa3df,#1890ff)', text: '技术' },
+      policy:     { bg: 'linear-gradient(135deg,#f0a54a,#e8892b)', text: '政策' }
+    };
+
+    var CAT_TEXT = { notice: '公告', training: '培训', technology: '技术', policy: '政策' };
+
+    var currentId = '';
+    var currentNews = null;
+    var newsList = [];
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function fmtTime(t) {
+      if (!t) return '';
+      var d = new Date(String(t).replace(/-/g, '/').replace('T', ' ').replace(/\..*$/, ''));
+      if (isNaN(d.getTime())) return String(t).replace('T', ' ').slice(0, 16);
+      var p = function (n) { return String(n).padStart(2, '0'); };
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
+    function fmtViews(n) {
+      n = n || 0;
+      return n >= 10000 ? (Math.round(n / 1000) / 10) + 'w' : String(n);
+    }
+
+    /* ---------- 数据读取 ---------- */
+    function readNews() {
+      var list = [];
+      try {
+        if (window.MobileOpsStore && typeof MobileOpsStore.newsList === 'function') {
+          list = MobileOpsStore.newsList({ publishedOnly: true }) || [];
+        } else {
+          var raw = localStorage.getItem(NEWS_KEY);
+          var parsed = raw ? JSON.parse(raw) : [];
+          list = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch (e) {
+        console.warn('[mb_news_detail] 读取资讯失败', e);
+        list = [];
+      }
+      return list.filter(function (n) {
+        return n && n.status !== 'offline' && n.title;
+      });
+    }
+
+    /* ---------- 渲染 ---------- */
+    function renderCover(n) {
+      var box = document.getElementById('coverBox');
+      var theme = CAT_THEME[n.category] || CAT_THEME.notice;
+      if (n.cover) {
+        box.innerHTML = '<img class="nd-cover" src="' + esc(n.cover) + '" alt="' + esc(n.title) + '">';
+      } else {
+        box.innerHTML = '<div class="nd-cover-ph" style="background:' + theme.bg + '">' + esc(theme.text) + '</div>';
+      }
+    }
+
+    function renderMeta(n) {
+      var meta = document.getElementById('ndMeta');
+      var parts = [];
+      parts.push('<span class="nd-cat ' + esc(n.category) + '">' + esc(CAT_TEXT[n.category] || '资讯') + '</span>');
+      parts.push('<span>' + esc(fmtTime(n.publishTime)) + '</span>');
+      if (n.author) parts.push('<span>作者：' + esc(n.author) + '</span>');
+      if (n.source) parts.push('<span>来源：' + esc(n.source) + '</span>');
+      parts.push('<span>' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
+        esc(fmtViews(n.viewCount)) + ' 次阅读</span>');
+      meta.innerHTML = parts.join('');
+    }
+
+    function renderSummary(n) {
+      var box = document.getElementById('ndSummary');
+      if (n.summary) {
+        box.textContent = n.summary;
+        box.style.display = '';
+      } else {
+        box.style.display = 'none';
+      }
+    }
+
+    function renderNav(index) {
+      var prev = document.getElementById('navPrev');
+      var next = document.getElementById('navNext');
+      var prevTitle = document.getElementById('navPrevTitle');
+      var nextTitle = document.getElementById('navNextTitle');
+
+      var hasPrev = index > 0;
+      var hasNext = index >= 0 && index < newsList.length - 1;
+
+      prev.className = 'nd-nav-item' + (hasPrev ? '' : ' disabled');
+      next.className = 'nd-nav-item' + (hasNext ? '' : ' disabled');
+      prevTitle.textContent = hasPrev ? (newsList[index - 1].title || '') : '没有了';
+      nextTitle.textContent = hasNext ? (newsList[index + 1].title || '') : '没有了';
+
+      prev.onclick = hasPrev ? function () { openById(newsList[index - 1].id); } : null;
+      next.onclick = hasNext ? function () { openById(newsList[index + 1].id); } : null;
+    }
+
+    function showTip(text) {
+      var tip = document.getElementById('tipBar');
+      tip.textContent = text;
+      tip.style.display = 'block';
+    }
+
+    function render(index) {
+      var n = newsList[index];
+      currentNews = n;
+      document.getElementById('ndTitle').textContent = n.title || '';
+      document.title = (n.title || '资讯详情') + ' - 智慧果园';
+      renderCover(n);
+      renderMeta(n);
+      renderSummary(n);
+      document.getElementById('ndContent').textContent = n.content || '';
+      renderNav(index);
+    }
+
+    /* ---------- 阅读量（会话去重） ---------- */
+    function increaseView(id) {
+      if (window.MobileOpsStore && typeof MobileOpsStore.increaseNewsView === 'function') {
+        return MobileOpsStore.increaseNewsView(id);
+      }
+      // 无数据层时直接回写 localStorage
+      var flag = 'mb_news_read';
+      try {
+        var raw = sessionStorage.getItem(flag);
+        var parsed = raw ? JSON.parse(raw) : [];
+        var read = Array.isArray(parsed) ? parsed : [];
+        if (read.indexOf(String(id)) >= 0) return false;
+        read.push(String(id));
+        sessionStorage.setItem(flag, JSON.stringify(read.slice(-200)));
+      } catch (e) { /* 忽略配额错误 */ }
+      try {
+        var all = JSON.parse(localStorage.getItem(NEWS_KEY) || '[]');
+        for (var i = 0; i < all.length; i++) {
+          if (String(all[i].id) === String(id)) {
+            all[i].viewCount = (all[i].viewCount || 0) + 1;
+            localStorage.setItem(NEWS_KEY, JSON.stringify(all));
+            return true;
+          }
+        }
+      } catch (e) { /* 写入失败不阻断展示 */ }
+      return false;
+    }
+
+    /* ---------- 交互 ---------- */
+    function openById(id) {
+      currentId = id;
+      window.location.href = 'mb_news_detail.html?id=' + encodeURIComponent(id);
+    }
+
+    function goBack() {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = 'mb_news.html';
+      }
+    }
+
+    function shareNews() {
+      var title = currentNews ? (currentNews.title || '资讯') : '资讯';
+      var text = '【智慧果园】' + title;
+      if (navigator.share) {
+        navigator.share({ title: title, text: text, url: window.location.href })
+          .catch(function () { /* 用户取消分享，忽略 */ });
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text + ' ' + window.location.href).then(function () {
+          toast('链接已复制到剪贴板');
+        }).catch(function () {
+          toast('复制失败，请手动复制地址栏链接');
+        });
+        return;
+      }
+      toast('请手动复制地址栏链接分享');
+    }
+
+    function toast(msg) {
+      var el = document.createElement('div');
+      el.textContent = msg;
+      el.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);' +
+        'background:rgba(0,0,0,0.78);color:#fff;padding:9px 16px;border-radius:999px;' +
+        'font-size:13px;z-index:9999;max-width:80%;text-align:center;';
+      document.body.appendChild(el);
+      setTimeout(function () { el.remove(); }, 2200);
+    }
+
+    /* ---------- 初始化 ---------- */
+    document.addEventListener('DOMContentLoaded', function () {
+      var params = new URLSearchParams(window.location.search);
+      currentId = params.get('id') || '';
+
+      newsList = readNews();
+
+      if (!newsList.length) {
+        document.getElementById('ndTitle').textContent = '暂无资讯';
+        document.getElementById('ndContent').textContent = '';
+        showTip('后台尚未发布资讯，请稍后再来查看。');
+        document.getElementById('ndNav').style.display = 'none';
+        return;
+      }
+
+      var index = -1;
+      for (var i = 0; i < newsList.length; i++) {
+        if (String(newsList[i].id) === String(currentId)) { index = i; break; }
+      }
+
+      if (index < 0) {
+        index = 0;
+        showTip('未找到指定资讯，已为您展示最新资讯。');
+      }
+
+      render(index);
+
+      if (index >= 0 && newsList[index] && newsList[index].id) {
+        if (increaseView(newsList[index].id)) {
+          newsList[index].viewCount = (newsList[index].viewCount || 0) + 1;
+          renderMeta(newsList[index]);
+        }
+      }
+    });
+  </script>
+</body>
+</html>

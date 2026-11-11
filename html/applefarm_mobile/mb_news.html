@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>智慧果园 - 资讯</title>
+  <link rel="stylesheet" href="css/mobile-design-system.css">
+  <!-- 共享数据层 -->
+  <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
+  <style>
+    /* ========== 资讯列表页专属样式 ========== */
+
+    /* --- 顶部返回栏 --- */
+    .news-topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--bg-white);
+      border-bottom: 1px solid var(--border);
+    }
+    .news-back {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: var(--primary-50);
+      color: var(--primary-700);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .news-back:active { transform: scale(0.94); }
+    .news-topbar-title {
+      font-size: var(--font-lg);
+      font-weight: 600;
+      color: var(--text);
+    }
+    .news-topbar-count {
+      margin-left: auto;
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+    }
+
+    /* --- 分类筛选条 --- */
+    .news-filters {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px 4px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .news-filters::-webkit-scrollbar { display: none; }
+    .news-filter {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-white);
+      color: var(--text-secondary);
+      font-size: var(--font-sm);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .news-filter.active {
+      background: var(--primary-500);
+      border-color: var(--primary-500);
+      color: #fff;
+      font-weight: 500;
+    }
+
+    /* --- 搜索框 --- */
+    .news-search {
+      margin: 8px 16px 12px;
+      position: relative;
+    }
+    .news-search input {
+      width: 100%;
+      height: 38px;
+      padding: 0 36px 0 34px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      background: var(--bg-white);
+      font-size: var(--font-sm);
+      font-family: inherit;
+      color: var(--text);
+    }
+    .news-search input:focus {
+      outline: none;
+      border-color: var(--primary-500);
+    }
+    .news-search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-tertiary);
+      pointer-events: none;
+      display: flex;
+    }
+    .news-search-clear {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: none;
+      background: none;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      padding: 4px;
+      display: none;
+    }
+    .news-search.has-value .news-search-clear { display: flex; }
+
+    /* --- 资讯卡片 --- */
+    .news-list {
+      padding: 0 16px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .news-item {
+      background: var(--bg-white);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .news-item:active {
+      transform: scale(0.985);
+    }
+    .news-item-cover {
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+      display: block;
+      background: var(--primary-50);
+    }
+    .news-item-cover-ph {
+      width: 100%;
+      height: 92px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--font-xs);
+      color: rgba(255, 255, 255, 0.9);
+      letter-spacing: 2px;
+    }
+    .news-item-body { padding: 14px 16px; }
+    .news-item-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .news-item-title {
+      flex: 1;
+      font-size: var(--font-md);
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .news-cat {
+      flex-shrink: 0;
+      font-size: var(--font-xs);
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      font-weight: 500;
+    }
+    .news-cat.notice     { background: var(--primary-50); color: var(--primary-700); }
+    .news-cat.training   { background: var(--primary-100); color: var(--primary-800); }
+    .news-cat.technology { background: var(--info-light); color: var(--info-dark); }
+    .news-cat.policy     { background: var(--warning-light); color: var(--warning-dark); }
+    .news-item-summary {
+      font-size: var(--font-sm);
+      color: var(--text-secondary);
+      line-height: 1.55;
+      margin-bottom: 10px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .news-item-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: var(--font-xs);
+      color: var(--text-tertiary);
+    }
+    .news-item-foot span { display: inline-flex; align-items: center; gap: 4px; }
+    .news-top-mark {
+      background: var(--error-light);
+      color: var(--error-dark);
+      border-radius: var(--radius-sm);
+      padding: 1px 6px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    /* --- 空态 --- */
+    .news-empty {
+      padding: 60px 24px;
+      text-align: center;
+      color: var(--text-tertiary);
+      font-size: var(--font-sm);
+    }
+    .news-empty-icon {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 12px;
+      border-radius: 50%;
+      background: var(--primary-50);
+      color: var(--primary-600);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="mb-app">
+    <!-- 顶部返回栏 -->
+    <div class="news-topbar">
+      <button class="news-back" type="button" onclick="goBack()" aria-label="返回">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      </button>
+      <div class="news-topbar-title">资讯</div>
+      <div class="news-topbar-count" id="topCount"></div>
+    </div>
+
+    <!-- 分类筛选 -->
+    <div class="news-filters" id="filterBar"></div>
+
+    <!-- 搜索 -->
+    <div class="news-search" id="searchBox">
+      <span class="news-search-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </span>
+      <input type="search" id="searchInput" placeholder="搜索资讯标题或内容" oninput="onSearch(this.value)">
+      <button class="news-search-clear" type="button" onclick="clearSearch()" aria-label="清空">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- 资讯列表 -->
+    <div class="news-list" id="newsList"></div>
+    <div class="news-empty" id="emptyHint" style="display:none;">
+      <div class="news-empty-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/></svg>
+      </div>
+      <div id="emptyText">暂无资讯</div>
+    </div>
+  </div>
+
+  <script>
+    /* ============================================================
+     * 资讯列表页（移动工作端）
+     * 数据源：localStorage['mb_news']（后台「移动端运营 › 消息与同步 › 资讯管理」维护）
+     *   结构：[{ id, category, title, summary, content, cover,
+     *            author, source, publishTime, status, top, viewCount }]
+     *   仅展示 status === 'published'；置顶优先，其次按发布时间倒序
+     *   点击卡片 → mb_news_detail.html?id=<资讯ID>
+     * ============================================================ */
+
+    var NEWS_KEY = 'mb_news';
+
+    /* 分类字典（与后台 MobileOpsStore 保持一致） */
+    var CAT_LIST = [
+      { key: '', text: '全部' },
+      { key: 'notice', text: '公告' },
+      { key: 'training', text: '培训' },
+      { key: 'technology', text: '技术' },
+      { key: 'policy', text: '政策' }
+    ];
+
+    /* 分类占位色块（无封面图时按分类渲染） */
+    var CAT_THEME = {
+      notice:     { bg: 'linear-gradient(135deg,#46c365,#1a8a3c)', text: '公告' },
+      training:   { bg: 'linear-gradient(135deg,#7bc96f,#3f9142)', text: '培训' },
+      technology: { bg: 'linear-gradient(135deg,#4aa3df,#1890ff)', text: '技术' },
+      policy:     { bg: 'linear-gradient(135deg,#f0a54a,#e8892b)', text: '政策' }
+    };
+
+    var currentCat = '';
+    var currentKeyword = '';
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function fmtDate(t) {
+      if (!t) return '';
+      var d = new Date(String(t).replace(/-/g, '/').replace('T', ' ').replace(/\..*$/, ''));
+      if (isNaN(d.getTime())) return String(t).replace('T', ' ').slice(0, 10);
+      var p = function (n) { return String(n).padStart(2, '0'); };
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    }
+
+    function fmtViews(n) {
+      n = n || 0;
+      return n >= 10000 ? (Math.round(n / 1000) / 10) + 'w' : String(n);
+    }
+
+    /* ---------- 数据读取 ---------- */
+    function readNews() {
+      var list = [];
+      try {
+        if (window.MobileOpsStore && typeof MobileOpsStore.newsList === 'function') {
+          list = MobileOpsStore.newsList({ publishedOnly: true }) || [];
+        } else {
+          var raw = localStorage.getItem(NEWS_KEY);
+          var parsed = raw ? JSON.parse(raw) : [];
+          list = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch (e) {
+        console.warn('[mb_news] 读取资讯失败', e);
+        list = [];
+      }
+      return list.filter(function (n) {
+        return n && n.status !== 'offline' && n.title;
+      });
+    }
+
+    function filtered() {
+      var list = readNews();
+      if (currentCat) {
+        list = list.filter(function (n) { return n.category === currentCat; });
+      }
+      if (currentKeyword) {
+        var kw = currentKeyword.toLowerCase();
+        list = list.filter(function (n) {
+          var hay = ((n.title || '') + ' ' + (n.summary || '') + ' ' + (n.content || '')).toLowerCase();
+          return hay.indexOf(kw) >= 0;
+        });
+      }
+      return list;
+    }
+
+    /* ---------- 渲染 ---------- */
+    function renderFilters() {
+      var bar = document.getElementById('filterBar');
+      bar.innerHTML = CAT_LIST.map(function (c) {
+        return '<button class="news-filter' + (c.key === currentCat ? ' active' : '') + '" type="button" data-cat="' + esc(c.key) + '">' + esc(c.text) + '</button>';
+      }).join('');
+    }
+
+    function renderList() {
+      var list = filtered();
+      var box = document.getElementById('newsList');
+      var empty = document.getElementById('emptyHint');
+
+      document.getElementById('topCount').textContent = list.length ? list.length + ' 条资讯' : '';
+
+      if (!list.length) {
+        box.innerHTML = '';
+        empty.style.display = 'block';
+        document.getElementById('emptyText').textContent =
+          (currentCat || currentKeyword) ? '没有符合条件的资讯，试试调整筛选条件' : '暂无资讯，后台发布后将在这里展示';
+        return;
+      }
+      empty.style.display = 'none';
+
+      box.innerHTML = list.map(function (n) {
+        var theme = CAT_THEME[n.category] || CAT_THEME.notice;
+        var cover = n.cover
+          ? '<img class="news-item-cover" src="' + esc(n.cover) + '" alt="' + esc(n.title) + '">'
+          : '<div class="news-item-cover-ph" style="background:' + theme.bg + '">' + esc(theme.text) + '</div>';
+        return '<div class="news-item" onclick="openDetail(\'' + esc(n.id) + '\')">' +
+          cover +
+          '<div class="news-item-body">' +
+            '<div class="news-item-head">' +
+              '<div class="news-item-title">' + esc(n.title) +
+                (n.top ? ' <span class="news-top-mark">置顶</span>' : '') + '</div>' +
+              '<span class="news-cat ' + esc(n.category) + '">' + esc(catText(n.category)) + '</span>' +
+            '</div>' +
+            (n.summary ? '<div class="news-item-summary">' + esc(n.summary) + '</div>' : '') +
+            '<div class="news-item-foot">' +
+              '<span>' + esc(fmtDate(n.publishTime)) + '</span>' +
+              '<span>' +
+                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
+                fmtViews(n.viewCount) +
+              '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function catText(key) {
+      for (var i = 0; i < CAT_LIST.length; i++) {
+        if (CAT_LIST[i].key === key) return CAT_LIST[i].text;
+      }
+      return '资讯';
+    }
+
+    /* ---------- 交互 ---------- */
+    function openDetail(id) {
+      window.location.href = 'mb_news_detail.html?id=' + encodeURIComponent(id);
+    }
+
+    function goBack() {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = 'mb_home.html';
+      }
+    }
+
+    function onSearch(val) {
+      currentKeyword = String(val || '').trim();
+      document.getElementById('searchBox').classList.toggle('has-value', !!currentKeyword);
+      renderList();
+    }
+
+    function clearSearch() {
+      currentKeyword = '';
+      document.getElementById('searchInput').value = '';
+      document.getElementById('searchBox').classList.remove('has-value');
+      renderList();
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('[data-cat]') : null;
+      if (!btn) return;
+      currentCat = btn.getAttribute('data-cat');
+      renderFilters();
+      renderList();
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+      renderFilters();
+      renderList();
+      /* 后台变更后跨标签页实时同步 */
+      window.addEventListener('storage', function (e) {
+        if (e.key === NEWS_KEY) renderList();
+      });
+    });
+  </script>
+</body>
+</html>

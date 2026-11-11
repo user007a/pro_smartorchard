@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧果园 - 资讯管理</title>
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="stylesheet" href="css/page-content.css">
+<link rel="stylesheet" href="css/unified-theme.css">
+<link rel="stylesheet" href="css/typography.css">
+<style id="standalone-fix">/* 独立打开时内容撑满（导航统一由 index.html 承担） */
+  .main-wrapper{margin-left:0!important;width:100%!important;}
+</style>
+<style>
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+  }
+  .stat-label { font-size: var(--font-size-sm); color: var(--text-tertiary); margin-bottom: var(--space-xs); }
+  .stat-value {
+    font-size: 26px; font-weight: var(--font-weight-bold);
+    color: var(--text-primary); line-height: 1.2; font-variant-numeric: tabular-nums;
+  }
+  .stat-card.is-pub .stat-value { color: var(--success); }
+  .stat-card.is-view .stat-value { color: var(--primary-500); }
+  .stat-card.is-month .stat-value { color: var(--info); }
+
+  .notice-bar {
+    display: flex; align-items: flex-start; gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--info-bg); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); font-size: var(--font-size-sm);
+    color: var(--text-secondary); margin-bottom: var(--space-lg); line-height: 1.6;
+  }
+  .notice-bar svg { flex-shrink: 0; margin-top: 2px; color: var(--info); }
+  .notice-bar code {
+    font-family: var(--font-family-mono, monospace);
+    background: rgba(24,144,255,0.08); padding: 1px 5px; border-radius: 4px;
+  }
+
+  .cat-tag {
+    display: inline-block; padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs); white-space: nowrap;
+  }
+  .cat-tag.notice     { background: var(--primary-50); color: var(--primary-600); }
+  .cat-tag.training   { background: var(--success-bg); color: var(--success); }
+  .cat-tag.technology { background: var(--info-bg); color: var(--info); }
+  .cat-tag.policy     { background: var(--warning-bg); color: var(--warning); }
+
+  .status-tag {
+    display: inline-block; padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs); white-space: nowrap;
+  }
+  .status-tag.on  { background: var(--success-bg); color: var(--success); }
+  .status-tag.off { background: var(--gray-100); color: var(--text-tertiary); }
+
+  .top-tag {
+    display: inline-block; margin-left: 6px; padding: 1px 6px;
+    border-radius: var(--radius-sm); font-size: 11px;
+    background: var(--error-bg); color: var(--error);
+  }
+
+  .cell-title {
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--text-primary); margin-bottom: 2px;
+  }
+  .cell-sub {
+    font-size: var(--font-size-xs);
+    color: var(--text-tertiary);
+    max-width: 380px; overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .cover-thumb {
+    width: 56px; height: 38px; object-fit: cover;
+    border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+    background: var(--gray-100); display: block;
+  }
+  .cover-none {
+    width: 56px; height: 38px; border-radius: var(--radius-sm);
+    border: 1px dashed var(--border-default);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--text-tertiary);
+  }
+  .empty-state {
+    padding: var(--space-2xl) 0; text-align: center;
+    color: var(--text-tertiary); font-size: var(--font-size-sm);
+  }
+
+  /* ===== 弹窗 ===== */
+  .modal-overlay {
+    display: none;
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center; align-items: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--bg-card);
+    border-radius: 12px;
+    width: 92%; max-width: 640px; max-height: 85vh;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    animation: modalFadeIn 0.2s ease-out;
+  }
+  @keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px; border-bottom: 1px solid var(--border-default);
+  }
+  .modal-title { font-size: 16px; font-weight: 600; color: #1f1f1f; }
+  .modal-close {
+    background: none; border: none; cursor: pointer;
+    padding: 4px; font-size: 20px; line-height: 1;
+    color: var(--text-tertiary); transition: color 0.2s;
+  }
+  .modal-close:hover { color: var(--text-secondary); }
+  .modal-body { padding: 20px; overflow-y: auto; max-height: calc(85vh - 132px); }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 12px;
+    padding: 16px 20px; border-top: 1px solid var(--border-default);
+  }
+  .modal-field { margin-bottom: var(--space-lg); }
+  .modal-field:last-child { margin-bottom: 0; }
+  .modal-field label {
+    display: block; font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--text-primary); margin-bottom: var(--space-sm);
+  }
+  .modal-field textarea, .modal-field input, .modal-field select {
+    width: 100%; padding: 10px 14px;
+    border: 1.5px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-base); font-family: inherit;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--bg-card);
+  }
+  .modal-field textarea { min-height: 90px; resize: vertical; line-height: var(--line-height-relaxed); }
+  .modal-field input:focus, .modal-field select:focus, .modal-field textarea:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 4px rgba(24, 144, 255, 0.12);
+    outline: none;
+  }
+  .field-hint { font-size: var(--font-size-xs); color: var(--text-tertiary); margin-top: 6px; }
+  .cover-picker { display: flex; align-items: center; gap: 12px; }
+  .cover-preview {
+    width: 96px; height: 64px; object-fit: cover;
+    border-radius: var(--radius-sm); border: 1px solid var(--border-light);
+    background: var(--gray-100);
+  }
+  .cover-empty {
+    width: 96px; height: 64px; border-radius: var(--radius-sm);
+    border: 1px dashed var(--border-default);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--text-tertiary);
+  }
+</style>
+</head>
+<body data-active-menu="mobile-ops" data-active-submenu="mb-news">
+
+<div class="main-wrapper">
+  <div class="tab-bar">
+    <div class="tab-bar-actions">
+      <button class="tab-close-all" title="关闭全部标签">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 3L11 11M11 3L3 11"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <nav class="device-tabs" aria-label="移动端运营·消息与同步">
+      <a href="mb_message.html">消息推送</a>
+      <a href="mb_sync_queue.html">同步队列</a>
+      <a href="mb_news.html" class="active">资讯管理</a>
+    </nav>
+    <div class="page-header">
+      <div>
+        <div class="page-title">资讯管理</div>
+        <div class="page-subtitle">维护移动端首页「信息资讯」区块与资讯列表页的内容、封面与发布状态</div>
+      </div>
+      <div class="page-actions">
+        <button class="jg-btn" onclick="refreshList()">刷新</button>
+        <button class="jg-btn jg-btn-primary" onclick="openEdit()">新增资讯</button>
+      </div>
+    </div>
+
+    <div class="notice-bar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="8"/>
+      </svg>
+      <div>资讯写入存储键 <code>mb_news</code>，由 <code>MobileOpsStore</code> 统一收口；移动端首页资讯区块、资讯列表页 <code>mb_news.html</code> 与详情页 <code>mb_news_detail.html</code> 均实时消费本表。仅「已发布」状态的资讯对移动端可见。</div>
+    </div>
+
+    <!-- 统计区 -->
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">资讯总数</div>
+        <div class="stat-value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card is-pub">
+        <div class="stat-label">已发布</div>
+        <div class="stat-value" id="statPub">0</div>
+      </div>
+      <div class="stat-card is-view">
+        <div class="stat-label">累计阅读</div>
+        <div class="stat-value" id="statView">0</div>
+      </div>
+      <div class="stat-card is-month">
+        <div class="stat-label">本月新增</div>
+        <div class="stat-value" id="statMonth">0</div>
+      </div>
+    </div>
+
+    <!-- 搜索栏区 -->
+    <div class="page-section search-section">
+      <div class="search-bar">
+        <select class="search-select" id="catSelect">
+          <option value="">全部分类</option>
+        </select>
+        <select class="search-select" id="statusSelect">
+          <option value="">全部状态</option>
+          <option value="on">已发布</option>
+          <option value="off">已下架</option>
+        </select>
+        <input type="text" class="search-input" placeholder="搜索标题、摘要或正文..." id="searchInput">
+        <div class="search-actions">
+          <button class="jg-btn jg-btn-primary" onclick="refreshList()">搜索</button>
+          <button class="jg-btn" onclick="resetFilter()">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据列表区 -->
+    <div class="page-section data-section">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:60px;">序号</th>
+              <th>资讯标题</th>
+              <th style="width:100px;">分类</th>
+              <th style="width:80px;">封面</th>
+              <th style="width:80px;">阅读量</th>
+              <th style="width:110px;">发布人</th>
+              <th style="width:150px;">发布时间</th>
+              <th style="width:200px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="newsBody"></tbody>
+        </table>
+      </div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无资讯，点击右上角「新增资讯」创建第一条</div>
+    </div>
+  </main>
+</div>
+
+<!-- ===== 编辑弹窗 ===== -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="editTitle">新增资讯</h3>
+      <button class="modal-close" onclick="closeEdit()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label>资讯分类<span style="color:var(--error);">*</span></label>
+        <select id="editCat"></select>
+      </div>
+      <div class="modal-field">
+        <label>资讯标题<span style="color:var(--error);">*</span></label>
+        <input type="text" id="editTitleInput" placeholder="请输入资讯标题（不超过 40 字）">
+      </div>
+      <div class="modal-field">
+        <label>摘要</label>
+        <textarea id="editSummary" style="min-height:60px;" placeholder="列表页展示的简短摘要（不超过 80 字）"></textarea>
+      </div>
+      <div class="modal-field">
+        <label>正文<span style="color:var(--error);">*</span></label>
+        <textarea id="editContent" placeholder="详情页展示的正文内容，支持换行"></textarea>
+      </div>
+      <div class="modal-field">
+        <label>封面图</label>
+        <div class="cover-picker">
+          <div id="coverBox"></div>
+          <div>
+            <button class="jg-btn" onclick="pickCover()">选择图片</button>
+            <button class="jg-btn" onclick="clearCover()">移除</button>
+            <input type="file" id="coverFile" accept="image/*" style="display:none;" onchange="onCoverPicked(this)">
+            <div class="field-hint">图片会压缩后以本地数据存储，单张上限 300KB；未设置时移动端按分类渲染占位色块。</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-field">
+        <label>作者</label>
+        <input type="text" id="editAuthor" placeholder="如：技术推广中心">
+      </div>
+      <div class="modal-field">
+        <label>来源</label>
+        <input type="text" id="editSource" placeholder="如：市农业农村局">
+      </div>
+      <div class="modal-field">
+        <label>发布时间<span style="color:var(--error);">*</span></label>
+        <input type="datetime-local" id="editTime">
+      </div>
+      <div class="modal-field">
+        <label>发布状态</label>
+        <select id="editStatus">
+          <option value="published">已发布（移动端可见）</option>
+          <option value="offline">已下架（移动端不展示）</option>
+        </select>
+      </div>
+      <div class="modal-field">
+        <label>置顶</label>
+        <select id="editTop">
+          <option value="0">不置顶</option>
+          <option value="1">置顶（优先展示）</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="jg-btn" onclick="closeEdit()">取消</button>
+      <button class="jg-btn jg-btn-primary" onclick="submitEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/common-functions.js"></script>
+<script src="js/shared/mobile-ops-store.js"></script>
+<script>
+/* ============================================================
+ * 资讯管理（移动端运营 · 消息与同步 · 组内 Tab 第 3 项）
+ * 数据源：MobileOpsStore / localStorage['mb_news']
+ *   结构：[{ id, category, title, summary, content, cover,
+ *            author, source, publishTime, status, top,
+ *            viewCount, publisher, createdAt, updatedAt }]
+ *   category：notice 公告 / training 培训 / technology 技术 / policy 政策
+ *   status  ：published 已发布 / offline 已下架（仅 published 对移动端可见）
+ *   读取方  ：移动端 mb_home.html（首页资讯区块）
+ *             移动端 mb_news.html（资讯列表）
+ *             移动端 mb_news_detail.html（资讯详情）
+ * ============================================================ */
+
+/* 当前编辑中的资讯 id（null = 新增） */
+var currentEditId = null;
+
+/* 当前弹窗中的封面图（DataURL） */
+var currentCover = '';
+
+/* 封面压缩后的最大边（px），控制 DataURL 体积 */
+var COVER_MAX_SIDE = 480;
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function fmtTime(t) {
+  if (!t) return '—';
+  var d = new Date(String(t).replace(/-/g, '/').replace('T', ' ').replace(/\..*$/, ''));
+  if (isNaN(d.getTime())) return String(t).replace('T', ' ').slice(0, 16);
+  var p = function (n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+/* ---------- 分类下拉 ---------- */
+function fillCategorySelect() {
+  var sel = document.getElementById('catSelect');
+  var edit = document.getElementById('editCat');
+  var cats = MobileOpsStore.NEWS_CATEGORIES || ['notice', 'training', 'technology', 'policy'];
+  var text = MobileOpsStore.NEWS_CATEGORY_TEXT || {};
+  var opts = cats.map(function (c) {
+    return '<option value="' + esc(c) + '">' + esc(text[c] || c) + '</option>';
+  }).join('');
+  sel.innerHTML = '<option value="">全部分类</option>' + opts;
+  edit.innerHTML = opts;
+}
+
+/* ---------- 读取 ---------- */
+function readAll() {
+  try {
+    return MobileOpsStore.list('news') || [];
+  } catch (e) {
+    console.warn('[mb_news] 读取资讯失败', e);
+    return [];
+  }
+}
+
+function filteredList() {
+  var cat = document.getElementById('catSelect').value;
+  var status = document.getElementById('statusSelect').value;
+  var kw = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  return readAll().filter(function (n) {
+    if (cat && n.category !== cat) return false;
+    if (status === 'on' && n.status !== 'published') return false;
+    if (status === 'off' && n.status !== 'offline') return false;
+    if (kw) {
+      var hay = ((n.title || '') + ' ' + (n.summary || '') + ' ' + (n.content || '')).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    return true;
+  }).sort(function (a, b) {
+    if (a.top !== b.top) return a.top ? -1 : 1;
+    var ta = new Date(String(a.publishTime || a.createdAt || '').replace(/-/g, '/')).getTime();
+    var tb = new Date(String(b.publishTime || b.createdAt || '').replace(/-/g, '/')).getTime();
+    return (tb || 0) - (ta || 0);
+  });
+}
+
+/* ---------- 统计与渲染 ---------- */
+function renderStats(list) {
+  var published = list.filter(function (n) { return n.status === 'published'; }).length;
+  var views = list.reduce(function (sum, n) { return sum + (n.viewCount || 0); }, 0);
+  var prefix = MobileOpsStore.now().slice(0, 7);
+  var monthNew = list.filter(function (n) {
+    return String(n.publishTime || n.createdAt || '').slice(0, 7) === prefix;
+  }).length;
+
+  document.getElementById('statTotal').textContent = list.length;
+  document.getElementById('statPub').textContent = published;
+  document.getElementById('statView').textContent = views;
+  document.getElementById('statMonth').textContent = monthNew;
+}
+
+function renderTable() {
+  var all = readAll();
+  renderStats(all);
+
+  var list = filteredList();
+  var body = document.getElementById('newsBody');
+  var empty = document.getElementById('emptyHint');
+
+  if (!list.length) {
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = all.length
+      ? '没有符合条件的资讯，试试调整筛选条件'
+      : '暂无资讯，点击右上角「新增资讯」创建第一条';
+    return;
+  }
+  empty.style.display = 'none';
+
+  var text = MobileOpsStore.NEWS_CATEGORY_TEXT || {};
+  body.innerHTML = list.map(function (n, i) {
+    var on = n.status === 'published';
+    var cover = n.cover
+      ? '<img class="cover-thumb" src="' + esc(n.cover) + '" alt="封面">'
+      : '<div class="cover-none">无</div>';
+    return '<tr>' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td><div class="cell-title">' + esc(n.title) +
+          (n.top ? '<span class="top-tag">置顶</span>' : '') + '</div>' +
+          '<div class="cell-sub">' + esc(n.summary || n.content) + '</div></td>' +
+      '<td><span class="cat-tag ' + esc(n.category) + '">' + esc(text[n.category] || n.category) + '</span></td>' +
+      '<td>' + cover + '</td>' +
+      '<td>' + (n.viewCount || 0) + '</td>' +
+      '<td>' + esc(n.publisher || n.author || '系统管理员') + '</td>' +
+      '<td class="text-mono">' + esc(fmtTime(n.publishTime)) + '</td>' +
+      '<td><div class="action-btns">' +
+        '<button class="action-btn edit" data-act="edit" data-id="' + esc(n.id) + '">编辑</button>' +
+        '<button class="action-btn detail" data-act="top" data-id="' + esc(n.id) + '">' + (n.top ? '取消置顶' : '置顶') + '</button>' +
+        '<button class="action-btn approve" data-act="toggle" data-id="' + esc(n.id) + '">' + (on ? '下架' : '发布') + '</button>' +
+        '<button class="action-btn delete" data-act="delete" data-id="' + esc(n.id) + '">删除</button>' +
+      '</div></td>' +
+    '</tr>';
+  }).join('');
+}
+
+function refreshList() { renderTable(); }
+
+function resetFilter() {
+  document.getElementById('catSelect').value = '';
+  document.getElementById('statusSelect').value = '';
+  document.getElementById('searchInput').value = '';
+  renderTable();
+}
+
+/* ---------- 置顶 ---------- */
+function toggleTop(id) {
+  var res = MobileOpsStore.toggleNewsTop(id);
+  if (!res.ok) { Toast.error(res.msg); return; }
+  MobileOpsStore.audit(res.top ? '置顶资讯' : '取消置顶资讯', 'news', id, newsTitle(id));
+  renderTable();
+  Toast.success(res.msg);
+}
+
+/* ---------- 上下架 ---------- */
+function toggleStatus(id) {
+  var res = MobileOpsStore.toggleNews(id);
+  if (!res.ok) { Toast.error(res.msg); return; }
+  MobileOpsStore.audit(res.status === 'published' ? '发布资讯' : '下架资讯', 'news', id, newsTitle(id));
+  renderTable();
+  Toast.success(res.msg);
+}
+
+/* ---------- 删除 ---------- */
+function deleteNews(id) {
+  var title = newsTitle(id);
+  ConfirmDialog.show({
+    title: '删除资讯',
+    message: '将删除资讯「' + title + '」，删除后移动端首页与资讯列表不再展示，删除不可恢复。',
+    onConfirm: function () {
+      var res = MobileOpsStore.removeNews(id);
+      if (!res.ok) { Toast.error(res.msg); return; }
+      MobileOpsStore.audit('删除资讯', 'news', id, title);
+      renderTable();
+      Toast.success(res.msg);
+    }
+  });
+}
+
+function newsTitle(id) {
+  var n = MobileOpsStore.newsOf(id);
+  return n ? (n.title || '') : '';
+}
+
+/* ---------- 新增 / 编辑 ---------- */
+function openEdit(id) {
+  currentCover = '';
+  document.getElementById('editCat').value = 'notice';
+  document.getElementById('editTitleInput').value = '';
+  document.getElementById('editSummary').value = '';
+  document.getElementById('editContent').value = '';
+  document.getElementById('editAuthor').value = '';
+  document.getElementById('editSource').value = '';
+  document.getElementById('editStatus').value = 'published';
+  document.getElementById('editTop').value = '0';
+  document.getElementById('editTime').value = toLocalInput('');
+  renderCoverPreview();
+
+  currentEditId = id == null ? null : id;
+  if (currentEditId != null) {
+    var target = MobileOpsStore.newsOf(currentEditId);
+    if (!target) {
+      Toast.error('未找到该资讯，可能已被删除');
+      return;
+    }
+    document.getElementById('editTitle').textContent = '编辑资讯';
+    document.getElementById('editCat').value = target.category || 'notice';
+    document.getElementById('editTitleInput').value = target.title || '';
+    document.getElementById('editSummary').value = target.summary || '';
+    document.getElementById('editContent').value = target.content || '';
+    document.getElementById('editAuthor').value = target.author || '';
+    document.getElementById('editSource').value = target.source || '';
+    document.getElementById('editStatus').value = target.status === 'offline' ? 'offline' : 'published';
+    document.getElementById('editTop').value = target.top ? '1' : '0';
+    document.getElementById('editTime').value = toLocalInput(target.publishTime);
+    currentCover = target.cover || '';
+    renderCoverPreview();
+  } else {
+    document.getElementById('editTitle').textContent = '新增资讯';
+  }
+
+  document.getElementById('editModal').classList.add('show');
+}
+
+function closeEdit() {
+  document.getElementById('editModal').classList.remove('show');
+  currentEditId = null;
+  currentCover = '';
+}
+
+function submitEdit() {
+  var payload = {
+    id: currentEditId,
+    category: document.getElementById('editCat').value,
+    title: document.getElementById('editTitleInput').value.trim(),
+    summary: document.getElementById('editSummary').value.trim(),
+    content: document.getElementById('editContent').value.trim(),
+    cover: currentCover,
+    author: document.getElementById('editAuthor').value.trim(),
+    source: document.getElementById('editSource').value.trim(),
+    publishTime: document.getElementById('editTime').value
+      ? String(document.getElementById('editTime').value).replace('T', ' ')
+      : MobileOpsStore.now(),
+    status: document.getElementById('editStatus').value,
+    top: document.getElementById('editTop').value === '1'
+  };
+
+  var res = MobileOpsStore.saveNews(payload);
+  if (!res.ok) { Toast.warning(res.msg); return; }
+
+  MobileOpsStore.audit(currentEditId ? '编辑资讯' : '新增资讯', 'news', res.id, payload.title);
+  closeEdit();
+  renderTable();
+  Toast.success(res.msg);
+}
+
+/* ---------- 封面图 ---------- */
+function renderCoverPreview() {
+  var box = document.getElementById('coverBox');
+  if (!box) return;
+  box.innerHTML = currentCover
+    ? '<img class="cover-preview" src="' + esc(currentCover) + '" alt="封面预览">'
+    : '<div class="cover-empty">未选择</div>';
+}
+
+function pickCover() {
+  var input = document.getElementById('coverFile');
+  if (input) { input.value = ''; input.click(); }
+}
+
+function clearCover() {
+  currentCover = '';
+  renderCoverPreview();
+}
+
+function onCoverPicked(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) {
+    Toast.warning('请选择图片文件');
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    compressCover(e.target.result, function (dataUrl) {
+      if (!dataUrl) { Toast.error('封面图处理失败，请更换图片'); return; }
+      if (dataUrl.length > 400000) {
+        Toast.warning('封面图过大（上限 300KB），请更换后重试');
+        return;
+      }
+      currentCover = dataUrl;
+      renderCoverPreview();
+      Toast.success('封面图已更新');
+    });
+  };
+  reader.onerror = function () { Toast.error('封面图读取失败'); };
+  reader.readAsDataURL(file);
+}
+
+/* 等比压缩封面，控制 DataURL 体积 */
+function compressCover(dataUrl, cb) {
+  var img = new Image();
+  img.onload = function () {
+    var w = img.naturalWidth || img.width;
+    var h = img.naturalHeight || img.height;
+    if (!w || !h) { cb(dataUrl); return; }
+    var scale = Math.min(1, COVER_MAX_SIDE / Math.max(w, h));
+    var cw = Math.max(1, Math.round(w * scale));
+    var ch = Math.max(1, Math.round(h * scale));
+    var canvas = document.createElement('canvas');
+    canvas.width = cw;
+    canvas.height = ch;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.drawImage(img, 0, 0, cw, ch);
+    try {
+      cb(canvas.toDataURL('image/jpeg', 0.72));
+    } catch (e) {
+      cb(dataUrl);
+    }
+  };
+  img.onerror = function () { cb(null); };
+  img.src = dataUrl;
+}
+
+/* datetime-local 输入值：'2026-09-21 09:30' / ISO → '2026-09-21T09:30' */
+function toLocalInput(v) {
+  if (!v) return MobileOpsStore.now().slice(0, 16).replace(' ', 'T');
+  var s = String(v).replace('T', ' ').slice(0, 16);
+  return s.replace(' ', 'T');
+}
+
+/* ---------- 事件绑定 ---------- */
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest ? e.target.closest('[data-act]') : null;
+  if (!btn) return;
+  var id = btn.getAttribute('data-id');
+  var act = btn.getAttribute('data-act');
+  if (act === 'edit') openEdit(id);
+  else if (act === 'top') toggleTop(id);
+  else if (act === 'toggle') toggleStatus(id);
+  else if (act === 'delete') deleteNews(id);
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+  fillCategorySelect();
+  renderTable();
+  MobileOpsStore.subscribe(function () { renderTable(); });
+});
+</script>
+</body>
+</html>

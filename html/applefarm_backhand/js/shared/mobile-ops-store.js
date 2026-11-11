@@ -8,6 +8,7 @@
  *   expertQuestions  专家咨询      smartorchard_expert_questions 移动端 mb_expert
  *   staff            作业人员账号  mb_staff_accounts             后台维护 / 移动端 mb_login 校验
  *   messages         消息推送      mb_messages                   后台维护 / 移动端 mb_home 消费
+ *   news             资讯管理      mb_news                       后台维护 / 移动端 mb_home、mb_news 消费
  *   syncQueue        离线同步队列  smartorchard_sync_queue       移动端 MobileStore.enqueue
  *   aiConfig         AI 助手配置   mb_ai_config                  移动端 mb_ai_assistant 消费
  *   diseaseRules     识别规则      mb_disease_rules              移动端 mb_disease 消费
@@ -28,6 +29,7 @@ window.MobileOpsStore = (function () {
     expertQuestions: 'smartorchard_expert_questions',
     staff: 'mb_staff_accounts',
     messages: 'mb_messages',
+    news: 'mb_news',
     syncQueue: 'smartorchard_sync_queue',
     aiConfig: 'mb_ai_config',
     diseaseRules: 'mb_disease_rules',
@@ -40,6 +42,16 @@ window.MobileOpsStore = (function () {
     h5: 'H5消费者端',
     pc: 'PC后台',
     system: '系统生成'
+  };
+
+  /* 资讯分类字典（后台维护 / 移动端筛选共用） */
+  var NEWS_CATEGORIES = ['notice', 'training', 'technology', 'policy'];
+
+  var NEWS_CATEGORY_TEXT = {
+    notice: '公告',
+    training: '培训',
+    technology: '技术',
+    policy: '政策'
   };
 
   var CURRENT_USER_KEY = 'smartorchard_current_user';
@@ -326,11 +338,34 @@ window.MobileOpsStore = (function () {
     });
   }
 
+  /* 资讯：补齐分类 / 状态 / 置顶 / 阅读量等公共字段，兼容历史数据 */
+  function normalizeNews(it) {
+    return Object.assign({
+      category: 'notice',
+      status: 'published',
+      top: false,
+      viewCount: 0,
+      author: '系统管理员',
+      source: '',
+      summary: '',
+      content: '',
+      cover: '',
+      publishTime: it.createdAt || '',
+      publisher: '系统管理员'
+    }, it, {
+      category: NEWS_CATEGORIES.indexOf(it.category) >= 0 ? it.category : 'notice',
+      status: it.status === 'offline' ? 'offline' : 'published',
+      top: it.top === true,
+      viewCount: Math.max(0, parseInt(it.viewCount, 10) || 0)
+    });
+  }
+
   function normalize(entity, item) {
     if (entity === 'feedbacks') return normalizeFeedback(item);
     if (entity === 'expertQuestions') return normalizeQuestion(item);
     if (entity === 'staff') return normalizeStaff(item);
     if (entity === 'messages') return normalizeMessage(item);
+    if (entity === 'news') return normalizeNews(item);
     if (entity === 'syncQueue') return normalizeSync(item);
     return item;
   }
@@ -378,6 +413,165 @@ window.MobileOpsStore = (function () {
     }
 
     return changed;
+  }
+
+  /* ================= 资讯专用接口 ================= */
+
+  /**
+   * 资讯编号：NEWS-YYYYMMDD-NNN（按当天已有条数递增，不与历史冲突）
+   */
+  function nextNewsId(list, publishTime) {
+    var day = String(publishTime || now()).replace(/\D/g, '').slice(0, 8) || '00000000';
+    var prefix = 'NEWS-' + day + '-';
+    var max = 0;
+    (list || []).forEach(function (it) {
+      if (it && typeof it.id === 'string' && it.id.indexOf(prefix) === 0) {
+        var n = parseInt(it.id.slice(prefix.length), 10);
+        if (isFinite(n) && n > max) max = n;
+      }
+    });
+    var p = function (n) { return n < 10 ? '00' + n : n < 100 ? '0' + n : String(n); };
+    return prefix + p(max + 1);
+  }
+
+  /**
+   * 资讯列表（默认仅已发布；置顶优先，其次按发布时间倒序）
+   * @param {Object} opt { publishedOnly, category, keyword, limit }
+   */
+  function newsList(opt) {
+    opt = opt || {};
+    var rows = list('news');
+    if (opt.publishedOnly !== false) {
+      rows = rows.filter(function (n) { return n.status === 'published'; });
+    }
+    if (opt.category) {
+      rows = rows.filter(function (n) { return n.category === opt.category; });
+    }
+    if (opt.keyword) {
+      var kw = String(opt.keyword).toLowerCase();
+      rows = rows.filter(function (n) {
+        var hay = ((n.title || '') + ' ' + (n.summary || '') + ' ' + (n.content || '')).toLowerCase();
+        return hay.indexOf(kw) >= 0;
+      });
+    }
+    rows.sort(function (a, b) {
+      if (a.top !== b.top) return a.top ? -1 : 1;
+      return parseTime(b.publishTime || b.createdAt) - parseTime(a.publishTime || a.createdAt);
+    });
+    if (opt.limit > 0) rows = rows.slice(0, opt.limit);
+    return rows;
+  }
+
+  function newsOf(id) {
+    var row = findById(KEYS.news, id);
+    return row ? normalizeNews(row) : null;
+  }
+
+  /**
+   * 新增 / 更新资讯（统一校验）
+   * @param {Object} data { id?, category, title, summary, content, cover, author, source, publishTime, status, top }
+   * @returns {Object} { ok, id, msg }
+   */
+  function saveNews(data) {
+    data = data || {};
+    var title = String(data.title || '').trim();
+    var content = String(data.content || '').trim();
+
+    if (!title) return { ok: false, msg: '请填写资讯标题' };
+    if (title.length > 40) return { ok: false, msg: '资讯标题不能超过 40 字' };
+    if (!content) return { ok: false, msg: '请填写资讯正文' };
+
+    var category = NEWS_CATEGORIES.indexOf(data.category) >= 0 ? data.category : 'notice';
+    var publishTime = String(data.publishTime || '').trim() || now();
+    var cover = String(data.cover || '');
+    if (cover && cover.length > 400000) {
+      return { ok: false, msg: '封面图过大（上限 300KB），请更换后重试' };
+    }
+
+    var all = readList(KEYS.news);
+    var payload = {
+      category: category,
+      title: title,
+      summary: String(data.summary || '').trim(),
+      content: content,
+      cover: cover,
+      author: String(data.author || '').trim() || operatorName(),
+      source: String(data.source || '').trim(),
+      publishTime: publishTime,
+      status: data.status === 'offline' ? 'offline' : 'published',
+      top: data.top === true,
+      publisher: operatorName(),
+      updatedAt: now()
+    };
+
+    if (data.id) {
+      var exists = all.some(function (it) { return String(it.id) === String(data.id); });
+      if (!exists) return { ok: false, msg: '未找到该资讯，可能已被删除' };
+      var row = patch(KEYS.news, data.id, payload);
+      return row ? { ok: true, id: row.id, msg: '资讯已更新' } : { ok: false, msg: '资讯更新失败' };
+    }
+
+    payload.id = nextNewsId(all, publishTime);
+    payload.viewCount = 0;
+    payload.createdAt = now();
+    all.unshift(payload);
+    if (!writeList(KEYS.news, all)) {
+      return { ok: false, msg: '本地存储写入失败，资讯未能保存' };
+    }
+    return { ok: true, id: payload.id, msg: '资讯已发布' };
+  }
+
+  /** 上下架：published ↔ offline */
+  function toggleNews(id) {
+    var row = newsOf(id);
+    if (!row) return { ok: false, msg: '未找到该资讯' };
+    var next = row.status === 'published' ? 'offline' : 'published';
+    var ok = patch(KEYS.news, id, { status: next });
+    if (!ok) return { ok: false, msg: '状态切换失败' };
+    return { ok: true, status: next, msg: next === 'published' ? '资讯已发布' : '资讯已下架' };
+  }
+
+  /** 置顶 / 取消置顶 */
+  function toggleNewsTop(id) {
+    var row = newsOf(id);
+    if (!row) return { ok: false, msg: '未找到该资讯' };
+    var next = !row.top;
+    var ok = patch(KEYS.news, id, { top: next });
+    if (!ok) return { ok: false, msg: '置顶操作失败' };
+    return { ok: true, top: next, msg: next ? '已置顶' : '已取消置顶' };
+  }
+
+  /** 删除资讯（不存在时返回失败，不静默） */
+  function removeNews(id) {
+    var row = newsOf(id);
+    if (!row) return { ok: false, msg: '未找到该资讯' };
+    var ok = remove(KEYS.news, id);
+    return ok ? { ok: true, msg: '资讯已删除' } : { ok: false, msg: '资讯删除失败' };
+  }
+
+  /**
+   * 阅读量 +1（按会话去重：同一浏览器会话内同一条资讯仅计一次）
+   * @returns {boolean} 是否实际累加
+   */
+  function increaseNewsView(id) {
+    var row = newsOf(id);
+    if (!row) return false;
+    var flag = 'mb_news_read';
+    var read = [];
+    try {
+      var raw = sessionStorage.getItem(flag);
+      var parsed = raw ? JSON.parse(raw) : [];
+      read = Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      read = [];
+    }
+    if (read.indexOf(String(id)) >= 0) return false;
+    read.push(String(id));
+    try {
+      sessionStorage.setItem(flag, JSON.stringify(read.slice(-200)));
+    } catch (e) { /* 配额不足时忽略，不影响展示 */ }
+    var ok = patch(KEYS.news, id, { viewCount: (row.viewCount || 0) + 1 });
+    return !!ok;
   }
 
   /* ================= 派生指标 ================= */
@@ -434,6 +628,14 @@ window.MobileOpsStore = (function () {
     var rules = list('diseaseRules');
     var kb = list('faultKb');
 
+    var news = list('news');
+    var pubNews = news.filter(function (n) { return n.status === 'published'; });
+    var totalViews = news.reduce(function (sum, n) { return sum + (n.viewCount || 0); }, 0);
+    var monthPrefix = now().slice(0, 7);
+    var monthNew = news.filter(function (n) {
+      return String(n.publishTime || n.createdAt || '').slice(0, 7) === monthPrefix;
+    }).length;
+
     return {
       feedback: {
         total: fb.length, pending: pendingFb, processing: processingFb,
@@ -450,6 +652,14 @@ window.MobileOpsStore = (function () {
       },
       staff: { total: staff.length, active: activeStaff, disabled: staff.length - activeStaff },
       message: { total: msgs.length, enabled: enabledMsg, disabled: msgs.length - enabledMsg },
+      news: {
+        total: news.length,
+        published: pubNews.length,
+        offline: news.length - pubNews.length,
+        totalViews: totalViews,
+        monthNew: monthNew,
+        top: news.filter(function (n) { return n.top === true; }).length
+      },
       sync: {
         total: queue.length, pending: pendingSync,
         synced: queue.length - pendingSync,
@@ -475,6 +685,8 @@ window.MobileOpsStore = (function () {
   return {
     KEYS: KEYS,
     SOURCE_TEXT: SOURCE_TEXT,
+    NEWS_CATEGORIES: NEWS_CATEGORIES,
+    NEWS_CATEGORY_TEXT: NEWS_CATEGORY_TEXT,
     now: now,
     readList: readList,
     writeList: writeList,
@@ -494,6 +706,14 @@ window.MobileOpsStore = (function () {
     verifyPwd: verifyPwd,
     normalize: normalize,
     ready: ready,
-    stats: stats
+    stats: stats,
+    nextNewsId: nextNewsId,
+    newsList: newsList,
+    newsOf: newsOf,
+    saveNews: saveNews,
+    toggleNews: toggleNews,
+    toggleNewsTop: toggleNewsTop,
+    removeNews: removeNews,
+    increaseNewsView: increaseNewsView
   };
 })();

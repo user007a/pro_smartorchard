@@ -25,7 +25,12 @@
     if (window.Toast && Toast.show) Toast.show('提示', '当前页面暂无筛选逻辑');
   };
 
-  window.smartReset = function () {
+  /* 重置兜底：清空搜索栏控件并重新触发筛选。
+     仅在页面未自行定义 smartReset 时挂载 —— 本文件晚于页面内联脚本加载，
+     无条件覆盖会抹掉页面自定义的重置逻辑（如 device_access / enterprise_plot /
+     gateway_config / video_monitor / drone_patrol / farming_patrol /
+     guide_standard / task_assign 共 8 页）。 */
+  function fallbackReset() {
     var bar = document.querySelector('.search-bar') || document.querySelector('.search-section');
     if (bar) {
       bar.querySelectorAll('input[type="text"], input[type="search"]').forEach(function (i) { i.value = ''; });
@@ -34,5 +39,12 @@
     }
     var fn = pickFn();
     if (fn) fn();
-  };
+  }
+
+  if (typeof window.smartReset !== 'function') {
+    window.smartReset = fallbackReset;
+  } else {
+    /* 页面已定义：保留页面实现，并把兜底挂到独立名字供其内部复用 */
+    window.smartResetFallback = fallbackReset;
+  }
 })();
