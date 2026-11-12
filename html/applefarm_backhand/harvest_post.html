@@ -405,17 +405,24 @@
 <script src="js/common-functions.js"></script>
 <script src="js/export-helper.js"></script>
 <script src="js/shared/harvest-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 // 数据统一来自共享数据源 harvest-store.js；发货单来源批次必须是「已入库」的处理单
-const ORDER_OPTIONS = [
-  { value: 'XS-2026-001', label: 'XS-2026-001 · 销售订单' },
-  { value: 'XS-2026-002', label: 'XS-2026-002 · 销售订单' },
-  { value: 'XS-2026-003', label: 'XS-2026-003 · 销售订单' },
-  { value: 'XS-2026-004', label: 'XS-2026-004 · 销售订单' },
-  { value: 'XS-2026-005', label: 'XS-2026-005 · 销售订单' },
-  { value: 'RY-2026-001', label: 'RY-2026-001 · 认养订单' },
-  { value: 'RY-2026-002', label: 'RY-2026-002 · 认养订单' }
-];
+/* 严格空库模式：关联销售订单下拉来自后端 API（sf_sales_order），取不到就为空 */
+function loadOrderOptions() {
+  var sel = document.getElementById('add-order');
+  if (!sel) return;
+  if (!window.Api) { sel.innerHTML = ''; return; }
+  Api.get('sales_order', { page: 1, size: 500 }).then(function (r) {
+    var list = (r && r.ok && r.data && r.data.list) || [];
+    sel.innerHTML = list.map(function (o) {
+      var code = String(o.order_code || (o.id == null ? '' : o.id));
+      if (!code) return '';
+      var safe = code.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return '<option value="' + safe + '">' + safe + ' · 销售订单</option>';
+    }).join('');
+  }).catch(function () { sel.innerHTML = ''; });
+}
 
 let currentShipId = '';
 
@@ -679,8 +686,7 @@ function toLocalInput(d) {
 
 // 初始化
 document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('add-order').innerHTML = ORDER_OPTIONS.map(o =>
-    `<option value="${o.value}">${o.label}</option>`).join('');
+  loadOrderOptions();
   renderStats();
   Pagination.init({
     currentPage: 1,

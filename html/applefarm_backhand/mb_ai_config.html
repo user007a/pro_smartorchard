@@ -192,7 +192,6 @@
         <div class="page-subtitle">维护移动端「小果」助手的分类与热门推荐问题，配置后立即在移动端生效</div>
       </div>
       <div class="page-actions">
-        <button class="jg-btn" onclick="resetSeed()" title="将分类与问题还原为移动端初始默认">恢复默认</button>
         <button class="jg-btn" onclick="refreshAll()">刷新</button>
       </div>
     </div>
@@ -317,65 +316,22 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mobile-ops-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 /* ============================================================
- * AI 助手配置（T12）
- * 数据源：localStorage['mb_ai_config']
- * 结构：
- *   { categories: [{ id, name, desc }], hotQuestions: [{ id, question, category }] }
- * 移动端 mb_ai_assistant.html 读取同一存储；未配置时回到本文件 SEED 默认值。
- *
- * 关系约束：
- *   - 分类 ID 是被引用方（hotQuestions[].category → categories[].id），因此
- *     删除分类前必须先检查是否还有问题引用。
+ * AI 助手配置（T12）—— 严格空库模式
+ * 数据源（真实接口）：
+ *   Api.get('mb_ai_category') -> sf_mb_ai_category(id, category_id, category_name, description)
+ *   Api.get('mb_ai_question') -> sf_mb_ai_question(id, category_id, question, related_question)
+ * 页面对象：
+ *   分类 { id(DB主键), cid(分类ID), name, desc }
+ *   问题 { id(DB主键), question, category(所属分类DB主键) }
+ * 空库显示「暂无数据」，不内置演示记录，不写入 localStorage。
  * ============================================================ */
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'mb_ai_config';
-
-  /* 6 个分类，与移动端原本硬编码一致 */
-  var SEED_CATEGORIES = [
-    { id: 'general',  name: '综合', desc: '通用种植与农事管理问答' },
-    { id: 'plant',    name: '植保', desc: '病虫害识别与化学/生物防治' },
-    { id: 'grow',     name: '种植', desc: '修剪、套袋、疏花疏果等日常作业' },
-    { id: 'breed',    name: '育种', desc: '苹果品种、引种与品种特性' },
-    { id: 'crop',     name: '作物', desc: '苹果栽培技术与模式' },
-    { id: 'adoption', name: '认养', desc: '果树认养业务相关说明' }
-  ];
-
-  /* 3 条与移动端原文件列出的热门推荐问题完全一致的种子 */
-  var SEED_HOT_QUESTIONS = [
-    { id: 'q1', question: '苹果常见病虫害有哪些？如何防治？', category: 'plant' },
-    { id: 'q2', question: '苹果最佳施肥时间是什么时候？',     category: 'grow'  },
-    { id: 'q3', question: '如何提高苹果果实品质？',           category: 'crop' }
-  ];
-
-  function readAll() {
-    var v = MobileOpsStore.readObj('aiConfig');
-    if (!v) return null;
-    var cats = Array.isArray(v.categories) ? v.categories : [];
-    var qs = Array.isArray(v.hotQuestions) ? v.hotQuestions : [];
-    return { categories: cats, hotQuestions: qs };
-  }
-
-  function ensureSeed() {
-    var cur = readAll();
-    if (cur && (cur.categories.length || cur.hotQuestions.length)) return cur;
-    var seed = { categories: SEED_CATEGORIES.slice(), hotQuestions: SEED_HOT_QUESTIONS.slice() };
-    writeAll(seed);
-    return seed;
-  }
-
-  function writeAll(data, action) {
-    if (!MobileOpsStore.writeObj(MobileOpsStore.KEYS.aiConfig, data)) {
-      Toast.error('本地存储写入失败，请稍后重试');
-      return false;
-    }
-    MobileOpsStore.audit(action || '保存AI助手配置', 'aiConfig', '',
-      (data.categories || []).length + ' 个分类 / ' + (data.hotQuestions || []).length + ' 条热门问题');
-    return true;
-  }
+  var allData = { categories: [], hotQuestions: [] };
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -383,15 +339,66 @@
     });
   }
 
-  function genId(prefix) {
-    return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  function mapCategory(r) {
+    return {
+      id: String(r.id),
+      cid: r.category_id || '',
+      name: r.category_name || '',
+      desc: r.description || ''
+    };
+  }
+
+  function mapQuestion(r) {
+    return {
+      id: String(r.id),
+      question: r.question || '',
+      category: r.category_id == null ? '' : String(r.category_id)
+    };
+  }
+
+  function setTableState(bodyId, emptyId, msg, colspan) {
+    var body = document.getElementById(bodyId);
+    var empty = document.getElementById(emptyId);
+    if (empty) empty.style.display = 'none';
+    if (body) body.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align:center;color:var(--text-tertiary);padding:24px 0;">' + esc(msg) + '</td></tr>';
+  }
+
+  function loadData() {
+    setTableState('categoryBody', 'catEmpty', '加载中...', 5);
+    setTableState('questionBody', 'qEmpty', '加载中...', 3);
+    if (!window.Api || !Api.get) {
+      setTableState('categoryBody', 'catEmpty', '数据加载失败：Api 未就绪', 5);
+      setTableState('questionBody', 'qEmpty', '数据加载失败：Api 未就绪', 3);
+      return;
+    }
+    Promise.all([
+      Api.get('mb_ai_category', { page: 1, size: 500, sort: 'id', order: 'asc' }),
+      Api.get('mb_ai_question', { page: 1, size: 500, sort: 'id', order: 'asc' })
+    ]).then(function (results) {
+      var cr = results[0], qr = results[1];
+      if (!cr || !cr.ok || !qr || !qr.ok) {
+        var msg = '数据加载失败：' + ((cr && cr.message) || (qr && qr.message) || '请检查登录状态与网络');
+        setTableState('categoryBody', 'catEmpty', msg, 5);
+        setTableState('questionBody', 'qEmpty', msg, 3);
+        return;
+      }
+      allData = {
+        categories: ((cr.data && cr.data.list) || []).map(mapCategory),
+        hotQuestions: ((qr.data && qr.data.list) || []).map(mapQuestion)
+      };
+      refreshAll();
+    }).catch(function (err) {
+      var msg = '数据加载失败：' + ((err && err.message) || '请检查登录状态与网络');
+      setTableState('categoryBody', 'catEmpty', msg, 5);
+      setTableState('questionBody', 'qEmpty', msg, 3);
+    });
   }
 
   function countLinkedQuestions(categoryId) {
-    var data = readAll();
-    if (!data) return 0;
     var n = 0;
-    data.hotQuestions.forEach(function (q) { if (q && q.category === categoryId) n++; });
+    allData.hotQuestions.forEach(function (q) {
+      if (q && q.category === categoryId) n++;
+    });
     return n;
   }
 
@@ -407,6 +414,7 @@
     var empty = document.getElementById('catEmpty');
     if (!data.categories.length) {
       body.innerHTML = '';
+      empty.textContent = '暂无数据';
       empty.style.display = 'block';
       return;
     }
@@ -414,7 +422,7 @@
     body.innerHTML = data.categories.map(function (c) {
       var linked = countLinkedQuestions(c.id);
       return '<tr>' +
-        '<td><span class="id-tag">' + esc(c.id) + '</span></td>' +
+        '<td><span class="id-tag">' + esc(c.cid || c.id) + '</span></td>' +
         '<td>' + esc(c.name || '') + '</td>' +
         '<td><div class="cell-sub">' + esc(c.desc || '') + '</div></td>' +
         '<td>' + linked + ' 条</td>' +
@@ -429,18 +437,17 @@
   function renderQuestions(data) {
     var body = document.getElementById('questionBody');
     var empty = document.getElementById('qEmpty');
-    // 用分类表做一次映射，便于显示分类名称而非 ID
     var catMap = {};
     data.categories.forEach(function (c) { catMap[c.id] = c.name; });
-
     if (!data.hotQuestions.length) {
       body.innerHTML = '';
+      empty.textContent = '暂无数据';
       empty.style.display = 'block';
       return;
     }
     empty.style.display = 'none';
     body.innerHTML = data.hotQuestions.map(function (q) {
-      var catName = catMap[q.category] || q.category || '—';
+      var catName = catMap[q.category] || '—';
       return '<tr>' +
         '<td><div class="cell-title">' + esc(q.question || '') + '</div></td>' +
         '<td>' + esc(catName) + '</td>' +
@@ -453,23 +460,19 @@
   }
 
   function rebuildQuestionCategorySelect(selectId) {
-    var data = readAll();
     var sel = document.getElementById(selectId);
     if (!sel) return;
     var opts = '<option value="">请选择</option>';
-    if (data) {
-      data.categories.forEach(function (c) {
-        opts += '<option value="' + esc(c.id) + '">' + esc(c.name) + '（' + esc(c.id) + '）</option>';
-      });
-    }
+    allData.categories.forEach(function (c) {
+      opts += '<option value="' + esc(c.id) + '">' + esc(c.name) + '（' + esc(c.cid || c.id) + '）</option>';
+    });
     sel.innerHTML = opts;
   }
 
   function refreshAll() {
-    var data = ensureSeed();
-    renderStats(data);
-    renderCategories(data);
-    renderQuestions(data);
+    renderStats(allData);
+    renderCategories(allData);
+    renderQuestions(allData);
     rebuildQuestionCategorySelect('qCategorySelect');
   }
 
@@ -493,12 +496,11 @@
   function openCategoryModal(id) {
     editingCatId = id || null;
     document.getElementById('catModalTitle').textContent = id ? '编辑分类' : '新增分类';
-    var data = readAll();
-    if (id && data) {
+    if (id) {
       var target = null;
-      data.categories.forEach(function (c) { if (c.id === id) target = c; });
+      allData.categories.forEach(function (c) { if (c.id === id) target = c; });
       if (!target) { Toast.error('未找到该分类'); return; }
-      document.getElementById('catIdInput').value = target.id;
+      document.getElementById('catIdInput').value = target.cid || '';
       document.getElementById('catNameInput').value = target.name || '';
       document.getElementById('catDescInput').value = target.desc || '';
       document.getElementById('catIdInput').disabled = true;
@@ -518,69 +520,60 @@
     var idInput = document.getElementById('catIdInput');
     var nameInput = document.getElementById('catNameInput');
     var descInput = document.getElementById('catDescInput');
-    var id = (idInput.value || '').trim();
+    var cid = (idInput.value || '').trim();
     var name = (nameInput.value || '').trim();
     var desc = (descInput.value || '').trim();
 
     if (editingCatId) {
-      // 编辑：只能改名称和描述
       if (!name) { Toast.warning('请填写分类名称'); return; }
-      var data = readAll();
-      if (!data) return;
-      var hit = false;
-      data.categories.forEach(function (c) {
-        if (c.id === editingCatId) { c.name = name; c.desc = desc; hit = true; }
-      });
-      if (!hit) { Toast.error('未找到该分类'); return; }
-      if (writeAll(data, '编辑AI分类')) {
+      Api.update('mb_ai_category', editingCatId, {
+        category_name: name, description: desc
+      }).then(function (res) {
+        if (!res || !res.ok) { Toast.error((res && res.message) || '保存失败'); return; }
         closeCategoryModal();
-        refreshAll();
+        loadData();
         Toast.success('分类已更新');
-      }
+      }).catch(function (err) { Toast.error((err && err.message) || '保存失败'); });
       return;
     }
 
-    // 新增
-    if (!id) { Toast.warning('请填写分类 ID'); return; }
-    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(id)) {
+    if (!cid) { Toast.warning('请填写分类 ID'); return; }
+    if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(cid)) {
       Toast.warning('分类 ID 须以字母开头，仅含字母/数字/下划线');
       return;
     }
     if (!name) { Toast.warning('请填写分类名称'); return; }
-    var data2 = readAll() || { categories: [], hotQuestions: [] };
     var dup = false;
-    data2.categories.forEach(function (c) { if (c.id === id) dup = true; });
+    allData.categories.forEach(function (c) { if (c.cid === cid) dup = true; });
     if (dup) { Toast.warning('分类 ID 已存在'); return; }
-    data2.categories.push({ id: id, name: name, desc: desc });
-    if (writeAll(data2, '新增AI分类')) {
+    Api.create('mb_ai_category', {
+      category_id: cid, category_name: name, description: desc
+    }).then(function (res) {
+      if (!res || !res.ok) { Toast.error((res && res.message) || '保存失败'); return; }
       closeCategoryModal();
-      refreshAll();
+      loadData();
       Toast.success('已新增分类');
-    }
+    }).catch(function (err) { Toast.error((err && err.message) || '保存失败'); });
   }
 
   function deleteCategory(id) {
-    var data = readAll();
-    if (!data) return;
     var target = null;
-    data.categories.forEach(function (c) { if (c.id === id) target = c; });
+    allData.categories.forEach(function (c) { if (c.id === id) target = c; });
     if (!target) { Toast.error('未找到该分类'); return; }
     ConfirmDialog.show({
       title: '删除分类',
       message: '确认删除分类「' + (target.name || id) + '」？该操作不可恢复。',
       onConfirm: function () {
-        var cur = readAll();
-        if (!cur) return;
         var linked = countLinkedQuestions(id);
         if (linked > 0) {
           Toast.warning('该分类下还有 ' + linked + ' 条热门问题，请先删除或迁移后再删除分类');
           return;
         }
-        cur.categories = cur.categories.filter(function (c) { return c.id !== id; });
-        if (writeAll(cur, '删除AI分类')) {
-          refreshAll();
+        Api.remove('mb_ai_category', id).then(function (res) {
+          if (!res || !res.ok) { Toast.error((res && res.message) || '删除失败'); return; }
+          loadData();
           Toast.success('分类已删除');
-        }
+        }).catch(function (err) { Toast.error((err && err.message) || '删除失败'); });
       }
     });
   }
@@ -593,10 +586,8 @@
     document.getElementById('qModalTitle').textContent = id ? '编辑问题' : '新增问题';
     rebuildQuestionCategorySelect('qCategorySelect');
     if (id) {
-      var data = readAll();
-      if (!data) return;
       var target = null;
-      data.hotQuestions.forEach(function (q) { if (q.id === id) target = q; });
+      allData.hotQuestions.forEach(function (q) { if (q.id === id) target = q; });
       if (!target) { Toast.error('未找到该问题'); return; }
       document.getElementById('qTextInput').value = target.question || '';
       document.getElementById('qCategorySelect').value = target.category || '';
@@ -615,55 +606,28 @@
     var cat = document.getElementById('qCategorySelect').value;
     if (!qText) { Toast.warning('请填写问题内容'); return; }
     if (!cat) { Toast.warning('请选择所属分类'); return; }
-    var data = readAll();
-    if (!data) return;
-    if (editingQId) {
-      var hit = false;
-      data.hotQuestions.forEach(function (q) {
-        if (q.id === editingQId) { q.question = qText; q.category = cat; hit = true; }
-      });
-      if (!hit) { Toast.error('未找到该问题'); return; }
-      if (writeAll(data, '编辑AI热门问题')) {
-        closeQuestionModal();
-        refreshAll();
-        Toast.success('热门问题已更新');
-      }
-    } else {
-      data.hotQuestions.push({ id: genId('q'), question: qText, category: cat });
-      if (writeAll(data, '新增AI热门问题')) {
-        closeQuestionModal();
-        refreshAll();
-        Toast.success('已新增热门问题');
-      }
-    }
+    var isEdit = !!editingQId;
+    var body = { question: qText, category_id: Number(cat) || null };
+    var req = isEdit
+      ? Api.update('mb_ai_question', editingQId, body)
+      : Api.create('mb_ai_question', body);
+    req.then(function (res) {
+      if (!res || !res.ok) { Toast.error((res && res.message) || '保存失败'); return; }
+      closeQuestionModal();
+      loadData();
+      Toast.success(isEdit ? '热门问题已更新' : '已新增热门问题');
+    }).catch(function (err) { Toast.error((err && err.message) || '保存失败'); });
   }
   function deleteQuestion(id) {
     ConfirmDialog.show({
       title: '删除热门问题',
       message: '确认从推荐问题中移除该条？操作不可恢复。',
       onConfirm: function () {
-        var data = readAll();
-        if (!data) return;
-        data.hotQuestions = data.hotQuestions.filter(function (q) { return q.id !== id; });
-        if (writeAll(data, '删除AI热门问题')) {
-          refreshAll();
+        Api.remove('mb_ai_question', id).then(function (res) {
+          if (!res || !res.ok) { Toast.error((res && res.message) || '删除失败'); return; }
+          loadData();
           Toast.success('热门问题已删除');
-        }
-      }
-    });
-  }
-
-  /* ====================== 恢复默认 ====================== */
-  function resetSeed() {
-    ConfirmDialog.show({
-      title: '恢复默认配置',
-      message: '将把分类与热门问题还原为移动端内置的 6 分类 + 3 热门。继续？',
-      onConfirm: function () {
-        var seed = { categories: SEED_CATEGORIES.slice(), hotQuestions: SEED_HOT_QUESTIONS.slice() };
-        if (writeAll(seed, '恢复默认AI配置')) {
-          refreshAll();
-          Toast.success('已恢复默认配置');
-        }
+        }).catch(function (err) { Toast.error((err && err.message) || '删除失败'); });
       }
     });
   }
@@ -680,17 +644,12 @@
     else if (qDel) deleteQuestion(qDel.getAttribute('data-del-q'));
   });
 
-  /* ====================== 启动 ====================== */
-  window.addEventListener('storage', function (e) {
-    if (e.key === STORAGE_KEY) refreshAll();
-  });
-
   document.addEventListener('DOMContentLoaded', function () {
-    refreshAll();
+    loadData();
   });
 
   /* 暴露给内联 onclick */
-  window.refreshAll = refreshAll;
+  window.refreshAll = loadData;
   window.switchView = switchView;
   window.openCategoryModal = openCategoryModal;
   window.closeCategoryModal = closeCategoryModal;
@@ -698,7 +657,6 @@
   window.openQuestionModal = openQuestionModal;
   window.closeQuestionModal = closeQuestionModal;
   window.submitQuestion = submitQuestion;
-  window.resetSeed = resetSeed;
 })();
 </script>
 </body>

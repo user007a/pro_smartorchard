@@ -44,7 +44,7 @@
   </div>
 
   <div class="mall-card">
-    <div class="mall-card-head"><span>会员积分账户</span><button class="mall-btn" onclick="render()">刷新</button></div>
+    <div class="mall-card-head"><span>会员积分账户</span><button class="mall-btn" onclick="loadPoints()">刷新</button></div>
     <table class="mall-table">
       <thead><tr>
         <th style="width:60px;">序号</th><th>会员</th><th>等级</th><th>累计消费</th>
@@ -56,7 +56,16 @@
 </div>
 
 <script src="js/shared/mall-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
+/* 严格空库模式：会员积分账户与等级规则一律来自后端 API，不再使用本地演示数据 */
+var POINT_RESOURCES = { members: 'mall_member', rules: 'mall_level_rule' };
+var memberData = [];
+var rulesData = [];
+var pointsCfg = {};
+var pointsLoadState = 'loading';
+var pointsLoadError = '';
+
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -70,12 +79,56 @@ function autoLevel(amount, rules) {
   return 'normal';
 }
 
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapMemberRow(row) {
+  return {
+    id: row.member_code || (row.id == null ? '' : String(row.id)),
+    name: row.nickname || '',
+    phone: row.phone || '',
+    level: row.level || 'normal',
+    amount: Number(row.total_consume) || 0,
+    orders: Number(row.order_count) || 0,
+    points: Number(row.points) || 0
+  };
+}
+function mapLevelRuleRow(row) {
+  return { level: row.level || 'normal', name: row.level_name || '', min: Number(row.threshold) || 0 };
+}
+
+/* 异步取数：加载中 / 暂无数据 / 加载失败三态，不写 localStorage */
+function loadPoints() {
+  if (!window.Api) { pointsLoadState = 'error'; pointsLoadError = '接口未就绪'; render(); return; }
+  pointsLoadState = 'loading'; pointsLoadError = ''; render();
+  Promise.all([
+    Api.get(POINT_RESOURCES.members, { page: 1, size: 500 }),
+    Api.get(POINT_RESOURCES.rules, { page: 1, size: 500 })
+  ]).then(function (res) {
+    var mr = res[0], rr = res[1];
+    if (!mr || !mr.ok || !rr || !rr.ok) {
+      pointsLoadState = 'error';
+      pointsLoadError = (mr && mr.message) || (rr && rr.message) || '请求异常';
+      memberData = []; rulesData = []; render(); return;
+    }
+    memberData = ((mr.data && mr.data.list) || []).map(mapMemberRow);
+    rulesData = ((rr.data && rr.data.list) || []).map(mapLevelRuleRow);
+    pointsLoadState = 'ok'; render();
+  }).catch(function (e) {
+    pointsLoadState = 'error'; pointsLoadError = (e && e.message) || '网络异常';
+    memberData = []; rulesData = []; render();
+  });
+}
+
 function render() {
-  var s = MallStore.settings();
-  var rules = s.levelRules || [];
-  var pts = s.points || {};
-  var vip = rules.filter(function (r) { return r.level === 'vip'; })[0] || { min: 3000 };
-  var gold = rules.filter(function (r) { return r.level === 'gold'; })[0] || { min: 1000 };
+  if (pointsLoadState !== 'ok') {
+    var msg = pointsLoadState === 'loading' ? '正在加载数据...' : ('数据加载失败：' + pointsLoadError);
+    document.getElementById('body').innerHTML = '<tr><td colspan="7" class="mall-empty">' + esc(msg) + '</td></tr>';
+    ['kpiMembers', 'kpiPoints', 'kpiVip', 'kpiDeduct'].forEach(function (id) { document.getElementById(id).textContent = '0'; });
+    return;
+  }
+  var rules = rulesData;
+  var pts = pointsCfg;
+  var vip = rules.filter(function (r) { return r.level === 'vip'; })[0] || { min: 0 };
+  var gold = rules.filter(function (r) { return r.level === 'gold'; })[0] || { min: 0 };
 
   document.getElementById('vipMin').value = vip.min;
   document.getElementById('goldMin').value = gold.min;
@@ -83,11 +136,9 @@ function render() {
   document.getElementById('pointsRate').value = pts.rate == null ? 1 : pts.rate;
   document.getElementById('deductRate').value = pts.deductRate == null ? 100 : pts.deductRate;
 
-  var members = MallStore.members();
-  var rows = members.map(function (m) {
-    var st = MallStore.memberStats(m);
-    var level = m.level === 'vip' || m.level === 'gold' ? m.level : autoLevel(st.totalSpend, rules);
-    return { id: m.id, name: m.nickname, phone: m.phone, level: level, amount: st.totalSpend, orders: st.orderCount, points: m.points || 0 };
+  var rows = memberData.map(function (m) {
+    var level = m.level === 'vip' || m.level === 'gold' ? m.level : autoLevel(m.amount, rules);
+    return { id: m.id, name: m.name, phone: m.phone, level: level, amount: m.amount, orders: m.orders, points: m.points };
   });
 
   document.getElementById('kpiMembers').textContent = rows.length;
@@ -103,7 +154,7 @@ function render() {
       '<td>' + r.orders + ' 单</td>' +
       '<td><strong>' + r.points + '</strong> 分</td>' +
       '<td><button class="mall-link" onclick="adjustPoints(\'' + esc(r.id) + '\')">调整积分</button></td></tr>';
-  }).join('') || '<tr><td colspan="7" class="mall-empty">暂无会员数据</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="mall-empty">暂无数据</td></tr>';
 }
 
 function saveRules() {
@@ -121,13 +172,13 @@ function saveRules() {
   };
   var r = MallStore.saveSettings({ levelRules: rules, points: points });
   if (!r.ok) { alert(r.error || '保存失败'); return; }
+  rulesData = rules; pointsCfg = points;
   alert('规则已保存，H5 会员中心将按新规则展示');
   render();
 }
 
 function adjustPoints(id) {
-  var members = MallStore.members();
-  var m = members.filter(function (x) { return x.id === id; })[0];
+  var m = memberData.filter(function (x) { return x.id === id; })[0];
   if (!m) return;
   var input = prompt('当前积分 ' + (m.points || 0) + '，请输入调整数量（正数增加，负数扣减）', '0');
   if (input === null) return;
@@ -139,7 +190,7 @@ function adjustPoints(id) {
   render();
 }
 
-document.addEventListener('DOMContentLoaded', render);
+document.addEventListener('DOMContentLoaded', loadPoints);
 </script>
 </body>
 </html>

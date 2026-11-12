@@ -311,16 +311,12 @@
       return n >= 10000 ? (Math.round(n / 1000) / 10) + 'w' : String(n);
     }
 
-    /* ---------- 数据读取 ---------- */
+    /* ---------- 数据读取（纯在线：资讯来自后端 sf_mb_news，经 MobileOpsStore 桥接） ---------- */
     function readNews() {
       var list = [];
       try {
         if (window.MobileOpsStore && typeof MobileOpsStore.newsList === 'function') {
           list = MobileOpsStore.newsList({ publishedOnly: true }) || [];
-        } else {
-          var raw = localStorage.getItem(NEWS_KEY);
-          var parsed = raw ? JSON.parse(raw) : [];
-          list = Array.isArray(parsed) ? parsed : [];
         }
       } catch (e) {
         console.warn('[mb_news] 读取资讯失败', e);
@@ -440,10 +436,12 @@
     document.addEventListener('DOMContentLoaded', function () {
       renderFilters();
       renderList();
-      /* 后台变更后跨标签页实时同步 */
-      window.addEventListener('storage', function (e) {
-        if (e.key === NEWS_KEY) renderList();
-      });
+      /* 后端预加载完成后重渲染（严格空库：数据来自数据库） */
+      if (window.MobileOpsStore && MobileOpsStore.subscribe) {
+        MobileOpsStore.subscribe(function (key) {
+          if (!key || key === MobileOpsStore.KEYS.news) renderList();
+        });
+      }
     });
   </script>
 </body>

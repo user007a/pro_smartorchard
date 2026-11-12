@@ -243,6 +243,7 @@
   </div>
 
   <script src="js/h5-auth.js"></script>
+  <script src="js/h5-data.js"></script>
   <script src="../applefarm_backhand/js/shared/mall-store.js"></script>
   <script>
     function navigateTo(page) { window.location.href = page; }
@@ -274,11 +275,8 @@ function renderLoginEntry() {
   }
 }
 
-// 会员中心 4 宫格：从 localStorage 实时统计（H5-B-021）
-function readArr(key) {
-  try { var v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; }
-  catch (e) { return []; }
-}
+// 会员中心 4 宫格：数据来自后端（H5Data），不再读写 localStorage 业务键
+function readArr(key) { return []; }
 
 // 会员等级：优先读取后台「用户运营 / 积分与权益」维护的等级规则
 function computeMemberLevel(totalSpend) {
@@ -293,43 +291,11 @@ function computeMemberLevel(totalSpend) {
   return { name: '普通会员', min: 0 };
 }
 
-// 当前登录用户对应的后台会员档案（手机号 / 用户名 / 昵称任一匹配）
-function currentUserMember() {
-  if (typeof MallStore === 'undefined' || !H5Auth.isLoggedIn()) return null;
-  var loginUser = sessionStorage.getItem('loginUser') || '';
-  var p = H5Auth.profile() || {};
-  var phone = String(p.phone || '');
-  var names = [loginUser, p.nickname, p.name, H5Auth.displayName()].filter(Boolean);
-  var list = MallStore.members();
-  for (var i = 0; i < list.length; i++) {
-    var m = list[i];
-    if (loginUser && m.userId && m.userId === loginUser) return m;
-    if (phone && m.phone === phone) return m;
-    if (names.indexOf(m.nickname) >= 0) return m;
-  }
-  return null;
-}
+// 当前登录用户对应的后端会员档案（H5Data.currentMemberRow 异步返回）
+function currentUserMember() { return window.__memberRow || null; }
 
-// 仅统计「当前登录用户」的订单：优先按会员档案归属，其次按收货人/用户名归属
-function currentUserOrders(orders) {
-  var loginUser = sessionStorage.getItem('loginUser') || '';
-  if (!loginUser || !Array.isArray(orders)) return [];
-  var member = currentUserMember();
-  if (member && typeof MallStore !== 'undefined') {
-    return orders.filter(function (o) { return MallStore.orderBelongsTo(o, member); });
-  }
-  var p = (typeof H5Auth.profile === 'function') ? (H5Auth.profile() || {}) : {};
-  var names = [loginUser, p.nickname, p.name, (typeof H5Auth.displayName === 'function' ? H5Auth.displayName() : '')].filter(Boolean);
-  var phone = String(p.phone || '');
-  return orders.filter(function (o) {
-    if (!o) return false;
-    if (o.user === loginUser || o.userName === loginUser || o.username === loginUser) return true;
-    if (o.userId && o.userId === loginUser) return true;
-    if (o.address && names.indexOf(o.address.name) >= 0) return true;
-    if (phone && o.address && String(o.address.phone || '') === phone) return true;
-    return false;
-  });
-}
+// 订单已由 H5Data 按 member_id 过滤，直接返回
+function currentUserOrders(orders) { return Array.isArray(orders) ? orders : []; }
 
 function currentUserSpend(orders) {
   var mine = currentUserOrders(orders);
@@ -340,73 +306,65 @@ function currentUserSpend(orders) {
   }, 0);
 }
 
-// 仅统计「当前登录用户」的认养数；兼容用户名/昵称/手机号三种归属字段
+// 认养数：来自后端 sf_adoption_order（按认养人电话 / 客户ID 归属）
 function currentUserAdoptions(all) {
-  var loginUser = sessionStorage.getItem('loginUser') || '';
-  if (!loginUser || !Array.isArray(all) || !all.length) return 0;
-  var profile = (typeof H5Auth !== 'undefined' && H5Auth.profile) ? (H5Auth.profile() || {}) : {};
-  var names = [loginUser, profile.name, profile.nickname];
-  if (typeof H5Auth !== 'undefined' && H5Auth.displayName) names.push(H5Auth.displayName());
-  names = names.filter(Boolean);
-  var phone = String(profile.phone || '');
-
+  if (!Array.isArray(all) || !all.length) return 0;
+  var p = (typeof H5Auth !== 'undefined' && H5Auth.profile) ? (H5Auth.profile() || {}) : {};
+  var phone = String(p.phone || '');
+  var mid = (typeof H5Data !== 'undefined' && H5Data.currentMember) ? H5Data.currentMember() : null;
   var n = 0;
   for (var i = 0; i < all.length; i++) {
     var a = all[i];
     if (!a) continue;
-    if (names.indexOf(a.user) >= 0 || names.indexOf(a.userName) >= 0 || names.indexOf(a.username) >= 0) { n++; continue; }
-    if (phone && String(a.phone || '') === phone) { n++; continue; }
+    if (mid && a.customerId && String(a.customerId) === String(mid.id)) { n++; continue; }
+    if (phone && String(a.adopterPhone || a.phone || '') === phone) { n++; continue; }
   }
   return n;
 }
 
 function refreshMemberStats() {
-  var orders = readArr('h5_orders');
-  var favs = readArr('h5_favorites');
-  var points = readArr('h5_points').reduce(function(s, p) { return s + (p.amount || 0); }, 0);
-  var allAdoptions = readArr('snzg_adoptions');
+  H5Data.ready.then(function () {
+    return Promise.all([
+      H5Data.list('order'),
+      H5Data.favorite.list(),
+      H5Data.currentMemberRow(),
+      H5Data.list('adoption_order')
+    ]);
+  }).then(function (res) {
+    var orders = res[0] || [];
+    var favs = res[1] || [];
+    var member = res[2];
+    var allAdoptions = res[3] || [];
+    window.__memberRow = member;
 
-  // 演示值（仅无任何数据时回填一次），避免污染正常账号的数据
-  var isEmptyData = !orders.length && !favs.length && !allAdoptions.length && !points;
-  if (isEmptyData) {
-    try {
-      localStorage.setItem('h5_points', JSON.stringify([{ amount: 1280, source: '消费返积分' }]));
-    } catch (e) {}
-    points = readArr('h5_points').reduce(function(s, p) { return s + (p.amount || 0); }, 0);
-  }
+    var loginUser = H5Auth.isLoggedIn() ? (H5Auth.displayName() || H5Auth.currentUser()) : '';
+    var nameEl = document.getElementById('memberName');
+    var levelEl = document.getElementById('memberLevel');
+    var areaEl = document.getElementById('memberArea');
+    if (nameEl) nameEl.textContent = loginUser || '未登录，点击下方登录';
+    var spend = currentUserSpend(orders);
+    var level = computeMemberLevel(spend);
+    if (levelEl) levelEl.textContent = level.name;
+    var adoptionsN = currentUserAdoptions(allAdoptions);
+    if (areaEl) areaEl.textContent = loginUser ? ('已认养 ' + adoptionsN + ' 棵果树') : '登录后即可认养果树、查看溯源档案';
 
-  // 顶部用户信息从 sessionStorage 读取
-  var loginUser = sessionStorage.getItem('loginUser') || '';
-  var nameEl = document.getElementById('memberName');
-  var levelEl = document.getElementById('memberLevel');
-  var areaEl = document.getElementById('memberArea');
-  if (nameEl) nameEl.textContent = loginUser || '未登录，点击下方登录';
-  var spend = currentUserSpend(orders);
-  var level = computeMemberLevel(spend);
-  if (levelEl) levelEl.textContent = level.name;
-  var adoptionsN = currentUserAdoptions(allAdoptions);
-  if (areaEl) areaEl.textContent = loginUser ? ('已认养 ' + adoptionsN + ' 棵果树') : '登录后即可认养果树、查看溯源档案';
-
-  // 未登录时订单/收藏统计不展示，避免游客看到他人数据
-  var mine = currentUserOrders(orders);
-  var member = currentUserMember();
-  var memberPoints = member ? (Number(member.points) || 0) : points;
-  document.getElementById('statOrders').textContent = loginUser ? mine.length : 0;
-  document.getElementById('statAdoptions').textContent = adoptionsN;
-  document.getElementById('statFavs').textContent = loginUser ? favs.length : 0;
-  document.getElementById('statPoints').textContent = loginUser ? memberPoints : 0;
+    var mine = currentUserOrders(orders);
+    var memberPoints = member ? (Number(member.points) || 0) : 0;
+    document.getElementById('statOrders').textContent = loginUser ? mine.length : 0;
+    document.getElementById('statAdoptions').textContent = adoptionsN;
+    document.getElementById('statFavs').textContent = loginUser ? favs.length : 0;
+    document.getElementById('statPoints').textContent = loginUser ? memberPoints : 0;
+  });
 }
 document.addEventListener('DOMContentLoaded', refreshMemberStats);
 document.addEventListener('DOMContentLoaded', renderLoginEntry);
-window.addEventListener('storage', function (e) {
-  if (e.key && (/^h5_|^snzg_adoptions/.test(e.key))) refreshMemberStats();
-});
 
 function confirmLogout() {
   if (!confirm('确定要退出登录吗？')) return;
   H5Auth.logout();
   window.location.href = 'trace_intro.html?logout=1';
 }
+
   </script>
 </body>
 </html>

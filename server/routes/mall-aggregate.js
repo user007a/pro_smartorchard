@@ -2,7 +2,7 @@
  * 商城模块聚合读写接口
  * --------------------------------------------------------------
  * mall 数据采用「全量重建」策略（POST 清空表再重灌），避免复杂唯一键。
- * 覆盖表（16 张）见 TABLES。
+ * 覆盖表（19 张）见 TABLES。
  */
 const express = require('express');
 const { query, execute } = require('../config/db');
@@ -44,6 +44,9 @@ const TABLES = {
   levelRules: 'sf_mall_level_rule',
   banners: 'sf_mall_banner',
   notices: 'sf_mall_notice',
+  carts: 'sf_mall_cart',
+  addresses: 'sf_mall_address',
+  favorites: 'sf_mall_favorite',
 };
 
 router.get('/aggregate', async (req, res, next) => {

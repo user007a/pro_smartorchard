@@ -136,7 +136,7 @@
         <div class="page-subtitle">维护消费者 H5 商城「花牛苹果」的上架 SKU、价格与上下架状态</div>
       </div>
       <div class="page-actions">
-        <button class="jg-btn" onclick="resetToH5Default()">恢复 H5 默认</button>
+        <button class="jg-btn" onclick="resetToH5Default()">刷新数据</button>
         <button class="jg-btn jg-btn-primary" onclick="openEdit()">新增商品</button>
       </div>
     </div>
@@ -203,7 +203,7 @@
           <tbody id="productBody"></tbody>
         </table>
       </div>
-      <div id="emptyHint" class="empty-state" style="display:none;">暂无商品</div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无数据</div>
     </div>
   </main>
 </div>
@@ -219,7 +219,7 @@
       <div class="form-row">
         <div class="form-field">
           <label>SKU 编码<span style="color:var(--error);">*</span></label>
-          <input type="text" id="editSid" placeholder="如 redFuji">
+          <input type="text" id="editSid" placeholder="如 SKU001">
         </div>
         <div class="form-field">
           <label>商品分类</label>
@@ -332,14 +332,17 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mall-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 /* ============================================================
  * 商品管理（商城管理）
- * 数据源：localStorage['mall_products']
- *   初始值 = H5 端 h5_store.html 的 productData（6 个 SKU）
- *   字段：{ id, name, desc, price, original, img, cat, status }
+ * 严格空库模式：商品一律来自后端 API（sf_mall_product），不再使用本地演示数据/播种
  * ============================================================ */
+var PRODUCT_RESOURCE = 'mall_product';
 var PRODUCT_KEY = 'mall_products';
+var productsData = [];
+var productLoadState = 'loading';
+var productLoadError = '';
 
 var CAT_TEXT = { fruit: '水果', gift: '礼盒', adopt: '认养' };
 var VARIETY_TEXT = {
@@ -347,41 +350,58 @@ var VARIETY_TEXT = {
   jinshuai: '金帅', hongxing: '红星', guoguang: '国光', mixed: '混合'
 };
 
-/* 与 H5 端 js/mall-products.js 的 DEFAULT_PRODUCTS 保持一致
-   tag：H5 端商品角标（热销/推荐/礼盒…），缺失会导致 H5 角标消失
-   variety：品种筛选维度；spec：包装规格，随订单写入避免规格错记 */
-var H5_DEFAULT_PRODUCTS = [
-  { id: 'redFuji',  name: '花牛苹果 5斤装',    desc: '脆甜多汁 · 新鲜采摘', price: 68,   original: 88,   img: 'images/thumb_redfuji.jpg', cat: 'fruit', variety: 'huaniu', spec: '5斤装',  status: 'on',  tag: '热销' },
-  { id: 'gala',     name: '嘎拉苹果 5斤装',    desc: '酸甜可口 · 皮薄肉嫩', price: 58,   original: 78,   img: 'images/thumb_gala.jpg',    cat: 'fruit', variety: 'gala',   spec: '5斤装',  status: 'on',  tag: '推荐' },
-  { id: 'giftBox',  name: '精品礼盒装 8斤',    desc: '送礼佳品 · 品质保证', price: 168,  original: 198,  img: 'images/thumb_giftbox.jpg', cat: 'gift',  variety: 'mixed', spec: '8斤装',  status: 'on',  tag: '礼盒' },
-  { id: 'adopt3yr', name: '认养果树3年套餐',   desc: '专属果树 · 全程溯源', price: 1888, original: 0,    img: 'images/thumb_tree.jpg',    cat: 'adopt', variety: 'huaniu', spec: '3年套餐', status: 'on',  tag: '认养' },
-  { id: 'adopt1',   name: '花牛苹果认养1棵',   desc: '3年认养 · 专属标识', price: 1888, original: 0,    img: 'images/thumb_tree.jpg',    cat: 'adopt', variety: 'huaniu', spec: '1棵/3年', status: 'on',  tag: '热门' },
-  { id: 'adopt2',   name: '花牛苹果认养2棵',   desc: '3年认养 · 优惠价',   price: 3588, original: 0,    img: 'images/thumb_tree.jpg',    cat: 'adopt', variety: 'huaniu', spec: '2棵/3年', status: 'off', tag: '优惠' }
-];
-
 var editingId = null;
 
-function readList() {
-  try {
-    var raw = localStorage.getItem(PRODUCT_KEY);
-    if (!raw) return null;
-    var v = JSON.parse(raw);
-    return Array.isArray(v) && v.length ? v : null;
-  } catch (e) {
-    return null;
-  }
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapProductRow(row) {
+  var tags = [];
+  try { tags = row.service_tags ? JSON.parse(row.service_tags) : []; } catch (e) { tags = []; }
+  if (!Array.isArray(tags)) tags = [];
+  return {
+    id: row.product_code || (row.id == null ? '' : String(row.id)),
+    name: row.product_name || '',
+    desc: row.desc || '',
+    price: Number(row.price) || 0,
+    original: Number(row.original) || 0,
+    costPrice: Number(row.cost_price) || 0,
+    memberPrice: Number(row.member_price) || 0,
+    img: '',
+    cat: row.category_id || '',
+    variety: row.variety || '',
+    spec: row.spec || '',
+    unit: row.unit || '',
+    tag: row.tag || '',
+    stock: Number(row.stock) || 0,
+    safetyStock: Number(row.safety_stock) || 0,
+    soldCount: Number(row.sold_count) || 0,
+    sort: Number(row.sort) || 0,
+    serviceTags: tags,
+    detailHtml: row.detail_html || '',
+    status: row.status === 'off' ? 'off' : 'on'
+  };
 }
 
-function readAll() {
-  var list = readList();
-  if (!list) {
-    list = H5_DEFAULT_PRODUCTS.map(function (p) { return Object.assign({}, p); });
-    writeList(list);
-  }
-  return typeof MallStore !== 'undefined' ? MallStore.products() : list;
+/* 异步取数：加载中 / 暂无数据 / 加载失败三态，不写 localStorage */
+function loadProducts() {
+  if (!window.Api) { productLoadState = 'error'; productLoadError = '接口未就绪'; renderTable(); return; }
+  productLoadState = 'loading'; productLoadError = ''; renderTable();
+  Api.get(PRODUCT_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      productLoadState = 'error'; productLoadError = (r && r.message) || '请求异常';
+      productsData = []; renderTable(); return;
+    }
+    productsData = ((r.data && r.data.list) || []).map(mapProductRow);
+    productLoadState = 'ok'; renderTable();
+  }).catch(function (e) {
+    productLoadState = 'error'; productLoadError = (e && e.message) || '网络异常';
+    productsData = []; renderTable();
+  });
 }
+
+function readAll() { return productsData; }
 
 function writeList(list) {
+  productsData = list;
   if (typeof MallStore !== 'undefined') {
     var r = MallStore.replaceProducts(list);
     if (!r.ok) { Toast.error(r.error || '商品保存失败'); return false; }
@@ -434,6 +454,13 @@ function filteredList() {
 }
 
 function renderTable() {
+  if (productLoadState !== 'ok') {
+    var msg = productLoadState === 'loading' ? '正在加载数据...' : ('数据加载失败：' + productLoadError);
+    document.getElementById('productBody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text-secondary,#6b7b6b);">' + esc(msg) + '</td></tr>';
+    document.getElementById('emptyHint').style.display = 'none';
+    ['statTotal', 'statOn', 'statOff', 'statAdopt', 'statWarn'].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = '0'; });
+    return;
+  }
   var list = filteredList();
   renderStats();
 
@@ -568,19 +595,16 @@ function submitEdit() {
     }
   }
 
-  if (typeof MallStore !== 'undefined') {
-    var result = MallStore.saveProduct(payload);
-    if (!result.ok) { Toast.warning(result.error || '商品保存失败'); return; }
-  } else {
-    if (editingId) {
-      for (var i = 0; i < list.length; i++) {
-        if (list[i].id === editingId) { payload.createdAt = list[i].createdAt; list[i] = payload; break; }
-      }
-    } else {
-      list.push(payload);
-    }
-    if (!writeList(list)) return;
-  }
+  var item = Object.assign({
+    costPrice: 0, memberPrice: 0, img: '', cat: '', variety: '', spec: '', unit: '',
+    tag: '', stock: 0, safetyStock: 0, soldCount: 0, sort: list.length + 1,
+    serviceTags: [], detailHtml: '', status: 'on'
+  }, payload);
+  var idx = -1;
+  for (var m = 0; m < list.length; m++) { if (list[m].id === (editingId || payload.id)) { idx = m; break; } }
+  if (idx >= 0) item = Object.assign({}, list[idx], item);
+  if (idx >= 0) list[idx] = item; else list.push(item);
+  if (!writeList(list)) return;
 
   closeEditModal();
   renderTable();
@@ -613,14 +637,14 @@ function removeProduct(id) {
   });
 }
 
+/* 严格空库模式：不再写死默认商品，改为从数据库重新加载 */
 function resetToH5Default() {
   ConfirmDialog.show({
-    title: '恢复默认',
-    message: '将丢弃后台所有改动，恢复为 H5 端内置商品清单。是否继续？',
+    title: '重新加载',
+    message: '重新从数据库加载商品？当前未保存的改动将被丢弃。',
     onConfirm: function () {
-      localStorage.removeItem(PRODUCT_KEY);
-      renderTable();
-      Toast.success('已恢复 H5 默认商品');
+      loadProducts();
+      Toast.success('已重新加载商品');
     }
   });
 }
@@ -629,7 +653,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });
-  renderTable();
+  loadProducts();
 });
 </script>
 </body>

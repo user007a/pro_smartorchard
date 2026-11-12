@@ -5,12 +5,12 @@
  * 上链成功率、追溯码状态分布等指标，供后台维护并供大屏
  * （da_trace.html）读取。
  *
- * 取数策略：
- *   auto（默认）→ TraceStore / CertStore / HarvestStore 实时聚合
- *   demo         → 使用内置种子数据（演示兜底）
+ * 【严格空库模式】演示兜底（demo）已彻底删除：
+ *   仅保留 auto 一条路径，即从 TraceStore / CertStore / HarvestStore
+ *   实时聚合真实业务数据；无任何内置演示种子，无数据即返回零值结构。
+ *   setMode 只接受 auto，sourceInfo 恒为 auto / real|empty。
  *
- * 存储 key： applefarm_trace_stats_v1（仅存演示数据）
- * 模式 key： applefarm_trace_stats_mode（auto / demo）
+ * 历史存储 key： applefarm_trace_stats_v1（严格空库模式下不再写入）
  *
  * 暴露 API：
  *   TraceStatStore.overview()        → 顶部汇总指标
@@ -22,107 +22,51 @@
  *   TraceStatStore.certificates()    → 认证证书批次统计
  *   TraceStatStore.flow()            → 批次流向五级数据
  *   TraceStatStore.recordScan(meta)  → 委托 TraceStore 记录扫码
- *   TraceStatStore.setMode(mode)     → 切换 auto / demo
+ *   TraceStatStore.setMode(mode)     → 恒为 auto（保留签名）
  *   TraceStatStore.sourceInfo()      → 当前数据源信息
  *   TraceStatStore.refresh()         → 强制重算并通知
  *   TraceStatStore.subscribe(fn)     → 订阅变更
- *   TraceStatStore.reset()           → 恢复默认演示数据
+ *   TraceStatStore.reset()           → 清空缓存并重新聚合
  */
 
 (function(global){
   'use strict';
 
-  var STORAGE_KEY = 'applefarm_trace_stats_v1';
-  var MODE_KEY = 'applefarm_trace_stats_mode';
+  var STORAGE_KEY = 'applefarm_trace_stats_v1';  // 历史存储键：严格空库模式下不再写入，仅保留常量兼容旧引用
   var TRACE_KEY = 'smartorchard_trace_v1';
   var CERT_KEY = 'smartorchard_cert_v1';
   var HARVEST_KEY = 'smartorchard_harvest_v1';
 
+  // 严格空库模式：仅保留数据结构的零值模板，不再包含任何演示数值
   var DEFAULT_DATA = {
-    // 累计上链批次 / 激活码 / 发码总量
-    totalBatches: 108420,
-    totalIssued: 155300,
-
-    // 近 7 日扫码趋势（累计量）
-    scanTrend: [
-      { date:'10-15', value:10120 }, { date:'10-16', value:10480 }, { date:'10-17', value:11020 },
-      { date:'10-18', value:10860 }, { date:'10-19', value:11520 }, { date:'10-20', value:11640 },
-      { date:'10-21', value:12860 }
-    ],
-
-    // 省份扫码分布（近 30 日累计）
-    provinces: [
-      { name:'广东', value:1680 }, { name:'浙江', value:1420 }, { name:'江苏', value:1180 },
-      { name:'北京', value:980 },  { name:'上海', value:940 },  { name:'山东', value:860 },
-      { name:'河南', value:820 },  { name:'四川', value:760 },  { name:'湖北', value:680 },
-      { name:'福建', value:620 },  { name:'新疆', value:560 },  { name:'陕西', value:520 }
-    ],
-    provinceTotal: 31,
-
-    // 扫码来源渠道
-    channels: [
-      { name:'微信扫码', value:7970, ratio:62 },
-      { name:'支付宝',   value:2315, ratio:18 },
-      { name:'果园 App', value:1672, ratio:13 },
-      { name:'网页查询', value:900,  ratio:7 }
-    ],
-
-    // 追溯码状态（累加总数需等于 totalIssued）
-    codeStatus: [
-      { name:'已激活', value:96300, ratio:62 },
-      { name:'未激活', value:32600, ratio:21 },
-      { name:'已过期', value:17100, ratio:11 },
-      { name:'已作废', value:9300,  ratio:6 }
-    ],
-
-    // 区块链存证区块
-    chainBlocks: [
-      { height:108420, hash:'0x3f8a', time:'2026-10-21 10:12' },
-      { height:108410, hash:'0x9d2c', time:'2026-10-21 09:48' },
-      { height:108400, hash:'0x71be', time:'2026-10-21 09:24' },
-      { height:108392, hash:'0x2adf', time:'2026-10-21 09:02' },
-      { height:108381, hash:'0xc40e', time:'2026-10-21 08:40' }
-    ],
-    chainNodes: 6,
-    chainConsensus: 'Raft',
-    chainSuccessRate: 99.96,
-
-    // 认证证书覆盖批次
-    certificates: [
-      { name:'有机认证', code:'CN-ORG-2024-0913', batches:18240, valid:'有效' },
-      { name:'绿色食品', code:'GF-3201-2023-118', batches:32600, valid:'有效' },
-      { name:'HACCP 危害分析', code:'CN-HACCP-2022-0457', batches:41800, valid:'有效' },
-      { name:'地理标志产品', code:'GI-MJAP-2021-0022', batches:26400, valid:'有效' },
-      { name:'ISO9001 质量管理', code:'CN-ISO-2020-3310', batches:52900, valid:'有效' },
-      { name:'GAP 良好农业规范', code:'CN-GAP-2023-0761', batches:22150, valid:'有效' }
-    ],
-
-    // 批次流向：基地 → 采收 → 包装 → 渠道 → 消费者
+    totalBatches: 0,
+    totalIssued: 0,
+    scanTrend: [],
+    provinces: [],
+    provinceTotal: 0,
+    channels: [],
+    codeStatus: [],
+    chainBlocks: [],
+    chainNodes: 0,
+    chainConsensus: '',
+    chainSuccessRate: 0,
+    certificates: [],
     flow: {
-      base:     [ {name:'麦积', value:46200}, {name:'秦州', value:35800}, {name:'甘谷', value:26420} ],
-      harvest:  [ {name:'一级果', value:70000}, {name:'二级果', value:34420}, {name:'加工果', value:4000} ],
-      package:  [ {name:'礼盒装', value:32000}, {name:'电商箱装', value:52000}, {name:'散装', value:24420} ],
-      channel:  [ {name:'商超连锁', value:38600}, {name:'电商平台', value:41200}, {name:'产地直发', value:16800}, {name:'批发市场', value:11820} ],
-      consumer: [ {name:'家庭用户', value:74200}, {name:'礼品馈赠', value:34220} ],
-      thisWeek: 2860,
-      channelCount: 12,
-      avgDuration: 4.2
+      base: [], harvest: [], package: [], channel: [], consumer: [],
+      thisWeek: 0, channelCount: 0, avgDuration: null
     },
-
-    // 质量指标
-    passRate: 99.6,
-    avgResponse: 0.8,
-    traceCoverage: 89.2,
-    satisfaction: 4.9
+    passRate: null,
+    avgResponse: null,
+    traceCoverage: null,
+    satisfaction: null
   };
 
   /* ---------------- 通用工具 ---------------- */
 
   var subscribers = [];
-  var inMemory = null;
   var cached = null;
   var bound = false;
-  var lastSource = 'demo';
+  var lastSource = '';
   var lastAt = '';
 
   function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -442,27 +386,28 @@
     }
   }
 
-  /* ---------------- 读写、模式与广播 ---------------- */
+  /* ---------------- 模式、缓存与广播 ---------------- */
 
-  function mode(){
-    try { return localStorage.getItem(MODE_KEY) === 'demo' ? 'demo' : 'auto'; }
-    catch (e) { return 'auto'; }
-  }
+  // 严格空库模式：模式恒为 auto，不再存在 demo 分支
+  function mode(){ return 'auto'; }
 
   function invalidate(){ cached = null; }
 
-  /** 统一取数入口：auto 优先真实数据，不可用时降级演示种子 */
+  /** 无真实数据时返回零值同构结构，绝不注入任何演示数据 */
+  function emptyView(){ return deepClone(DEFAULT_DATA); }
+
+  /** 统一取数入口：只采用真实数据聚合结果，无数据时返回零值结构 */
   function view(){
     ensureBound();
-    if (mode() === 'demo') { lastSource = 'demo'; return ensure(); }
     if (!cached) {
       cached = derive();
-      lastSource = cached ? 'real' : 'demo';
+      lastSource = cached ? 'real' : 'empty';
       lastAt = nowStamp();
     }
-    return cached || ensure();
+    return cached || emptyView();
   }
 
+  /** 证书优先从真实 CertStore 取（保留真实数据路径） */
   function certsFromCertStore(){
     var S = global.CertStore;
     if (!S || typeof S.qualifications !== 'function') return null;
@@ -480,30 +425,8 @@
     }).slice(0, 6);
   }
 
-  function load(){
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      var obj = JSON.parse(raw);
-      return (obj && typeof obj === 'object') ? obj : null;
-    } catch(e){ return null; }
-  }
-
-  function save(){ try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } catch(e){} }
-
-  function ensure(){
-    if (inMemory) return inMemory;
-    var stored = load();
-    if (stored) {
-      var base = deepClone(DEFAULT_DATA);
-      Object.keys(base).forEach(function(k){ if (stored[k] === undefined) stored[k] = base[k]; });
-      inMemory = stored;
-    } else {
-      inMemory = deepClone(DEFAULT_DATA);
-      save();
-    }
-    return inMemory;
-  }
+  /* 严格空库模式：本地演示存储（load/save/ensure）已整体移除，
+     不再读写 localStorage，也不再向页面注入内置种子数据 */
 
   function notify(reason){
     subscribers.forEach(function(fn){
@@ -519,11 +442,6 @@
         detail: { reason: reason, source: lastSource, updatedAt: lastAt }
       }));
     } catch(e){}
-  }
-
-  function broadcast(reason){
-    save();
-    emit(reason);
   }
 
   function bindSource(){
@@ -554,7 +472,6 @@
 
   var TraceStatStore = {
     STORAGE_KEY: STORAGE_KEY,
-    MODE_KEY: MODE_KEY,
 
     overview: function(){
       var d = view();
@@ -592,38 +509,31 @@
       if (Array.isArray(d.certificates) && d.certificates.length) return deepClone(d.certificates);
       var fromStore = certsFromCertStore();
       if (fromStore) return fromStore;
-      return deepClone(ensure().certificates);
+      return [];
     },
     flow:         function(){ return deepClone(view().flow || {}); },
 
-    /** 记录扫码：对象入参委托 TraceStore；数字入参仅在 demo 模式累加种子 */
+    /** 记录扫码：严格空库模式下仅委托 TraceStore，不再累加演示种子 */
     recordScan: function(meta){
       var T = global.TraceStore;
       if (meta && typeof meta === 'object' && meta.code &&
           T && typeof T.recordScan === 'function') {
         return T.recordScan(meta.code, meta);
       }
-      if (typeof meta === 'number' && mode() === 'demo') {
-        var d = ensure();
-        var n = Number(meta) || 0;
-        if (n <= 0) return 0;
-        if (d.scanTrend.length) d.scanTrend[d.scanTrend.length - 1].value += n;
-        broadcast('scan');
-        return d.scanTrend.length ? d.scanTrend[d.scanTrend.length - 1].value : n;
-      }
       return { ok:false, message:'缺少追溯码，无法记录扫码' };
     },
 
     setMode: function(m){
-      try { localStorage.setItem(MODE_KEY, m === 'demo' ? 'demo' : 'auto'); } catch(e){}
+      // 严格空库模式：仅接受 auto（恒走真实数据聚合），忽略其他取值
+      if (m !== 'auto') return;
       invalidate();
       emit('mode');
     },
     mode: function(){ return mode(); },
     sourceInfo: function(){
       return {
-        mode: mode(),
-        source: mode() === 'demo' ? 'demo' : (cached ? 'real' : lastSource),
+        mode: 'auto',
+        source: cached ? 'real' : lastSource,
         updatedAt: lastAt
       };
     },
@@ -638,20 +548,11 @@
       };
     },
     reset: function(){
-      inMemory = deepClone(DEFAULT_DATA);
-      save();
+      // 严格空库模式：仅清空缓存并重新聚合，不恢复 / 写入任何演示数据
       invalidate();
-      broadcast('reset');
-    },
-    _syncFromExternal: function(){
-      var stored = load();
-      if (stored) { inMemory = stored; invalidate(); notify('sync'); }
+      emit('reset');
     }
   };
-
-  window.addEventListener('storage', function(e){
-    if (e.key === STORAGE_KEY) TraceStatStore._syncFromExternal();
-  });
 
   bindSource();
 

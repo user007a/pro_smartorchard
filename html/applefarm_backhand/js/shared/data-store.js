@@ -41,7 +41,8 @@
     var baseDir = selfEl.src.replace(/[^\/]*$/, '');
     var deps = [
       { name: 'Api', src: baseDir + '../../../common/js/api.js' },
-      { name: 'DataMapper', src: baseDir + 'data-mapper.js' }
+      { name: 'DataMapper', src: baseDir + 'data-mapper.js' },
+      { name: 'PlotStore', src: baseDir + 'plot-store.js' }
     ];
     var pending = deps.filter(function (d) { return !global[d.name]; });
     if (!pending.length) return Promise.resolve();
@@ -69,6 +70,7 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
+    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -76,10 +78,12 @@
       return api.get('data/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
+        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
+        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = global.DataMapper.toAggregate(res.data);
         var e = ensure();
         ['sources', 'collections', 'models', 'achievements', 'milestones', 'highlights'].forEach(function (k) {
-          if (agg[k] && agg[k].length) e[k] = agg[k];
+          e[k] = agg[k] || [];
         });
         save();
         notify('backend-loaded');
@@ -115,81 +119,34 @@
   /* ---------------- 默认数据 ---------------- */
 
   // 数据源接入配置
-  var DEFAULT_SOURCES = [
-    { id:'DS01', name:'农事记录数据源', type:'业务库', protocol:'REST API', endpoint:'/api/v1/farming/records', freq:'5分钟', status:'online', statusText:'运行中', updatedAt:'2026-10-21 09:30' },
-    { id:'DS02', name:'设备实时数据源', type:'IoT 网关', protocol:'MQTT', endpoint:'mqtt://iot-gw:1883/sensor', freq:'实时', status:'online', statusText:'运行中', updatedAt:'2026-10-21 10:12' },
-    { id:'DS03', name:'销售订单数据源', type:'业务库', protocol:'REST API', endpoint:'/api/v1/sales/orders', freq:'15分钟', status:'online', statusText:'运行中', updatedAt:'2026-10-21 10:05' },
-    { id:'DS04', name:'溯源批次数据源', type:'区块链', protocol:'WebSocket', endpoint:'wss://chain-gw/blocks', freq:'实时', status:'warning', statusText:'延迟偏高', updatedAt:'2026-10-21 09:58' },
-    { id:'DS05', name:'环境气象数据源', type:'IoT 网关', protocol:'MQTT', endpoint:'mqtt://iot-gw:1883/weather', freq:'10分钟', status:'online', statusText:'运行中', updatedAt:'2026-10-21 10:10' },
-    { id:'DS06', name:'移动端回传数据源', type:'移动端', protocol:'HTTPS', endpoint:'/api/v1/mobile/upload', freq:'实时', status:'offline', statusText:'已离线', updatedAt:'2026-10-21 08:12' }
-  ];
+  var DEFAULT_SOURCES = [];
 
   // 数据归集统计
-  var DEFAULT_COLLECTIONS = [
-    { id:'DC01', source:'农事记录', amount:86420000, yoy:18.4, rate:99.5, category:'农事' },
-    { id:'DC02', source:'设备数据', amount:124800000, yoy:32.6, rate:99.1, category:'设备' },
-    { id:'DC03', source:'销售数据', amount:12360000, yoy:12.8, rate:98.7, category:'销售' },
-    { id:'DC04', source:'溯源数据', amount:31580000, yoy:24.5, rate:99.6, category:'溯源' },
-    { id:'DC05', source:'环境数据', amount:31240000, yoy:16.2, rate:98.9, category:'环境' }
-  ];
+  var DEFAULT_COLLECTIONS = [];
 
   // 近 12 月归集趋势（万条）
-  var DEFAULT_COLLECTION_TREND = [
-    { month:'1月', value:1680 }, { month:'2月', value:1720 }, { month:'3月', value:1850 },
-    { month:'4月', value:1910 }, { month:'5月', value:2020 }, { month:'6月', value:2110 },
-    { month:'7月', value:2240 }, { month:'8月', value:2380 }, { month:'9月', value:2560 },
-    { month:'10月', value:2680 }, { month:'11月', value:2760 }, { month:'12月', value:2820 }
-  ];
+  var DEFAULT_COLLECTION_TREND = [];
 
   // 模型运行监控
-  var DEFAULT_MODELS = [
-    { id:'MD01', name:'产量预测模型', calls:326000, hitRate:92.4, response:184, version:'v3.2', status:'online', statusText:'在线' },
-    { id:'MD02', name:'价格预测模型', calls:241000, hitRate:89.7, response:210, version:'v2.8', status:'online', statusText:'在线' },
-    { id:'MD03', name:'物候预测模型', calls:183000, hitRate:94.1, response:156, version:'v2.1', status:'online', statusText:'在线' },
-    { id:'MD04', name:'病虫害识别模型', calls:368000, hitRate:96.3, response:128, version:'v4.0', status:'online', statusText:'在线' },
-    { id:'MD05', name:'气象预测模型', calls:166000, hitRate:91.2, response:96,  version:'v3.5', status:'online', statusText:'在线' }
-  ];
+  var DEFAULT_MODELS = [];
 
   // 近 14 天模型调用量（万次）
-  var DEFAULT_MODEL_CALLS = [
-    { date:'10-08', value:7.8 }, { date:'10-09', value:8.2 }, { date:'10-10', value:8.9 },
-    { date:'10-11', value:8.4 }, { date:'10-12', value:9.1 }, { date:'10-13', value:9.4 },
-    { date:'10-14', value:8.8 }, { date:'10-15', value:9.2 }, { date:'10-16', value:9.6 },
-    { date:'10-17', value:9.0 }, { date:'10-18', value:9.3 }, { date:'10-19', value:9.5 },
-    { date:'10-20', value:9.1 }, { date:'10-21', value:9.2 }
-  ];
+  var DEFAULT_MODEL_CALLS = [];
 
   // 提质增效记录（实施前 → 实施后）
-  var DEFAULT_ACHIEVEMENTS = [
-    { id:'AC01', item:'节水', before:100, after:68,  unit:'%', delta:-32, desc:'滴灌精准灌溉替代漫灌' },
-    { id:'AC02', item:'节肥', before:100, after:74,  unit:'%', delta:-26, desc:'测土配方 + 水肥一体化' },
-    { id:'AC03', item:'减药', before:100, after:62,  unit:'%', delta:-38, desc:'绿色防控 + 生物农药' },
-    { id:'AC04', item:'增产', before:100, after:115, unit:'%', delta:15,  desc:'树体改造 + 适时补肥' },
-    { id:'AC05', item:'减损', before:100, after:79,  unit:'%', delta:-21, desc:'预冷分选 + 冷链直发' }
-  ];
+  var DEFAULT_ACHIEVEMENTS = [];
 
   // 数字化里程碑
-  var DEFAULT_MILESTONES = [
-    { id:'MS01', date:'2025-12', title:'通过数字农业建设项目验收', desc:'完成基础设施建设与设备部署', status:'done' },
-    { id:'MS02', date:'2026-03', title:'果树认养数字化上线', desc:'认养全流程线上化管理', status:'done' },
-    { id:'MS03', date:'2026-06', title:'AI 病虫害识别模型上线', desc:'图像识别准确率达 96.3%', status:'done' },
-    { id:'MS04', date:'2026-08', title:'溯源上链突破 10 万批次', desc:'区块链存证稳定运行', status:'done' },
-    { id:'MS05', date:'2026-10', title:'数据运营中心上线', desc:'八大驾驶舱数据全面打通', status:'done' }
-  ];
+  var DEFAULT_MILESTONES = [];
 
   // 成果亮点（驾驶舱底部绝对量口径，可后台维护）
-  var DEFAULT_HIGHLIGHTS = [
-    { id:'HL01', item:'全年节水', value:8600, unit:'吨', desc:'滴灌与水肥一体化替代传统漫灌' },
-    { id:'HL02', item:'全年节肥', value:42,   unit:'吨', desc:'测土配方施肥，按需供给' },
-    { id:'HL03', item:'全年减药', value:1.8,  unit:'吨', desc:'绿色防控与生物农药替代' },
-    { id:'HL04', item:'优质果率', value:86,   unit:'%',  desc:'分级分选后一级果占比' }
-  ];
+  var DEFAULT_HIGHLIGHTS = [];
 
   // 数字化覆盖地块：planned 为规划口径（可维护），ledgerFallback 为台账未落库时的兜底值
   var DEFAULT_COVERAGE = { planned: 126, ledgerFallback: 23 };
 
   // 系统运行信息：按上线/最近故障日期计算稳定运行天数，manualUptimeDays 可人工覆盖
-  var DEFAULT_OPS = { onlineSince: '2025-10-20', lastDowntime: '', manualUptimeDays: null };
+  var DEFAULT_OPS = { onlineSince: '', lastDowntime: '', manualUptimeDays: null };
 
   /* ---------------- 读写与广播 ---------------- */
 
@@ -282,12 +239,14 @@
     } catch(e){ return fallback; }
   }
 
-  /** 地块台账实际条数：优先取地块管理落库数据，未落库时使用兜底值 */
+  /** 地块台账实际条数：优先取 PlotStore 的 sf_plot 快照，无数据时使用兜底值 */
   function plotLedgerCount(fallback){
-    var arr = readJson('smartorchard_plot_master', null);
-    if (Array.isArray(arr) && arr.length){
-      var valid = arr.filter(function(x){ return x && x.code; }).length;
-      return valid || arr.length;
+    if (global.PlotStore) {
+      var list = global.PlotStore.plots();
+      if (list.length){
+        var valid = list.filter(function(x){ return x && x.code; }).length;
+        return valid || list.length;
+      }
     }
     return Number(fallback) || 0;
   }

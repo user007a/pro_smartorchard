@@ -94,6 +94,7 @@
 
   /** 从后端聚合接口拉取证书数据，成功后合并进内存并通知 */
   function preloadFromBackend() {
+    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -101,9 +102,11 @@
       return api.get('cert/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
+        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
+        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = global.CertMapper.toAggregate(res.data);
         var list = agg.certs || [];
-        if (list.length) {
+        if (true) { // 严格模式：空库也以后端结果为准
           var base = defaults();
           // 后端数据合并进 store 内存（保留 DEFAULT_DATA 里的派生/展示兜底字段）
           var merged = list.map(function (c, i) {
@@ -279,45 +282,10 @@
    * ============================================================ */
 
   /** 企业资质种子：来自企业信息页「资质证书」区块（数据最完整：图片 / 机构 / 发证日期 / 有效期） */
-  var QUALIFICATION_SEED = [
-    { typeCode: 'green_food', name: '绿色食品认证', certNo: 'GRN-2025-0001', no: 'LB-62-2012056', issueOrg: '中国绿色食品发展中心', issueDate: '2025-08-20', validEnd: '2028-08-19', img: '../common/images/certs/cert_green_food.jpg', sort: 1, topShow: false, scope: '全域（8 大基地 126 个地块）' },
-    { typeCode: 'organic', name: '有机产品认证', certNo: 'ORG-2025-0001', no: 'OP-2013078', issueOrg: '中国质量认证中心', issueDate: '2025-11-02', validEnd: '2026-11-01', img: '../common/images/certs/cert_organic.jpg', sort: 2, topShow: false, scope: 'A1 区 · 东区 1-8 号地（花牛苹果）' },
-    { typeCode: 'national', name: '国家级农业产业化重点龙头企业', certNo: 'NAT-2024-0001', no: 'NL-2024004', issueOrg: '农业农村部产业化办公室', issueDate: '2024-12-15', validEnd: '2027-12-14', img: '../common/images/certs/cert_national_leader.jpg', sort: 3, topShow: true, scope: '企业主体' },
-    { typeCode: 'geographic', name: '地理标志保护', certNo: 'GI-2026-0001', no: 'GI-2012010', issueOrg: '国家知识产权局', issueDate: '2026-01-10', validEnd: '2031-01-09', img: '../common/images/certs/cert_geographic.jpg', sort: 4, topShow: false, scope: '花牛苹果（GB/T 10651）' },
-    { typeCode: 'haccp', name: 'HACCP 体系认证', certNo: 'HACCP-2025-0001', no: 'HC-2019008', issueOrg: '中国质量认证中心', issueDate: '2025-06-30', validEnd: '2026-09-28', img: '../common/images/certs/cert_haccp.jpg', sort: 5, topShow: false, scope: '贮藏加工中心 · 冷链车间' },
-    { typeCode: 'gap', name: 'GAP 良好农业规范', certNo: 'GAP-2025-0001', no: 'GAP-2019156', issueOrg: '中国质量认证中心', issueDate: '2025-09-12', validEnd: '2028-09-11', img: '../common/images/certs/cert_gap.jpg', sort: 6, topShow: false, scope: '全域种植基地' },
-    { typeCode: 'export', name: '出口果园备案', certNo: 'EXP-2026-0001', no: 'EX-2015032', issueOrg: '海关总署进出口食品安全局', issueDate: '2026-02-18', validEnd: '2029-02-17', img: '../common/images/certs/cert_export.jpg', sort: 7, topShow: false, scope: '出口备案果园 5 个' },
-    { typeCode: 'iso9001', name: 'ISO9001 质量体系', certNo: 'ISO-2025-0001', no: 'QMS-201845', issueOrg: '中国质量认证中心', issueDate: '2025-12-01', validEnd: '2028-11-30', img: '../common/images/certs/cert_iso9001.jpg', sort: 8, topShow: false, scope: '企业管理体系' },
-    { typeCode: 'blockchain', name: '区块链溯源试点', certNo: 'BLK-2026-0001', no: 'BLK-GS-2026-013', issueOrg: '甘肃省农业农村厅', issueDate: '2026-09-05', validEnd: '2026-10-05', img: '../common/images/certs/cert_export.jpg', sort: 9, topShow: false, scope: '溯源批次（已上链）' },
-    { typeCode: 'green_food', name: '绿色食品标志使用证书（年度复审）', certNo: 'GRN-2024-0002', no: 'LB-62-2011042', issueOrg: '中国绿色食品发展中心', issueDate: '2024-12-28', validEnd: '2026-12-27', img: '../common/images/certs/cert_green_food.jpg', sort: 10, topShow: false, scope: '礼盒装系列（2024 批次）' }
-  ];
+  var QUALIFICATION_SEED = [];
 
   /** 批次凭证种子：来自原证书管理页 mockCertData 的批次类记录 */
-  var BATCH_SEED = [
-    ['quality_cert', '质量合格证', 'ZH-2026-090101', 'PC-20260901-001', '北京华联超市', '2026-09-01', '2027-09-01'],
-    ['inspection', '检测报告', 'JC-2026-090102', 'PC-20260902-002', '上海果蔬配送中心', '2026-09-02', '2027-09-02'],
-    ['inspection', '检测报告', 'JC-2026-090103', 'PC-20260903-003', '广州江南市场', '2026-08-20', '2026-09-10'],
-    ['quality_cert', '质量合格证', 'ZH-2026-090104', 'PC-20260904-004', '深圳沃尔玛超市', '2026-09-04', '2027-09-04'],
-    ['quality_cert', '质量合格证', 'ZH-2026-090105', 'PC-20260905-005', '天津家乐福', '2026-09-05', '2027-09-05'],
-    ['inspection', '检测报告', 'JC-2026-090106', 'PC-20260906-006', '重庆永辉超市', '2026-09-06', '2027-09-06'],
-    ['origin', '原产地证明', 'YD-2026-090107', 'PC-20260907-007', '成都伊藤洋华堂', '2026-09-07', '2027-09-07'],
-    ['quality_cert', '质量合格证', 'ZH-2026-090108', 'PC-20260908-008', '武汉中百仓储', '2026-09-08', '2027-09-08'],
-    ['inspection', '检测报告', 'JC-2026-090109', 'PC-20260909-009', '杭州世纪联华', '2026-09-09', '2027-09-09'],
-    ['inspection', '检测报告', 'JC-2026-090110', 'PC-20260910-010', '南京苏果超市', '2026-08-25', '2026-09-15'],
-    ['origin', '原产地证明', 'YD-2026-090111', 'PC-20260911-011', '苏州大润发', '2026-09-11', '2027-09-11'],
-    ['quality_cert', '质量合格证', 'ZH-2026-090112', 'PC-20260912-012', '无锡欧尚', '2026-09-12', '2027-09-12'],
-    ['inspection', '检测报告', 'JC-2026-090113', 'PC-20260913-013', '宁波三江购物', '2026-09-13', '2027-09-13'],
-    ['quality_cert', '质量合格证', 'ZH-2026-090114', 'PC-20260914-014', '温州人本超市', '2026-09-14', '2027-09-14'],
-    ['origin', '原产地证明', 'YD-2026-090115', 'PC-20260915-015', '青岛利群集团', '2026-09-15', '2027-09-15'],
-    ['quality_cert', '质量合格证', 'ZH-2026-090116', 'PC-20260916-016', '济南银座商城', '2026-09-16', '2027-09-16'],
-    ['inspection', '检测报告', 'JC-2026-090117', 'PC-20260917-017', '大连大商集团', '2026-09-17', '2027-09-17'],
-    ['inspection', '检测报告', 'JC-2026-090118', 'PC-20260918-018', '沈阳兴隆大家庭', '2026-08-30', '2026-09-20'],
-    ['origin', '原产地证明', 'YD-2026-090119', 'PC-20260919-019', '哈尔滨中央红', '2026-09-19', '2027-09-19'],
-    ['quality_cert', '质量合格证', 'ZH-2026-090120', 'PC-20260920-020', '长春欧亚集团', '2026-09-20', '2027-09-20'],
-    ['inspection', '检测报告', 'JC-2026-090121', 'PC-20260901-001', '合肥百大集团', '2026-09-01', '2027-09-01'],
-    ['quality_cert', '质量合格证', 'ZH-2026-090122', 'PC-20260902-002', '福州永辉超市', '2026-09-02', '2027-09-02'],
-    ['origin', '原产地证明', 'YD-2026-090123', 'PC-20260903-003', '厦门夏商集团', '2026-09-03', '2027-09-03']
-  ];
+  var BATCH_SEED = [];
 
   function buildQualifications() {
     return QUALIFICATION_SEED.map(function (r, i) {
@@ -381,17 +349,17 @@
         customer: r[4],
         product: '花牛苹果',
         conclusion: '合格',
-        tester: '惠加宁',
+        tester: '',
         reportNo: r[0] === 'inspection' ? r[2] : '',
         qrUrl: '',
         traceCode: '',
         stamp: '',
         renewNote: '',
         revokeReason: '',
-        operator: '惠加宁',
+        operator: '',
         createdAt: r[5] + ' 17:30:00',
         updatedAt: r[5] + ' 17:30:00',
-        auditLogs: [{ at: r[5] + ' 17:30:00', actor: '惠加宁', action: '签发', detail: '签发' + r[1] + '，关联批次 ' + r[3] }]
+        auditLogs: [{ at: r[5] + ' 17:30:00', actor: '', action: '签发', detail: '签发' + r[1] + '，关联批次 ' + r[3] }]
       };
     });
   }
@@ -437,7 +405,7 @@
         stamp: '',
         renewNote: '',
         revokeReason: '',
-        operator: '惠加宁',
+        operator: '',
         createdAt: stampNow(),
         updatedAt: stampNow(),
         auditLogs: [{ at: stampNow(), actor: '系统迁移', action: '迁移', detail: '自合格证签发页迁移' }]

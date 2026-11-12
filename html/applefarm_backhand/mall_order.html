@@ -220,7 +220,7 @@
           <tbody id="orderBody"></tbody>
         </table>
       </div>
-      <div id="emptyHint" class="empty-state" style="display:none;">暂无订单</div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无数据</div>
     </div>
   </main>
 </div>
@@ -301,23 +301,25 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mall-store.js"></script>
-<script src="js/shared/demo-seed.js"></script>
+<script src="../common/js/api.js"></script>
+<!-- 严格空库模式：演示数据播种已停用，数据一律来自后端 API -->
 <script>
 /* ============================================================
- * C端订单管理（商城管理）
- * 数据源：localStorage['h5_orders']（H5 下单写入）
- *   订单字段：{ id, no, items[], subtotal, discount, total, payment, invoice,
- *               address{name,phone,region,detail}, couponCode,
- *               status, statusCode, createdAt, logistics[] }
- *   statusCode 枚举：pending / paid / shipped / completed / cancelled
- * 发货：写 h5_sales_orders（{ orderNo, tracking, company, shippedAt }）
- *       并把 h5_orders 对应订单推进为「待收货」，与 sales_order.html 一致
+ * C端订单管理 —— 严格空库模式
+ * 数据源：Api.get('mall_order') -> sf_mall_order
+ *   (id, order_code, member_id, member_name, product_info, amount, subtotal,
+ *    discount, coupon_code, coupon_discount, points_used, points_discount,
+ *    freight, pay_way, pay_txn_no, pay_time, invoice_id, address, order_time,
+ *    status, remark, after_sales_id, logistics)
+ * 状态映射：DB pending/to_ship/done/refunded/cancelled
+ *   -> 页面 pending/paid/completed/refunded/cancelled；含 logistics 且 paid 升级为 shipped
+ * product_info / address / logistics 为 JSON 或纯文本，读取时容错解析
+ * 券名 / 会员关联 / 认养订单：DB 无对应列，降级为券码 / member_name / 空
+ * 空库显示「暂无数据」，不写入 localStorage。
  * ============================================================ */
-var ORDERS_KEY = 'h5_orders';
-var SHIP_KEY = 'h5_sales_orders';
-var COUPONS_KEY = 'mall_coupons';
+var orderRows = [];
+var dataLoaded = false;
 
-/* 状态 Tab：与 H5 h5_order.html 的 statusOf() 判定口径一致 */
 var TABS = [
   { key: 'all', text: '全部' },
   { key: 'pending', text: '待付款' },
@@ -328,30 +330,12 @@ var TABS = [
   { key: 'refunded', text: '已退款' },
   { key: 'cancelled', text: '已取消' }
 ];
-
 var STATUS_TEXT = { pending: '待付款', paid: '待发货', shipped: '待收货', completed: '已完成', cancelled: '已取消', refunding: '退款中', refunded: '已退款' };
-
+var STATUS_FROM_DB = { pending: 'pending', to_ship: 'paid', done: 'completed', refunded: 'refunded', cancelled: 'cancelled', paid: 'paid', shipped: 'shipped', completed: 'completed' };
 var COMPANY_TEXT = { sf: '顺丰速运', jd: '京东物流', yd: '圆通速递', yt: '韵达快递', zt: '中通快递' };
 
 var currentTab = 'all';
 var currentNo = null;
-
-function readArr(key) {
-  try {
-    var v = JSON.parse(localStorage.getItem(key) || '[]');
-    return Array.isArray(v) ? v : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function writeArr(key, list) {
-  try {
-    localStorage.setItem(key, JSON.stringify(list));
-  } catch (e) {
-    Toast.error('本地存储写入失败，操作未能保存');
-  }
-}
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -367,85 +351,99 @@ function fmtTime(iso) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
-/* 券码快照 → 券名（券可能在后台被删除，届时仅显示券码） */
+function nowStr() {
+  return new Date().toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function parseArr(v) {
+  if (Array.isArray(v)) return v;
+  try { var x = JSON.parse(v || '[]'); return Array.isArray(x) ? x : []; } catch (e) { return []; }
+}
+function parseObj(v) {
+  if (v && typeof v === 'object' && !Array.isArray(v)) return v;
+  try { var x = JSON.parse(v || '{}'); return (x && typeof x === 'object' && !Array.isArray(x)) ? x : null; } catch (e) { return null; }
+}
+
+function mapOrder(r) {
+  var rawItems = r.product_info;
+  var items = parseArr(rawItems).filter(function (x) { return x && typeof x === 'object'; });
+  if (!items.length && typeof rawItems === 'string') {
+    var t = rawItems.trim();
+    if (t && t.charAt(0) !== '[' && t.charAt(0) !== '{') items = [{ name: t }];
+  }
+  var addr = parseObj(r.address);
+  if (!addr && typeof r.address === 'string' && r.address.trim()) addr = { detail: r.address.trim() };
+  var logistics = parseArr(r.logistics);
+  var status = STATUS_FROM_DB[r.status] || 'pending';
+  if (logistics.length && status === 'paid') status = 'shipped';
+  var total = Number(r.amount);
+  if (isNaN(total) || total === 0) {
+    total = items.reduce(function (s2, x) { return s2 + (Number(x.price) || 0) * (Number(x.qty) || 1); }, 0);
+  }
+  return {
+    id: String(r.id),
+    no: r.order_code || String(r.id),
+    items: items,
+    subtotal: Number(r.subtotal) || 0,
+    discount: Number(r.discount) || 0,
+    total: total,
+    payment: r.pay_way || '在线支付',
+    invoice: !!r.invoice_id,
+    invoiceNo: r.invoice_id || '',
+    couponCode: r.coupon_code || '',
+    couponDiscount: Number(r.coupon_discount) || 0,
+    pointsUsed: Number(r.points_used) || 0,
+    pointsDiscount: Number(r.points_discount) || 0,
+    freight: Number(r.freight) || 0,
+    memberId: r.member_id == null ? '' : String(r.member_id),
+    memberName: r.member_name || (r.member_id ? String(r.member_id) : '未绑定'),
+    remark: r.remark || '',
+    payTxnNo: r.pay_txn_no || '',
+    payTime: r.pay_time || '',
+    afterSalesId: r.after_sales_id || '',
+    adoptionOrders: [],
+    address: addr,
+    createdAt: r.order_time || r.created_at || '',
+    status: status,
+    ship: null,
+    logistics: logistics
+  };
+}
+
+function setTableState(bodyId, emptyId, msg, colspan) {
+  var body = document.getElementById(bodyId);
+  var empty = document.getElementById(emptyId);
+  if (empty) empty.style.display = 'none';
+  if (body) body.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align:center;color:var(--text-tertiary);padding:24px 0;">' + esc(msg) + '</td></tr>';
+}
+
+function loadData() {
+  dataLoaded = false;
+  setTableState('orderBody', 'emptyHint', '加载中...', 10);
+  if (!window.Api || !Api.get) {
+    setTableState('orderBody', 'emptyHint', '数据加载失败：Api 未就绪', 10);
+    return;
+  }
+  Api.get('mall_order', { page: 1, size: 500, sort: 'id', order: 'desc' }).then(function (res) {
+    if (!res || !res.ok) {
+      setTableState('orderBody', 'emptyHint', '数据加载失败：' + ((res && res.message) || '请检查登录状态与网络'), 10);
+      return;
+    }
+    orderRows = ((res.data && res.data.list) || []).map(mapOrder);
+    dataLoaded = true;
+    renderTable();
+  }).catch(function (err) {
+    setTableState('orderBody', 'emptyHint', '数据加载失败：' + ((err && err.message) || '请检查登录状态与网络'), 10);
+  });
+}
+
 function couponText(code) {
   if (!code) return '未使用';
-  var list = readArr(COUPONS_KEY);
-  for (var i = 0; i < list.length; i++) {
-    if (list[i] && list[i].code === code) {
-      var c = list[i];
-      var rule = c.type === 'cash' ? '减 ¥' + c.value : (Number(c.value) / 10).toFixed(1) + ' 折';
-      return esc(c.name || code) + '（' + rule + '，券码 ' + esc(code) + '）';
-    }
-  }
-  return '券码 ' + esc(code) + '（券已下架）';
+  return '券码 ' + esc(code);
 }
 
-/* 状态归一化：优先 statusCode，缺失时回退中文 status；
-   「待收货」由 h5_sales_orders 中存在运单记录推断（与 H5 h5_order.html 的 statusOf 同口径） */
-function statusOf(o, shipped) {
-  var code = o.statusCode;
-  if (!STATUS_TEXT[code]) {
-    var map = { '待付款': 'pending', '已取消': 'cancelled', '待发货': 'paid', '待收货': 'shipped', '已完成': 'completed', '退款中': 'refunding', '已退款': 'refunded' };
-    code = map[o.status] || 'pending';
-  }
-  if (shipped && code === 'paid') code = 'shipped';
-  return code;
-}
-
-function memberName(o) {
-  var list = typeof MallStore !== 'undefined' ? MallStore.members() : [];
-  for (var i = 0; i < list.length; i++) {
-    if (o.memberId && list[i].id === o.memberId) return list[i].nickname;
-    if (o.address && list[i].phone && list[i].phone === o.address.phone) return list[i].nickname;
-  }
-  return o.memberId || '未绑定';
-}
-
-/* 构建行数据：兼容脏数据，缺字段一律给默认值 */
 function buildRows() {
-  var ships = readArr(SHIP_KEY);
-  return readArr(ORDERS_KEY).filter(function (o) { return o && typeof o === 'object'; }).map(function (o) {
-    var no = o.no || o.id || '';
-    var ship = null;
-    for (var i = 0; i < ships.length; i++) {
-      if (ships[i] && (ships[i].orderNo === no || ships[i].orderNo === o.id)) { ship = ships[i]; break; }
-    }
-    var items = Array.isArray(o.items) ? o.items.filter(function (x) { return x && typeof x === 'object'; }) : [];
-    var total = Number(o.total);
-    if (isNaN(total)) {
-      total = items.reduce(function (s, x) { return s + (Number(x.price) || 0) * (Number(x.qty) || 1); }, 0);
-    }
-    var addr = (o.address && typeof o.address === 'object') ? o.address : null;
-    return {
-      no: no,
-      raw: o,
-      items: items,
-      subtotal: Number(o.subtotal) || 0,
-      discount: Number(o.discount) || 0,
-      total: total,
-      payment: o.payment || '在线支付',
-      invoice: !!o.invoice,
-      invoiceNo: o.invoiceNo || '',
-      couponCode: o.couponCode || '',
-      couponDiscount: Number(o.couponDiscount) || 0,
-      pointsUsed: Number(o.pointsUsed) || 0,
-      pointsDiscount: Number(o.pointsDiscount) || 0,
-      freight: Number(o.freight) || 0,
-      memberId: o.memberId || '',
-      memberName: memberName(o),
-      remark: o.remark || '',
-      payTxnNo: o.payTxnNo || '',
-      payTime: o.payTime || '',
-      afterSalesId: o.afterSalesId || '',
-      adoptionOrders: Array.isArray(o.adoptionOrders) ? o.adoptionOrders : [],
-      address: addr,
-      createdAt: o.createdAt || '',
-      status: statusOf(o, !!ship),
-      ship: ship,
-      logistics: Array.isArray(o.logistics) ? o.logistics : []
-    };
-  }).sort(function (a, b) {
+  return orderRows.slice().sort(function (a, b) {
     return (new Date(b.createdAt || 0).getTime() || 0) - (new Date(a.createdAt || 0).getTime() || 0);
   });
 }
@@ -473,7 +471,7 @@ function renderTabs(rows) {
   var counts = { all: rows.length, pending: 0, paid: 0, shipped: 0, completed: 0, cancelled: 0, refunding: 0, refunded: 0 };
   rows.forEach(function (r) { counts[r.status] = (counts[r.status] || 0) + 1; });
   document.getElementById('statusTabs').innerHTML = TABS.map(function (t) {
-    return '<button class="status-tab' + (currentTab === t.key ? ' active' : '') + '" onclick="switchTab(\'' + t.key + '\')">' +
+    return '<button class="status-tab' + (currentTab === t.key ? ' active' : '') + '" data-order-tab="' + esc(t.key) + '">' +
       esc(t.text) + '<span class="tab-count">' + (counts[t.key] || 0) + '</span></button>';
   }).join('');
 }
@@ -501,6 +499,7 @@ function addrText(r) {
 }
 
 function renderTable() {
+  if (!dataLoaded) return;
   var all = buildRows();
   var rows = filteredRows();
   renderStats(all);
@@ -511,7 +510,7 @@ function renderTable() {
 
   if (!rows.length) {
     body.innerHTML = '';
-    emptyHint.textContent = all.length ? '该状态下暂无订单' : '暂无订单';
+    emptyHint.textContent = all.length ? '该状态下暂无订单' : '暂无数据';
     emptyHint.style.display = 'block';
     return;
   }
@@ -521,21 +520,21 @@ function renderTable() {
     var first = r.items[0] || {};
     var moreCount = r.items.length - 1;
     var goods = '<div class="goods-cell">' +
-      '<img class="goods-img" src="../applefarm_h5/' + esc(first.img || '') + '" alt="" onerror="this.style.visibility=\'hidden\'">' +
+      '<img class="goods-img" src="../applefarm_h5/' + esc(first.img || '') + '" alt="" onerror="this.remove()">' +
       '<div><div class="goods-name">' + esc(first.name || '商品') + '</div>' +
       '<div class="goods-sub">' + esc(first.spec || first.desc || '标准装') + ' × ' + (Number(first.qty) || 1) +
         (moreCount > 0 ? ' · 另 ' + moreCount + ' 件' : '') + '</div></div></div>';
-    var btns = '<button class="action-btn detail" onclick="openDetail(\'' + esc(r.no) + '\')">详情</button>';
+    var btns = '<button class="action-btn detail" data-order-detail="' + esc(r.no) + '">详情</button>';
     if (r.status === 'paid') {
-      btns += '<button class="action-btn ship" onclick="openShip(\'' + esc(r.no) + '\')">发货</button>';
+      btns += '<button class="action-btn ship" data-order-ship="' + esc(r.no) + '">发货</button>';
     }
     if (r.status === 'pending') {
-      btns += '<button class="action-btn delete" onclick="cancelOrder(\'' + esc(r.no) + '\')">取消</button>';
+      btns += '<button class="action-btn delete" data-order-cancel="' + esc(r.no) + '">取消</button>';
     }
     if (r.status === 'paid' || r.status === 'shipped' || r.status === 'completed') {
-      btns += '<button class="action-btn delete" onclick="refundOrder(\'' + esc(r.no) + '\')">退款</button>';
+      btns += '<button class="action-btn delete" data-order-refund="' + esc(r.no) + '">退款</button>';
     }
-    btns += '<button class="action-btn detail" onclick="openRemark(\'' + esc(r.no) + '\')">备注</button>';
+    btns += '<button class="action-btn detail" data-order-remark="' + esc(r.no) + '">备注</button>';
     return '<tr>' +
       '<td class="checkbox-col">' + (i + 1) + '</td>' +
       '<td class="text-mono"><strong>' + esc(r.no) + '</strong>' +
@@ -579,7 +578,7 @@ function openDetail(no) {
   var goodsHtml = r.items.length
     ? r.items.map(function (x) {
         return '<div class="detail-goods">' +
-          '<img class="goods-img" src="../applefarm_h5/' + esc(x.img || '') + '" alt="" onerror="this.style.visibility=\'hidden\'">' +
+          '<img class="goods-img" src="../applefarm_h5/' + esc(x.img || '') + '" alt="" onerror="this.remove()">' +
           '<div style="flex:1;"><div class="goods-name">' + esc(x.name || '商品') + '</div>' +
           '<div class="goods-sub">' + esc(x.spec || x.desc || '标准装') + '</div></div>' +
           '<div style="text-align:right;"><div class="amount-cell">¥' + ((Number(x.price) || 0) * (Number(x.qty) || 1)) + '</div>' +
@@ -588,15 +587,11 @@ function openDetail(no) {
       }).join('')
     : '<div style="color:var(--text-tertiary);font-size:var(--font-size-sm);">该订单无商品明细</div>';
 
-  var shipHtml = r.ship
-    ? '<div class="detail-value">承运：' + esc(r.ship.company ? (COMPANY_TEXT[r.ship.company] || r.ship.company) : '—') +
-      '<br>运单号：' + esc(r.ship.tracking || '—') +
-      '<br>发货时间：' + esc(fmtTime(r.ship.shippedAt)) + '</div>'
-    : (r.logistics.length
-      ? '<div class="detail-value">承运：' + esc(r.logistics[0].company || '—') +
-        '<br>运单号：' + esc(r.logistics[0].tracking || '—') +
-        '<br>发货时间：' + esc(fmtTime(r.logistics[0].shippedAt)) + '</div>'
-      : '<div style="color:var(--text-tertiary);font-size:var(--font-size-sm);">暂无物流信息</div>');
+  var shipHtml = r.logistics.length
+    ? '<div class="detail-value">承运：' + esc(COMPANY_TEXT[r.logistics[0].company] || r.logistics[0].company || '—') +
+      '<br>运单号：' + esc(r.logistics[0].tracking || '—') +
+      '<br>发货时间：' + esc(fmtTime(r.logistics[0].shippedAt)) + '</div>'
+    : '<div style="color:var(--text-tertiary);font-size:var(--font-size-sm);">暂无物流信息</div>';
 
   document.getElementById('detailBody').innerHTML =
     '<div class="detail-block"><div class="detail-label">商品清单</div>' +
@@ -608,8 +603,7 @@ function openDetail(no) {
       '<br>运费 ¥' + r.freight.toLocaleString('zh-CN') +
       '<br>优惠合计 − ¥' + r.discount.toLocaleString('zh-CN') + ' = 实付 <strong>¥' + r.total.toLocaleString('zh-CN') + '</strong></div></div>' +
     '<div class="detail-block"><div class="detail-label">会员归属</div>' +
-      '<div class="detail-value">' + esc(r.memberName) + (r.memberId ? '（' + esc(r.memberId) + '）' : '') +
-      '<br><span style="color:var(--text-tertiary);font-size:var(--font-size-xs);">已按手机号/会员 ID 与会员档案自动关联</span></div></div>' +
+      '<div class="detail-value">' + esc(r.memberName) + (r.memberId ? '（' + esc(r.memberId) + '）' : '') + '</div></div>' +
     '<div class="detail-block"><div class="detail-label">收货地址快照</div>' +
       '<div class="detail-value">' + (r.address ? (esc(r.address.name || '') + ' ' + esc(r.address.phone || '') +
         '<br>' + esc([r.address.region, r.address.detail].filter(Boolean).join(' '))) : '该订单未记录地址快照') + '</div></div>' +
@@ -624,8 +618,6 @@ function openDetail(no) {
       '<br>下单时间：' + esc(fmtTime(r.createdAt)) + '</div></div>' +
     '<div class="detail-block"><div class="detail-label">订单备注</div>' +
       '<div class="detail-value">' + (r.remark ? esc(r.remark) : '无') + '</div></div>' +
-    (r.adoptionOrders.length ? '<div class="detail-block"><div class="detail-label">关联认养订单</div>' +
-      '<div class="detail-value">' + r.adoptionOrders.map(esc).join('<br>') + '</div></div>' : '') +
     '<div class="detail-block"><div class="detail-label">物流信息</div>' + shipHtml + '</div>';
 
   document.getElementById('detailModal').classList.add('show');
@@ -642,15 +634,16 @@ function cancelOrder(no) {
     confirmText: '确认取消',
     danger: true,
     onConfirm: function () {
-      var res = MallStore.cancelOrder(no, '后台管理员取消');
-      if (!res.ok) { Toast.error(res.error || '取消失败'); return; }
-      renderTable();
-      Toast.success('订单已取消');
+      Api.update('mall_order', r.id, { status: 'cancelled' }).then(function (res) {
+        if (!res || !res.ok) { Toast.error((res && res.message) || '取消失败'); return; }
+        loadData();
+        Toast.success('订单已取消');
+      }).catch(function (err) { Toast.error((err && err.message) || '取消失败'); });
     }
   });
 }
 
-/* 退款：创建售后单并推进订单为已退款 */
+/* 退款：推进订单为已退款，原因追加到备注（DB 无售后单字段在范围内） */
 function refundOrder(no) {
   var r = findByNo(no);
   if (!r) { Toast.error('未找到该订单'); return; }
@@ -658,20 +651,12 @@ function refundOrder(no) {
   if (reason === null) return;
   reason = reason.trim();
   if (!reason) { Toast.warning('退款原因不能为空'); return; }
-  var created = MallStore.saveAfterSale({
-    orderNo: no,
-    memberId: r.memberId,
-    type: 'refund',
-    reason: reason,
-    amount: r.total,
-    status: 'pending',
-    handler: '后台管理员'
-  });
-  if (!created.ok) { Toast.error(created.error || '售后单创建失败'); return; }
-  var res = MallStore.updateAfterSale(created.data.id, { status: 'refunded', remark: reason });
-  if (!res.ok) { Toast.error(res.error || '退款失败'); return; }
-  renderTable();
-  Toast.success('退款已完成，订单状态更新为已退款');
+  var remark = (r.remark ? r.remark + ' | ' : '') + '退款原因：' + reason;
+  Api.update('mall_order', r.id, { status: 'refunded', remark: remark }).then(function (res) {
+    if (!res || !res.ok) { Toast.error((res && res.message) || '退款失败'); return; }
+    loadData();
+    Toast.success('退款已完成，订单状态更新为已退款');
+  }).catch(function (err) { Toast.error((err && err.message) || '退款失败'); });
 }
 
 /* 订单备注 */
@@ -686,14 +671,17 @@ function openRemark(no) {
 
 function confirmRemark() {
   var text = document.getElementById('remarkText').value.trim();
-  var res = MallStore.updateOrder(currentNo, { remark: text });
-  if (!res.ok) { Toast.error(res.error || '备注保存失败'); return; }
-  closeModal('remarkModal');
-  renderTable();
-  Toast.success('备注已保存');
+  var r = findByNo(currentNo);
+  if (!r) { Toast.error('未找到该订单'); return; }
+  Api.update('mall_order', r.id, { remark: text }).then(function (res) {
+    if (!res || !res.ok) { Toast.error((res && res.message) || '备注保存失败'); return; }
+    closeModal('remarkModal');
+    loadData();
+    Toast.success('备注已保存');
+  }).catch(function (err) { Toast.error((err && err.message) || '备注保存失败'); });
 }
 
-/* 发货：写 h5_sales_orders + 推进 h5_orders 状态为「待收货」 */
+/* 发货：写 logistics 并推进 status=to_ship */
 function openShip(no) {
   var r = findByNo(no);
   if (!r) { Toast.error('未找到该订单'); return; }
@@ -710,21 +698,40 @@ function confirmShip() {
   if (!tracking) { Toast.warning('请填写运单号'); return; }
   var no = currentNo;
   var company = document.getElementById('shipCompany').value;
-  var res = MallStore.shipOrder(no, company, tracking);
-  if (!res.ok) { Toast.error(res.error || '发货失败'); return; }
-  closeModal('shipModal');
-  renderTable();
-  Toast.success('已发货，运单号：' + tracking);
+  var r = findByNo(no);
+  if (!r) { Toast.error('未找到该订单'); return; }
+  var logistics = [{ company: company, tracking: tracking, shippedAt: nowStr() }];
+  Api.update('mall_order', r.id, {
+    status: 'to_ship', logistics: JSON.stringify(logistics)
+  }).then(function (res) {
+    if (!res || !res.ok) { Toast.error((res && res.message) || '发货失败'); return; }
+    closeModal('shipModal');
+    loadData();
+    Toast.success('已发货，运单号：' + tracking);
+  }).catch(function (err) { Toast.error((err && err.message) || '发货失败'); });
 }
 
+/* 事件代理 */
+document.addEventListener('click', function (e) {
+  var tab = e.target.closest && e.target.closest('[data-order-tab]');
+  var d = e.target.closest && e.target.closest('[data-order-detail]');
+  var sh = e.target.closest && e.target.closest('[data-order-ship]');
+  var ca = e.target.closest && e.target.closest('[data-order-cancel]');
+  var rf = e.target.closest && e.target.closest('[data-order-refund]');
+  var rm = e.target.closest && e.target.closest('[data-order-remark]');
+  if (tab) switchTab(tab.getAttribute('data-order-tab'));
+  else if (d) openDetail(d.getAttribute('data-order-detail'));
+  else if (sh) openShip(sh.getAttribute('data-order-ship'));
+  else if (ca) cancelOrder(ca.getAttribute('data-order-cancel'));
+  else if (rf) refundOrder(rf.getAttribute('data-order-refund'));
+  else if (rm) openRemark(rm.getAttribute('data-order-remark'));
+});
+
 document.addEventListener('DOMContentLoaded', function () {
-  // 演示数据播种：仅在 H5 尚未产生订单时写入 25 条示意订单 + 对应运单
-  DemoSeed.ensure('c-orders');
-  if (typeof MallStore !== 'undefined') MallStore.migrate();
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });
-  renderTable();
+  loadData();
 });
 </script>
 </body>

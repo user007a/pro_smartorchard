@@ -10,6 +10,7 @@
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <!-- 共享数据层 -->
   <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
   <style>
     /* ========== 页面专属样式（仅保留设计系统未覆盖的部分） ========== */
     
@@ -394,26 +395,40 @@
     }
 
     /**
-     * 读取后台配置；损坏或缺失时回退到内置 BUILTIN_RULES。
-     * 注意：禁用规则（enabled=false）会被剔除，不参与匹配与无命中回退。
+     * 读取后端识别规则（sf_mb_disease_rule，经 MobileOpsStore 桥接）；
+     * 无数据时回退到内置 BUILTIN_RULES。禁用规则（status=inactive）会被剔除。
      */
     function loadActiveRules() {
-      var raw = null;
-      try { raw = localStorage.getItem('mb_disease_rules'); } catch (e) { raw = null; }
-      if (!raw) return BUILTIN_RULES.slice().filter(function (r) { return r.enabled !== false; }).map(adaptRule);
+      var rows = [];
       try {
-        var v = JSON.parse(raw);
-        if (!Array.isArray(v)) throw new Error('not array');
-        var cleaned = [];
-        v.forEach(function (r) {
-          if (!r || typeof r !== 'object') return;
-          if (r.enabled === false) return;
-          cleaned.push(adaptRule(r));
-        });
-        return cleaned;
-      } catch (e) {
+        if (window.MobileOpsStore && typeof MobileOpsStore.list === 'function') {
+          rows = MobileOpsStore.list('diseaseRules') || [];
+        }
+      } catch (e) { rows = []; }
+      if (!Array.isArray(rows) || !rows.length) {
         return BUILTIN_RULES.slice().filter(function (r) { return r.enabled !== false; }).map(adaptRule);
       }
+      var riskMap = { '高': 'high', '中': 'medium', '低': 'low' };
+      var cleaned = [];
+      rows.forEach(function (r) {
+        if (!r || typeof r !== 'object') return;
+        if (r.status === 'inactive') return;
+        var kw = [];
+        try { kw = JSON.parse(r.match_keywords); } catch (e) { kw = String(r.match_keywords || '').split(/[,，]/); }
+        if (!Array.isArray(kw)) kw = [];
+        cleaned.push(adaptRule({
+          disease: r.disease_name,
+          name: r.disease_name,
+          keyword: kw,
+          keys: kw,
+          risk: riskMap[r.risk_level] || r.risk_level || 'medium',
+          confidence: r.confidence,
+          conf: r.confidence,
+          prevent: [],
+          tips: ''
+        }));
+      });
+      return cleaned;
     }
 
     /** 兼容旧引用：保持变量名 DEMO_RULES 可被任何依赖它的代码继续使用 */
@@ -423,9 +438,12 @@
     function refreshDemoRules() {
       DEMO_RULES = loadActiveRules();
     }
-    window.addEventListener('storage', function (e) {
-      if (e.key === 'mb_disease_rules') refreshDemoRules();
-    });
+    /* 后端预加载完成后重载规则表 */
+    if (window.MobileOpsStore && MobileOpsStore.subscribe) {
+      MobileOpsStore.subscribe(function (key) {
+        if (!key || key === MobileOpsStore.KEYS.diseaseRules) refreshDemoRules();
+      });
+    }
 
     /* ====================================================================
      * 图像特征分析（L-8）

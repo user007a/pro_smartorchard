@@ -4,13 +4,7 @@
  */
 
 // 人员下拉选项（系统设置中的用户列表，与 common-functions.js 保持一致）
-const USER_OPTIONS_LIST = [
-  '惠加宁', '黄忠坚', '徐水应', '朱泉龙', '陈小忠',
-  '廖春亮', '李建明', '李根', '张才孙', '刘全国',
-  '毛定卫', '叶三东', '周才贵', '程名高', '邓小华',
-  '周成友', '危红卫', '方超', '曹红英', '崔新根',
-  '超级用户'
-];
+const USER_OPTIONS_LIST = [];
 // 生成人员 select 字段的 options 数组（供 Modal.form 的 type:'select' 使用）
 function buildUserOptions(selectedValue) {
   const opts = [{ value: '', label: '请选择负责人' }];
@@ -276,6 +270,9 @@ function baseLedgerList() {
   if (typeof S.baseLedger === 'function') return S.baseLedger();
   return [];
 }
+// 地块列表：严格空库模式下地块业务数据一律由各页面经 Api.get('plot') 拉取，
+// PageActions 不持有任何本地副本；此处返回空列表，供同步的搜索/详情/编辑逻辑使用。
+function plotList() { return []; }
 function getCert(id) {
   const S = certStore();
   return S ? S.get(id) : null;
@@ -519,109 +516,10 @@ const PageActions = (function() {
       { id: 8, name: '樱桃园全景-观景台', group: '樱桃园', image: 'https://images.unsplash.com/photo-1515907007725-a1e3d70c6e73?w=400&h=300&fit=crop' }
     ],
     // 基地状态 4 态：planning 筹建中 / built 已建成 / active 运营中 / disabled 已停用
-    enterprises: [
-      { id: 'ENT001', code: 'JD-001', name: '天水麦积区基地', address: '甘肃省天水市麦积区', area: 2800, manager: '惠加宁', phone: '133-0791-2585', status: 'active',
-        baseImages: [
-          'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop',
-          'https://images.unsplash.com/photo-1570913149827-d2ac84ab3f9a?w=400&h=300&fit=crop'
-        ] },
-      { id: 'ENT002', code: 'JD-002', name: '天水秦州基地', address: '甘肃省天水市秦州区', area: 1600, manager: '黄忠坚', phone: '139-7941-2180', status: 'active',
-        baseImages: [
-          'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?w=400&h=300&fit=crop'
-        ] },
-      { id: 'ENT003', code: 'JD-003', name: '青岛莱西基地', address: '山东省青岛市莱西市', area: 2100, manager: '徐水应', phone: '138-7941-8637', status: 'active',
-        baseImages: [
-          'https://images.unsplash.com/photo-1584306670957-acf935f5033c?w=400&h=300&fit=crop'
-        ] },
-      { id: 'ENT004', code: 'JD-004', name: '龙口南山基地', address: '山东省烟台市龙口市', area: 1800, manager: '朱泉龙', phone: '182-9645-2648', status: 'built',
-        baseImages: [
-          'https://images.unsplash.com/photo-1560493676-04071c5f467b?w=400&h=300&fit=crop'
-        ] },
-      { id: 'ENT005', code: 'JD-005', name: '天水甘谷基地', address: '甘肃省天水市甘谷县', area: 3200, manager: '陈小忠', phone: '187-7941-7899', status: 'planning' },
-      { id: 'ENT006', code: 'JD-006', name: '招远金岭基地', address: '山东省烟台市招远市', area: 1500, manager: '廖春亮', phone: '137-6767-9075', status: 'disabled' },
-      { id: 'ENT007', code: 'JD-007', name: '天水梨乡基地', address: '甘肃省天水市秦安县', area: 2400, manager: '李建明', phone: '139-7043-2567', status: 'active' },
-      { id: 'ENT008', code: 'JD-008', name: '海阳万米海滩基地', address: '山东省烟台市海阳市', area: 1200, manager: '李根', phone: '130-3058-7809', status: 'built' },
-      { id: 'ENT009', code: 'JD-009', name: '牟平养马岛基地', address: '山东省烟台市牟平区', area: 1900, manager: '张才孙', phone: '150-7942-7679', status: 'active' },
-      { id: 'ENT010', code: 'JD-010', name: '福山张格庄基地', address: '山东省烟台市福山区', area: 800, manager: '刘全国', phone: '138-7040-9283', status: 'active' },
-      { id: 'ENT011', code: 'JD-011', name: '芝罘岛基地', address: '山东省烟台市芝罘区', area: 650, manager: '毛定卫', phone: '159-7958-0151', status: 'disabled' },
-      { id: 'ENT012', code: 'JD-012', name: '开发区八角基地', address: '山东省烟台市经济技术开发区', area: 3500, manager: '叶三东', phone: '133-0794-6219', status: 'active' },
-      { id: 'ENT013', code: 'JD-013', name: '高新区科技基地', address: '山东省烟台市高新技术产业开发区', area: 1100, manager: '周才贵', phone: '133-0704-3277', status: 'planning' },
-      { id: 'ENT014', code: 'JD-014', name: '昆嵛山生态基地', address: '山东省烟台市昆嵛山国家级自然保护区', area: 4200, manager: '程名高', phone: '138-7941-1631', status: 'planning' },
-      { id: 'ENT015', code: 'JD-015', name: '长岛海洋基地', address: '山东省烟台市长岛县', area: 900, manager: '邓小华', phone: '151-7945-0918', status: 'built' },
-      { id: 'ENT016', code: 'JD-016', name: '日照岚山基地', address: '山东省日照市岚山区', area: 2600, manager: '周成友', phone: '134-0794-5529', status: 'active' },
-      { id: 'ENT017', code: 'JD-017', name: '潍坊诸城基地', address: '山东省潍坊市诸城市', area: 1700, manager: '危红卫', phone: '138-7045-6916', status: 'built' },
-      { id: 'ENT018', code: 'JD-018', name: '临沂沂水基地', address: '山东省临沂市沂水县', area: 3100, manager: '方超', phone: '134-3794-2227', status: 'active' },
-      { id: 'ENT019', code: 'JD-019', name: '泰安肥城基地', address: '山东省泰安市肥城市', area: 2300, manager: '曹红英', phone: '151-7948-0005', status: 'active' },
-      { id: 'ENT020', code: 'JD-020', name: '济宁曲阜基地', address: '山东省济宁市曲阜市', area: 1400, manager: '崔新根', phone: '139-7040-2086', status: 'disabled' },
-      { id: 'ENT021', code: 'JD-021', name: '滨州阳信基地', address: '山东省滨州市阳信县', area: 1850, manager: '惠加宁', phone: '133-0791-2585', status: 'active' },
-      { id: 'ENT022', code: 'JD-022', name: '德州乐陵基地', address: '山东省德州市乐陵市', area: 2000, manager: '黄忠坚', phone: '139-7941-2180', status: 'active' }
-    ],
-    plots: [
-      { id: 'PLOT001', code: 'D-001', name: '东区1号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 85, year: 2018, status: 'normal', manager: '惠加宁',
-        baseImages: [
-          'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop',
-          'https://images.unsplash.com/photo-1570913149827-d2ac84ab3f9a?w=400&h=300&fit=crop',
-          'https://images.unsplash.com/photo-1584306670957-acf935f5033c?w=400&h=300&fit=crop'
-        ] },
-      { id: 'PLOT002', code: 'D-002', name: '东区2号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 120, year: 2016, status: 'normal', manager: '黄忠坚',
-        baseImages: [
-          'https://images.unsplash.com/photo-1570913149827-d2ac84ab3f9a?w=400&h=300&fit=crop'
-        ] },
-      { id: 'PLOT003', code: 'D-003', name: '西区1号地', enterprise: '天水麦积区苹果基地', variety: '金帅', area: 95, year: 2019, status: 'warning', manager: '徐水应',
-        baseImages: [
-          'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?w=400&h=300&fit=crop',
-          'https://images.unsplash.com/photo-1560493676-04071c5f467b?w=400&h=300&fit=crop'
-        ] },
-      { id: 'PLOT004', code: 'D-004', name: '南区1号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 70, year: 2017, status: 'normal', manager: '朱泉龙' },
-      { id: 'PLOT005', code: 'D-005', name: '北区1号地', enterprise: '甘肃麦积区苹果基地', variety: '秦冠', area: 150, year: 2015, status: 'danger', manager: '陈小忠',
-        baseImages: [
-          'https://images.unsplash.com/photo-1528821128474-27f963b062bf?w=400&h=300&fit=crop'
-        ] },
-      { id: 'PLOT006', code: 'D-006', name: '中区1号地', enterprise: '甘肃吉县苹果园', variety: '花牛苹果', area: 65, year: 2020, status: 'normal', manager: '廖春亮' },
-      { id: 'PLOT007', code: 'D-007', name: '南区2号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 88, year: 2018, status: 'normal', manager: '李建明' },
-      { id: 'PLOT008', code: 'D-008', name: '西区2号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 110, year: 2017, status: 'warning', manager: '李根' },
-      { id: 'PLOT009', code: 'D-009', name: '北区2号地', enterprise: '甘肃麦积区苹果基地', variety: '花牛苹果', area: 92, year: 2016, status: 'normal', manager: '张才孙' },
-      { id: 'PLOT010', code: 'D-010', name: '东区3号地', enterprise: '天水麦积区苹果基地', variety: '金帅', area: 78, year: 2021, status: 'danger', manager: '刘全国' },
-      { id: 'PLOT011', code: 'D-011', name: '南区3号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 105, year: 2019, status: 'normal', manager: '毛定卫' },
-      { id: 'PLOT012', code: 'D-012', name: '西区3号地', enterprise: '天水麦积区苹果基地', variety: '秦冠', area: 82, year: 2022, status: 'normal', manager: '叶三东' },
-      { id: 'PLOT013', code: 'D-013', name: '北区3号地', enterprise: '甘肃麦积区苹果基地', variety: '花牛苹果', area: 75, year: 2018, status: 'warning', manager: '周才贵' },
-      { id: 'PLOT014', code: 'D-014', name: '中区2号地', enterprise: '甘肃吉县苹果园', variety: '花牛苹果', area: 98, year: 2017, status: 'normal', manager: '程名高' },
-      { id: 'PLOT015', code: 'D-015', name: '东区4号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 68, year: 2020, status: 'normal', manager: '邓小华' },
-      { id: 'PLOT016', code: 'D-016', name: '南区4号地', enterprise: '甘肃麦积区苹果园', variety: '金帅', area: 115, year: 2015, status: 'danger', manager: '周成友' },
-      { id: 'PLOT017', code: 'D-017', name: '西区4号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 89, year: 2019, status: 'normal', manager: '危红卫' },
-      { id: 'PLOT018', code: 'D-018', name: '北区4号地', enterprise: '甘肃麦积区苹果基地', variety: '花牛苹果', area: 96, year: 2021, status: 'warning', manager: '方超' },
-      { id: 'PLOT019', code: 'D-019', name: '中区3号地', enterprise: '甘肃吉县苹果园', variety: '花牛苹果', area: 72, year: 2018, status: 'normal', manager: '曹红英' },
-      { id: 'PLOT020', code: 'D-020', name: '东区5号地', enterprise: '天水麦积区苹果基地', variety: '秦冠', area: 102, year: 2016, status: 'normal', manager: '崔新根' },
-      { id: 'PLOT021', code: 'D-021', name: '南区5号地', enterprise: '甘肃麦积区苹果园', variety: '花牛苹果', area: 86, year: 2022, status: 'normal', manager: '惠加宁' },
-      { id: 'PLOT022', code: 'D-022', name: '西区5号地', enterprise: '天水麦积区苹果基地', variety: '花牛苹果', area: 93, year: 2017, status: 'danger', manager: '黄忠坚' },
-      { id: 'PLOT023', code: 'D-023', name: '北区5号地', enterprise: '甘肃麦积区苹果基地', variety: '金帅', area: 81, year: 2020, status: 'normal', manager: '徐水应' },
-    ],
+    enterprises: [],
+    plots: [],
     // 证书数据已迁移至共享数据层 CertStore（js/shared/cert-store.js），此处不再保留副本
-    certRecords: [
-      { id: 1, certId: 'SN202606130001', product: '花牛苹果', queryTime: '2026-09-13 14:30:00', ip: '192.168.1.100', status: 'success' },
-      { id: 2, certId: 'SN202606130001', product: '花牛苹果', queryTime: '2026-09-13 11:20:00', ip: '10.0.0.55', status: 'success' },
-      { id: 3, certId: 'SN202606130001', product: '花牛苹果', queryTime: '2026-09-13 10:30:00', ip: '172.16.0.88', status: 'success' },
-      { id: 4, certId: 'SN202606120002', product: '金帅苹果', queryTime: '2026-09-12 16:45:00', ip: '192.168.1.101', status: 'success' },
-      { id: 5, certId: 'SN202606120003', product: '花牛苹果', queryTime: '2026-09-12 15:20:00', ip: '10.0.0.56', status: 'success' },
-      { id: 6, certId: 'SN202606120004', product: '花牛苹果', queryTime: '2026-09-12 14:10:00', ip: '172.16.0.89', status: 'failed' },
-      { id: 7, certId: 'SN202606110005', product: '秦冠苹果', queryTime: '2026-09-11 13:30:00', ip: '192.168.1.102', status: 'success' },
-      { id: 8, certId: 'SN202606110006', product: '花牛苹果', queryTime: '2026-09-11 11:15:00', ip: '10.0.0.57', status: 'success' },
-      { id: 9, certId: 'SN202606110007', product: '金帅苹果', queryTime: '2026-09-11 09:45:00', ip: '172.16.0.90', status: 'success' },
-      { id: 10, certId: 'SN202606100008', product: '花牛苹果', queryTime: '2026-09-10 17:00:00', ip: '192.168.1.103', status: 'success' },
-      { id: 11, certId: 'SN202606100009', product: '花牛苹果', queryTime: '2026-09-10 14:20:00', ip: '10.0.0.58', status: 'success' },
-      { id: 12, certId: 'SN202606100010', product: '花牛苹果', queryTime: '2026-09-10 10:30:00', ip: '172.16.0.91', status: 'failed' },
-      { id: 13, certId: 'SN202606090011', product: '秦冠苹果', queryTime: '2026-09-09 16:15:00', ip: '192.168.1.104', status: 'success' },
-      { id: 14, certId: 'SN202606090012', product: '花牛苹果', queryTime: '2026-09-09 13:40:00', ip: '10.0.0.59', status: 'success' },
-      { id: 15, certId: 'SN202606090013', product: '金帅苹果', queryTime: '2026-09-09 11:00:00', ip: '172.16.0.92', status: 'success' },
-      { id: 16, certId: 'SN202606080014', product: '花牛苹果', queryTime: '2026-09-08 15:30:00', ip: '192.168.1.105', status: 'success' },
-      { id: 17, certId: 'SN202606080015', product: '花牛苹果', queryTime: '2026-09-08 12:20:00', ip: '10.0.0.60', status: 'success' },
-      { id: 18, certId: 'SN202606080016', product: '花牛苹果', queryTime: '2026-09-08 09:15:00', ip: '172.16.0.93', status: 'failed' },
-      { id: 19, certId: 'SN202606070017', product: '秦冠苹果', queryTime: '2026-09-07 16:45:00', ip: '192.168.1.106', status: 'success' },
-      { id: 20, certId: 'SN202606070018', product: '花牛苹果', queryTime: '2026-09-07 14:00:00', ip: '10.0.0.61', status: 'success' },
-      { id: 21, certId: 'SN202606070019', product: '金帅苹果', queryTime: '2026-09-07 11:30:00', ip: '172.16.0.94', status: 'success' },
-      { id: 22, certId: 'SN202606060020', product: '花牛苹果', queryTime: '2026-09-06 15:20:00', ip: '192.168.1.107', status: 'success' },
-      { id: 23, certId: 'SN202606060021', product: '花牛苹果', queryTime: '2026-09-06 10:15:00', ip: '10.0.0.62', status: 'success' },
-    ]
+    certRecords: []
   };
 
   // 当前页码和每页条数
@@ -822,7 +720,7 @@ const PageActions = (function() {
         );
         break;
       case 'plot':
-        data = mockData.plots.filter(p => 
+        data = plotList().filter(p => 
           p.name.includes(keyword) || p.id.includes(keyword) || p.enterprise.includes(keyword)
         );
         break;
@@ -857,7 +755,7 @@ const PageActions = (function() {
         ];
         break;
       case 'plot':
-        data = mockData.plots.find(p => p.id === id);
+        data = plotList().find(p => p.id === id);
         fields = [
           { label: '地块编号', name: 'code' },
           { label: '地块名称', name: 'name' },
@@ -904,7 +802,7 @@ const PageActions = (function() {
         ];
         break;
       case 'plot':
-        data = mockData.plots.find(p => p.id === id);
+        data = plotList().find(p => p.id === id);
         fields = [
           { name: 'name', label: '地块名称', type: 'text', required: true },
           { name: 'enterprise', label: '所属基地', type: 'select', options: baseLedgerList().map(e => ({ value: e.name, label: e.name })) },
@@ -1041,7 +939,7 @@ const PageActions = (function() {
         title = '新建地块';
         fields = [
           { name: 'name', label: '地块名称', type: 'text', required: true },
-          { name: 'enterprise', label: '所属基地', type: 'select', options: mockData.enterprises.map(e => ({ value: e.name, label: e.name })) },
+          { name: 'enterprise', label: '所属基地', type: 'select', options: baseLedgerList().map(e => ({ value: e.name, label: e.name })) },
           { name: 'variety', label: '品种', type: 'select', required: true, options: [
             { value: '花牛苹果', label: '花牛苹果' },
             { value: '红富士', label: '红富士' },
@@ -1118,30 +1016,73 @@ const PageActions = (function() {
       if (typeof window.printCertList === 'function') window.printCertList();
       return;
     }
-    const data = currentPage === 'enterprise' ? baseLedgerList() : mockData.plots;
 
     const headers = currentPage === 'enterprise' ? ['基地编号', '基地名称', '地址', '面积(亩)', '负责人', '联系电话', '状态'] :
                     ['地块编号', '地块名称', '所属基地', '品种', '面积(亩)', '种植年份', '负责人', '状态'];
 
-    const rows = data.map(row => {
-      if (currentPage === 'enterprise') {
-        return [row.code, row.name, row.address, row.area, row.manager, row.phone, getStatusText(row.status, 'enterprise')];
+    function doExport(data) {
+      // 严格空库：无数据明确提示，不静默导出空表假装成功
+      if (!Array.isArray(data) || data.length === 0) {
+        Toast.show('暂无数据可导出', 'warning');
+        return;
       }
-      return [row.id, row.name, row.enterprise, row.variety, row.area, row.year, row.manager, getStatusText(row.status, 'plot')];
-    });
+      const rows = data.map(row => {
+        if (currentPage === 'enterprise') {
+          return [row.code, row.name, row.address, row.area, row.manager, row.phone, getStatusText(row.status, 'enterprise')];
+        }
+        return [row.id, row.name, row.enterprise, row.variety, row.area, row.year, row.manager, getStatusText(row.status, 'plot')];
+      });
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${currentPage}_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${currentPage}_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-    Toast.show('导出成功', 'success');
+      Toast.show('导出成功', 'success');
+    }
+
+    if (currentPage === 'plot') {
+      // 地块导出走真实接口（与 enterprise_plot 页面同源的 sf_plot 数据）
+      const Api = (typeof window !== 'undefined') ? window.Api : null;
+      if (!Api || typeof Api.get !== 'function') {
+        Toast.show('数据接口未就绪，暂无数据可导出', 'error');
+        return;
+      }
+      Api.get('plot', { page: 1, size: 500, sort: 'id', order: 'asc' }).then(function (res) {
+        if (!res || !res.ok) {
+          Toast.show((res && res.message) || '地块数据加载失败，暂无数据可导出', 'error');
+          return;
+        }
+        const list = (res.data && Array.isArray(res.data.list)) ? res.data.list : [];
+        // 数据库行 -> CSV 列字段（扩展字段在 remark JSON 中，与页面 mapPlot 口径一致）
+        doExport(list.map(function (r) {
+          let ext = {};
+          try { ext = JSON.parse(r.remark || '{}') || {}; } catch (e) { ext = {}; }
+          if (typeof ext !== 'object' || ext === null) ext = {};
+          return {
+            id: r.id,
+            name: r.name || '',
+            enterprise: ext.enterprise || '',
+            variety: r.variety_code || ext.variety || '',
+            area: r.area == null ? '' : r.area,
+            year: r.plant_year || '',
+            manager: ext.manager || '',
+            status: r.plot_status || 'normal'
+          };
+        }));
+      }).catch(function (err) {
+        Toast.show('地块数据加载失败：' + ((err && err.message) || '未知错误'), 'error');
+      });
+      return;
+    }
+
+    doExport(baseLedgerList());
   }
 
   // 批量导入
@@ -1322,7 +1263,7 @@ const PageActions = (function() {
   function submitCert(id) {
     const cert = getCert(id);
     if (!cert) { Toast.show('证书不存在或已被删除', 'error'); return; }
-    const res = CertStore.submit(id, cert.operator || '惠加宁');
+    const res = CertStore.submit(id, cert.operator || '');
     if (!res.ok) { Toast.show(res.message || '提交失败', 'error'); return; }
     Toast.show('已提交审核', 'success');
   }
@@ -1331,7 +1272,7 @@ const PageActions = (function() {
   function approveCert(id) {
     const cert = getCert(id);
     if (!cert) { Toast.show('证书不存在或已被删除', 'error'); return; }
-    const res = CertStore.approve(id, cert.operator || '惠加宁');
+    const res = CertStore.approve(id, cert.operator || '');
     if (!res.ok) { Toast.show(res.message || '审核失败', 'error'); return; }
     Toast.show('证书已生效', 'success');
   }

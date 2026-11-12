@@ -49,6 +49,7 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
+    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -56,23 +57,25 @@
       return api.get('mall/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
+        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
+        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = window.MallMapper.toAggregate(res.data);
-        if (agg.products.length) safeWrite(KEYS.products, agg.products);
-        if (agg.promotions.length) safeWrite(KEYS.promotions, agg.promotions);
-        if (agg.coupons.length) safeWrite(KEYS.coupons, agg.coupons);
-        if (agg.claims.length) safeWrite(KEYS.claims, agg.claims);
-        if (agg.members.length) safeWrite(KEYS.members, agg.members);
-        if (agg.orders.length) safeWrite(KEYS.orders, agg.orders);
-        if (agg.afterSales.length) safeWrite(KEYS.afterSales, agg.afterSales);
-        if (agg.invoices.length) safeWrite(KEYS.invoices, agg.invoices);
-        if (agg.posts.length) safeWrite(KEYS.posts, agg.posts);
+        safeWrite(KEYS.products, agg.products || []);
+        safeWrite(KEYS.promotions, agg.promotions || []);
+        safeWrite(KEYS.coupons, agg.coupons || []);
+        safeWrite(KEYS.claims, agg.claims || []);
+        safeWrite(KEYS.members, agg.members || []);
+        safeWrite(KEYS.orders, agg.orders || []);
+        safeWrite(KEYS.afterSales, agg.afterSales || []);
+        safeWrite(KEYS.invoices, agg.invoices || []);
+        safeWrite(KEYS.posts, agg.posts || []);
         var st = settings();
-        if (agg.categories.length) st.categories = agg.categories;
-        if (agg.varieties.length) st.varieties = agg.varieties;
-        if (agg.freight.length) st.freight = agg.freight;
-        if (agg.levelRules.length) st.levelRules = agg.levelRules;
-        if (agg.banners.length) { st.home = st.home || {}; st.home.banners = agg.banners; }
-        if (agg.notices.length) st.notices = agg.notices;
+        st.categories = agg.categories || [];
+        st.varieties = agg.varieties || [];
+        st.freight = agg.freight || [];
+        st.levelRules = agg.levelRules || [];
+        st.home = st.home || {}; st.home.banners = agg.banners || [];
+        st.notices = agg.notices || [];
         safeWrite(KEYS.settings, st);
       }
       return res;

@@ -480,26 +480,17 @@
 <div class="toast" id="toast"><span class="toast-message" id="toastMessage"></span></div>
 
 <script src="js/shared/cert-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 var currentSection = '';
 var editData = {};
 
 // 人员规模角色分类（汇总与表格、进度条均由这一条常量数组计算）
 var STAFF_ROLE_OPTIONS = ['管理', '销售', '技术', '作业', '后勤', '其他'];
-var STAFF_ROLES = [
-  { sort: 1, role: '管理', count: 18 },
-  { sort: 2, role: '技术', count: 42 },
-  { sort: 3, role: '作业', count: 198 },
-  { sort: 4, role: '销售', count: 28 }
-];
+let STAFF_ROLES = [];
 
 // 专家团队
-var EXPERTS = [
-  { sort: 1, name: '贾福昌', avatar: '', role: '首席农业专家', org: '天水花牛苹果（集团）有限责任公司', joinDate: '2010-10-11', desc: '主持花牛苹果品种改良与栽培技术规程制定，牵头制定省级标准化生产技术体系。' },
-  { sort: 2, name: '李文清', avatar: '', role: '农业技术总监', org: '甘肃省农科院果树研究所', joinDate: '2016-03-01', desc: '二十余年果业生产管理经验，主导水肥一体化与绿色防控技术落地。' },
-  { sort: 3, name: '王建国', avatar: '', role: '数字农业专家', org: '西北农林科技大学园艺学院', joinDate: '2019-07-15', desc: '负责智慧果园物联网架构与数据模型建设，推动全链条数字化管理。' },
-  { sort: 4, name: '张淑芬', avatar: '', role: '质量与品牌总监', org: '天水海关技术中心', joinDate: '2021-05-20', desc: '牵头溯源体系建设与品牌运营，成功推动花牛苹果出口马尔代夫。' }
-];
+let EXPERTS = [];
 
 // 企业资质（发证机构 / 发证日期 / 有效期，30 天内到期高亮；topShow 为顶部横幅展示的资质）
 // 数据源统一为共享数据层 CertStore（企业资质类），此处仅做视图映射，编辑后实时回写
@@ -523,18 +514,11 @@ function certDataView() {
 }
 
 // 发展历程（历程序号 / 历程日期 / 历程标题 / 历程描述 / 排序号）
-var TIMELINE_DATA = [
-  { sort: 1, no: '01', date: '2010年10月', title: '公司成立', desc: '在甘肃省天水市麦积区注册成立，注册资本11250万元，启动花牛苹果全产业链整合与品牌化运营。' },
-  { sort: 2, no: '02', date: '2012年06月', title: '地理标志保护', desc: '"花牛苹果"获国家地理标志产品保护，品牌价值跻身全国苹果区域公用品牌前列。' },
-  { sort: 3, no: '03', date: '2016年01月', title: '中国农发基金注资', desc: '中国农发重点建设基金有限公司注资2400万元，成为战略股东，公司资本实力进一步增强。' },
-  { sort: 4, no: '04', date: '2018年09月', title: '"潘苹果"品牌发布', desc: '与SOHO中国潘石屹联合打造"潘苹果"品牌，建立O2O线上线下销售网络，品牌影响力辐射全国。' },
-  { sort: 5, no: '05', date: '2024年', title: '国家级龙头企业', desc: '获评2024年国家级农业产业化重点龙头企业，建成8个花牛苹果种植基地、126个标准化地块，年产花牛苹果约3600吨，品牌化运营进入新阶段。' },
-  { sort: 6, no: '06', date: '2025年11月', title: '首次出口马尔代夫', desc: '花牛苹果经天水海关检验检疫合格，首次出口马尔代夫，品牌国际化迈出关键一步。' }
-];
+let TIMELINE_DATA = [];
 
 // 顶部横幅（企业名称 + 背景图 + 固定徽标；国家级资质徽标取自 CERT_DATA 中 topShow 的资质名称）
 var BANNER = {
-  name: '天水花牛苹果（集团）有限责任公司',
+  name: '',
   bg: '../common/images/orchard_bg.jpg',
   staticBadges: ['甘肃省龙头企业', '出口备案企业', '"潘苹果"品牌']
 };
@@ -563,57 +547,25 @@ var BIZ_STATUS = ['存续（在营）', '在业', '清算中', '注销', '吊销
 
 // 基本信息（type 决定编辑弹窗中的控件类型；full 表示独占一行）
 var BASE_INFO = [
-  { key: 'name', label: '企业名称', type: 'text', value: '天水花牛苹果（集团）有限责任公司' },
-  { key: 'creditCode', label: '统一信用代码', type: 'text', value: '91620500561130147J' },
-  { key: 'legalPerson', label: '法定代表人', type: 'text', value: '贾福昌' },
-  { key: 'capital', label: '注册资本（万元）', type: 'number', value: '11250' },
-  { key: 'establishDate', label: '成立日期', type: 'date', value: '2010-10-11' },
-  { key: 'enterpriseType', label: '企业类型', type: 'select', options: ENTERPRISE_TYPES, value: '有限责任公司（自然人投资或控股）' },
-  { key: 'industry', label: '所属行业', type: 'text', value: '农、林、牧、渔专业及辅助性活动' },
-  { key: 'status', label: '经营状态', type: 'select', tag: true, options: BIZ_STATUS, value: '存续（在营）' },
-  { key: 'address', label: '注册地址', type: 'textarea', full: true, value: '甘肃省天水市麦积区东柯河片区花牛集团花牛苹果产业园区一期1幢' },
-  { key: 'scope', label: '经营范围', type: 'textarea', full: true, value: '农副产品收购、销售及进出口业务，果品贮藏、初加工，预包装食品、散装食品、包装材料销售，果品基地建设，技术推广及咨询，租赁服务' },
-  { key: 'term', label: '营业期限', type: 'daterange', full: true, start: '2010-10-11', end: '', value: '2010年10月11日 至 长期' },
-  { key: 'authority', label: '登记机关', type: 'text', value: '天水市市场监督管理局' }
+  { key: 'name', label: '企业名称', type: 'text', value: '' },
+  { key: 'creditCode', label: '统一信用代码', type: 'text', value: '' },
+  { key: 'legalPerson', label: '法定代表人', type: 'text', value: '' },
+  { key: 'capital', label: '注册资本（万元）', type: 'number', value: '' },
+  { key: 'establishDate', label: '成立日期', type: 'date', value: '' },
+  { key: 'enterpriseType', label: '企业类型', type: 'select', options: ENTERPRISE_TYPES, value: '' },
+  { key: 'industry', label: '所属行业', type: 'text', value: '' },
+  { key: 'status', label: '经营状态', type: 'select', tag: true, options: BIZ_STATUS, value: '' },
+  { key: 'address', label: '注册地址', type: 'textarea', full: true, value: '' },
+  { key: 'scope', label: '经营范围', type: 'textarea', full: true, value: '' },
+  { key: 'term', label: '营业期限', type: 'daterange', full: true, start: '', end: '', value: '' },
+  { key: 'authority', label: '登记机关', type: 'text', value: '' }
 ];
 
 // 经营数据（供数据大屏企业管理驾驶舱顶部事实条）
-var OPERATION_DATA = [
-  { sort: 1, label: '年度总产值', value: '12860', unit: '万元' },
-  { sort: 2, label: '年总产量', value: '3600', unit: '吨' },
-  { sort: 3, label: '经营总面积', value: '2450', unit: '亩' },
-  { sort: 4, label: '认证证书数', value: String(CertStore.qualifications().length), unit: '项' },
-  { sort: 5, label: '服务农户数', value: '3860', unit: '户' }
-];
+let OPERATION_DATA = [];
 
 // 业务结构（排序号决定卡片展示顺序；icon/color 为卡片配色，可随新增业务自动分配）
-var BIZ_STRUCTURE = [
-  {
-    sort: 1, icon: '🌿', color: 'plant', name: '种植基地',
-    desc: '在天水麦积区布局8个花牛苹果种植基地，共126个标准化地块，依托黄土高原海拔高、昼夜温差大的地理优势，种植元帅系花牛苹果，配套智能灌溉、物联网监测与无人机巡检。',
-    m1Label: '基地数量', m1Value: '8 个', m2Label: '总面积', m2Value: '2450 亩'
-  },
-  {
-    sort: 2, icon: '📦', color: 'pack', name: '贮藏加工',
-    desc: '自建花牛苹果产业园区，配备现代化分选包装车间与气调冷藏库，提供清洗、分拣、打蜡、分级、包装全链路加工服务，年加工能力覆盖全市花牛苹果产量。',
-    m1Label: '年产量', m1Value: '3600 吨', m2Label: '年产值', m2Value: '2512 万元'
-  },
-  {
-    sort: 3, icon: '🛒', color: 'sale', name: '品牌销售',
-    desc: '与SOHO中国潘石屹联合打造"潘苹果"品牌，建立覆盖线上线下渠道的销售网络，产品出口马尔代夫等国家，新增"潘果汇""嘉农汇"等品牌矩阵。',
-    m1Label: '核心品牌', m1Value: '潘苹果', m2Label: '出口国家', m2Value: '马尔代夫等'
-  },
-  {
-    sort: 4, icon: '🧪', color: 'biz-agri', name: '农资服务',
-    desc: '配套农资供应、测土配方、植保飞防与农机作业服务，覆盖8个基地全产业链，年供应各类农资逾3800吨，并输出标准化技术服务包。',
-    m1Label: '年供应量', m1Value: '3800 吨', m2Label: '服务基地', m2Value: '8 个'
-  },
-  {
-    sort: 5, icon: '🚚', color: 'cold', name: '冷链物流',
-    desc: '自建预冷分选与冷链发运体系，配备冷藏车18辆、气调库6座，覆盖产地预冷—干线运输—终端配送全链路，产地到端损耗控制在5%以内。',
-    m1Label: '冷藏车', m1Value: '18 辆', m2Label: '损耗控制', m2Value: '< 5%'
-  }
-];
+let BIZ_STRUCTURE = [];
 
 // 新增业务结构时循环使用的图标与配色
 var BIZ_ICONS = ['🌿', '📦', '🛒', '🧪', '🚚', '🏭', '🔬', '🌾', '🐝', '🏪'];
@@ -803,14 +755,158 @@ function renderBizStructure() {
   }).join('');
 }
 
-renderStaff();
-renderExperts();
-renderCerts();
-renderOperation();
-renderBanner();
-renderBaseInfo();
-renderBizStructure();
-renderTimeline();
+/* ===== 严格空库模式：企业信息各区块一律来自后端 API ===== */
+var ENTERPRISE_RESOURCES = {
+  enterprise: 'enterprise',
+  staff: 'enterprise_staff',
+  expert: 'enterprise_expert',
+  timeline: 'enterprise_timeline',
+  operation: 'enterprise_operation',
+  biz: 'enterprise_biz'
+};
+
+var ENTERPRISE_SECTIONS = {
+  staff: 'staffTableBody',
+  expert: 'expertGrid',
+  cert: 'cert-list',
+  operation: 'operationStats',
+  baseinfo: 'baseinfo-grid',
+  biz: 'bizGrid',
+  timeline: 'timeline-grid'
+};
+
+// 区块状态：加载中 / 暂无数据 / 失败
+function setSectionStatus(id, text, isError) {
+  var box = document.getElementById(id);
+  if (!box) return;
+  box.innerHTML = '<div style="padding:20px;text-align:center;color:' +
+    (isError ? '#cf1322' : 'var(--text-tertiary)') + ';font-size:13px;">' + text + '</div>';
+}
+
+function setAllSections(text, isError) {
+  Object.keys(ENTERPRISE_SECTIONS).forEach(function (k) {
+    setSectionStatus(ENTERPRISE_SECTIONS[k], text, isError);
+  });
+}
+
+// 数据库字段(snake_case) -> 页面视图字段映射
+function mapStaffRow(row) {
+  return { sort: Number(row.sort_order) || 0, role: row.role_type || '', count: Number(row.count) || 0 };
+}
+function mapExpertRow(row) {
+  return {
+    sort: Number(row.sort_order) || 0, name: row.name || '', avatar: '',
+    role: row.role || '', org: row.org || '', joinDate: row.join_date || '', desc: row.description || ''
+  };
+}
+function mapTimelineRow(row) {
+  return {
+    sort: Number(row.sort_order) || 0, no: String(row.sort_order || '').padStart(2, '0'),
+    date: row.timeline_date || '', title: row.title || '', desc: row.description || ''
+  };
+}
+function mapOperationRow(row) {
+  return {
+    sort: Number(row.sort_order) || 0, label: row.label || '',
+    value: (row.value === null || row.value === undefined) ? '' : String(row.value),
+    unit: row.unit || ''
+  };
+}
+function mapBizRow(row) {
+  return {
+    sort: Number(row.sort_order) || 0, icon: row.icon || '', color: row.color || '',
+    name: row.name || '', desc: row.description || '',
+    m1Label: row.m1_label || '', m1Value: row.m1_value || '',
+    m2Label: row.m2_label || '', m2Value: row.m2_value || ''
+  };
+}
+function mapEnterpriseRow(row) {
+  return {
+    name: row.name || '', creditCode: row.credit_code || '', legalPerson: row.legal_person || '',
+    capital: (row.capital === null || row.capital === undefined) ? '' : String(row.capital),
+    establishDate: row.establish_date || '', enterpriseType: row.enterprise_type || '',
+    industry: row.industry || '', status: row.biz_status || '',
+    address: row.address || '', scope: row.scope || '',
+    termStart: row.term_start || '', termEnd: row.term_end || '', authority: row.authority || ''
+  };
+}
+
+// 把企业基本信息写入 BASE_INFO 字段定义（保留 UI 控件结构，仅替换业务值）
+function applyEnterpriseBase(row) {
+  BANNER.name = row.name || '';
+  var map = {
+    name: row.name, creditCode: row.creditCode, legalPerson: row.legalPerson,
+    capital: row.capital, establishDate: row.establishDate,
+    enterpriseType: row.enterpriseType, industry: row.industry, status: row.status,
+    address: row.address, scope: row.scope, authority: row.authority
+  };
+  BASE_INFO.forEach(function (f) {
+    if (Object.prototype.hasOwnProperty.call(map, f.key)) f.value = map[f.key] || '';
+  });
+  var term = BASE_INFO.filter(function (f) { return f.key === 'term'; })[0];
+  if (term) {
+    term.start = row.termStart || '';
+    term.end = row.termEnd || '';
+    term.value = term.start ? (term.start + ' 至 ' + (term.end || '长期')) : '';
+  }
+}
+
+// 原地刷新数组引用，保证编辑表格 etSave() 持有的引用始终有效
+function refill(target, rows) {
+  target.length = 0;
+  rows.forEach(function (x) { target.push(x); });
+}
+
+// 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示；不写 localStorage
+function loadEnterpriseData() {
+  if (!window.Api) { setAllSections('数据加载失败：接口未就绪', true); return; }
+  setAllSections('正在加载数据...', false);
+  var R = ENTERPRISE_RESOURCES;
+  Promise.all([
+    Api.get(R.enterprise, { page: 1, size: 500 }),
+    Api.get(R.staff, { page: 1, size: 500 }),
+    Api.get(R.expert, { page: 1, size: 500 }),
+    Api.get(R.timeline, { page: 1, size: 500 }),
+    Api.get(R.operation, { page: 1, size: 500 }),
+    Api.get(R.biz, { page: 1, size: 500 })
+  ]).then(function (res) {
+    for (var i = 0; i < res.length; i++) {
+      if (!res[i] || !res[i].ok) {
+        setAllSections('数据加载失败：' + ((res[i] && res[i].message) || '请求异常'), true);
+        return;
+      }
+    }
+    function listOf(r) { return (r.data && r.data.list) || []; }
+    refill(STAFF_ROLES, listOf(res[1]).map(mapStaffRow));
+    refill(EXPERTS, listOf(res[2]).map(mapExpertRow));
+    refill(TIMELINE_DATA, listOf(res[3]).map(mapTimelineRow));
+    refill(OPERATION_DATA, listOf(res[4]).map(mapOperationRow));
+    refill(BIZ_STRUCTURE, listOf(res[5]).map(mapBizRow));
+
+    var entList = listOf(res[0]);
+    if (entList.length) applyEnterpriseBase(mapEnterpriseRow(entList[0]));
+
+    if (STAFF_ROLES.length) renderStaff(); else setSectionStatus('staffTableBody', '暂无数据', false);
+    if (EXPERTS.length) renderExperts(); else setSectionStatus('expertGrid', '暂无数据', false);
+    if (TIMELINE_DATA.length) renderTimeline(); else setSectionStatus('timeline-grid', '暂无数据', false);
+    if (OPERATION_DATA.length) renderOperation(); else setSectionStatus('operationStats', '暂无数据', false);
+    if (BIZ_STRUCTURE.length) renderBizStructure(); else setSectionStatus('bizGrid', '暂无数据', false);
+    if (entList.length) {
+      renderBaseInfo();
+      renderBanner();
+    } else {
+      setSectionStatus('baseinfo-grid', '暂无数据', false);
+      var nameEl = document.getElementById('bannerName');
+      if (nameEl) nameEl.textContent = '暂无数据';
+    }
+    // 资质证书保留 CertStore.qualifications() 真源（team-lead 指定保留）
+    if (certDataView().length) renderCerts(); else setSectionStatus('cert-list', '暂无数据', false);
+  }).catch(function (e) {
+    setAllSections('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+  });
+}
+
+loadEnterpriseData();
 
 function closeModal(){
   var modal = document.getElementById('editModal');
@@ -831,7 +927,7 @@ function showToast(message, type){
   showToast._timer = setTimeout(function(){ box.classList.remove('show'); }, 3000);
 }
 
-// 日期格式化：2026-03-05 → 2026年03月05日
+// 日期格式化：YYYY-MM-DD → YYYY年MM月DD日
 function formatDateCN(d) {
   if (!d) return '';
   var p = String(d).split('-');

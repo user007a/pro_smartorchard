@@ -932,18 +932,23 @@
       if (input === null) return;
       var tracking = String(input).trim();
       if (!tracking) { MobileStore.toast('物流单号不能为空', 'warning'); return; }
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_sales_orders') || '[]'); } catch (e) { list = []; }
-      var exist = list.some(function(s) { return s.orderNo === orderId; });
-      if (!exist) {
-        list.push({
-          orderNo: orderId,
-          tracking: tracking,
-          company: '顺丰速运',
-          shippedAt: new Date().toISOString(),
-          source: 'mobile_adoption'
-        });
-        localStorage.setItem('h5_sales_orders', JSON.stringify(list));
+
+      // 发货落库：sf_sales_shipment（发货与物流），不再写本地业务键
+      if (window.Api && typeof window.Api.create === 'function') {
+        var d = new Date();
+        var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+        var shipCode = 'SHIP-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
+          pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+        window.Api.create('sales_shipment', {
+          shipment_code: shipCode,
+          order_code: orderId,
+          express_company: '顺丰速运',
+          tracking_no: tracking,
+          ship_time: d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()),
+          source: 'mobile_adoption',
+          status: '在途'
+        }).catch(function (e) { console.warn('[shipOrder] 发货落库失败', e); });
       }
       var card = document.querySelector('#orderList .order-card[data-order="' + orderId + '"]');
       if (card) {

@@ -16,7 +16,7 @@
       <p>商品分类、品种下拉统一引用此处配置，H5 商城筛选与后台表单同步生效。</p>
     </div>
     <div class="mall-actions">
-      <button class="mall-btn" onclick="resetDict()">恢复默认</button>
+      <button class="mall-btn" onclick="resetDict()">刷新数据</button>
     </div>
   </div>
 
@@ -69,7 +69,15 @@
 </div>
 
 <script src="js/shared/mall-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
+/* 严格空库模式：分类/品种/商品数一律来自后端 API，不再使用本地演示数据 */
+var DICT_RESOURCES = { categories: 'mall_category', varieties: 'mall_variety', products: 'mall_product' };
+var categoriesData = [];
+var varietiesData = [];
+var productsData = [];
+var dictLoadState = 'loading';
+var dictLoadError = '';
 var editingKey = null;
 
 function esc(s) {
@@ -78,10 +86,54 @@ function esc(s) {
   });
 }
 
-function getSettings() { return MallStore.settings(); }
-function products() { return MallStore.products(); }
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapCategoryRow(row) {
+  return { code: row.category_code || '', name: row.category_name || '', sort: Number(row.sort_order) || 0, status: row.status === 'off' ? 'off' : 'on' };
+}
+function mapVarietyRow(row) {
+  return { code: row.variety_code || '', name: row.variety_name || '', sort: Number(row.sort) || 0, status: row.status === 'off' ? 'off' : 'on' };
+}
+function mapProductRow(row) {
+  return { id: row.product_code || row.id || '', cat: row.category_id || '', variety: row.variety || '' };
+}
+
+/* 异步取数：加载中 / 暂无数据 / 加载失败三态，不写 localStorage */
+function loadDict() {
+  if (!window.Api) { dictLoadState = 'error'; dictLoadError = '接口未就绪'; render(); return; }
+  dictLoadState = 'loading'; dictLoadError = ''; render();
+  Promise.all([
+    Api.get(DICT_RESOURCES.categories, { page: 1, size: 500 }),
+    Api.get(DICT_RESOURCES.varieties, { page: 1, size: 500 }),
+    Api.get(DICT_RESOURCES.products, { page: 1, size: 500 })
+  ]).then(function (res) {
+    var cr = res[0], vr = res[1], pr = res[2];
+    if (!cr || !cr.ok || !vr || !vr.ok || !pr || !pr.ok) {
+      dictLoadState = 'error';
+      dictLoadError = (cr && cr.message) || (vr && vr.message) || (pr && pr.message) || '请求异常';
+      categoriesData = []; varietiesData = []; productsData = []; render(); return;
+    }
+    categoriesData = ((cr.data && cr.data.list) || []).map(mapCategoryRow);
+    varietiesData = ((vr.data && vr.data.list) || []).map(mapVarietyRow);
+    productsData = ((pr.data && pr.data.list) || []).map(mapProductRow);
+    dictLoadState = 'ok'; render();
+  }).catch(function (e) {
+    dictLoadState = 'error'; dictLoadError = (e && e.message) || '网络异常';
+    categoriesData = []; varietiesData = []; productsData = []; render();
+  });
+}
+
+/* 返回页面级数据的引用，运行时增删改即时生效 */
+function getSettings() { return { categories: categoriesData, varieties: varietiesData }; }
+function products() { return productsData; }
 
 function render() {
+  if (dictLoadState !== 'ok') {
+    var msg = dictLoadState === 'loading' ? '正在加载数据...' : ('数据加载失败：' + dictLoadError);
+    document.getElementById('catBody').innerHTML = '<tr><td colspan="6" class="mall-empty">' + esc(msg) + '</td></tr>';
+    document.getElementById('varBody').innerHTML = '<tr><td colspan="6" class="mall-empty">' + esc(msg) + '</td></tr>';
+    ['kpiCat', 'kpiVar', 'kpiCatOn', 'kpiSku'].forEach(function (id) { document.getElementById(id).textContent = '0'; });
+    return;
+  }
   var s = getSettings();
   var list = products();
   var cats = (s.categories || []).slice().sort(function (a, b) { return a.sort - b.sort; });
@@ -104,7 +156,7 @@ function render() {
         '<button class="mall-link" onclick="toggleItem(\'categories\',\'' + esc(c.code) + '\')">' + (c.status === 'off' ? '启用' : '停用') + '</button>' +
         '<button class="mall-link danger" onclick="removeItem(\'categories\',\'' + esc(c.code) + '\')">删除</button>' +
       '</div></td></tr>';
-  }).join('') || '<tr><td colspan="6" class="mall-empty">暂无分类</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="mall-empty">暂无数据</td></tr>';
 
   document.getElementById('varBody').innerHTML = vars.map(function (v, i) {
     var count = list.filter(function (p) { return p.variety === v.code; }).length;
@@ -118,7 +170,7 @@ function render() {
         '<button class="mall-link" onclick="toggleItem(\'varieties\',\'' + esc(v.code) + '\')">' + (v.status === 'off' ? '启用' : '停用') + '</button>' +
         '<button class="mall-link danger" onclick="removeItem(\'varieties\',\'' + esc(v.code) + '\')">删除</button>' +
       '</div></td></tr>';
-  }).join('') || '<tr><td colspan="6" class="mall-empty">暂无品种</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="mall-empty">暂无数据</td></tr>';
 }
 
 function addItem(type) {
@@ -199,30 +251,13 @@ function removeItem(type, code) {
   render();
 }
 
+/* 严格空库模式：不再写死默认字典，改为从数据库重新加载 */
 function resetDict() {
-  if (!confirm('恢复默认分类与品种？已自定义的字典项将被覆盖。')) return;
-  var defaults = {
-    categories: [
-      { code: 'fruit', name: '水果', sort: 1, status: 'on' },
-      { code: 'gift', name: '礼盒', sort: 2, status: 'on' },
-      { code: 'adopt', name: '认养', sort: 3, status: 'on' }
-    ],
-    varieties: [
-      { code: 'huaniu', name: '花牛苹果', sort: 1, status: 'on' },
-      { code: 'redfuji', name: '红富士', sort: 2, status: 'on' },
-      { code: 'gala', name: '嘎啦', sort: 3, status: 'on' },
-      { code: 'qinguan', name: '秦冠', sort: 4, status: 'on' },
-      { code: 'jinshuai', name: '金帅', sort: 5, status: 'on' },
-      { code: 'hongxing', name: '红星', sort: 6, status: 'on' },
-      { code: 'guoguang', name: '国光', sort: 7, status: 'on' },
-      { code: 'mixed', name: '混合装', sort: 8, status: 'on' }
-    ]
-  };
-  MallStore.saveSettings(defaults);
-  render();
+  if (!confirm('重新从数据库加载分类与品种？当前未保存的改动将被丢弃。')) return;
+  loadDict();
 }
 
-document.addEventListener('DOMContentLoaded', render);
+document.addEventListener('DOMContentLoaded', loadDict);
 </script>
 </body>
 </html>

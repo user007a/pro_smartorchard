@@ -48,7 +48,8 @@
     var baseDir = selfEl.src.replace(/[^\/]*$/, '');
     var deps = [
       { name: 'Api', src: baseDir + '../../../common/js/api.js' },
-      { name: 'AlertMapper', src: baseDir + 'alert-mapper.js' }
+      { name: 'AlertMapper', src: baseDir + 'alert-mapper.js' },
+      { name: 'PlotStore', src: baseDir + 'plot-store.js' }
     ];
     var pending = deps.filter(function (d) { return !global[d.name]; });
     if (!pending.length) return Promise.resolve();
@@ -76,6 +77,7 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
+    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -83,11 +85,13 @@
       return api.get('alert/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
+        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
+        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = global.AlertMapper.toAggregate(res.data);
         var e = ensureLoaded();
-        if (agg.alerts && agg.alerts.length) e.alerts = agg.alerts;
-        if (agg.rules && agg.rules.length) e.rules = agg.rules;
-        if (agg.reports && agg.reports.length) e.reports = agg.reports;
+        e.alerts = agg.alerts || [];
+        e.rules = agg.rules || [];
+        e.reports = agg.reports || [];
         saveToStorage();
         notify('backend-loaded');
       }
@@ -117,7 +121,6 @@
   var STORAGE_KEY = 'applefarm_alert_state_v1';
   var BACKUP_KEY = 'applefarm_alert_state_v1_backup_v1';
   var VERSION = 3;
-  var PLOT_MASTER_KEY = 'smartorchard_plot_master';
   var TARGETS_KEY = 'snzg_alert_targets';
 
   // ================================================================
@@ -346,12 +349,8 @@
   }
 
   function readPlotMaster(){
-    try {
-      var raw = global.localStorage && global.localStorage.getItem(PLOT_MASTER_KEY);
-      if (!raw) return [];
-      var arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr : [];
-    } catch(e){ return []; }
+    if (!global.PlotStore) return [];
+    return global.PlotStore.plots();
   }
 
   // 槽位顺序：A1-A4 / B1-B4 / C1-C3 / D1 对应驾驶舱 12 块示意地图
@@ -373,13 +372,13 @@
    */
   function buildPlotAlias(){
     var master = readPlotMaster();
-    var sig = master.map(function(p){ return (p.code || '') + '|' + (p.enterprise || ''); }).join(',');
+    var sig = master.map(function(p){ return (p.code || '') + '|' + (p.base || ''); }).join(',');
     if (plotAliasCache.sig === sig && plotAliasCache.table) {
       return { master: plotAliasCache.master, table: plotAliasCache.table };
     }
     var byBase = {};
     master.forEach(function(p){
-      var b = normalizeBase(p.enterprise);
+      var b = normalizeBase(p.base);
       if (!b) return;
       (byBase[b] || (byBase[b] = [])).push(p);
     });
@@ -407,7 +406,7 @@
     var hit = null;
     if (code) hit = master.filter(function(p){ return p.code === code; })[0] || null;
     if (hit) {
-      return { matched:true, plotCode:hit.code, plot:hit, base:normalizeBase(hit.enterprise), slot:slot };
+      return { matched:true, plotCode:hit.code, plot:hit, base:normalizeBase(hit.base), slot:slot };
     }
     if (EXTERNAL_BASES.indexOf(base) >= 0) return { matched:false, base:base, slot:slot, reason:'external' };
     if (!master.length) return { matched:false, base:base, slot:slot, reason:'no-master' };
@@ -471,135 +470,15 @@
   // 种子数据（设备 23 + 农事 23）
   // ================================================================
 
-  var DEFAULT_ALERTS = (function(){
-    var out = [];
-
-    // 设备预警 23 条
-    out.push({ id:'DEV001', type:'device', title:'设备离线：水肥一体化设备离线超过30分钟', level:'urgent', levelText:'紧急', device:'水肥一体化控制器-A01', location:'天水麦积区基地 - 地块A1', time:'2026-09-20 10:30', status:'pending', statusText:'待处理', desc:'设备已离线超过30分钟，请检查设备连接状态和网络状况。建议立即联系现场运维人员进行排查。', history:['系统自动生成预警'] });
-    out.push({ id:'DEV002', type:'device', title:'数据异常：土壤湿度传感器数值异常', level:'important', levelText:'重要', device:'土壤湿度传感器-S05', location:'天水秦州基地 - 地块B3', time:'2026-09-20 09:15', status:'processing', statusText:'处理中', desc:'传感器数值超出正常范围，请检查传感器是否损坏或需要校准。', history:['系统自动生成预警','技术员已接单处理'] });
-    out.push({ id:'DEV003', type:'device', title:'设备离线：气象站设备离线', level:'important', levelText:'重要', device:'气象站-M02', location:'天水甘谷基地 - 中心区域', time:'2026-09-20 08:45', status:'pending', statusText:'待处理', desc:'气象站设备通讯中断，可能影响气象数据采集。', history:['系统自动生成预警'] });
-    out.push({ id:'DEV004', type:'device', title:'设备维护提醒：摄像头C03需要清洁', level:'notice', levelText:'通知', device:'监控摄像头-C03', location:'青岛莱西基地 - 地块C2', time:'2026-09-19 17:00', status:'completed', statusText:'已处理', desc:'摄像头镜头积尘过多，建议安排清洁维护。', history:['系统自动生成预警','已完成清洁维护'] });
-    out.push({ id:'DEV005', type:'device', title:'数据异常：虫情灯识别异常', level:'reminder', levelText:'提醒', device:'虫情灯-I01', location:'龙口南山基地 - 地块D1', time:'2026-09-19 14:30', status:'completed', statusText:'已处理', desc:'虫情识别准确率下降，建议检查设备状态。', history:['系统自动生成预警','已完成设备检查'] });
-    out.push({ id:'DEV006', type:'device', title:'设备离线：灌溉控制器离线', level:'urgent', levelText:'紧急', device:'灌溉控制器-I02', location:'天水麦积区基地 - 地块A2', time:'2026-09-19 12:00', status:'pending', statusText:'待处理', desc:'灌溉控制器离线，可能影响灌溉计划执行。', history:['系统自动生成预警'] });
-    out.push({ id:'DEV007', type:'device', title:'电池电量低：太阳能板供电不足', level:'important', levelText:'重要', device:'太阳能板-SP01', location:'天水秦州基地 - 地块B1', time:'2026-09-19 10:20', status:'processing', statusText:'处理中', desc:'太阳能板发电量不足，电池电量低于20%。', history:['系统自动生成预警','已安排检查太阳能板'] });
-    out.push({ id:'DEV008', type:'device', title:'设备离线：温湿度传感器离线', level:'important', levelText:'重要', device:'温湿度传感器-T03', location:'青岛莱西基地 - 地块C1', time:'2026-09-18 16:45', status:'completed', statusText:'已处理', desc:'传感器已恢复正常连接。', history:['系统自动生成预警','已恢复连接'] });
-    out.push({ id:'DEV009', type:'device', title:'数据异常：风速传感器读数异常', level:'reminder', levelText:'提醒', device:'风速传感器-W01', location:'天水甘谷基地 - 风口区域', time:'2026-09-18 14:30', status:'completed', statusText:'已处理', desc:'风速读数出现异常波动，已完成校准。', history:['系统自动生成预警','已完成校准'] });
-    out.push({ id:'DEV010', type:'device', title:'设备维护提醒：土壤传感器需要校准', level:'notice', levelText:'通知', device:'土壤传感器-S01', location:'天水麦积区基地 - 地块A3', time:'2026-09-18 09:00', status:'pending', statusText:'待处理', desc:'土壤传感器已运行超过6个月，建议进行校准。', history:['系统自动生成预警'] });
-    out.push({ id:'DEV011', type:'device', title:'设备离线：无人机基站离线', level:'urgent', levelText:'紧急', device:'无人机基站-DJ01', location:'龙口南山基地 - 停机坪', time:'2026-09-17 18:30', status:'pending', statusText:'待处理', desc:'无人机基站通讯中断，影响无人机作业。', history:['系统自动生成预警'] });
-    out.push({ id:'DEV012', type:'device', title:'数据异常：光照传感器数值波动', level:'reminder', levelText:'提醒', device:'光照传感器-L01', location:'天水秦州基地 - 地块B2', time:'2026-09-17 15:20', status:'processing', statusText:'处理中', desc:'光照传感器数值波动较大，需要检查。', history:['系统自动生成预警','技术员正在处理'] });
-    out.push({ id:'DEV013', type:'device', title:'设备离线：CO2传感器离线', level:'important', levelText:'重要', device:'CO2传感器-C01', location:'青岛莱西基地 - 温室大棚', time:'2026-09-17 11:00', status:'completed', statusText:'已处理', desc:'CO2传感器已恢复正常。', history:['系统自动生成预警','已恢复正常'] });
-    out.push({ id:'DEV014', type:'device', title:'设备维护提醒：摄像头C05镜头需要清洁', level:'notice', levelText:'通知', device:'监控摄像头-C05', location:'天水甘谷基地 - 东门区域', time:'2026-09-16 17:30', status:'completed', statusText:'已处理', desc:'摄像头镜头已清洁完毕。', history:['系统自动生成预警','已完成清洁'] });
-    out.push({ id:'DEV015', type:'device', title:'数据异常：土壤pH值传感器异常', level:'important', levelText:'重要', device:'pH传感器-P02', location:'天水麦积区基地 - 地块A4', time:'2026-09-16 14:15', status:'pending', statusText:'待处理', desc:'pH传感器读数异常，需要检查校准。', history:['系统自动生成预警'] });
-    out.push({ id:'DEV016', type:'device', title:'设备离线：土壤水分传感器离线', level:'important', levelText:'重要', device:'土壤水分传感器-M01', location:'天水秦州基地 - 地块B4', time:'2026-09-16 10:00', status:'processing', statusText:'处理中', desc:'土壤水分传感器离线，正在排查原因。', history:['系统自动生成预警','正在排查'] });
-    out.push({ id:'DEV017', type:'device', title:'设备维护提醒：气象站需要维护', level:'notice', levelText:'通知', device:'气象站-M01', location:'天水麦积区基地 - 中心区域', time:'2026-09-15 16:00', status:'pending', statusText:'待处理', desc:'气象站设备运行时间过长，需要进行常规维护。', history:['系统自动生成预警'] });
-    out.push({ id:'DEV018', type:'device', title:'数据异常：雨量传感器数值异常', level:'reminder', levelText:'提醒', device:'雨量传感器-R01', location:'天水甘谷基地 - 南门区域', time:'2026-09-15 13:30', status:'completed', statusText:'已处理', desc:'雨量传感器已校准完毕。', history:['系统自动生成预警','已完成校准'] });
-    out.push({ id:'DEV019', type:'device', title:'设备离线：摄像头C01离线', level:'urgent', levelText:'紧急', device:'监控摄像头-C01', location:'青岛莱西基地 - 北门区域', time:'2026-09-15 09:45', status:'pending', statusText:'待处理', desc:'监控摄像头离线，影响区域监控。', history:['系统自动生成预警'] });
-    out.push({ id:'DEV020', type:'device', title:'设备维护提醒：灌溉控制器需要检修', level:'notice', levelText:'通知', device:'灌溉控制器-I01', location:'龙口南山基地 - 地块D2', time:'2026-09-14 17:00', status:'completed', statusText:'已处理', desc:'灌溉控制器已完成检修。', history:['系统自动生成预警','已完成检修'] });
-    out.push({ id:'DEV021', type:'device', title:'数据异常：空气湿度传感器波动', level:'reminder', levelText:'提醒', device:'空气湿度传感器-H01', location:'天水麦积区基地 - 地块A5', time:'2026-09-14 14:20', status:'completed', statusText:'已处理', desc:'空气湿度传感器波动已恢复正常。', history:['系统自动生成预警','已恢复正常'] });
-    out.push({ id:'DEV022', type:'device', title:'设备离线：温度传感器离线', level:'important', levelText:'重要', device:'温度传感器-T01', location:'天水秦州基地 - 地块B5', time:'2026-09-14 10:30', status:'processing', statusText:'处理中', desc:'温度传感器离线，正在恢复连接。', history:['系统自动生成预警','正在恢复'] });
-    out.push({ id:'DEV023', type:'device', title:'设备维护提醒：虫情灯需要清理', level:'notice', levelText:'通知', device:'虫情灯-I02', location:'青岛莱西基地 - 地块C3', time:'2026-09-13 16:30', status:'pending', statusText:'待处理', desc:'虫情灯收集盒已满，需要清理。', history:['系统自动生成预警'] });
-
-    // 农事预警 23 条
-    out.push({ id:'FAR001', type:'farming', title:'病虫害预警：红蜘蛛虫害爆发风险', level:'urgent', levelText:'紧急', location:'天水麦积区基地 - 地块A1、A2、A3', time:'2026-09-20 11:00', status:'pending', statusText:'待处理', desc:'根据监测数据，红蜘蛛虫口密度已达到防治阈值（>5头/叶），预计未来3天内将进入爆发期。建议立即采取防治措施。', srcType:'disease', srcTypeText:'病虫害预警', history:['系统自动生成预警'], threshold:{ current:'8头/叶', limit:'5头/叶', trend:'呈上升趋势' } });
-    out.push({ id:'FAR002', type:'farming', title:'气象预警：暴雨将至，建议做好排水准备', level:'important', levelText:'重要', location:'天水秦州基地 - 全部地块', time:'2026-09-20 09:30', status:'processing', statusText:'处理中', desc:'预计未来24小时内将有暴雨，降雨量预计达到50-80mm。请做好果园排水设施检查和加固工作。', srcType:'weather', srcTypeText:'气象预警', history:['系统自动生成预警','已通知现场准备'], threshold:{ current:'80mm', limit:'50mm', trend:'即将发生' } });
-    out.push({ id:'FAR003', type:'farming', title:'土壤预警：地块B3土壤湿度超标', level:'important', levelText:'重要', location:'天水甘谷基地 - 地块B3', time:'2026-09-20 08:00', status:'pending', statusText:'待处理', desc:'地块B3土壤湿度超过85%，长期高湿可能导致根系腐烂。建议及时排水降湿。', srcType:'soil', srcTypeText:'土壤预警', history:['系统自动生成预警'], threshold:{ current:'88%', limit:'85%', trend:'持续偏高' } });
-    out.push({ id:'FAR004', type:'farming', title:'病虫害预警：白粉病高发期提醒', level:'reminder', levelText:'提醒', location:'青岛莱西基地 - 地块C1、C2', time:'2026-09-19 16:30', status:'completed', statusText:'已处理', desc:'当前气候条件适宜白粉病发生，建议加强监测并及时预防。', srcType:'disease', srcTypeText:'病虫害预警', history:['系统自动生成预警','已完成预防喷施'], threshold:{ current:'3级', limit:'5级', trend:'风险中等' } });
-    out.push({ id:'FAR005', type:'farming', title:'生长预警：苹果果实膨大期需加强施肥', level:'notice', levelText:'通知', location:'龙口南山基地 - 地块D1、D2', time:'2026-09-19 14:00', status:'completed', statusText:'已处理', desc:'当前处于苹果果实快速膨大期，需及时补充钾肥和钙肥，促进果实发育。', srcType:'growth', srcTypeText:'生长预警', history:['系统自动生成预警','已完成追肥'], threshold:{ current:'正常', limit:'-', trend:'需关注' } });
-    out.push({ id:'FAR006', type:'farming', title:'气象预警：高温预警，请注意防暑降温', level:'important', levelText:'重要', location:'天水麦积区基地 - 全部地块', time:'2026-09-19 11:30', status:'pending', statusText:'待处理', desc:'预计今日最高气温将达到35°C以上，请安排工作人员错峰作业，做好防暑降温措施。', srcType:'weather', srcTypeText:'气象预警', history:['系统自动生成预警'], threshold:{ current:'36°C', limit:'35°C', trend:'持续升高' } });
-    out.push({ id:'FAR007', type:'farming', title:'病虫害预警：蚜虫数量超标', level:'important', levelText:'重要', location:'天水秦州基地 - 地块B1、B2', time:'2026-09-18 17:00', status:'processing', statusText:'处理中', desc:'蚜虫监测数据显示数量已超过防治阈值，建议及时喷洒农药进行防治。', srcType:'disease', srcTypeText:'病虫害预警', history:['系统自动生成预警','已安排喷药'], threshold:{ current:'15头/叶', limit:'10头/叶', trend:'快速上升' } });
-    out.push({ id:'FAR008', type:'farming', title:'土壤预警：地块A4氮肥含量偏低', level:'notice', levelText:'通知', location:'天水麦积区基地 - 地块A4', time:'2026-09-18 15:00', status:'completed', statusText:'已处理', desc:'土壤检测显示氮肥含量低于适宜范围，建议追施氮肥。', srcType:'soil', srcTypeText:'土壤预警', history:['系统自动生成预警','已完成追肥'], threshold:{ current:'120mg/kg', limit:'150mg/kg', trend:'偏低' } });
-    out.push({ id:'FAR009', type:'farming', title:'气象预警：大风预警，检查防风设施', level:'urgent', levelText:'紧急', location:'天水甘谷基地 - 风口区域', time:'2026-09-18 10:30', status:'pending', statusText:'待处理', desc:'预计今日有6-7级大风，阵风可达8级。请检查并加固果园防风设施。', srcType:'weather', srcTypeText:'气象预警', history:['系统自动生成预警'], threshold:{ current:'15m/s', limit:'12m/s', trend:'风速增大' } });
-    out.push({ id:'FAR010', type:'farming', title:'生长预警：果树修剪周期提醒', level:'notice', levelText:'通知', location:'青岛莱西基地 - 地块C3', time:'2026-09-17 16:00', status:'pending', statusText:'待处理', desc:'当前是夏季修剪的最佳时期，建议及时进行夏剪，改善通风透光条件。', srcType:'growth', srcTypeText:'生长预警', history:['系统自动生成预警'], threshold:{ current:'正常', limit:'-', trend:'适时进行' } });
-    out.push({ id:'FAR011', type:'farming', title:'病虫害预警：斑点落叶病风险', level:'important', levelText:'重要', location:'龙口南山基地 - 地块D1', time:'2026-09-17 14:30', status:'completed', statusText:'已处理', desc:'根据气象条件预测，未来一周斑点落叶病发生风险较高，建议提前预防。', srcType:'disease', srcTypeText:'病虫害预警', history:['系统自动生成预警','已完成预防'], threshold:{ current:'中风险', limit:'高风险', trend:'风险上升' } });
-    out.push({ id:'FAR012', type:'farming', title:'土壤预警：地块B4pH值偏低', level:'reminder', levelText:'提醒', location:'天水秦州基地 - 地块B4', time:'2026-09-17 11:00', status:'completed', statusText:'已处理', desc:'土壤pH值为5.2，低于苹果树适宜范围(6.0-7.0)，建议施用石灰进行改良。', srcType:'soil', srcTypeText:'土壤预警', history:['系统自动生成预警','已施石灰改良'], threshold:{ current:'5.2', limit:'6.0', trend:'偏低' } });
-    out.push({ id:'FAR013', type:'farming', title:'气象预警：低温预警，做好防寒措施', level:'urgent', levelText:'紧急', location:'天水麦积区基地 - 地块A5', time:'2026-09-16 18:00', status:'pending', statusText:'待处理', desc:'预计夜间最低气温将降至5°C以下，新梢可能受到冻害。请做好防寒保温措施。', srcType:'weather', srcTypeText:'气象预警', history:['系统自动生成预警'], threshold:{ current:'4°C', limit:'5°C', trend:'气温下降' } });
-    out.push({ id:'FAR014', type:'farming', title:'病虫害预警：金龟子成虫活跃期', level:'reminder', levelText:'提醒', location:'天水甘谷基地 - 地块B1、B2', time:'2026-09-16 15:30', status:'processing', statusText:'处理中', desc:'金龟子成虫开始活跃，注意监测并采取诱杀措施。', srcType:'disease', srcTypeText:'病虫害预警', history:['系统自动生成预警','正在诱杀'], threshold:{ current:'12头/株', limit:'20头/株', trend:'逐渐增加' } });
-    out.push({ id:'FAR015', type:'farming', title:'生长预警：疏果期提醒', level:'notice', levelText:'通知', location:'青岛莱西基地 - 地块C1、C2', time:'2026-09-16 10:00', status:'completed', statusText:'已处理', desc:'当前是疏果的关键时期，请及时进行疏果，保证果实品质。', srcType:'growth', srcTypeText:'生长预警', history:['系统自动生成预警','已完成疏果'], threshold:{ current:'正常', limit:'-', trend:'适时进行' } });
-    out.push({ id:'FAR016', type:'farming', title:'土壤预警：地块A1有机质含量偏低', level:'reminder', levelText:'提醒', location:'天水麦积区基地 - 地块A1', time:'2026-09-15 16:30', status:'pending', statusText:'待处理', desc:'土壤有机质含量为1.2%，低于适宜范围(>2.0%)，建议增施有机肥。', srcType:'soil', srcTypeText:'土壤预警', history:['系统自动生成预警'], threshold:{ current:'1.2%', limit:'2.0%', trend:'偏低' } });
-    out.push({ id:'FAR017', type:'farming', title:'气象预警：冰雹预警，做好防护准备', level:'urgent', levelText:'紧急', location:'天水秦州基地 - 全部地块', time:'2026-09-15 14:00', status:'completed', statusText:'已处理', desc:'预计未来2小时内有冰雹天气，请立即做好防雹准备。', srcType:'weather', srcTypeText:'气象预警', history:['系统自动生成预警','已过冰雹天气'], threshold:{ current:'有冰雹', limit:'-', trend:'已过' } });
-    out.push({ id:'FAR018', type:'farming', title:'病虫害预警：叶螨防治提醒', level:'important', levelText:'重要', location:'龙口南山基地 - 地块D2', time:'2026-09-15 09:30', status:'pending', statusText:'待处理', desc:'叶螨监测数据接近防治阈值，建议及时防治。', srcType:'disease', srcTypeText:'病虫害预警', history:['系统自动生成预警'], threshold:{ current:'4头/叶', limit:'5头/叶', trend:'接近阈值' } });
-    out.push({ id:'FAR019', type:'farming', title:'土壤预警：地块C3钾元素缺乏', level:'important', levelText:'重要', location:'青岛莱西基地 - 地块C3', time:'2026-09-14 17:00', status:'processing', statusText:'处理中', desc:'土壤钾元素含量偏低，影响果实品质和抗病能力。建议追施钾肥。', srcType:'soil', srcTypeText:'土壤预警', history:['系统自动生成预警','已追施钾肥'], threshold:{ current:'80mg/kg', limit:'120mg/kg', trend:'偏低' } });
-    out.push({ id:'FAR020', type:'farming', title:'生长预警：套袋期提醒', level:'notice', levelText:'通知', location:'天水麦积区基地 - 地块A2、A3', time:'2026-09-14 14:30', status:'completed', statusText:'已处理', desc:'苹果幼果已进入套袋适宜期，请及时安排套袋工作。', srcType:'growth', srcTypeText:'生长预警', history:['系统自动生成预警','已完成套袋'], threshold:{ current:'正常', limit:'-', trend:'适时进行' } });
-    out.push({ id:'FAR021', type:'farming', title:'病虫害预警：炭疽病预防提醒', level:'reminder', levelText:'提醒', location:'天水甘谷基地 - 地块B3', time:'2026-09-14 10:00', status:'completed', statusText:'已处理', desc:'当前气候条件适宜炭疽病发生，建议及时喷施保护性药剂。', srcType:'disease', srcTypeText:'病虫害预警', history:['系统自动生成预警','已喷施药剂'], threshold:{ current:'低风险', limit:'中风险', trend:'风险上升' } });
-    out.push({ id:'FAR022', type:'farming', title:'气象预警：干旱预警，建议灌溉', level:'important', levelText:'重要', location:'天水秦州基地 - 地块B5', time:'2026-09-13 16:00', status:'pending', statusText:'待处理', desc:'连续10天无有效降雨，土壤墒情不足。建议及时灌溉。', srcType:'weather', srcTypeText:'气象预警', history:['系统自动生成预警'], threshold:{ current:'25%', limit:'35%', trend:'持续下降' } });
-    out.push({ id:'FAR023', type:'farming', title:'土壤预警：地块D1盐分累积超标', level:'important', levelText:'重要', location:'龙口南山基地 - 地块D1', time:'2026-09-13 13:30', status:'processing', statusText:'处理中', desc:'土壤盐分含量达到3.5g/kg，超过安全阈值，建议进行冲洗改良。', srcType:'soil', srcTypeText:'土壤预警', history:['系统自动生成预警','正在冲洗'], threshold:{ current:'3.5g/kg', limit:'3.0g/kg', trend:'持续累积' } });
-
-    // 触发时间动态化：按原始时间先后顺序，均匀映射到"最近 30 天"内（今日为第 0 天）。
-    // 保证任意日期打开页面时，新用户看到的预警都是近期数据，而非固定的历史月份（PC-B-032）。
-    (function dynamicTimes(){
-      var order = out.slice().sort(function(a,b){
-        return String(b.time || '').localeCompare(String(a.time || ''));
-      });
-      var total = order.length;
-      var now = new Date();
-      order.forEach(function(item, i){
-        var daysAgo = total > 1 ? Math.round(i / (total - 1) * 29) : 0;
-        var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo);
-        var hh = String(item.time || '').substring(11, 13) || '10';
-        var mm = String(item.time || '').substring(14, 16) || '00';
-        item.time = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + hh + ':' + mm;
-      });
-      out.sort(function(a,b){ return String(b.time || '').localeCompare(String(a.time || '')); });
-    })();
-
-    // 补齐受理 / 闭环 / SLA 截止时间，保证首屏处置时长与超时率有真实样本
-    out.forEach(function(item){ hydrateTimes(item); });
-
-    return out;
-  })();
+  // 严格空库模式：预警记录不再内置演示数据，一律由后端 sf_alert_record 提供。
+  var DEFAULT_ALERTS = [];
 
   // ================================================================
   // 种子规则（预警设置页落库对象）
   // ================================================================
 
-  var DEFAULT_RULES = (function(){
-    function r(code, name, source, category, level, metric, op, value, value2, unit, scopeType, scopeIds, notify, users, status, desc) {
-      var sla = DEFAULT_SLA[level];
-      return {
-        id: code, code: code, name: name,
-        source: source, category: category,
-        level: level, levelText: levelTextOf(level),
-        threshold: { metric: metric, op: op, value: value, value2: value2, unit: unit },
-        scope: { type: scopeType, ids: scopeIds || [] },
-        notify: notify,
-        assignees: users || [],
-        respondSla: sla.respond, handleSla: sla.handle, escalateTo: sla.escalate,
-        status: status, statusText: status === 'active' ? '启用' : '停用',
-        desc: desc,
-        createTime: '2026-09-01 09:00', updatedAt: '2026-09-01 09:00'
-      };
-    }
-    var N_ALL = { internal: true, sms: false, push: false };
-    var N_SMS = { internal: true, sms: true, push: false };
-    var N_ALL3 = { internal: true, sms: true, push: true };
-    var out = [];
-    out.push(r('W001','低温霜冻预警','model','weather','urgent','temperature','lt',5,null,'°C','all',[],N_SMS,['惠加宁','黄忠坚'],'active','当温度低于5°C时触发预警，提醒做好防寒措施。'));
-    out.push(r('W002','设备离线预警','device','device','urgent','offlineMinutes','gt',10,null,'分钟','all',[],{internal:true,sms:false,push:true},['运维组'],'active','设备离线超过10分钟自动触发预警通知。'));
-    out.push(r('W003','农资库存告急','inventory','inventory','reminder','stock','lt',null,null,'件','all',[],N_ALL,['仓库管理员'],'active','农资库存低于安全线时自动预警。'));
-    out.push(r('W004','农事任务逾期','system','growth','reminder','overdueHours','gt',24,null,'小时','all',[],N_SMS,['任务负责人'],'inactive','农事任务逾期超过24小时触发预警。'));
-    out.push(r('W005','病虫害风险预警','model','pest','important','pestCount','gt',5,null,'头/叶','all',[],{internal:true,sms:false,push:true},['植保组'],'active','病虫害监测数据超过阈值时触发预警。'));
-    out.push(r('W006','土壤湿度异常','device','soil','notice','soilMoisture','lt',20,null,'%','all',[],N_ALL,['技术员'],'active','土壤湿度低于20%时触发预警。'));
-    out.push(r('W007','高温预警','model','weather','urgent','temperature','gt',35,null,'°C','all',[],N_ALL3,['全体员工'],'active','温度超过35°C时触发高温预警。'));
-    out.push(r('W008','设备故障预警','device','device','urgent','faultCode','gt',0,null,'码','all',[],{internal:true,sms:true,push:false},['运维组'],'active','设备检测到故障码时自动触发预警。'));
-    out.push(r('W009','肥料库存预警','inventory','inventory','reminder','stock','lt',50,null,'kg','all',[],N_ALL,['仓库管理员'],'active','肥料库存低于50kg时触发预警。'));
-    out.push(r('W010','暴雨预警','model','weather','important','rainfall','gt',50,null,'mm','all',[],N_SMS,['全体员工'],'active','预计降雨量超过50mm时触发暴雨预警。'));
-    out.push(r('W011','灌溉异常预警','device','device','reminder','flowDeviation','gt',10,null,'%','all',[],{internal:true,sms:false,push:true},['技术员'],'inactive','灌溉系统流量异常时触发预警。'));
-    out.push(r('W012','农药库存预警','inventory','inventory','reminder','stock','lt',null,null,'件','all',[],N_ALL,['仓库管理员'],'active','农药库存低于安全线时触发预警。'));
-    out.push(r('W013','大风预警','model','weather','urgent','windSpeed','gt',15,null,'m/s','all',[],N_ALL3,['全体员工'],'active','风速超过15m/s时触发大风预警。'));
-    out.push(r('W014','设备维护提醒','device','device','notice','runtimeHours','gt',5000,null,'h','all',[],N_ALL,['运维组'],'active','设备运行时长超过5000小时提醒维护。'));
-    out.push(r('W015','授粉期提醒','system','growth','notice','phenologyStage','eq',1,null,'期','all',[],N_SMS,['技术员'],'active','苹果花期自动提醒授粉。'));
-    out.push(r('W016','收获期提醒','system','growth','notice','maturity','gt',90,null,'%','all',[],N_SMS,['采摘组'],'active','果实成熟度超过90%时提醒收获。'));
-    out.push(r('W017','土壤肥力预警','device','soil','reminder','soilNutrient','lt',100,null,'mg/kg','all',[],N_ALL,['技术员'],'active','土壤N/P/K含量低于阈值时预警。'));
-    out.push(r('W018','冰雹预警','model','weather','urgent','radarEcho','gt',35,null,'dBZ','all',[],N_ALL3,['全体员工'],'active','雷达检测到冰雹回波时触发预警。'));
-    out.push(r('W019','包装箱库存预警','inventory','inventory','notice','stock','lt',1000,null,'个','all',[],N_ALL,['仓库管理员'],'inactive','包装箱库存低于1000个时预警。'));
-    out.push(r('W020','温湿度异常预警','device','environment','reminder','tempHumidity','gt',0,null,'异常','all',[],{internal:true,sms:false,push:true},['技术员'],'active','温湿度超出正常范围时预警。'));
-    out.push(r('W021','鸟害预警','system','pest','notice','birdCount','gt',0,null,'只','all',[],N_ALL,['植保组'],'active','鸟害监测设备触发时预警。'));
-    out.push(r('W022','雷电预警','model','weather','urgent','lightning','gt',0,null,'次','all',[],N_ALL3,['全体员工'],'active','检测到雷电活动时触发预警。'));
-    out.push(r('W023','仓储温度预警','device','environment','important','temperature','gt',25,null,'°C','all',[],{internal:true,sms:true,push:false},['仓库管理员'],'active','仓储温度超过25°C时触发预警。'));
-    out.push(r('W024','资质证书到期预警','cert','quality','important','daysToExpire','lt',90,null,'天','all',[],N_SMS,['质量部','行政部'],'active','企业资质或批次凭证距到期日不足90天时触发预警。'));
-    out.push(r('W025','资质证书过期预警','cert','quality','urgent','daysToExpire','lt',0,null,'天','all',[],N_ALL3,['质量部','行政部'],'active','企业资质或批次凭证已过有效期时触发紧急预警。'));
-    return out;
-  })();
+  // 严格空库模式：预警规则不再内置演示数据，一律由后端 sf_alert_rule 提供。
+  var DEFAULT_RULES = [];
 
   // ================================================================
   // 持久化

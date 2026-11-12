@@ -321,10 +321,10 @@
      * 挂牌 PNG 缓存的容量治理
      * ------------------------------------------------------------
      * 为什么要限流：Canvas 生成的挂牌以 base64 dataURL（约体积的 4/3）
-     * 完整存入 localStorage，而 localStorage 单域配额仅约 5MB，
-     * 一张挂牌 50~200KB，几十条就会写满并触发 QuotaExceededError，
-     * 之后所有 localStorage 写入（含农事记录、挂牌元数据）都会失败。
-     * 长期方案：挂牌 PNG 改存对象存储/文件服务，localStorage 只留 URL。
+     * 完整存入 sessionStorage（会话级缓存，业务数据已走后端，不落本地业务键），
+     * 而 sessionStorage 单域配额仅约 5MB，一张挂牌 50~200KB，
+     * 几十条就会写满并触发 QuotaExceededError，之后所有本地写入都会失败。
+     * 长期方案：挂牌 PNG 改存对象存储/文件服务，本地只留 URL。
      * 当前过渡策略：
      *   1) 单条上限 300KB，超限只留元数据（png 置空，skipped=true）
      *   2) 总条数上限最近 10 条，新的在前
@@ -341,7 +341,7 @@
     // 读取历史挂牌 PNG 缓存，损坏数据按空数组处理，绝不让页面崩溃
     function readPngCache() {
       try {
-        var raw = localStorage.getItem(PNG_STORE_KEY);
+        var raw = sessionStorage.getItem(PNG_STORE_KEY);
         if (!raw) return [];
         var v = JSON.parse(raw);
         return Array.isArray(v) ? v : [];
@@ -353,7 +353,7 @@
     // 读取挂牌归档清单（仅元数据）
     function readTagArchive() {
       try {
-        var raw = localStorage.getItem(PNG_ARCHIVE_KEY);
+        var raw = sessionStorage.getItem(PNG_ARCHIVE_KEY);
         if (!raw) return [];
         var v = JSON.parse(raw);
         return Array.isArray(v) ? v : [];
@@ -376,7 +376,7 @@
       var list = readTagArchive();
       list.unshift(entry);
       if (list.length > ARCHIVE_MAX_COUNT) list = list.slice(0, ARCHIVE_MAX_COUNT);
-      try { localStorage.setItem(PNG_ARCHIVE_KEY, JSON.stringify(list)); } catch (e) {}
+      try { sessionStorage.setItem(PNG_ARCHIVE_KEY, JSON.stringify(list)); } catch (e) {}
     }
 
     // 写入挂牌 PNG 缓存（带单条上限、条数上限与配额兜底）
@@ -394,7 +394,7 @@
       if (record.skipped) archiveTagRecord(record, '单张过大');
 
       try {
-        localStorage.setItem(PNG_STORE_KEY, JSON.stringify(list));
+        sessionStorage.setItem(PNG_STORE_KEY, JSON.stringify(list));
         return true;
       } catch (e) {
         // 配额已满：清空所有 base64 图片、只保留元数据后重试一次
@@ -405,7 +405,7 @@
               png: '', time: it.time, size: it.size, skipped: true
             };
           });
-          localStorage.setItem(PNG_STORE_KEY, JSON.stringify(metaOnly));
+          sessionStorage.setItem(PNG_STORE_KEY, JSON.stringify(metaOnly));
           MobileStore.toast('存储空间不足，已清除历史挂牌图片，请及时下载保存', 'warning');
           return true;
         } catch (e2) {
@@ -491,13 +491,12 @@
       if (el) el.addEventListener('input', updatePreview);
     });
     renderTagRecords();
-    // 跨标签页同步：归档清单或挂牌记录变化时刷新「图片已归档」标识
-    window.addEventListener('storage', function (e) {
-      if (!e || !e.key) return;
-      if (e.key === PNG_ARCHIVE_KEY || (window.MobileStore && e.key === MobileStore.KEYS.adoptionTag)) {
-        renderTagRecords();
-      }
-    });
+    // 挂牌记录变化时刷新「图片已归档」标识（订阅内存镜像，替代跨标签页 storage 事件）
+    if (window.MobileStore && typeof MobileStore.subscribe === 'function') {
+      MobileStore.subscribe(function (reason) {
+        if (reason === MobileStore.KEYS.adoptionTag) renderTagRecords();
+      });
+    }
   </script>
 </body>
 </html>

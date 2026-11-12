@@ -230,7 +230,7 @@
       <div class="form-row">
         <div class="form-field">
           <label>姓名<span style="color:var(--error);">*</span></label>
-          <input type="text" id="editName" placeholder="如 张建国">
+          <input type="text" id="editName" placeholder="请输入姓名">
         </div>
         <div class="form-field">
           <label>手机号<span style="color:var(--error);">*</span></label>
@@ -280,10 +280,11 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mobile-ops-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 /* ============================================================
  * 作业人员账号（移动端运营 · 用户服务）
- * 数据源：MobileOpsStore / localStorage['mb_staff_accounts']
+ * 严格空库模式：数据一律来自后端 API（sf_mb_staff_account），页面不再播种演示账号
  *   消费方 = 移动端 mb_login.html（登录校验 / 微信登录手机号匹配）
  *            后台 mb_expert_reply.html（专家名录与指派下拉）
  *   字段：{ username, pwdHash, name, role, phone, base, status,
@@ -291,30 +292,73 @@
  *   密码只保存 SHA-256 摘要，不落明文。
  * ============================================================ */
 
-/* 与移动端 mb_login.html 内置演示账号保持一致（仅存摘要） */
-var DEFAULT_STAFF = [
-  { username: 'demo',         pwdHash: MobileOpsStore.hashPwd('demo123'),  name: '演示用户',   role: '访客',   phone: '13800000001', base: '天水麦积区基地', status: 'active',   isExpert: false },
-  { username: 'zhangjianguo', pwdHash: MobileOpsStore.hashPwd('123456'),   name: '张建国',     role: '果农',   phone: '13800000002', base: '天水麦积区基地', status: 'active',   isExpert: false },
-  { username: 'admin',        pwdHash: MobileOpsStore.hashPwd('admin123'), name: '系统管理员', role: '管理员', phone: '13800000000', base: '天水麦积区基地', status: 'active',   isExpert: true, expertTitle: '苹果栽培 / 病虫害防治' }
-];
+var STAFF_RESOURCE = 'mb_staff_account';
+/* 账号缓存：由 loadStaff() 从后端 API 异步填充，页面不再读写 localStorage 播种 */
+let staffData = [];
+
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapStaffRow(row) {
+  return {
+    username: row.account || '',
+    pwdHash: row.password || '',
+    name: row.real_name || '',
+    role: row.role || '果农',
+    phone: row.phone || '',
+    base: '',
+    status: row.status || 'active',
+    isExpert: !!row.is_expert,
+    expertTitle: row.expertise || '',
+    createdAt: row.created_at || '',
+    lastLoginAt: ''
+  };
+}
+
+/* 表格状态提示：加载中 / 暂无数据 / 加载失败 */
+function setStaffStatus(text, isError) {
+  var body = document.getElementById('staffBody');
+  var empty = document.getElementById('emptyHint');
+  if (body) body.innerHTML = '';
+  if (empty) {
+    empty.style.display = 'block';
+    empty.textContent = text;
+    empty.style.color = isError ? 'var(--error, #d03050)' : '';
+  }
+  ['statTotal', 'statActive', 'statDisabled'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = '0';
+  });
+}
+
+/* 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示；不写 localStorage */
+function loadStaff() {
+  if (!window.Api) { setStaffStatus('数据加载失败：接口未就绪', true); return; }
+  setStaffStatus('正在加载数据...', false);
+  Api.get(STAFF_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      setStaffStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true);
+      return;
+    }
+    var list = (r.data && r.data.list) || [];
+    staffData = list.map(mapStaffRow);
+    if (!staffData.length) { setStaffStatus('暂无数据', false); return; }
+    renderTable();
+  }).catch(function (e) {
+    setStaffStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+  });
+}
 
 var ROLE_CLASS = { 管理员: 'admin', 果农: 'farmer', 访客: 'guest' };
 
 var editingUsername = null;
 
+/* 数据源：loadStaff() 从后端填充的内存缓存，不再读 localStorage / 播种 */
 function readStaff() {
-  var list = MobileOpsStore.list('staff');
-  if (!list.length) {
-    list = DEFAULT_STAFF.map(function (s) { return Object.assign({}, s); });
-    writeList(list);
-  }
-  return list;
+  return staffData;
 }
 
+/* 仅更新内存缓存，保证增删改交互即时生效；不写 localStorage */
 function writeList(list) {
-  if (!MobileOpsStore.writeList(MobileOpsStore.KEYS.staff, list)) {
-    Toast.error('本地存储写入失败，账号未能保存');
-  }
+  staffData = list;
 }
 
 function esc(s) {
@@ -358,6 +402,7 @@ function renderTable() {
   if (!list.length) {
     body.innerHTML = '';
     emptyHint.style.display = 'block';
+    emptyHint.textContent = readStaff().length ? '没有符合条件的账号，试试调整筛选条件' : '暂无数据';
     return;
   }
   emptyHint.style.display = 'none';
@@ -413,7 +458,7 @@ function openEdit(username) {
   document.getElementById('editStatus').value = s ? (s.status || 'active') : 'active';
   document.getElementById('editIsExpert').checked = !!(s && s.isExpert);
   document.getElementById('editExpertTitle').value = s ? (s.expertTitle || '') : '';
-  document.getElementById('editBase').value = s ? (s.base || '天水麦积区基地') : '天水麦积区基地';
+  document.getElementById('editBase').value = s ? (s.base || '') : '';
   document.getElementById('pwdRequired').style.display = s ? 'none' : '';
 
   document.getElementById('editModal').classList.add('show');
@@ -515,28 +560,28 @@ function removeStaff(username) {
   });
 }
 
+/* 严格空库模式：不再「恢复演示账号」，改为从数据库重新加载 */
 function resetToMobileDefault() {
   ConfirmDialog.show({
-    title: '恢复默认',
-    message: '将丢弃后台所有改动，恢复为移动端内置的 3 个演示账号。是否继续？',
+    title: '重新加载',
+    message: '将从数据库重新加载作业人员账号，未保存到后端的本地改动会丢失。是否继续？',
     onConfirm: function () {
-      MobileOpsStore.writeList(MobileOpsStore.KEYS.staff, []);
-      MobileOpsStore.audit('恢复默认账号', 'staff', '');
-      renderTable();
-      Toast.success('已恢复默认账号');
+      loadStaff();
+      Toast.success('已从数据库重新加载');
     }
   });
 }
 
 document.addEventListener('DOMContentLoaded', function () {
   MobileOpsStore.ready();
+  // 严格空库模式：账号一律由后端 API 拉取，不再播种演示账号
+  loadStaff();
   MobileOpsStore.subscribe(function (key) {
     if (key === MobileOpsStore.KEYS.staff) renderTable();
   });
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });
-  renderTable();
 });
 </script>
 </body>

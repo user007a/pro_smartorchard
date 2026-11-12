@@ -610,6 +610,7 @@ body{display:block;background:
 </div>
 
 <script src="../applefarm_backhand/js/shared/plot-master-seed.js"></script>
+<script src="../applefarm_backhand/js/shared/plot-store.js"></script>
 <script src="../applefarm_backhand/js/shared/model-store.js"></script>
 <script src="../applefarm_backhand/js/shared/device-store.js"></script>
 <script src="../applefarm_backhand/js/shared/production-store.js"></script>
@@ -654,38 +655,31 @@ body{display:block;background:
 /* ---------- 地理地块数据（约100亩示范基地，示意GIS，可替换为真实GeoJSON） ----------
    pts 为不规则田块多边形顶点（SVG 900×720 坐标系），
    边界参照 gis_base.jpg 实际地物：左侧冲沟林带、右上/右下斜向道路、中部竖向田间路。 */
-/* ---------- 地块数据（P0-01）：以 smartorchard_plot_master 为主数据，模型按 plotCode 关联 ----------
+/* ---------- 地块数据（P0-01）：以 PlotStore（sf_plot 台账）为主数据，模型按 plotCode 关联 ----------
    模型只提供 geometry / health / riskIndex / yieldL；名称、品种、面积、负责人、基地以台账为准。
-   台账未初始化时用 plot-master-seed.js 兜底播种，保证与后台地块管理同源。 */
-(function ensurePlotMaster(){
-  try{
-    var raw=localStorage.getItem('smartorchard_plot_master');
-    var arr=raw?JSON.parse(raw):null;
-    if((!arr||!arr.length)&&window.PLOT_MASTER_SEED&&PLOT_MASTER_SEED.length){
-      localStorage.setItem('smartorchard_plot_master',JSON.stringify(PLOT_MASTER_SEED));
-    }
-  }catch(e){}
-})();
-var PLOT_MASTER=(function(){
-  try{return JSON.parse(localStorage.getItem('smartorchard_plot_master')||'[]')||[];}catch(e){return [];}
-})();
+   台账统一由 /api/plot 提供，与后台地块管理同源。
+   台账为异步加载，加载完成后重算 PLOTS 并重绘地块图层。 */
+var PLOT_MASTER=(window.PlotStore?PlotStore.plots():[])||[];
 function masterOf(code){
   for(var i=0;i<PLOT_MASTER.length;i++){if(PLOT_MASTER[i].code===code)return PLOT_MASTER[i];}
   return null;
 }
 function lvlStatus(l){return l==='high'?'r':(l==='medium'?'w':'h');}
-var MODEL_PLOTS=(window.ModelStore?ModelStore.get('pest').lists.plots:[])||[];
-var PLOTS=MODEL_PLOTS.map(function(m){
-  var d=masterOf(m.plotCode)||{};
-  return {
-    id:m.id, plotCode:m.plotCode||'', pts:m.pts,
-    name:d.name||m.name, variety:d.variety||m.variety,
-    area:(typeof d.area==='number'&&d.area>0)?d.area:m.area,
-    base:d.enterprise||'', manager:d.manager||m.manager,
-    status:lvlStatus(m.level), level:m.level,
-    yieldL:m.yieldL, health:m.health, riskIndex:m.riskIndex, pestName:m.pest
-  };
-});
+function buildPlots(){
+  var modelPlots=(window.ModelStore?ModelStore.get('pest').lists.plots:[])||[];
+  return modelPlots.map(function(m){
+    var d=masterOf(m.plotCode)||{};
+    return {
+      id:m.id, plotCode:m.plotCode||'', pts:m.pts,
+      name:d.name||m.name, variety:d.variety||m.variety,
+      area:(typeof d.area==='number'&&d.area>0)?d.area:m.area,
+      base:d.base||'', manager:d.manager||m.manager,
+      status:lvlStatus(m.level), level:m.level,
+      yieldL:m.yieldL, health:m.health, riskIndex:m.riskIndex, pestName:m.pest
+    };
+  });
+}
+var PLOTS=buildPlots();
 var COL={h:'rgba(43,212,110,.26)',w:'rgba(242,179,61,.30)',r:'rgba(229,86,75,.28)'};
 var COLB={h:'#2bd46e',w:'#f5b53d',r:'#ff5d63'};
 var YCOLF={高:'rgba(56,214,255,.26)',中:'rgba(62,142,240,.26)',低:'rgba(30,78,143,.30)'};
@@ -706,24 +700,32 @@ function centroid(pts){
   return [x/pts.length,y/pts.length];
 }
 var STXT={h:'低风险',w:'中风险',r:'高风险'};
-PLOTS.forEach(function(p,i){
-  var g=el('g',{class:'plot','data-i':i,tabindex:'0',role:'button',
-    'aria-label':p.plotCode+' '+p.name+'，'+p.variety+'，'+p.area+'亩，'+STXT[p.status]+'，健康指数'+p.health+'，回车查看详情'});
-  var shape=el('polygon',{points:p.pts.map(function(q){return q[0]+','+q[1];}).join(' '),
-    fill:COL[p.status],stroke:COLB[p.status],'stroke-width':2,'stroke-linejoin':'round'});
-  var c=centroid(p.pts);
-  var t1=el('text',{x:c[0],y:c[1]-8,'text-anchor':'middle',class:'pid'});t1.textContent=p.plotCode+' '+p.name;
-  var t2=el('text',{x:c[0],y:c[1]+14,'text-anchor':'middle',class:'parea'});t2.textContent=p.area+'亩 · '+p.variety;
-  g.appendChild(shape);g.appendChild(t1);g.appendChild(t2);
-  g.addEventListener('click',function(){select(i);});
-  g.addEventListener('keydown',function(e){
-    if(e.key==='Enter'||e.key===' '||e.key==='Spacebar'){e.preventDefault();select(i);}
+/* 绘制地块图层（台账异步到达后可重绘） */
+function renderPlotLayer(){
+  plotEls.forEach(function(pe){pe.g.remove();});
+  plotEls=[];
+  PLOTS.forEach(function(p,i){
+    if(!p.pts||!p.pts.length) return;
+    var g=el('g',{class:'plot','data-i':i,tabindex:'0',role:'button',
+      'aria-label':p.plotCode+' '+p.name+'，'+p.variety+'，'+p.area+'亩，'+STXT[p.status]+'，健康指数'+p.health+'，回车查看详情'});
+    var shape=el('polygon',{points:p.pts.map(function(q){return q[0]+','+q[1];}).join(' '),
+      fill:COL[p.status],stroke:COLB[p.status],'stroke-width':2,'stroke-linejoin':'round'});
+    var c=centroid(p.pts);
+    var t1=el('text',{x:c[0],y:c[1]-8,'text-anchor':'middle',class:'pid'});t1.textContent=p.plotCode+' '+p.name;
+    var t2=el('text',{x:c[0],y:c[1]+14,'text-anchor':'middle',class:'parea'});t2.textContent=p.area+'亩 · '+p.variety;
+    g.appendChild(shape);g.appendChild(t1);g.appendChild(t2);
+    g.addEventListener('click',function(){select(i);});
+    g.addEventListener('keydown',function(e){
+      if(e.key==='Enter'||e.key===' '||e.key==='Spacebar'){e.preventDefault();select(i);}
+    });
+    map.appendChild(g);plotEls.push({g:g,shape:shape});
   });
-  map.appendChild(g);plotEls.push({g:g,shape:shape});
-});
+}
+renderPlotLayer();
 
 /* 地图标题与图例：按模型分级实时统计（P0-09） */
-(function(){
+/* 地图标题与图例：按模型分级实时统计（P0-09），台账到达后可重绘 */
+function renderMapLegend(){
   var cnt={low:0,medium:0,high:0},areaSum=0;
   PLOTS.forEach(function(p){cnt[p.level]=(cnt[p.level]||0)+1;areaSum+=p.area;});
   var ms=document.getElementById('mapSummary');
@@ -740,7 +742,8 @@ PLOTS.forEach(function(p,i){
       '<span><em style="background:#ff5d63"></em>高风险 '+cnt.high+'</span>'+
       (PLOT_MASTER.length>PLOTS.length?'<span style="color:var(--text-3)">未建模 '+(PLOT_MASTER.length-PLOTS.length)+'</span>':'');
   }
-})();
+}
+renderMapLegend();
 
 function applyLayer(layer){
   plotEls.forEach(function(pe,i){

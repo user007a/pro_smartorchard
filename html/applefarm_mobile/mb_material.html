@@ -428,19 +428,39 @@
     /* 兜底 HTML：后台农资库不可用时回填页面原有的 6 条硬编码展示，保证页面不空白 */
     var FALLBACK_HTML = '';
 
-    /* 读取后台农资库原始清单（保持后台顺序）；读不到/损坏返回空数组，绝不回写后台源 */
-    function readBackendMaterials() {
-      var raw = null;
-      try { raw = localStorage.getItem(BACKEND_STOCK_KEY); } catch (e) { raw = null; }
-      if (!raw) return [];
-      try {
-        var parsed = JSON.parse(raw);
-        if (!parsed || !Array.isArray(parsed.materials)) return [];
-        return parsed.materials.filter(function (m) { return m && m.code; });
-      } catch (e) {
-        /* 数据损坏时按空处理，页面走兜底默认值 */
-        return [];
+    /* 农资档案缓存：由 loadMaterials 从后端 sf_material_info 拉取后填充 */
+    var materialCache = null;
+
+    /* 从后端拉取农资档案（sf_material_info），映射为页面既有结构 */
+    function loadMaterials(cb) {
+      if (materialCache !== null) { cb(materialCache); return; }
+      if (window.Api && typeof Api.get === 'function') {
+        Api.get('material_info', { size: 500 }).then(function (res) {
+          var list = [];
+          if (res && res.ok && res.data && Array.isArray(res.data.list)) {
+            list = res.data.list.map(function (m) {
+              return {
+                code: m.material_code || '',
+                name: m.material_name || '',
+                stock: m.current_stock != null ? Number(m.current_stock) : 0,
+                unit: m.unit || '',
+                spec: m.spec || '',
+                type: m.type_name || m.material_type || ''
+              };
+            }).filter(function (m) { return m.code; });
+          }
+          materialCache = list;
+          cb(list);
+        }).catch(function () { materialCache = []; cb([]); });
+      } else {
+        materialCache = [];
+        cb([]);
       }
+    }
+
+    /* 读取农资档案缓存；未加载返回空数组 */
+    function readBackendMaterials() {
+      return materialCache || [];
     }
 
     /* 按后台编号读取单条农资（提交领用时以编号为准，与后台 code 对齐） */
@@ -618,18 +638,18 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-      /* 记录初始硬编码列表作为兜底快照，供后台数据缺失时还原 */
+      /* 记录初始硬编码列表作为兜底快照，供后端数据缺失时还原 */
       var box = document.getElementById('materialList');
       FALLBACK_HTML = box ? box.innerHTML : '';
-      renderMaterialList();
-      renderMyApplies();
-      /* 订阅：后台审批/库存调整写回后，列表与库存展示同步刷新 */
+      /* 先从后端拉取农资档案，再渲染（严格空库：档案来自数据库） */
+      loadMaterials(function () {
+        renderMaterialList();
+        renderMyApplies();
+      });
+      /* 订阅：审批/库存调整写回后，列表与库存展示同步刷新 */
       MobileStore.subscribe(function () {
         renderMyApplies();
         renderMaterialList();
-      });
-      window.addEventListener('storage', function (e) {
-        if (e.key === BACKEND_STOCK_KEY) renderMaterialList();
       });
     });
   </script>

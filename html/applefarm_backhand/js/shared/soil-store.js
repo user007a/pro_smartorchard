@@ -31,7 +31,8 @@
     var baseDir = selfEl.src.replace(/[^\/]*$/, '');
     var deps = [
       { name: 'Api', src: baseDir + '../../../common/js/api.js' },
-      { name: 'SoilMapper', src: baseDir + 'soil-mapper.js' }
+      { name: 'SoilMapper', src: baseDir + 'soil-mapper.js' },
+      { name: 'PlotStore', src: baseDir + 'plot-store.js' }
     ];
     var pending = deps.filter(function (d) { return !global[d.name]; });
     if (!pending.length) return Promise.resolve();
@@ -59,6 +60,7 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
+    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -66,8 +68,10 @@
       return api.get('soil/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
+        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
+        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = global.SoilMapper.toAggregate(res.data);
-        if (agg.tests && agg.tests.length) { inMemory = agg.tests; save(); notify('backend-loaded'); }
+        inMemory = agg.tests || []; save(); notify('backend-loaded');
       }
       return res;
     }).catch(function (err) {
@@ -101,37 +105,30 @@
       ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
   }
 
-  /* 地块主数据：与 enterprise_plot.html 共用同一 key */
-  var PLOT_MASTER_KEY = 'smartorchard_plot_master';
+  /* 地块主数据：统一来自 PlotStore（sf_plot），不再读本地缓存 */
   function plotOf(code) {
-    try {
-      var raw = localStorage.getItem(PLOT_MASTER_KEY);
-      var arr = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(arr)) {
-        var hit = arr.filter(function (p) { return p && p.code === code; })[0];
-        if (hit) return { code: hit.code, name: hit.name || '', base: hit.enterprise || '', area: num(hit.area) };
-      }
-    } catch (e) {}
+    var hit = global.PlotStore ? global.PlotStore.plotOf(code) : null;
+    if (hit) return { code: hit.code, name: hit.name || '', base: hit.base || '', area: num(hit.area) };
     return { code: code, name: '', base: '', area: 0 };
   }
 
   /* 种子：12 个已建模地块各一份 2026-10 检测报告，均值对齐 2.4% / 62 / 28 / 186 / 6.8 / 1240µS·cm⁻¹ */
-  var PLOT_CODES = ['D-001', 'D-002', 'D-003', 'D-004', 'D-005', 'D-006',
-    'D-007', 'D-008', 'D-009', 'D-010', 'D-011', 'D-012'];
-  var GM = [2.2, 2.5, 2.3, 2.6, 2.4, 2.4, 2.5, 2.3, 2.6, 2.4, 2.3, 2.3];
-  var AN = [58, 64, 60, 66, 62, 61, 65, 59, 63, 60, 64, 62];
-  var AP = [25, 30, 27, 31, 28, 26, 29, 27, 30, 28, 26, 29];
-  var AK = [178, 192, 182, 196, 186, 184, 190, 180, 194, 186, 182, 182];
-  var PH = [6.7, 6.9, 6.8, 6.9, 6.7, 6.8, 6.9, 6.7, 6.8, 6.9, 6.7, 6.8];
-  var EC = [1180, 1260, 1220, 1300, 1240, 1230, 1280, 1200, 1290, 1240, 1210, 1230];
+  /* 严格空库模式：不内置演示地块编号与检测数值，检测记录一律来自后端 /api/soil/aggregate */
+  var PLOT_CODES = [];
+  var GM = [];
+  var AN = [];
+  var AP = [];
+  var AK = [];
+  var PH = [];
+  var EC = [];
 
   function buildSeed() {
     return PLOT_CODES.map(function (code, i) {
       return {
         id: 'ST-2026-' + ('00' + (i + 1)).slice(-3),
         plotCode: code,
-        sampleDate: '2026-10-' + pad2(18 + (i % 5)),
-        lab: '天水市农技推广中心',
+        sampleDate: '',
+        lab: '',
         organicMatter: GM[i],
         availableN: AN[i],
         availableP: AP[i],
@@ -324,18 +321,21 @@
     latestByPlot: latestByPlot,
     latestOf: latestOf,
     summary: summary,
-    plots: function () { return PLOT_CODES.map(plotOf); },
+    plots: function () {
+      if (global.PlotStore) {
+        return global.PlotStore.plots().map(function (p) {
+          return { code: p.code, name: p.name || '', base: p.base || '', area: num(p.area) };
+        });
+      }
+      return PLOT_CODES.map(plotOf);
+    },
     /** 地块台账全量（供录入页下拉） */
     plotList: function () {
-      try {
-        var raw = localStorage.getItem(PLOT_MASTER_KEY);
-        var arr = raw ? JSON.parse(raw) : [];
-        if (Array.isArray(arr) && arr.length) {
-          return arr.map(function (p) {
-            return { code: p.code, name: p.name || '', base: p.enterprise || '', area: num(p.area) };
-          });
-        }
-      } catch (e) {}
+      if (global.PlotStore) {
+        return global.PlotStore.plots().map(function (p) {
+          return { code: p.code, name: p.name || '', base: p.base || '', area: num(p.area) };
+        });
+      }
       return PLOT_CODES.map(plotOf);
     },
     validate: validate,

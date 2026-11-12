@@ -9,6 +9,7 @@
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
   <style>
     /* 页面特定样式 - 使用设计系统变量 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: 66px; }
@@ -194,14 +195,6 @@
     let currentTab = 'all';
     let selectedFeedbackType = 'suggestion';
 
-    const FEEDBACK_KEY = 'smartorchard_feedbacks';
-    const SEED_FEEDBACKS = [
-      { id: 1, title: '建议增加病虫害识别功能', content: '希望能增加拍照识别病虫害的功能，这样果农可以快速判断果树问题。', type: 'suggestion', status: 'processing', createTime: '2026-09-21 10:30', source: 'mobile', operator: '张建国', operatorId: 'zhangjianguo', reply: '感谢您的建议，我们正在开发中，预计下月上线。' },
-      { id: 2, title: '数据同步异常', content: '农事记录同步到云端时经常失败，网络正常的情况下也会出现。', type: 'problem', status: 'pending', createTime: '2026-09-20 15:20', source: 'mobile', operator: '张建国', operatorId: 'zhangjianguo' },
-      { id: 3, title: '优化地块绘制', content: '画地块时希望能支持更精确的坐标定位。', type: 'suggestion', status: 'passed', createTime: '2026-09-19 09:15', source: 'mobile', operator: '李四', operatorId: 'lisi', reply: '已优化，在最新版本中已上线。' },
-      { id: 4, title: '施肥建议不准确', content: '系统给出的施肥建议和实际需求有差异。', type: 'problem', status: 'rejected', createTime: '2026-09-18 14:00', source: 'mobile', operator: '王五', operatorId: 'wangwu', rejectReason: '请提供具体地块信息，我们重新分析。' }
-    ];
-
     /* 当前登录作业人员，用于反馈/提问的来源留痕（后台「来源端 + 提交人」） */
     function currentOperator() {
       try {
@@ -212,19 +205,48 @@
       }
     }
 
-    // 反馈落库持久化，刷新后不丢失
-    const mockFeedbacks = (function() {
+    /* 纯在线数据源：反馈来自后端 sf_mb_feedback，经 MobileOpsStore 桥接。
+     * 将 store 字段（feedbackType/submitTime/submitter）映射回页面既有字段结构
+     * （type/createTime/operator），页面渲染逻辑保持不变。 */
+    function getFeedbacks() {
+      let rows = [];
       try {
-        var saved = JSON.parse(localStorage.getItem(FEEDBACK_KEY) || 'null');
-        if (Array.isArray(saved) && saved.length) return saved;
-      } catch (e) { /* 读取失败则用初始数据 */ }
-      return SEED_FEEDBACKS.slice();
-    })();
+        if (window.MobileOpsStore && typeof MobileOpsStore.list === 'function') {
+          rows = MobileOpsStore.list('feedbacks') || [];
+        }
+      } catch (e) { rows = []; }
+      return rows.map(function (f, i) {
+        return {
+          id: f.id != null && f.id !== '' ? f.id : ('fb_' + i),
+          title: f.title || '',
+          content: f.content || '',
+          type: f.feedbackType || f.type || 'suggestion',
+          status: f.status || 'pending',
+          createTime: f.submitTime || f.createTime || '',
+          source: f.source || 'mobile',
+          operator: f.submitter || f.operator || '',
+          operatorId: f.operatorId || '',
+          reply: f.reply || '',
+          rejectReason: f.rejectReason || ''
+        };
+      });
+    }
 
-    function saveFeedbacks() {
-      try {
-        localStorage.setItem(FEEDBACK_KEY, JSON.stringify(mockFeedbacks));
-      } catch (e) { /* 存储不可用时不阻断交互 */ }
+    /* 反馈写入后端（经 MobileOpsStore 全量桥接，字段映射为 mapper 约定） */
+    function persistFeedback(item) {
+      if (!window.MobileOpsStore || typeof MobileOpsStore.push !== 'function') return;
+      MobileOpsStore.push('feedbacks', {
+        title: item.title,
+        content: item.content,
+        feedbackType: item.type || 'suggestion',
+        submitter: item.operator || '',
+        operatorId: item.operatorId || '',
+        submitTime: item.createTime || MobileStore.fmtTime(Date.now()),
+        status: item.status || 'pending',
+        source: item.source || 'mobile',
+        reply: item.reply || null,
+        rejectReason: item.rejectReason || null
+      });
     }
 
     function navigateTo(page) {
@@ -244,10 +266,17 @@
           selectedFeedbackType = item.dataset.type;
         });
       });
+      /* 后端预加载完成后重渲染（严格空库：数据来自数据库） */
+      if (window.MobileOpsStore && MobileOpsStore.subscribe) {
+        MobileOpsStore.subscribe(function (key) {
+          if (!key || key === MobileOpsStore.KEYS.feedbacks) loadFeedbacks();
+        });
+      }
     }
 
     function loadFeedbacks() {
       const container = document.getElementById('feedbackList');
+      const mockFeedbacks = getFeedbacks();
       let filtered = mockFeedbacks;
       
       if (currentTab !== 'all') {
@@ -312,7 +341,7 @@
     }
 
     function showDetail(id) {
-      const feedback = mockFeedbacks.find(f => f.id === id);
+      const feedback = getFeedbacks().find(f => String(f.id) === String(id));
       if (!feedback) return;
       
       document.getElementById('detailTitle').textContent = feedback.title;
@@ -404,8 +433,7 @@
         appVersion: '1.0.0'
       };
       
-      mockFeedbacks.unshift(newFeedback);
-      saveFeedbacks();
+      persistFeedback(newFeedback);
       closeCreateModal();
       document.getElementById('successModalTitle').textContent = '提交成功';
       document.getElementById('successModal').classList.add('show');
@@ -414,7 +442,7 @@
     }
 
     function editFeedback(id) {
-      const feedback = mockFeedbacks.find(f => f.id === id);
+      const feedback = getFeedbacks().find(f => String(f.id) === String(id));
       if (!feedback) return;
       
       document.getElementById('feedbackTitle').value = feedback.title;
@@ -441,7 +469,7 @@
         feedback.status = 'pending';
         feedback.updatedAt = MobileStore.fmtTime(Date.now());
         delete feedback.rejectReason;
-        saveFeedbacks();
+        persistFeedback(feedback);
         
         submitFeedback = originalSubmit;
         closeCreateModal();

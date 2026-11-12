@@ -547,7 +547,7 @@
     let deletingId = null;
 
     /* ================= 采收人下拉多选 ================= */
-    const HARVESTER_OPTIONS = ['惠加宁','黄忠坚','徐水应','朱泉龙','陈小忠','廖春亮','李建明','李根','张才孙','刘全国','毛定卫','叶三东','周才贵','程名高','邓小华','周成友','危红卫','方超','曹红英','崔新根','超级用户'];
+    const HARVESTER_OPTIONS = [];
     const harvesterSelects = {};
     const MS_CHECK_SVG = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.2 5 8.7 9.5 3.5"/></svg>';
     const MS_CLOSE_SVG = '<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 2 8 8M8 2 2 8"/></svg>';
@@ -997,7 +997,7 @@
       fillGrades(document.getElementById('edit-level'), item.level);
       document.getElementById('edit-batch').value = item.batchNo || '';
       document.getElementById('edit-quantity').value = item.qty;
-      // 多选下拉：根据 harvesters 字符串（如「惠加宁、黄忠坚」）回填选中项
+      // 多选下拉：根据 harvesters 字符串（如「张三、李四」）回填选中项
       harvesterSelects['edit-harvesters'].setValues(splitHarvesters(item.harvesters));
       document.getElementById('edit-start').value = String(item.startTime || '').replace(' ', 'T');
       document.getElementById('edit-end').value = String(item.endTime || '').replace(' ', 'T');
@@ -1129,6 +1129,27 @@
     document.addEventListener('DOMContentLoaded', function() {
       initHarvesterSelect('add-harvesters');
       initHarvesterSelect('edit-harvesters');
+      // 从真实用户表加载采收人选项（严格空库：空库时为空）
+      if (typeof window.loadUserOptions === 'function') {
+        window.loadUserOptions().then(function (names) {
+          names.forEach(function (n) {
+            if (HARVESTER_OPTIONS.indexOf(n) === -1) HARVESTER_OPTIONS.push(n);
+          });
+          // 重建已初始化的采收人多选下拉选项
+          Object.keys(harvesterSelects).forEach(function (id) {
+            var inst = harvesterSelects[id];
+            if (!inst || !inst.optionsBox) return;
+            inst.optionsBox.innerHTML = HARVESTER_OPTIONS.map(function (name) {
+              return '<div class="ms-option" data-value="' + msEscape(name) + '">' +
+                '<span class="ms-check">' + MS_CHECK_SVG + '</span>' +
+                '<span class="ms-name">' + msEscape(name) + '</span>' +
+              '</div>';
+            }).join('') + '<div class="ms-empty">未找到匹配人员</div>';
+            inst.optionEls = Array.prototype.slice.call(inst.optionsBox.querySelectorAll('.ms-option'));
+            renderHarvesterSelect(inst);
+          });
+        });
+      }
       fillBaseFilter();
       fillPlans(document.getElementById('add-plan'), '');
       fillPlans(document.getElementById('edit-plan'), '');

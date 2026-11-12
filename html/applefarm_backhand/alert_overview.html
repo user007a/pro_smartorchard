@@ -129,8 +129,8 @@
                 </svg>
               </span>
             </div>
-            <div class="stat-value" id="kpiPending">0</div>
-            <div class="stat-footer">含紧急 <span id="kpiUrgent">0</span> 条 · 较昨日 <span id="kpiDelta">—</span></div>
+            <div class="stat-value" id="kpiPending">—</div>
+            <div class="stat-footer">含紧急 <span id="kpiUrgent">—</span> 条 · 较昨日 <span id="kpiDelta">—</span></div>
           </div>
           <div class="stat-card blue">
             <div class="stat-header">
@@ -142,8 +142,8 @@
                 </svg>
               </span>
             </div>
-            <div class="stat-value" id="kpiOpen">0</div>
-            <div class="stat-footer">待处理 <span id="kpiPending2">0</span> · 处理中 <span id="kpiProcessing">0</span> · 已转工单 <span id="kpiTransferred">0</span></div>
+            <div class="stat-value" id="kpiOpen">—</div>
+            <div class="stat-footer">待处理 <span id="kpiPending2">—</span> · 处理中 <span id="kpiProcessing">—</span> · 已转工单 <span id="kpiTransferred">—</span></div>
           </div>
           <div class="stat-card green">
             <div class="stat-header">
@@ -154,8 +154,8 @@
                 </svg>
               </span>
             </div>
-            <div class="stat-value" id="kpiRate">0%</div>
-            <div class="stat-footer">已闭环 <span id="kpiDone">0</span> / <span id="kpiTotal">0</span> · 已忽略 <span id="kpiIgnored">0</span></div>
+            <div class="stat-value" id="kpiRate">—</div>
+            <div class="stat-footer">已闭环 <span id="kpiDone">—</span> / <span id="kpiTotal">—</span> · 已忽略 <span id="kpiIgnored">—</span></div>
           </div>
           <div class="stat-card orange">
             <div class="stat-header">
@@ -222,11 +222,40 @@
   </div>
 </div>
 
+<script src="../common/js/api.js"></script>
 <script src="js/shared/alert-data.js"></script>
 <script>
   var LEVEL_LABEL = { urgent:'紧急', important:'重要', reminder:'提醒', notice:'通知' };
   var SOURCE_LABEL = { device:'设备预警', manual:'人工上报', model:'模型预警', inventory:'库存预警', system:'系统预警', cert:'资质到期预警' };
   var CATEGORY_LABEL = { device:'设备', pest:'病虫害', weather:'气象', soil:'土壤', growth:'生长', environment:'环境', yield:'产量', inventory:'库存', quality:'质量' };
+  /* ===== 严格空库模式：加载 / 空 / 错误态 =====
+   * 数据由已严格化的 AlertStore 后端桥接（alert/aggregate）提供，
+   * 页面层不重复取数：init 显示加载中，backend-loaded 后渲染真实数据。 */
+  var __alertReady = false;
+  function __alertState(kind, msg) {
+    var box = document.getElementById('topList');
+    if (box) box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px;">' +
+      (kind === 'loading' ? '加载中...' : ('数据加载失败：' + (msg || ''))) + '</div>';
+  }
+  function __alertBootstrap(onReady) {
+    __alertState('loading');
+    if (window.Api && Api.isLoggedIn && !Api.isLoggedIn()) {
+      __alertState('error', '未登录或登录已失效，请重新登录');
+      return;
+    }
+    if (window.AlertStore && typeof AlertStore.subscribe === 'function') {
+      AlertStore.subscribe(function (reason) {
+        if (reason === 'init') { __alertState('loading'); return; }
+        __alertReady = true;
+        onReady();
+      });
+    }
+    // 后端长时间无响应时给出错误态，避免一直停留在「加载中」
+    setTimeout(function () {
+      if (!__alertReady) __alertState('error', '无法获取预警数据，请检查网络或后端服务');
+    }, 8000);
+  }
+
 
   // 当前来源视角：'all' 或 AlertStore.SOURCES 的 key
   var currentSource = 'all';
@@ -333,7 +362,7 @@
     document.getElementById('topTitle').textContent = '待处理预警 Top 3';
     if (!top.length){
       document.getElementById('topList').innerHTML =
-        '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px;">当前无待处理预警</div>';
+        '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px;">暂无数据</div>';
       return;
     }
     var html = top.map(function(a){
@@ -503,13 +532,11 @@
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function(){
       initFromQuery();
-      refresh();
-      AlertStore.subscribe(refresh);
+      __alertBootstrap(refresh);
     });
   } else {
     initFromQuery();
-    refresh();
-    AlertStore.subscribe(refresh);
+    __alertBootstrap(refresh);
   }
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>

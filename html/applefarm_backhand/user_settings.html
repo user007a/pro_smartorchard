@@ -540,8 +540,8 @@
                 </svg>
               </div>
             </div>
-            <div class="stat-value">1,256<span class="unit">次</span></div>
-            <div class="stat-sub">近 30 天 86 次</div>
+            <div class="stat-value" id="statLoginTotal">—</div>
+            <div class="stat-sub" id="statLoginSub">—</div>
           </div>
           <div class="snzg-stat-card">
             <div class="stat-header">
@@ -552,8 +552,8 @@
                 </svg>
               </div>
             </div>
-            <div class="stat-value">21<span class="unit">天</span></div>
-            <div class="stat-sub">共 22 个工作日</div>
+            <div class="stat-value" id="statActiveDays">—</div>
+            <div class="stat-sub">—</div>
           </div>
           <div class="snzg-stat-card">
             <div class="stat-header">
@@ -564,8 +564,8 @@
                 </svg>
               </div>
             </div>
-            <div class="stat-value">28<span class="unit">项</span></div>
-            <div class="stat-sub">本月新增 6 项</div>
+            <div class="stat-value" id="statTasks">—</div>
+            <div class="stat-sub">—</div>
           </div>
           <div class="snzg-stat-card">
             <div class="stat-header">
@@ -576,8 +576,8 @@
                 </svg>
               </div>
             </div>
-            <div class="stat-value">32<span class="unit">次</span></div>
-            <div class="stat-sub">含 4 次配置变更</div>
+            <div class="stat-value" id="statOps">—</div>
+            <div class="stat-sub">—</div>
           </div>
         </div>
 
@@ -644,7 +644,7 @@
                 </div>
                 <div class="info-row">
                   <span class="info-label">账户创建时间</span>
-                  <span class="info-value">2026-09-15 10:30</span>
+                  <span class="info-value" id="accountCreatedAt">—</span>
                 </div>
                 <div class="info-row">
                   <span class="info-label">账户状态</span>
@@ -662,42 +662,43 @@
 </div>
 
 <script src="js/components/modal.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 (function () {
   'use strict';
 
   /* ============================================================
-   * 本地存储约定（与登录页 / 首页共用同一套 key）
+   * 严格空库模式：个人资料一律来自真实登录信息
    *   sessionStorage.snzg_user            当前登录用户（用户名、姓名、角色）
-   *   localStorage.snzg_user_accounts     账号覆盖表（密码 / 姓名 / 手机号等）
-   *   localStorage.snzg_avatar_<用户名>   头像（Base64）
-   *   localStorage.snzg_notification      通知偏好
-   *   localStorage.snzg_2fa               双重认证开关
+   *   localStorage.snzg_avatar_<用户名>   头像（Base64，纯 UI 偏好）
+   *   localStorage.snzg_notification      通知偏好（纯 UI 偏好）
+   *   localStorage.snzg_2fa               双重认证开关（纯 UI 偏好）
+   * 已移除写死账号密码表与 snzg_user_accounts 本地覆盖表：
+   * 密码校验走后端登录接口，资料扩展值仅存于当前页面内存，刷新即回到真实登录信息。
    * ============================================================ */
   var SESSION_KEY = 'snzg_user';
-  var ACCOUNT_KEY = 'snzg_user_accounts';
   var AVATAR_KEY_PREFIX = 'snzg_avatar_';
   var NOTIFY_KEY = 'snzg_notification';
   var TFA_KEY = 'snzg_2fa';
 
-  // 登录页内置账号的初始密码，仅用于「原密码」校验
-  var BUILTIN_ACCOUNTS = {
-    admin: 'admin123',
-    manager: 'manager123',
-    farmer: 'farmer123',
-    worker: 'worker123',
-    demo: 'demo123'
-  };
-
-  var DEFAULT_PROFILE = {
-    username: 'admin',
-    realName: '系统管理员',
-    role: '超级管理员',
-    base: '全部基地',
-    dept: '技术部',
-    position: '系统管理员',
-    bio: '负责系统日常维护和管理工作'
-  };
+  // 默认资料从真实登录信息派生，字段缺失即为空字符串，不写死任何人名 / 部门 / 职务 / 简介
+  var DEFAULT_PROFILE = (function () {
+    var u = null;
+    try { u = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch (e) {}
+    u = u || {};
+    return {
+      username: u.username || '',
+      realName: u.realName || '',
+      role: u.role || '',
+      base: u.base || '',
+      dept: u.dept || '',
+      position: u.position || '',
+      bio: u.bio || '',
+      gender: u.gender || '',
+      phone: u.phone || '',
+      email: u.email || ''
+    };
+  })();
 
   var DEFAULT_NOTIFY = {
     ntDevice: true,
@@ -709,16 +710,8 @@
     ntSms: false
   };
 
-  var ACTIVITY_LOGS = [
-    { time: '2026-10-22 09:15:32', type: 'login', module: '系统登录', content: '登录后台管理系统', ip: '192.168.1.100', result: '成功' },
-    { time: '2026-10-21 17:42:08', type: 'edit', module: '个人资料', content: '更新联系方式与个人简介', ip: '192.168.1.100', result: '成功' },
-    { time: '2026-10-21 10:05:31', type: 'view', module: '预警中心', content: '查看设备预警列表', ip: '192.168.1.100', result: '成功' },
-    { time: '2026-10-20 16:20:45', type: 'edit', module: '账户安全', content: '修改登录密码', ip: '192.168.1.100', result: '成功' },
-    { time: '2026-10-20 08:31:12', type: 'login', module: '系统登录', content: '登录后台管理系统', ip: '116.24.18.77', result: '成功' },
-    { time: '2026-10-19 21:14:03', type: 'login', module: '系统登录', content: '异地登录尝试', ip: '116.24.18.77', result: '已拦截' },
-    { time: '2026-10-19 14:08:57', type: 'edit', module: '通知设置', content: '调整预警通知渠道', ip: '192.168.1.100', result: '成功' },
-    { time: '2026-10-18 11:26:40', type: 'export', module: '统计分析', content: '导出月度运营报表', ip: '192.168.1.100', result: '成功' }
-  ];
+  /* 严格空库模式：活动记录来自真实接口 operation_log，不再内置任何示例日志 */
+  var ACTIVITY_LOGS = [];
 
   var ACTIVITY_META = {
     login:  { text: '登录', tag: 'info' },
@@ -745,8 +738,11 @@
     var u = readJSON(sessionStorage, SESSION_KEY, null);
     return (u && u.username) ? u : { username: DEFAULT_PROFILE.username };
   }
+  // 资料扩展值仅存在于当前页面生命周期的内存镜像中：运行时编辑即时生效，
+  // 刷新后回到真实登录信息；绝不写任何本地账号覆盖表 / 假密码存储。
+  var profileOverrides = {};
   function accountMap() {
-    return readJSON(localStorage, ACCOUNT_KEY, {}) || {};
+    return profileOverrides;
   }
   function toast(msg, type) { Toast.show(msg, type || 'success'); }
 
@@ -786,20 +782,16 @@
     };
   }
 
-  // 在保留密码 / 停用状态的前提下合并档案字段
+  // 合并资料扩展字段（仅内存态，不落 localStorage）
   function patchAccount(username, patch) {
-    var map = accountMap();
-    var prev = map[username] || {};
+    var prev = profileOverrides[username] || {};
     var next = {};
-    if (prev.password !== undefined) next.password = prev.password;
-    if (prev.disabled !== undefined) next.disabled = prev.disabled;
-    if (prev.role !== undefined) next.role = prev.role;
+    Object.keys(prev).forEach(function (k) { next[k] = prev[k]; });
     Object.keys(patch).forEach(function (k) {
       if (patch[k] !== undefined) next[k] = patch[k];
     });
-    map[username] = next;
-    writeJSON(localStorage, ACCOUNT_KEY, map);
-    return map[username];
+    profileOverrides[username] = next;
+    return next;
   }
 
   function fillProfileForm() {
@@ -911,12 +903,6 @@
   }
 
   /* ---------------- 账户安全 ---------------- */
-  function currentPassword() {
-    var s = sessionUser();
-    var acc = accountMap()[s.username] || {};
-    return acc.password !== undefined ? acc.password : (BUILTIN_ACCOUNTS[s.username] || '');
-  }
-
   function renderSecurityInfo() {
     var p = profile();
     el('phoneDesc').textContent = p.phone ? ('已绑定：' + maskPhone(p.phone)) : '未绑定手机号，短信通知不可用';
@@ -932,14 +918,11 @@
       fields: [
         { name: 'oldPwd', label: '原密码', type: 'password', required: true, placeholder: '请输入当前登录密码' },
         { name: 'newPwd', label: '新密码', type: 'password', required: true, placeholder: '6-20 位，建议字母 + 数字组合',
-          hint: '修改成功后当前登录状态保持不变，下次登录请使用新密码。' },
+          hint: '原密码由后端登录接口校验；若后端暂不支持密码写入，将明确提示失败。' },
         { name: 'confirmPwd', label: '确认新密码', type: 'password', required: true, placeholder: '请再次输入新密码' }
       ],
       onSubmit: function (data) {
-        if (data.oldPwd !== currentPassword()) {
-          toast('原密码不正确', 'error');
-          return false;
-        }
+        if (!data.oldPwd) { toast('请输入原密码', 'warning'); return false; }
         if (!data.newPwd || data.newPwd.length < 6) {
           toast('新密码至少 6 位', 'warning');
           return false;
@@ -952,10 +935,35 @@
           toast('两次输入的新密码不一致', 'warning');
           return false;
         }
-        patchAccount(sessionUser().username, { password: data.newPwd });
-        el('pwdDesc').textContent = '当前密码强度：强 · 刚刚更新';
-        toast('密码修改成功');
-        return true;
+        var username = sessionUser().username;
+        if (!username) { toast('登录信息缺失，请重新登录', 'error'); return false; }
+
+        // 原密码校验走真实登录接口（MySQL + bcrypt），不再读任何写死密码 / 本地覆盖表
+        Api.login({ username: username, password: data.oldPwd }).then(function (loginRes) {
+          if (!loginRes || !loginRes.ok) { toast('原密码错误', 'error'); return; }
+          var userId = loginRes.data && loginRes.data.user && loginRes.data.user.id;
+          var tokenBackup = Api.getToken();
+          // 尝试通过后端写入新密码；sf_user.password 被通用 CRUD 排除且无专用接口，必然无法真正写入
+          Api.update('user', userId, { password: data.newPwd }).then(function (updRes) {
+            if (updRes && updRes.ok) {
+              // 万一后端将来支持：用新密码再登录一次做真实验证，绝不假装成功
+              Api.login({ username: username, password: data.newPwd }).then(function (verify) {
+                if (verify && verify.ok) {
+                  Modal.close();
+                  el('pwdDesc').textContent = '当前密码强度：强 · 刚刚更新';
+                  toast('密码修改成功');
+                } else {
+                  if (tokenBackup) Api.setToken(tokenBackup);
+                  toast('密码修改失败：后端暂不支持该操作', 'error');
+                }
+              }).catch(function () { toast('密码修改失败：后端暂不支持该操作', 'error'); });
+              return;
+            }
+            toast('密码修改失败：后端暂不支持该操作', 'error');
+          }).catch(function () { toast('密码修改失败：后端暂不支持该操作', 'error'); });
+        }).catch(function () { toast('原密码校验失败，请检查网络', 'error'); });
+        // 异步结果决定后续提示，期间保持弹窗，不假装成功
+        return false;
       }
     });
   }
@@ -1023,24 +1031,89 @@
   /* ---------------- 活动记录 ---------------- */
   function renderActivity() {
     var body = el('activityBody');
+    if (!ACTIVITY_LOGS.length) {
+      body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-tertiary);padding:32px;">暂无数据</td></tr>';
+      el('activityCount').textContent = '0 条';
+      el('lastLoginAt').textContent = '—';
+      el('lastLoginIp').textContent = '—';
+      el('statLoginTotal').textContent = '0';
+      el('statActiveDays').textContent = '0';
+      el('statTasks').textContent = '—';
+      el('statOps').textContent = '0';
+      el('statLoginSub').textContent = '暂无登录记录';
+      return;
+    }
     body.innerHTML = ACTIVITY_LOGS.map(function (log) {
       var meta = ACTIVITY_META[log.type] || { text: log.type, tag: 'disabled' };
-      var resultTag = log.result === '成功' ? 'success' : 'error';
+      var resultTag = log.result === '成功' ? 'success' : (log.result === '失败' ? 'error' : 'disabled');
       return '<tr>' +
         '<td>' + esc(log.time) + '</td>' +
         '<td><span class="status-tag ' + meta.tag + '">' + meta.text + '</span></td>' +
         '<td>' + esc(log.module) + '</td>' +
         '<td>' + esc(log.content) + '</td>' +
         '<td>' + esc(log.ip) + '</td>' +
-        '<td><span class="status-tag ' + resultTag + '">' + esc(log.result) + '</span></td>' +
+        '<td><span class="status-tag ' + resultTag + '">' + esc(log.result || '—') + '</span></td>' +
       '</tr>';
     }).join('');
     el('activityCount').textContent = ACTIVITY_LOGS.length + ' 条';
-    el('lastLoginAt').textContent = ACTIVITY_LOGS[0].time;
-    el('lastLoginIp').textContent = ACTIVITY_LOGS[0].ip;
+    var first = ACTIVITY_LOGS[0];
+    el('lastLoginAt').textContent = first.time || '—';
+    el('lastLoginIp').textContent = first.ip || '—';
+
+    /* 统计卡片全部基于真实日志计算，不写死任何数值 */
+    var loginCount = ACTIVITY_LOGS.filter(function (l) { return l.type === 'login'; }).length;
+    var now = new Date();
+    var monthKey = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    var monthLogs = ACTIVITY_LOGS.filter(function (l) { return String(l.time).slice(0, 7) === monthKey; });
+    var days = {};
+    monthLogs.forEach(function (l) { days[String(l.time).slice(0, 10)] = 1; });
+    el('statLoginTotal').textContent = String(loginCount);
+    el('statActiveDays').textContent = String(Object.keys(days).length);
+    el('statTasks').textContent = '—';   // 数据库无对应任务完成表，不造数据
+    el('statOps').textContent = String(monthLogs.length);
+    el('statLoginSub').textContent = '近 30 天 ' + ACTIVITY_LOGS.filter(function (l) {
+      return (Date.now() - new Date(String(l.time).replace(' ', 'T')).getTime()) <= 30 * 86400000;
+    }).length + ' 次';
+  }
+
+  function actionToType(action) {
+    var map = { '登录': 'login', '新增': 'add', '修改': 'edit', '编辑': 'edit', '删除': 'delete', '导出': 'export', '查看': 'view' };
+    return map[action] || 'view';
+  }
+
+  /* 严格空库模式：活动记录与账户创建时间均来自真实接口，无数据即空态 */
+  function loadActivity() {
+    el('activityBody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-tertiary);padding:32px;">加载中...</td></tr>';
+    Api.get('operation_log', { page: 1, size: 500, sort: 'id', order: 'desc' }).then(function (res) {
+      if (!res || !res.ok) {
+        el('activityBody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-tertiary);padding:32px;">数据加载失败：' + esc((res && res.message) || '请检查登录状态与网络') + '</td></tr>';
+        return;
+      }
+      ACTIVITY_LOGS = ((res.data && res.data.list) || []).map(function (r) {
+        return {
+          time: String(r.created_at || '').replace('T', ' ').slice(0, 19),
+          type: actionToType(r.action),
+          module: r.module || '',
+          content: r.detail || '',
+          ip: r.ip || '',
+          result: '—'   // 表无「结果」字段，不造「成功」等示例值
+        };
+      });
+      renderActivity();
+    }).catch(function (err) {
+      el('activityBody').innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-tertiary);padding:32px;">数据加载失败：' + esc((err && err.message) || '网络异常') + '</td></tr>';
+    });
+
+    /* 账户创建时间取真实 user 记录（空库下仅保留 admin） */
+    Api.get('user', { page: 1, size: 1 }).then(function (res) {
+      if (!res || !res.ok || !res.data || !res.data.list || !res.data.list.length) return;
+      var u = res.data.list[0];
+      if (u.created_at) el('accountCreatedAt').textContent = String(u.created_at).replace('T', ' ').slice(0, 16);
+    }).catch(function () { /* 保持 — */ });
   }
 
   function exportActivity() {
+    if (!ACTIVITY_LOGS.length) { toast('暂无数据可导出', 'warning'); return; }
     var headers = ['操作时间', '类型', '功能模块', '操作内容', 'IP地址', '结果'];
     var rows = ACTIVITY_LOGS.map(function (log) {
       var meta = ACTIVITY_META[log.type] || { text: log.type };
@@ -1078,7 +1151,7 @@
     fillProfileForm();
     renderSecurityInfo();
     fillNotificationForm();
-    renderActivity();
+    loadActivity();
   });
 
   window.switchTab = switchTab;

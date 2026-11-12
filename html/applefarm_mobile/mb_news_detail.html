@@ -262,16 +262,12 @@
       return n >= 10000 ? (Math.round(n / 1000) / 10) + 'w' : String(n);
     }
 
-    /* ---------- 数据读取 ---------- */
+    /* ---------- 数据读取（纯在线：资讯来自后端 sf_mb_news） ---------- */
     function readNews() {
       var list = [];
       try {
         if (window.MobileOpsStore && typeof MobileOpsStore.newsList === 'function') {
           list = MobileOpsStore.newsList({ publishedOnly: true }) || [];
-        } else {
-          var raw = localStorage.getItem(NEWS_KEY);
-          var parsed = raw ? JSON.parse(raw) : [];
-          list = Array.isArray(parsed) ? parsed : [];
         }
       } catch (e) {
         console.warn('[mb_news_detail] 读取资讯失败', e);
@@ -352,31 +348,11 @@
       renderNav(index);
     }
 
-    /* ---------- 阅读量（会话去重） ---------- */
+    /* ---------- 阅读量（会话去重，经 MobileOpsStore 写穿后端） ---------- */
     function increaseView(id) {
       if (window.MobileOpsStore && typeof MobileOpsStore.increaseNewsView === 'function') {
         return MobileOpsStore.increaseNewsView(id);
       }
-      // 无数据层时直接回写 localStorage
-      var flag = 'mb_news_read';
-      try {
-        var raw = sessionStorage.getItem(flag);
-        var parsed = raw ? JSON.parse(raw) : [];
-        var read = Array.isArray(parsed) ? parsed : [];
-        if (read.indexOf(String(id)) >= 0) return false;
-        read.push(String(id));
-        sessionStorage.setItem(flag, JSON.stringify(read.slice(-200)));
-      } catch (e) { /* 忽略配额错误 */ }
-      try {
-        var all = JSON.parse(localStorage.getItem(NEWS_KEY) || '[]');
-        for (var i = 0; i < all.length; i++) {
-          if (String(all[i].id) === String(id)) {
-            all[i].viewCount = (all[i].viewCount || 0) + 1;
-            localStorage.setItem(NEWS_KEY, JSON.stringify(all));
-            return true;
-          }
-        }
-      } catch (e) { /* 写入失败不阻断展示 */ }
       return false;
     }
 
@@ -424,7 +400,7 @@
     }
 
     /* ---------- 初始化 ---------- */
-    document.addEventListener('DOMContentLoaded', function () {
+    function boot() {
       var params = new URLSearchParams(window.location.search);
       currentId = params.get('id') || '';
 
@@ -455,6 +431,16 @@
           newsList[index].viewCount = (newsList[index].viewCount || 0) + 1;
           renderMeta(newsList[index]);
         }
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      boot();
+      /* 后端预加载完成后重渲染 */
+      if (window.MobileOpsStore && MobileOpsStore.subscribe) {
+        MobileOpsStore.subscribe(function (key) {
+          if (!key || key === MobileOpsStore.KEYS.news) boot();
+        });
       }
     });
   </script>

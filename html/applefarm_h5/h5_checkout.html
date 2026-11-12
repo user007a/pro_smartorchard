@@ -275,6 +275,7 @@
     </div>
   </div>
 
+  <script src="js/h5-data.js"></script>
   <script src="js/mall-coupons.js"></script>
   <script>
     function selectPayment(el) {
@@ -282,9 +283,16 @@
       el.classList.add('selected');
     }
 
+    /* ---------- 内存数据（来自后端，异步加载） ---------- */
+    var cartItems = [];       // 购物车（含未勾选）
+    var addressList = [];     // 收货地址
+    var checkoutDraft = null; // 首页加购草稿（sessionStorage 快照）
+
+    function readCart() { return cartItems; }
+    function readAddresses() { return addressList; }
+
     function renderAddress() {
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) { list = []; }
+      var list = addressList;
       if (!list.length) return;
       var def = list.filter(function(a) { return a.default; })[0] || list[0];
       var nameEl = document.getElementById('checkoutAddrName');
@@ -297,11 +305,6 @@
       }
     }
 
-    function readCart() {
-      try { return JSON.parse(localStorage.getItem('h5_cart') || '[]'); }
-      catch (e) { return []; }
-    }
-
     /* 优惠券规则来源：后台「商城管理 / 优惠券管理」维护的 mall_coupons
        （由 js/mall-coupons.js 提供，与购物车 h5_cart.html 共用同一份配置） */
     function calcDiscount(subtotal) {
@@ -311,7 +314,7 @@
     /* 积分抵扣：与购物车共用 h5_points_used（100 积分 = ¥1），避免两页口径漂移 */
     function pointsDeduct(subtotal) {
       var used = 0;
-      try { used = parseInt(localStorage.getItem('h5_points_used') || '0', 10); } catch (e) { used = 0; }
+      try { used = parseInt(sessionStorage.getItem('h5_points_used') || '0', 10); } catch (e) { used = 0; }
       if (isNaN(used) || used <= 0) return 0;
       return Math.min(Math.floor(used / 100), Math.max(0, subtotal));
     }
@@ -356,9 +359,9 @@
 
     /* 读取默认收货地址快照（供后台订单售后/对账使用） */
     function snapshotAddress() {
-      // 首页加购时会把当时的地址快照写入 h5_checkout_draft，24h 内优先沿用
+      // 首页加购时会把当时的地址快照写入 sessionStorage h5_checkout_draft，24h 内优先沿用
       try {
-        var draft = JSON.parse(localStorage.getItem('h5_checkout_draft') || 'null');
+        var draft = checkoutDraft;
         if (draft && draft.address && Date.now() - (Number(draft.ts) || 0) < 86400000) {
           return {
             name: draft.address.name || '', phone: draft.address.phone || '',
@@ -366,8 +369,7 @@
           };
         }
       } catch (e) { /* 忽略 */ }
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) { list = []; }
+      var list = addressList;
       if (!Array.isArray(list)) list = [];
       var def = list.filter(function (a) { return a && a.default; })[0] || list[0];
       if (!def) return { name: '刘友宝', phone: '15111480531', region: '湖南省长沙市', detail: '麓云路159号佳境小区15#1406' };
@@ -398,11 +400,8 @@
       };
       var res = (typeof MallStore !== 'undefined') ? MallStore.saveInvoice(inv) : null;
       if (res && res.ok) return;
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_invoices') || '[]'); } catch (e) { list = []; }
-      if (!Array.isArray(list)) list = [];
-      list.unshift(inv);
-      localStorage.setItem('h5_invoices', JSON.stringify(list));
+      // 兜底：直接走后端 sf_mall_invoice
+      if (typeof H5Data !== 'undefined' && H5Data.create) H5Data.create('invoice', inv);
     }
 
     /* 发票表单显隐：企业抬头才显示税号输入 */
@@ -513,7 +512,7 @@
       var subtotal = data.subtotal;
       var couponOff = couponCode ? round2(MallCoupons.calc(subtotal, couponCode)) : 0;
       var pointsOff = round2(pointsDeduct(subtotal));
-      var pointsUsed = (function () { try { return parseInt(localStorage.getItem('h5_points_used') || '0', 10) || 0; } catch (e) { return 0; } })();
+      var pointsUsed = (function () { try { return parseInt(sessionStorage.getItem('h5_points_used') || '0', 10) || 0; } catch (e) { return 0; } })();
       var order = {
         id: orderNo,
         no: orderNo,
@@ -544,50 +543,55 @@
       }
       order.adoptionOrders = adoptOrders;
       order.hasAdoption = adoptOrders.length > 0;
-      /* 落库必须原子化：任一步失败都要回滚并明确提示，禁止出现「提示成功但数据丢失」 */
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_orders') || '[]'); }
-      catch (e) { list = []; }
-      if (!Array.isArray(list)) list = [];
-      list.unshift(order);
-      try {
-        localStorage.setItem('h5_orders', JSON.stringify(list));
-      } catch (err) {
-        adoptOrders.forEach(function (no) { try { AdoptionStore.cancelOrder(no); } catch (e) {} });
-        showToast('订单保存失败（浏览器存储不可用），请检查隐私模式或清理空间后重试');
-        return;
-      }
-      if (needInvoice) { try { pushInvoiceApply(orderNo, data.total); } catch (e) {} }
-      /* 核销优惠券 + 会员累计：统一走 MallStore，后台券统计与大屏即时可见 */
-      if (typeof MallStore !== 'undefined') {
+      /* 落库走后端 sf_mall_order；失败回滚认养订单并明确提示 */
+      var saved = H5Data.create('order', order).then(function (res) {
+        if (!res || !res.ok) {
+          adoptOrders.forEach(function (no) { try { AdoptionStore.cancelOrder(no); } catch (e) {} });
+          showToast('订单保存失败：' + ((res && res.message) || '服务暂不可用'));
+          return;
+        }
+        if (needInvoice) { try { pushInvoiceApply(orderNo, data.total); } catch (e) {} }
+        /* 核销优惠券 + 会员累计：统一走 MallStore，后台券统计与大屏即时可见 */
+        if (typeof MallStore !== 'undefined') {
+          try {
+            if (couponCode) MallStore.consumeCoupon(couponCode, memberKey, orderNo);
+            if (member && pointsUsed > 0) {
+              MallStore.saveMember(Object.assign({}, member, {
+                points: Math.max(0, (Number(member.points) || 0) - pointsUsed),
+                lastOrderAt: order.createdAt
+              }));
+            } else if (member) {
+              MallStore.saveMember(Object.assign({}, member, { lastOrderAt: order.createdAt }));
+            }
+          } catch (e) { /* 统计回写失败不阻断下单 */ }
+        }
+        /* 清空已结算购物车项 + 会话草稿 */
+        cartItems.forEach(function (i) { if (i._id != null) H5Data.cart.remove(i._id); });
+        cartItems = [];
         try {
-          if (couponCode) MallStore.consumeCoupon(couponCode, memberKey, orderNo);
-          if (member && pointsUsed > 0) {
-            MallStore.saveMember(Object.assign({}, member, {
-              points: Math.max(0, (Number(member.points) || 0) - pointsUsed),
-              lastOrderAt: order.createdAt
-            }));
-          } else if (member) {
-            MallStore.saveMember(Object.assign({}, member, { lastOrderAt: order.createdAt }));
-          }
-        } catch (e) { /* 统计回写失败不阻断下单 */ }
-      }
-      try {
-        localStorage.removeItem('h5_cart');
-        localStorage.removeItem('h5_checkout_single');
-        localStorage.removeItem('h5_checkout_draft');
-        localStorage.removeItem('h5_points_used');
-        // 券码一次性使用，下单后清除，避免下次下单静默复用上次优惠
-        MallCoupons.clear();
-      } catch (e) {}
-      showToast('订单已生成：' + orderNo + '，使用' + payment +
-        (adoptOrders.length ? '，已锁定 ' + adoptOrders.length + ' 棵果树待支付' : '') +
-        (needInvoice ? '，已申请发票' : ''));
-      setTimeout(function() { window.location.href = 'h5_order.html?focus=' + orderNo; }, 1200);
+          sessionStorage.removeItem('h5_checkout_single');
+          sessionStorage.removeItem('h5_checkout_draft');
+          sessionStorage.removeItem('h5_points_used');
+          MallCoupons.clear();
+        } catch (e) {}
+        showToast('订单已生成：' + orderNo + '，使用' + payment +
+          (adoptOrders.length ? '，已锁定 ' + adoptOrders.length + ' 棵果树待支付' : '') +
+          (needInvoice ? '，已申请发票' : ''));
+        setTimeout(function() { window.location.href = 'h5_order.html?focus=' + orderNo; }, 1200);
+      });
+      return saved;
     }
 
-    renderAddress();
-    renderCheckout();
+    /* ---------- 初始化：异步拉取购物车 + 地址 + 草稿后渲染 ---------- */
+    H5Data.ready.then(function () {
+      return Promise.all([H5Data.cart.list(), H5Data.address.list()]);
+    }).then(function (res) {
+      cartItems = res[0] || [];
+      addressList = res[1] || [];
+      try { checkoutDraft = JSON.parse(sessionStorage.getItem('h5_checkout_draft') || 'null'); } catch (e) { checkoutDraft = null; }
+      renderAddress();
+      renderCheckout();
+    });
 
     function showToast(message) {
       var toast = document.createElement('div');

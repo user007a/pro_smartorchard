@@ -816,6 +816,7 @@
   <script src="js/mall-coupons.js"></script>
   <script src="js/mall-promotions.js"></script>
   <script src="js/h5-auth.js"></script>
+  <script src="js/h5-data.js"></script>
   <script>
     var currentQuantity = 1;
     var currentPrice = 68;
@@ -971,10 +972,11 @@
       el.dataset.method = method || '';
     }
 
+    /* 收货地址数据源：后端 sf_mall_address（内存 addressList，初始化时异步拉取） */
+    var addressList = [];
     /* 读取默认收货地址快照（供后台订单售后/对账使用） */
     function snapshotAddress() {
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) { list = []; }
+      var list = addressList;
       if (!Array.isArray(list)) list = [];
       var def = list.filter(function (a) { return a && a.default; })[0] || list[0];
       if (!def) return { name: '刘友宝', phone: '15111480531', region: '湖南省长沙市', detail: '麓云路159号佳境小区15#1406' };
@@ -990,9 +992,9 @@
         var payment = '微信支付';
         if (sel && sel.dataset && sel.dataset.method === 'alipay') payment = '支付宝';
         if (currentProductId) addToCart(currentProductId, currentQuantity);
-        // 首页仅加购，真正下单在结算页；这里把地址/券码快照随行携带，供 checkout 写入订单
+        // 首页仅加购，真正下单在结算页；这里把地址/券码快照随行携带（sessionStorage），供 checkout 写入订单
         try {
-          localStorage.setItem('h5_checkout_draft', JSON.stringify({
+          sessionStorage.setItem('h5_checkout_draft', JSON.stringify({
             address: snapshotAddress(),
             couponCode: (window.MallCoupons && MallCoupons.selected()) || '',
             invoice: needInvoice,
@@ -1008,10 +1010,9 @@
       }
     }
 
-    function readCart() {
-      try { return JSON.parse(localStorage.getItem('h5_cart') || '[]'); }
-      catch (e) { return []; }
-    }
+    /* 购物车数据源：后端 sf_mall_cart（内存 cartItems，初始化时异步拉取） */
+    var cartItems = [];
+    function readCart() { return cartItems; }
 
     function addToCart(productId, qty) {
       var p = findProduct(productId);
@@ -1026,11 +1027,18 @@
         found.qty = (Number(found.qty) || 1) + n;
         found.price = Number(p.price) || found.price;
         found.spec = MallProducts.specOf(p);
+        H5Data.cart.update(found);
       } else {
-        list.push({ id: productId, name: p.name, spec: MallProducts.specOf(p), desc: p.desc,
-          price: Number(p.price) || 0, qty: n, img: p.img, checked: true });
+        var item = { id: productId, name: p.name, spec: MallProducts.specOf(p), desc: p.desc,
+          price: Number(p.price) || 0, qty: n, img: p.img, checked: true };
+        H5Data.cart.add(item).then(function () {
+          return H5Data.cart.list();
+        }).then(function (rows) {
+          cartItems = rows || [];
+        });
+        list.push(item);
+        cartItems = list;
       }
-      localStorage.setItem('h5_cart', JSON.stringify(list));
     }
 
     function showToast(message) {
@@ -1045,6 +1053,13 @@
     document.head.appendChild(style);
 
     /* ========== 初始化：读取后台商品与活动清单 ========== */
+    H5Data.ready.then(function () {
+      return Promise.all([H5Data.cart.list(), H5Data.address.list()]);
+    }).then(function (res) {
+      cartItems = res[0] || [];
+      addressList = res[1] || [];
+    });
+
     MallProducts.ready.then(function () {
       renderHomeProducts();
       MallProducts.subscribe(renderHomeProducts);

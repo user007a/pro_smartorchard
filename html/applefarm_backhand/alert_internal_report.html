@@ -657,45 +657,45 @@
     <div class="modal-body" id="modalBody">
       <div class="report-content">
         <div class="report-header">
-          <div class="report-title" id="detailTitle">2026年9月20日预警日报</div>
+          <div class="report-title" id="detailTitle">—</div>
           <div class="report-meta">
-            <span id="detailTime">生成时间：2026-09-20 09:00</span>
-            <span id="detailAuthor">生成人：系统自动</span>
+            <span id="detailTime">生成时间：—</span>
+            <span id="detailAuthor">生成人：—</span>
           </div>
         </div>
         <div class="report-stats">
           <div class="stat-card">
-            <div class="stat-value" id="statDevice">12</div>
+            <div class="stat-value" id="statDevice">—</div>
             <div class="stat-label">设备预警</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value" id="statFarming">8</div>
+            <div class="stat-value" id="statFarming">—</div>
             <div class="stat-label">农事预警</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value" id="statUrgent">3</div>
+            <div class="stat-value" id="statUrgent">—</div>
             <div class="stat-label">紧急预警</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value" id="statRate">95%</div>
+            <div class="stat-value" id="statRate">—</div>
             <div class="stat-label">处理率</div>
           </div>
         </div>
         <div class="report-section">
           <div class="report-section-title">一、预警概述</div>
-          <div class="report-section-content" id="detailOverview">今日共收到20条预警信息，其中设备预警12条，农事预警8条。紧急级别预警3条，重要级别预警7条，提醒级别预警10条。整体处理率达到95%，较昨日提升2%。</div>
+          <div class="report-section-content" id="detailOverview">—</div>
         </div>
         <div class="report-section">
           <div class="report-section-title">二、设备预警详情</div>
-          <div class="report-section-content" id="detailDevice">今日设备预警主要集中在天水麦积区基地和天水秦州基地。其中水肥一体化设备离线预警2条，土壤湿度传感器异常预警3条，气象站设备离线预警1条。相关运维人员已及时响应处理。</div>
+          <div class="report-section-content" id="detailDevice">—</div>
         </div>
         <div class="report-section">
           <div class="report-section-title">三、农事预警详情</div>
-          <div class="report-section-content" id="detailFarming">农事预警方面，红蜘蛛虫害预警为最高优先级，已触发紧急级别。建议各基地密切关注虫害发展趋势，及时采取防治措施。此外，暴雨预警和大风预警也需要重点关注。</div>
+          <div class="report-section-content" id="detailFarming">—</div>
         </div>
         <div class="report-section">
           <div class="report-section-title">四、处理建议</div>
-          <div class="report-section-content" id="detailSuggestion">1. 针对红蜘蛛虫害预警，建议立即组织喷洒农药进行防治；2. 暴雨来临前做好果园排水准备；3. 大风天气检查加固防风设施；4. 加强设备巡检，确保设备正常运行。</div>
+          <div class="report-section-content" id="detailSuggestion">—</div>
         </div>
       </div>
     </div>
@@ -893,38 +893,72 @@
 
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="../common/js/api.js"></script>
 <script src="js/shared/alert-data.js"></script>
 <script>
-  // 预警内部报告数据源：统一来自 AlertStore（后端 sf_alert_report 表），不再使用 mock
-  function getReports() {
-    return (window.AlertStore && typeof window.AlertStore.reports === 'function')
-      ? window.AlertStore.reports()
-      : [];
-  }
-  let mockData = getReports();
+  /* 严格空库模式：内部报告一律来自后端 API（sf_alert_report），不再使用本地演示数据 */
+  var REPORT_RESOURCE = 'alert_report';
+  function getReports() { return mockData; }
+  let mockData = [];
 
-  let filteredData = [...mockData];
+  let filteredData = [];
   let currentReportId = null;
 
-  document.addEventListener('DOMContentLoaded', function() {
-    // 报告数据源：AlertStore.reports()（后端 sf_alert_report 表）
-    function renderReportList() {
-      mockData = getReports();
+  /* 数据库行(snake_case) → 页面渲染字段 */
+  function mapReportRow(row) {
+    return {
+      id: row.id,
+      title: row.report_name || '',
+      type: row.report_type || 'custom',
+      typeText: row.type_text || '自定义报告',
+      time: row.generate_time || '',
+      base: row.base_ids || '全部基地汇总',
+      author: row.generator || '',
+      statDevice: String(row.stat_device || 0),
+      statFarming: String(row.stat_farming || 0),
+      statUrgent: String(row.stat_urgent || 0),
+      statRate: row.stat_rate || '',
+      overview: row.overview || '',
+      deviceDetail: row.device_detail || '',
+      farmingDetail: row.farming_detail || '',
+      suggestion: row.suggestion || '',
+      content: row.content || ''
+    };
+  }
+
+  /* 表格状态提示：加载中 / 暂无数据 / 加载失败 */
+  function setReportStatus(text, isError) {
+    var tbody = document.getElementById('dataTableBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:' +
+      (isError ? 'var(--error, #d03050)' : 'var(--text-secondary, #6b7b6b)') + ';">' + text + '</td></tr>';
+    var pager = document.getElementById('pagination-container');
+    if (pager) pager.innerHTML = '';
+  }
+
+  /* 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示；不写 localStorage */
+  function loadReports() {
+    if (!window.Api) { setReportStatus('数据加载失败：接口未就绪', true); return; }
+    setReportStatus('正在加载数据...', false);
+    Api.get(REPORT_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+      if (!r || !r.ok) { setReportStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true); return; }
+      var list = (r.data && r.data.list) || [];
+      mockData = list.map(mapReportRow);
       filteredData = mockData.slice();
+      if (!mockData.length) { setReportStatus('暂无数据', false); return; }
       Pagination.init({
-        currentPage: 1,
-        pageSize: 10,
-        data: filteredData,
-        containerId: 'pagination-container',
-        tbodyId: 'dataTableBody',
+        currentPage: 1, pageSize: 10, data: filteredData,
+        containerId: 'pagination-container', tbodyId: 'dataTableBody',
         renderRow: renderRow
       });
-    }
-    renderReportList();
-    window.addEventListener('alertStoreChange', renderReportList);
+    }).catch(function (e) {
+      setReportStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+    });
+  }
 
-    // 种子报告统计一律由 AlertStore 实时汇总重算，消除与预警总览的口径差异
-    refreshSeedReportStats();
+  document.addEventListener('DOMContentLoaded', function() {
+    // 严格空库模式：报告数据异步从后端 API（sf_alert_report）取数
+    loadReports();
+    window.addEventListener('alertStoreChange', loadReports);
 
     document.addEventListener('click', function(e) {
       const btn = e.target.closest('.action-btn');
@@ -1055,9 +1089,7 @@
       }
       document.getElementById('deleteModal').classList.remove('show');
       showToast('报告删除成功', 'success');
-      mockData = getReports();
-      filteredData = [...mockData];
-      Pagination.updateData(filteredData);
+      loadReports();
     });
 
     document.getElementById('confirmDownload').addEventListener('click', function() {
@@ -1317,24 +1349,8 @@
     `;
   }
 
-  // 依据报告周期从 AlertStore 重算种子报告的统计与摘要（消除与总览口径不一致）
-  function refreshSeedReportStats() {
-    if (!window.AlertStore) return;
-    mockData.forEach(function(rpt){
-      var list = collectAlertsForReport(rpt.type, baseValueOf(rpt.base), rpt.startDate, rpt.endDate, rpt.time);
-      if (!list.length) return;
-      var stats = summarizeAlerts(list);
-      rpt.statDevice = String(stats.device);
-      rpt.statFarming = String(stats.farming);
-      rpt.statUrgent = String(stats.urgent);
-      rpt.statRate = stats.rate + '%';
-      rpt.overview = '本期共收到' + stats.total + '条预警信息，其中设备预警' + stats.device + '条，农事预警' + stats.farming +
-        '条；紧急级别' + stats.urgent + '条，已闭环' + stats.closed + '条，闭环率' + stats.rate + '%。';
-      rpt.deviceDetail = buildSourceSummary(list, 'device');
-      rpt.farmingDetail = buildSourceSummary(list, 'farming');
-      rpt.suggestion = buildSuggestion(list, stats);
-    });
-  }
+  // 严格空库模式：报告统计直接取后端字段，不再依赖 AlertStore 重算种子报告
+  function refreshSeedReportStats() { /* no-op：数据一律来自后端 API */ }
 
   // 基地中文名 → 下拉 value
   function baseValueOf(baseText) {
@@ -1425,10 +1441,7 @@
         suggestion: newReport.suggestion || ''
       });
     }
-    mockData = getReports();
-    filteredData = mockData.slice();
-    renderTable();
-    renderPagination();
+    loadReports();
     document.getElementById('generateModal').classList.remove('show');
     showToast('报告已生成：' + newReport.name, 'success');
   }

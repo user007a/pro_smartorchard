@@ -3,15 +3,32 @@
  * 包含模态框、分页、搜索等通用功能
  */
 
-// 人员下拉选项（系统设置中的用户列表）
-const USER_OPTIONS = [
-  '惠加宁', '黄忠坚', '徐水应', '朱泉龙', '陈小忠',
-  '廖春亮', '李建明', '李根', '张才孙', '刘全国',
-  '毛定卫', '叶三东', '周才贵', '程名高', '邓小华',
-  '周成友', '危红卫', '方超', '曹红英', '崔新根',
-  '超级用户'
-];
+// 人员下拉选项（严格空库模式：不再硬编码虚构人名，改为从真实用户表取数）
+const USER_OPTIONS = [];
 window.USER_OPTIONS = USER_OPTIONS;
+
+// 从真实用户表（sf_user）加载人员下拉选项，填充到 USER_OPTIONS
+function loadUserOptions() {
+  if (typeof window.Api !== 'object' && typeof window.Api !== 'function') return Promise.resolve([]);
+  if (!window.Api.get) return Promise.resolve([]);
+  return window.Api.get('user', { size: 500 }).then(function (res) {
+    var list = (res && res.data && res.data.list) || [];
+    var names = [];
+    list.forEach(function (u) {
+      var n = u && (u.real_name || u.username || u.name);
+      n = n == null ? '' : String(n).trim();
+      if (n && names.indexOf(n) === -1) names.push(n);
+    });
+    // 原地更新 USER_OPTIONS，保持 window.USER_OPTIONS 引用一致
+    USER_OPTIONS.length = 0;
+    names.forEach(function (n) { USER_OPTIONS.push(n); });
+    return names;
+  }).catch(function (e) {
+    console.warn('[common-functions] 加载用户列表失败', e);
+    return [];
+  });
+}
+window.loadUserOptions = loadUserOptions;
 
 // 生成人员下拉框 HTML（包含请选择占位项）
 function buildUserOptionsHtml(selectedValue) {

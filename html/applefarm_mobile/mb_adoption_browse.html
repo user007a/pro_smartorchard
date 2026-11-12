@@ -523,16 +523,37 @@
     }
 
     /* ============================================================
-     * 动态数据层：与后台 applefarm_backhand/adoption_browse.html 同源
-     *   adoption_browse_trees —— 在册展示果树（数组）
-     *     字段：treeNo, variety, varietyName, treeAge, price,
-     *           status(available/adopted/disabled), cameraId, openMonitor
-     *   adoption_guide —— 认养指南文案（对象）
-     *     字段：title, content, updatedAt
+     * 动态数据层（纯在线：后端 sf_adoption_tree）
+     *   sf_adoption_tree —— 在册展示果树
+     *     映射：treeNo←tree_code, variety, varietyName←variety_name,
+     *           treeAge←tree_age, price←year_fee,
+     *           status, cameraId←camera_id, openMonitor←open_scene
+     *   adoption_guide —— 认养指南文案：无后端表，保留页面硬编码文案
      * 读不到数据时整体回退到页面硬编码的 6 张卡片与指南文案
      * ============================================================ */
-    var ADOPTION_TREE_KEY  = 'adoption_browse_trees';
-    var ADOPTION_GUIDE_KEY = 'adoption_guide';
+    var treeCache = [];   // 展示果树列表（camelCase，来自 sf_adoption_tree）
+
+    // 从后端加载在册展示果树（未登录/无 Api 时保持空 → 走兜底）
+    function loadBrowseTrees() {
+      if (!window.Api || typeof window.Api.get !== 'function') return Promise.resolve(false);
+      return window.Api.get('adoption_tree', { size: 500 }).then(function (res) {
+        if (res && res.ok && res.data && Array.isArray(res.data.list)) {
+          treeCache = res.data.list.map(function (row) {
+            return {
+              treeNo: row.tree_code || '',
+              variety: row.variety || '',
+              varietyName: row.variety_name || '',
+              treeAge: row.tree_age != null ? row.tree_age : '',
+              price: row.year_fee != null ? row.year_fee : 0,
+              status: row.status || 'available',
+              cameraId: row.camera_id != null ? row.camera_id : null,
+              openMonitor: row.open_scene === 1 || row.open_scene === '1'
+            };
+          });
+        }
+        return true;
+      }).catch(function () { return false; });
+    }
 
     /* 品种代码 → 中文名 兜底映射（后台未给 varietyName 时使用） */
     var VARIETY_NAME_FALLBACK = {
@@ -562,19 +583,11 @@
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
       });
     }
-    function readLocalJSON(key) {
-      try {
-        var raw = localStorage.getItem(key);
-        if (!raw) return null;
-        return JSON.parse(raw);
-      } catch (e) { return null; }
-    }
-
     /* ---------- 果树卡片 ---------- */
     function readAdoptionTrees() {
-      var list = readLocalJSON(ADOPTION_TREE_KEY);
+      var list = treeCache;
       if (!list || !list.length) return null; /* 无数据 → 走兜底 */
-      /* 兼容后台尚未迁移的历史数据：hongfushi 实际指「花牛苹果」，读入时归一为 huaniu */
+      /* 兼容历史数据：hongfushi 实际指「花牛苹果」，读入时归一为 huaniu */
       list.forEach(function (t) { if (t && t.variety === 'hongfushi') t.variety = 'huaniu'; });
       return list;
     }
@@ -689,11 +702,10 @@
       return true;
     }
 
-    /* ---------- 认养指南文案 ---------- */
+    /* ---------- 认养指南文案 ----------
+     * 无后端表承载，始终返回 null → 保留页面硬编码指南文案 */
     function readAdoptionGuide() {
-      var g = readLocalJSON(ADOPTION_GUIDE_KEY);
-      if (!g || typeof g !== 'object' || !g.content) return null; /* 无数据 → 走兜底 */
-      return g;
+      return null;
     }
 
     /* 将纯文本指南解析为「小节标题 / 步骤 / 权益」结构，复用既有 class */
@@ -761,18 +773,6 @@
       return true;
     }
 
-    /* ---------- 跨标签页同步 ---------- */
-    function onAdoptionStorage(e) {
-      if (!e || !e.key) return;
-      if (e.key === ADOPTION_TREE_KEY) {
-        renderTreeCards();
-        renderVarietyTags();
-        applyVarietyFilter();
-      } else if (e.key === ADOPTION_GUIDE_KEY) {
-        renderAdoptionGuide();
-      }
-    }
-
     /* ---------- 搜索框（按当前卡片文案过滤，覆盖全部动态品种） ---------- */
     function bindSearch() {
       var el = document.querySelector('.search-input');
@@ -784,12 +784,17 @@
     }
 
     function initAdoptionBrowse() {
-      renderTreeCards();      /* 有数据则替换为动态卡片，否则保留硬编码 */
-      renderVarietyTags();    /* 有数据则按数据聚合品种标签，否则保留硬编码 */
-      applyVarietyFilter();   /* 按当前激活筛选恢复显隐 */
-      renderAdoptionGuide();  /* 有数据则替换指南文案 */
       bindSearch();
-      window.addEventListener('storage', onAdoptionStorage);
+      // 先渲染硬编码兜底，再异步加载后端果树后刷新
+      renderTreeCards();
+      renderVarietyTags();
+      applyVarietyFilter();
+      renderAdoptionGuide();
+      loadBrowseTrees().then(function () {
+        renderTreeCards();
+        renderVarietyTags();
+        applyVarietyFilter();
+      });
     }
 
     if (document.readyState === 'loading') {

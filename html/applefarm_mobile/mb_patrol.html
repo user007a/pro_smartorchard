@@ -610,7 +610,7 @@
 
     /* ---------- 打卡点数据源：mb_patrol_routes（后台「巡园路线配置」写入） ---------- */
     var ROUTE_KEY = 'mb_patrol_routes';
-    var BASE_KEY = 'mb_patrol_base';   // 当前选中基地（本机记忆，L-12）
+    var BASE_KEY = 'mb_patrol_base';   // 当前选中基地（会话记忆，L-12）
     var NEAR_THRESHOLD = 100;   // 米，点位未配置 nearRadius 时的默认就近范围
 
     /* 读不到路线数据时的硬编码兜底（保证页面功能不退化） */
@@ -637,14 +637,36 @@
       });
     }
 
-    /* 读取后台写入的路线列表；未写入 / 解析失败返回 null */
+    /* 路线缓存：由 fetchRoutes 从后端 sf_patrol_route 拉取后填充 */
+    var routeCache = null;
+
+    /* 从后端拉取启用的巡园路线，映射为页面既有结构 */
+    function fetchRoutes(cb) {
+      if (!window.Api || typeof Api.get !== 'function') { cb(routeCache); return; }
+      Api.get('patrol_route', { size: 500 }).then(function (res) {
+        var list = null;
+        if (res && res.ok && res.data && Array.isArray(res.data.list)) {
+          var mapped = res.data.list.map(function (r) {
+            var points = [];
+            try { points = r.points ? JSON.parse(r.points) : []; } catch (e) { points = []; }
+            return {
+              routeId: r.route_code,
+              routeName: r.route_name || '',
+              base: r.coverage || '',
+              enabled: r.enabled === 1 || r.enabled === true,
+              points: Array.isArray(points) ? points : []
+            };
+          }).filter(function (r) { return r && r.points && r.points.length; });
+          list = mapped.length ? mapped : null;
+        }
+        routeCache = list;
+        cb(list);
+      }).catch(function () { cb(routeCache); });
+    }
+
+    /* 读取路线列表；未拉取到返回 null */
     function readRoutesRaw() {
-      try {
-        var raw = localStorage.getItem(ROUTE_KEY);
-        if (!raw) return null;
-        var v = JSON.parse(raw);
-        return Array.isArray(v) ? v : null;
-      } catch (e) { return null; }
+      return routeCache;
     }
 
     /* 取第一条启用且有有效点位的路线（仅在路线未配置基地字段时兼容使用） */
@@ -658,11 +680,11 @@
 
     /* ---------- 基地与路线（L-12：巡园路线按基地隔离） ---------- */
     function readSavedBase() {
-      try { return localStorage.getItem(BASE_KEY) || ''; } catch (e) { return ''; }
+      try { return sessionStorage.getItem(BASE_KEY) || ''; } catch (e) { return ''; }
     }
 
     function saveBase(b) {
-      try { if (b) localStorage.setItem(BASE_KEY, b); } catch (e) { /* 忽略 */ }
+      try { if (b) sessionStorage.setItem(BASE_KEY, b); } catch (e) { /* 忽略 */ }
     }
 
     /* 从全部路线按 base 去重聚合基地（不限启用状态，便于用户看到完整可选项） */
@@ -1175,21 +1197,14 @@
       MobileStore.renderSyncBar(document.getElementById('syncBar'));
       document.getElementById('reportPhotoInput').addEventListener('change', function () { onReportPhotoPicked(this); });
 
-      loadCheckpoints();
-      renderBaseSelect();
-      updateRouteSubtitle();
-      renderCheckpoints();
+      // 先从后端拉取巡园路线，再渲染（严格空库：路线来自数据库）
+      fetchRoutes(function () {
+        loadCheckpoints();
+        renderBaseSelect();
+        updateRouteSubtitle();
+        renderCheckpoints();
+      });
       startTracking();
-    });
-
-    // 后台「巡园路线配置」改动后，跨标签页同步刷新
-    window.addEventListener('storage', function (e) {
-      if (!e || e.key !== ROUTE_KEY) return;
-      loadCheckpoints();
-      renderBaseSelect();
-      updateRouteSubtitle();
-      renderCheckpoints();
-      if (MobileStore.toast) MobileStore.toast('巡园路线已更新', 'info');
     });
 
     // 页面关闭时提示未完成打卡（按真实剩余数量）

@@ -1163,6 +1163,7 @@
 
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="../common/js/api.js"></script>
 <script src="js/shared/alert-data.js"></script>
 <script>
   // ================================================================
@@ -1183,6 +1184,38 @@
   const LEVEL_LABELS = { urgent: '紧急', important: '重要', reminder: '提醒', notice: '通知' };
   const NOTIFY_LABELS = { internal: '站内', sms: '短信', push: '推送' };
   const SCOPE_TEXT = { all: '全部预警', notice: '仅通知', reminder: '仅提醒' };
+  /* ===== 严格空库模式：加载 / 空 / 错误态 =====
+   * 数据由已严格化的 AlertStore 后端桥接（alert/aggregate）提供，
+   * 页面层不重复取数：init 显示加载中，backend-loaded 后渲染真实数据。 */
+  var __alertReady = false;
+  function __alertTbody(html) {
+    var tbody = document.getElementById('dataTableBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="99" style="text-align:center;padding:24px;color:var(--text-tertiary);">' + html + '</td></tr>';
+    var pg = document.getElementById('pagination-container');
+    if (pg) pg.innerHTML = '';
+  }
+  function __alertState(kind, msg) {
+    __alertTbody(kind === 'loading' ? '加载中...' : ('数据加载失败：' + (msg || '')));
+  }
+  function __alertBootstrap(onReady) {
+    __alertState('loading');
+    if (window.Api && Api.isLoggedIn && !Api.isLoggedIn()) {
+      __alertState('error', '未登录或登录已失效，请重新登录');
+      return;
+    }
+    if (window.AlertStore && typeof AlertStore.subscribe === 'function') {
+      AlertStore.subscribe(function (reason) {
+        if (reason === 'init') { __alertState('loading'); return; }
+        __alertReady = true;
+        onReady();
+      });
+    }
+    // 后端长时间无响应时给出错误态，避免一直停留在「加载中」
+    setTimeout(function () {
+      if (!__alertReady) __alertState('error', '无法获取预警数据，请检查网络或后端服务');
+    }, 8000);
+  }
+
 
   // SLA 默认值（与 AlertStore.DEFAULT_SLA 保持一致，用于「恢复默认」）
   const SLA_DEFAULTS = {
@@ -1312,6 +1345,15 @@
       containerId: 'pagination-container',
       tbodyId: 'dataTableBody',
       renderRow: renderRow
+    });
+
+    __alertBootstrap(function () {
+      filteredData = AlertStore.rules();
+      if (!filteredData.length) {
+        __alertTbody('暂无数据');
+      } else {
+        Pagination.updateData(filteredData);
+      }
     });
 
     document.getElementById('btnSaveSla').addEventListener('click', saveSlaConfig);

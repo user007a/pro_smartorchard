@@ -123,7 +123,7 @@
         <div class="page-subtitle">维护 H5 商城优惠券规则，购物车与结算页共用同一份券配置</div>
       </div>
       <div class="page-actions">
-        <button class="jg-btn" onclick="resetToH5Default()">恢复 H5 默认</button>
+        <button class="jg-btn" onclick="resetToH5Default()">刷新数据</button>
         <button class="jg-btn jg-btn-primary" onclick="openEdit()">新增优惠券</button>
       </div>
     </div>
@@ -198,7 +198,7 @@
           <tbody id="couponBody"></tbody>
         </table>
       </div>
-      <div id="emptyHint" class="empty-state" style="display:none;">暂无优惠券</div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无数据</div>
     </div>
   </main>
 </div>
@@ -305,48 +305,69 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mall-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 /* ============================================================
  * 优惠券管理（商城管理）
- * 数据源：localStorage['mall_coupons']
- *   消费方 = H5 h5_cart.html / h5_checkout.html（经 js/mall-coupons.js）
- *   字段：{ code, name, type, value, min, status, desc }
- *   type 枚举：cash 满减券 / percent 折扣券（value 为折数，9 = 9折）
+ * 严格空库模式：优惠券一律来自后端 API（sf_mall_coupon），不再使用本地演示数据/播种
  * ============================================================ */
+var COUPON_RESOURCE = 'mall_coupon';
 var COUPON_KEY = 'mall_coupons';
-
-/* 与 H5 js/mall-coupons.js 的 DEFAULT_COUPONS 保持一致 */
-var DEFAULT_COUPONS = [
-  { code: 'cash10',   name: '满100减10', type: 'cash',    value: 10, min: 100, status: 'on', desc: '订单满 100 元可用' },
-  { code: 'cash30',   name: '满200减30', type: 'cash',    value: 30, min: 200, status: 'on', desc: '订单满 200 元可用' },
-  { code: 'percent9', name: '9折优惠券', type: 'percent', value: 9,  min: 0,   status: 'on', desc: '无门槛，全场 9 折' }
-];
+var couponsData = [];
+var couponLoadState = 'loading';
+var couponLoadError = '';
 
 var TYPE_TEXT = { cash: '满减券', percent: '折扣券' };
 
 var editingCode = null;
 
-function readAll() {
-  try {
-    var raw = localStorage.getItem(COUPON_KEY);
-    if (!raw) return null;
-    var v = JSON.parse(raw);
-    return Array.isArray(v) && v.length ? v : null;
-  } catch (e) {
-    return null;
-  }
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapCouponRow(row) {
+  var skuIds = [];
+  try { skuIds = row.sku_ids ? JSON.parse(row.sku_ids) : []; } catch (e) { skuIds = []; }
+  if (!Array.isArray(skuIds)) skuIds = [];
+  return {
+    code: row.coupon_code || row.coupon_name || '',
+    name: row.coupon_name || '',
+    desc: row.desc || '',
+    type: row.coupon_type || 'cash',
+    value: Number(row.discount) || 0,
+    min: Number(row.threshold) || 0,
+    validFrom: String(row.valid_start || '').slice(0, 10),
+    validTo: String(row.valid_end || '').slice(0, 10),
+    totalQty: Number(row.total_count) || 0,
+    issuedQty: Number(row.issued_count) || 0,
+    usedQty: Number(row.used_count) || 0,
+    perUserLimit: Number(row.per_limit) || 0,
+    scope: row.scope || '',
+    skuIds: skuIds,
+    stackable: row.stackable === 1 || row.stackable === '1' || row.stackable === true,
+    receiveType: row.receive_type || '',
+    status: row.status === 'off' ? 'off' : 'on'
+  };
 }
 
-function readCoupons() {
-  var list = readAll();
-  if (!list) {
-    list = DEFAULT_COUPONS.map(function (c) { return Object.assign({}, c); });
-    writeList(list);
-  }
-  return typeof MallStore !== 'undefined' ? MallStore.coupons() : list;
+/* 异步取数：加载中 / 暂无数据 / 加载失败三态，不写 localStorage */
+function loadCoupons() {
+  if (!window.Api) { couponLoadState = 'error'; couponLoadError = '接口未就绪'; renderTable(); return; }
+  couponLoadState = 'loading'; couponLoadError = ''; renderTable();
+  Api.get(COUPON_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      couponLoadState = 'error'; couponLoadError = (r && r.message) || '请求异常';
+      couponsData = []; renderTable(); return;
+    }
+    couponsData = ((r.data && r.data.list) || []).map(mapCouponRow);
+    couponLoadState = 'ok'; renderTable();
+  }).catch(function (e) {
+    couponLoadState = 'error'; couponLoadError = (e && e.message) || '网络异常';
+    couponsData = []; renderTable();
+  });
 }
+
+function readCoupons() { return couponsData; }
 
 function writeList(list) {
+  couponsData = list;
   if (typeof MallStore !== 'undefined') {
     var ok = true;
     list.forEach(function (c) {
@@ -420,6 +441,14 @@ function filteredList() {
 }
 
 function renderTable() {
+  if (couponLoadState !== 'ok') {
+    var msg = couponLoadState === 'loading' ? '正在加载数据...' : ('数据加载失败：' + couponLoadError);
+    document.getElementById('couponBody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-secondary,#6b7b6b);">' + esc(msg) + '</td></tr>';
+    document.getElementById('emptyHint').style.display = 'none';
+    ['statTotal', 'statOn', 'statCash', 'statPercent', 'statIssued', 'statUsed'].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = '0'; });
+    var rate = document.getElementById('statRate'); if (rate) rate.textContent = '0.0%';
+    return;
+  }
   var list = filteredList();
   renderStats();
 
@@ -543,19 +572,15 @@ function submitEdit() {
     desc: document.getElementById('editDesc').value.trim()
   };
 
-  if (typeof MallStore !== 'undefined') {
-    var result = MallStore.saveCoupon(payload);
-    if (!result.ok) { Toast.warning(result.error || '优惠券保存失败'); return; }
-  } else {
-    if (editingCode) {
-      for (var k = 0; k < list.length; k++) {
-        if (list[k].code === editingCode) { list[k] = payload; break; }
-      }
-    } else {
-      list.push(payload);
-    }
-    if (!writeList(list)) return;
-  }
+  var item = Object.assign({
+    desc: '', validFrom: '', validTo: '', totalQty: 0, issuedQty: 0, usedQty: 0,
+    perUserLimit: 1, scope: 'all', skuIds: [], stackable: false, receiveType: 'public', status: 'on'
+  }, payload);
+  var idx = -1;
+  for (var m = 0; m < list.length; m++) { if (list[m].code === (editingCode || payload.code)) { idx = m; break; } }
+  if (idx >= 0) item = Object.assign({}, list[idx], item);
+  if (idx >= 0) list[idx] = item; else list.push(item);
+  if (!writeList(list)) return;
 
   closeEditModal();
   renderTable();
@@ -583,23 +608,22 @@ function removeCoupon(code) {
       if (typeof MallStore !== 'undefined') {
         var r = MallStore.removeCoupon(code);
         if (!r.ok) { Toast.error(r.error || '删除失败'); return; }
-      } else {
-        writeList(readCoupons().filter(function (c) { return c.code !== code; }));
       }
+      couponsData = couponsData.filter(function (c) { return c.code !== code; });
       renderTable();
       Toast.success('优惠券已删除');
     }
   });
 }
 
+/* 严格空库模式：不再写死默认券，改为从数据库重新加载 */
 function resetToH5Default() {
   ConfirmDialog.show({
-    title: '恢复默认',
-    message: '将丢弃后台所有改动，恢复为 H5 端内置的 3 张默认券。是否继续？',
+    title: '重新加载',
+    message: '重新从数据库加载优惠券？当前未保存的改动将被丢弃。',
     onConfirm: function () {
-      localStorage.removeItem(COUPON_KEY);
-      renderTable();
-      Toast.success('已恢复 H5 默认优惠券');
+      loadCoupons();
+      Toast.success('已重新加载优惠券');
     }
   });
 }
@@ -608,7 +632,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });
-  renderTable();
+  loadCoupons();
 });
 </script>
 </body>

@@ -43,6 +43,9 @@
   var backendLoadPromise = null;
   var persistTimer = null;
   var persistPending = null;
+  // 预加载竞态保护：记录「预加载请求在途期间」是否发生过本地写入，避免陈旧快照覆盖未推送的新增/编辑
+  var preloadInFlight = false;
+  var localWritesDuringPreload = 0;
 
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
@@ -60,6 +63,8 @@
   /** 从后端聚合接口拉取企业数据，成功后合并进内存并通知 */
   function preloadFromBackend() {
     if (backendLoadPromise) return backendLoadPromise;
+    preloadInFlight = true;
+    localWritesDuringPreload = 0;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
       if (!api || !api.isLoggedIn || !api.isLoggedIn()) return { ok: false, message: '未登录或依赖未就绪' };
@@ -67,12 +72,20 @@
     }).then(function (res) {
       if (res && res.ok && res.data) {
         var agg = global.EnterpriseMapper.toAggregate(res.data);
-        // 后端数据合并进 store 内存（保留 DEFAULT_DATA 里的派生/展示兜底字段）
-        memory = mergeDefaults(DEFAULT_DATA, backendAggToStore(agg));
-        backendReady = true;
-        global.EnterpriseStore._refs = res.data.refs || null;
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(memory)); } catch (e) { /* ignore */ }
-        broadcast('backend-sync');
+        // 竞态保护：若预加载请求在途期间用户做了本地增删改（如刚新增基地），
+        // 以本地数据为准，不要用页面加载时的陈旧快照覆盖，否则会「保存成功却看不到新增内容」。
+        if (localWritesDuringPreload > 0) {
+          backendReady = true;
+          global.EnterpriseStore._refs = res.data.refs || global.EnterpriseStore._refs;
+          // 不覆盖 memory / localStorage，本地变更稍后由 persistToBackend 推送到后端
+        } else {
+          // 后端数据合并进 store 内存（保留 DEFAULT_DATA 里的派生/展示兜底字段）
+          memory = mergeDefaults(emptyByShape(DEFAULT_DATA), backendAggToStore(agg));
+          backendReady = true;
+          global.EnterpriseStore._refs = res.data.refs || null;
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(memory)); } catch (e) { /* ignore */ }
+          broadcast('backend-sync');
+        }
       } else if (res && res._unauthorized) {
         backendReady = false;
       }
@@ -82,6 +95,7 @@
       backendReady = false;
       return { ok: false, message: err && err.message };
     }).finally(function () {
+      preloadInFlight = false;
       backendLoadPromise = null;
     });
     return backendLoadPromise;
@@ -89,7 +103,7 @@
 
   /** 把 mapper 产出的聚合对象映射回 store 的 DEFAULT_DATA 结构 */
   function backendAggToStore(agg) {
-    var out = clone(DEFAULT_DATA);
+    var out = emptyByShape(DEFAULT_DATA);
     if (agg.enterprise) {
       out.profile = {
         name: agg.enterprise.name || out.profile.name,
@@ -229,107 +243,76 @@
 
   var DEFAULT_DATA = {
     version: VERSION,
-    fiscalYear: '2026',
-    updatedAt: '2026-11-10',
+    fiscalYear: '',
+    updatedAt: '',
     caliber: {
       outputValue: '苹果产业产值口径（含未销售库存）',
       output: '2026 年苹果产量',
       baseArea: '对外展示口径，基地/地块台账补齐后自动对齐'
     },
     reference: {
-      enterpriseTotalOutputValue: 12860,
-      annualCapacity: 3600,
-      modelEstimate: 450
+      enterpriseTotalOutputValue: 0,
+      annualCapacity: 0,
+      modelEstimate: 0
     },
     profile: {
-      name: '天水花牛苹果（集团）有限责任公司',
-      brand: '数农智果',
-      location: '甘肃 · 天水 · 麦积区',
-      foundedDate: '2010-10-11',
-      positioning: '国家级苹果现代农业产业园',
-      vision: '数字赋能 · 绿色兴农'
+      name: '',
+      brand: '',
+      location: '',
+      foundedDate: '',
+      positioning: '',
+      vision: ''
     },
     operation: {
-      totalOutputValue: 2512,
-      totalOutput: 3260,
-      totalArea: 2450,
-      coreArea: 1650,
-      serviceHouseholds: 3860,
-      techManagedArea: 12000
+      totalOutputValue: 0,
+      totalOutput: 0,
+      totalArea: 0,
+      coreArea: 0,
+      serviceHouseholds: 0,
+      techManagedArea: 0
     },
-    certSeedCount: 10,
-    bases: [
-      { id: 'MJ', name: '麦积基地', area: 520, plots: 32, x: 300, y: 150, star: 1, baseStatus: 'active', address: '甘肃省天水市麦积区', managerName: '惠加宁', phone: '133-0791-2585', baseImages: [] },
-      { id: 'QZ', name: '秦州基地', area: 430, plots: 24, x: 424, y: 196, star: 0, baseStatus: 'active', address: '甘肃省天水市秦州区', managerName: '黄忠坚', phone: '139-7941-2180', baseImages: [] },
-      { id: 'QA', name: '秦安基地', area: 380, plots: 21, x: 216, y: 214, star: 0, baseStatus: 'active', address: '甘肃省天水市秦安县', managerName: '徐水应', phone: '138-7941-8637', baseImages: [] },
-      { id: 'GG', name: '甘谷基地', area: 310, plots: 17, x: 136, y: 250, star: 0, baseStatus: 'active', address: '甘肃省天水市甘谷县', managerName: '陈小忠', phone: '187-7941-7899', baseImages: [] },
-      { id: 'ZC', name: '张川基地', area: 240, plots: 13, x: 120, y: 140, star: 0, baseStatus: 'active', address: '甘肃省天水市张家川县', managerName: '朱泉龙', phone: '182-9645-2648', baseImages: [] },
-      { id: 'QS', name: '清水基地', area: 190, plots: 10, x: 576, y: 120, star: 0, baseStatus: 'active', address: '甘肃省天水市清水县', managerName: '廖春亮', phone: '137-6767-9075', baseImages: [] },
-      { id: 'LX', name: '陇西基地', area: 220, plots: 6, x: 722, y: 164, star: 0, baseStatus: 'active', address: '甘肃省定西市陇西县', managerName: '李建明', phone: '139-7043-2567', baseImages: [] },
-      { id: 'WS', name: '武山基地', area: 160, plots: 3, x: 474, y: 288, star: 0, baseStatus: 'active', address: '甘肃省天水市武山县', managerName: '李根', phone: '130-3058-7809', baseImages: [] }
-    ],
-    plotHealth: [
-      { k: '健康', v: 98, c: '#2bd46e' },
-      { k: '预警', v: 21, c: '#F2B33D' },
-      { k: '风险', v: 7, c: '#E5564B' }
-    ],
-    staff: [
-      { k: '管理', v: 18, c: '#38D6FF' },
-      { k: '技术', v: 42, c: '#2E8FE8' },
-      { k: '作业', v: 198, c: '#31C9E8' },
-      { k: '销售', v: 28, c: '#4E7FD6' }
-    ],
-    experts: [
-      { name: '贾福昌', title: '首席农业专家' },
-      { name: '李文清', title: '农业技术总监' },
-      { name: '王建国', title: '数字农业专家' },
-      { name: '张淑芬', title: '质量与品牌总监' }
-    ],
-    varieties: [
-      { k: '富士', v: 1826, p: 56, c: '#38D6FF' },
-      { k: '王林', v: 587, p: 18, c: '#2E8FE8' },
-      { k: '花牛', v: 456, p: 14, c: '#31C9E8' },
-      { k: '红星', v: 261, p: 8, c: '#4E7FD6' },
-      { k: '其他', v: 130, p: 4, c: '#8AA0BE' }
-    ],
-    value5: [['2022', 1580], ['2023', 1795], ['2024', 2040], ['2025', 2231], ['2026', 2512]],
-    yield5: [['2022', 2180], ['2023', 2460], ['2024', 2790], ['2025', 3010], ['2026', 3260]],
-    business: [
-      { name: '种植基地', icon: '🌿' },
-      { name: '贮藏加工', icon: '📦' },
-      { name: '品牌销售', icon: '🛒' },
-      { name: '农资服务', icon: '🧪' },
-      { name: '冷链物流', icon: '🚚' }
-    ],
-    timeline: [
-      { year: '2010', title: '公司成立', short: '麦积区注册成立' },
-      { year: '2012', title: '地理标志保护', short: '花牛苹果获保护' },
-      { year: '2016', title: '中国农发基金注资', short: '战略股东加入' },
-      { year: '2018', title: '“潘苹果”品牌发布', short: 'O2O 网络建立' },
-      { year: '2024', title: '国家级龙头企业', short: '8 基地 126 地块' },
-      { year: '2025', title: '首次出口马尔代夫', short: '品牌国际化', current: true }
-    ],
-    events: [
-      { date: '2026-09', text: '数据大屏升级，八大驾驶舱全线互通', hot: true },
-      { date: '2026-08', text: '区块链存证突破 10 万批次' },
-      { date: '2026-07', text: '果园认养业务上线一周年' },
-      { date: '2026-06', text: '苹果现代农业产业园二期投产' },
-      { date: '2026-05', text: '央视《乡村振兴》栏目专题报道' }
-    ],
+    certSeedCount: 0,
+    bases: [],
+    plotHealth: [],
+    staff: [],
+    experts: [],
+    varieties: [],
+    value5: [],
+    yield5: [],
+    business: [],
+    timeline: [],
+    events: [],
     outcomes: {
-      netProfit: 465,
-      netProfitYoy: 18.2,
-      adoptionRevenue: 291.58,
-      adoptionYoy: 24.5,
-      qoq: 6.8,
-      netRate: 18.5,
-      adoptionOrders: 1377,
-      renewRate: 76.4
+      netProfit: 0,
+      netProfitYoy: 0,
+      adoptionRevenue: 0,
+      adoptionYoy: 0,
+      qoq: 0,
+      netRate: 0,
+      adoptionOrders: 0,
+      renewRate: 0
     }
   };
 
   function clone(obj) {
     return JSON.parse(JSON.stringify(obj));
+  }
+
+  /* 严格空库模式：按 DEFAULT_DATA 的形状生成「全空」骨架。
+     数组清空、数值归零、字符串置空，只保留字段结构，避免页面在
+     空库下仍显示内置的演示记录 / 演示指标。 */
+  function emptyByShape(v) {
+    if (Array.isArray(v)) return [];
+    if (v && typeof v === 'object') {
+      var o = {};
+      for (var k in v) {
+        if (Object.prototype.hasOwnProperty.call(v, k)) o[k] = emptyByShape(v[k]);
+      }
+      return o;
+    }
+    if (typeof v === 'number') return 0;
+    if (typeof v === 'boolean') return false;
+    return v === null ? null : '';
   }
 
   function isObject(v) {
@@ -368,19 +351,19 @@
     var raw = null;
     try {
       raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return clone(DEFAULT_DATA);
+      if (!raw) return emptyByShape(DEFAULT_DATA);
       var parsed = JSON.parse(raw);
       if (!isObject(parsed)) throw new Error('invalid data');
-      var merged = mergeDefaults(DEFAULT_DATA, parsed);
+      var merged = mergeDefaults(emptyByShape(DEFAULT_DATA), parsed);
       /* 口径迁移：旧版认养营收/订单数（918 万 / 3260 单）与经营分析口径不一致，升级时重置 */
       if (parsed.version !== VERSION) {
-        merged.outcomes = clone(DEFAULT_DATA.outcomes);
+        merged.outcomes = emptyByShape(DEFAULT_DATA.outcomes);
         merged.version = VERSION;
       }
       return merged;
     } catch (e) {
       backupCorrupt(raw);
-      return clone(DEFAULT_DATA);
+      return emptyByShape(DEFAULT_DATA);
     }
   }
 
@@ -421,6 +404,8 @@
       return { ok: false, error: '本地存储写入失败，请检查浏览器存储空间或隐私模式' };
     }
     memory = next;
+    // 预加载请求在途期间发生的本地写入：标记计数，供其返回时跳过「陈旧快照覆盖」
+    if (preloadInFlight) localWritesDuringPreload++;
     // 后端持久化（防抖），登录态 + 依赖就绪才生效，失败静默回退本地缓存
     if (backendEnabled()) persistToBackend(next);
     broadcast(reason || 'update');
@@ -699,7 +684,7 @@
   }
 
   function reset() {
-    return persist(clone(DEFAULT_DATA), 'reset');
+    return persist(emptyByShape(DEFAULT_DATA), 'reset');
   }
 
   function subscribe(fn) {

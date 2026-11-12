@@ -836,16 +836,12 @@
 
     function typeLabel(type) { return TYPE_LABELS[type] || '未标注'; }
 
-    // 共享键 smartorchard_plots（画地块页经 MobileStore 写入）+ 兼容早期直接写 'plots' 的数据
+    // 新绘制地块来自后端 sf_plot（经 MobileStore 桥接，source=mobile 由画地块页写入）
     function getStoredPlots() {
       var arr = [];
       if (window.MobileStore) {
         arr = arr.concat(MobileStore.list(MobileStore.KEYS.plots));
       }
-      try {
-        var legacy = JSON.parse(localStorage.getItem('plots') || '[]');
-        if (Array.isArray(legacy)) arr = arr.concat(legacy);
-      } catch (e) { /* 忽略解析异常 */ }
       var seen = {}, out = [];
       arr.forEach(function (p, i) {
         if (!p) return;
@@ -918,6 +914,16 @@
 
     renderDrawnPlots();
     updateStats();
+
+    /* 后端预加载完成后重渲染新绘制地块（严格空库：数据来自数据库） */
+    if (window.MobileStore && MobileStore.subscribe) {
+      MobileStore.subscribe(function (key) {
+        if (!key || key === MobileStore.KEYS.plots) {
+          renderDrawnPlots();
+          updateStats();
+        }
+      });
+    }
 
     /* 从地图进入时直接定位并打开对应地块详情 */
     (function () {

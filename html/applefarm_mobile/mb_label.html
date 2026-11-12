@@ -167,18 +167,35 @@
     // 标签类型权威源：由后台「标签管理 - 标签类型」维护，读不到时回落到上面的 LABEL_TYPES 兜底
     var LABEL_TYPES_KEY = 'smartorchard_label_types';
 
-    /* 只读后台标签类型清单；无数据/损坏时回落到硬编码 LABEL_TYPES，绝不回写后台源 */
-    function readLabelTypes() {
-      try {
-        var raw = localStorage.getItem(LABEL_TYPES_KEY);
-        if (raw) {
-          var v = JSON.parse(raw);
-          if (Array.isArray(v) && v.length) {
-            return v.filter(function (t) { return t && t.name && t.enabled !== false; });
+    /* 标签类型缓存：由 loadLabelTypes 从后端 sf_label_type 拉取后填充 */
+    var labelTypesCache = null;
+
+    /* 从后端拉取标签类型（sf_label_type），映射为页面既有结构 */
+    function loadLabelTypes(cb) {
+      if (labelTypesCache !== null) { cb(labelTypesCache); return; }
+      if (window.Api && typeof Api.get === 'function') {
+        Api.get('label_type', { size: 500 }).then(function (res) {
+          var list = [];
+          if (res && res.ok && res.data && Array.isArray(res.data.list)) {
+            list = res.data.list
+              .filter(function (t) { return t && t.status !== 'inactive'; })
+              .map(function (t) {
+                return { id: t.label_code || '', name: t.label_name || '', desc: t.spec || t.label_type || '', stock: 0 };
+              })
+              .filter(function (t) { return t.name; });
           }
-        }
-      } catch (e) { /* 数据损坏时使用兜底默认，不影响页面 */ }
-      return LABEL_TYPES;
+          labelTypesCache = list.length ? list : null;
+          cb(labelTypesCache);
+        }).catch(function () { labelTypesCache = null; cb(null); });
+      } else {
+        labelTypesCache = null;
+        cb(null);
+      }
+    }
+
+    /* 只读标签类型清单；后端无数据时回落到硬编码 LABEL_TYPES */
+    function readLabelTypes() {
+      return labelTypesCache || LABEL_TYPES;
     }
 
     // 地块（与企业管理 - 地块管理一致）
@@ -191,22 +208,13 @@
       });
     }
 
-    /* 只读库存：后台源不存在时用类型默认值兜底；本函数绝不写入任何存储 */
+    /* 只读库存：标签库存由后台「打印标签」统一扣减，移动端仅展示类型默认值兜底，不读本地业务键 */
     function readStock() {
       const stock = {};
       LABEL_TYPES.forEach(t => { stock[t.name] = t.stock; });
-      try {
-        const raw = localStorage.getItem(STOCK_KEY);
-        if (raw) {
-          const v = JSON.parse(raw);
-          if (v && typeof v === 'object' && !Array.isArray(v)) {
-            Object.keys(v).forEach(k => {
-              const n = Number(v[k]);
-              if (typeof n === 'number' && isFinite(n)) stock[k] = n;
-            });
-          }
-        }
-      } catch (e) { /* 数据损坏时使用兜底默认，不影响页面 */ }
+      readLabelTypes().forEach(t => {
+        if (t && t.name && !(t.name in stock)) stock[t.name] = 0;
+      });
       return stock;
     }
 
@@ -339,12 +347,10 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-      refresh();
-      /* 订阅后台打印/库存写回，让列表与可用量同步刷新 */
+      /* 先从后端拉取标签类型，再渲染（严格空库：类型来自数据库） */
+      loadLabelTypes(function () { refresh(); });
+      /* 订阅领用记录写回，让列表与可用量同步刷新 */
       MobileStore.subscribe(refresh);
-      window.addEventListener('storage', function (e) {
-        if (e.key === STOCK_KEY || e.key === LABEL_TYPES_KEY || e.key === MobileStore.KEYS.labelRecords) refresh();
-      });
     });
   </script>
 </body>

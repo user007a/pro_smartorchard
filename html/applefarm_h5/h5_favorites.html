@@ -7,6 +7,7 @@
   <script src="js/h5-auth.js"></script>
   <script>H5Auth.require();</script>
   <script src="js/h5-back.js"></script>
+  <script src="js/h5-data.js"></script>
   <link rel="stylesheet" href="../applefarm_mobile/css/mobile-design-system.css">
   <style>
     .favorites-section { padding: var(--space-4); padding-bottom: 100px; }
@@ -247,27 +248,16 @@
       window.location.href = 'h5_store.html?product=' + encodeURIComponent(productId);
     }
 
-    /* 首次访问时初始化演示收藏数据，保证收藏页与会员中心统计一致 */
-    function seedFavorites() {
-      if (localStorage.getItem('h5_favorites')) return;
-      localStorage.setItem('h5_favorites', JSON.stringify([
-        { id: 'redFuji', name: '花牛苹果 5斤装', desc: '脆甜多汁 · 新鲜采摘', price: 68, img: 'images/thumb_red_hanging.jpg', date: '2026.10.15' },
-        { id: 'giftBox', name: '精品礼盒装 8斤', desc: '送礼佳品 · 品质保证', price: 168, img: 'images/thumb_giftbox.jpg', date: '2026.10.10' },
-        { id: 'adopt3yr', name: '认养果树3年套餐', desc: '专属果树 · 全程溯源', price: 1888, img: 'images/thumb_picked.jpg', date: '2026.10.05' }
-      ]));
-    }
+    /* 收藏数据来自后端 sf_mall_favorite（H5Data），不再内置演示数据 */
+    var favList = [];
 
-    function readFavorites() {
-      try { return JSON.parse(localStorage.getItem('h5_favorites') || '[]'); }
-      catch (e) { return []; }
-    }
+    function readFavorites() { return favList; }
 
     /* 多选删除状态 */
     var _favEditMode = false;
     var _favSelected = Object.create(null);
 
     function renderFavorites() {
-      seedFavorites();
       var list = readFavorites();
       var box = document.getElementById('favoriteList');
       var countEl = document.getElementById('favCount');
@@ -325,14 +315,24 @@
         return;
       }
       if (!confirm('确定删除已选的 ' + ids.length + ' 件收藏？')) return;
-      var next = readFavorites().filter(function (x) { return !_favSelected[x.id]; });
-      localStorage.setItem('h5_favorites', JSON.stringify(next));
-      _favSelected = Object.create(null);
-      showToast('已删除 ' + ids.length + ' 件收藏');
-      renderFavorites();
+      var next = [];
+      var removes = [];
+      readFavorites().forEach(function (x) {
+        if (_favSelected[x.id]) { if (x._id != null) removes.push(H5Data.favorite.remove(x._id)); }
+        else next.push(x);
+      });
+      Promise.all(removes).then(function () {
+        favList = next;
+        _favSelected = Object.create(null);
+        showToast('已删除 ' + ids.length + ' 件收藏');
+        renderFavorites();
+      });
     }
 
-    renderFavorites();
+    H5Data.ready.then(function () { return H5Data.favorite.list(); }).then(function (list) {
+      favList = list || [];
+      renderFavorites();
+    });
 
     function showToast(message) {
       var toast = document.createElement('div');

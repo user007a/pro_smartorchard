@@ -7,6 +7,7 @@
   <script src="js/h5-auth.js"></script>
   <script>H5Auth.require();</script>
   <script src="js/h5-back.js"></script>
+  <script src="js/h5-data.js"></script>
   <script src="../applefarm_backhand/js/shared/mall-store.js"></script>
   <link rel="stylesheet" href="../applefarm_mobile/css/mobile-design-system.css">
   <style>
@@ -235,40 +236,13 @@
   <script>
     function navigateTo(page) { window.location.href = page; }
 
-    var MESSAGE_DATA = [
-      { id: 1, type: 'system',   time: '2026.10.18 10:30', title: '您的认养果树已进入采收期', content: '您认养的A1-001花牛苹果已完成上色，果径与糖度达到采收标准。预计本周起按成熟度分批采收，采后将分级预冷并按溯源批次统一入库。点击查看实时生长报告。' },
-      { id: 2, type: 'activity', time: '2026.10.10 09:00', title: '秋采认养活动火热进行中', content: '秋采果树认养活动已开启：认养即享采收期直送到家，免邮并赠送果园采摘体验名额；老用户邀请好友双方各得100积分。活动截止至 2026-12-31，欢迎前往「认养」页了解详情。' },
-      { id: 3, type: 'order',    time: '2026.10.15 14:20', title: '您的订单已发货，请注意查收', content: '订单号：ORD20261015001，花牛苹果5斤装已通过冷链物流发出，预计2-3天内送达。您可在溯源页面查看配送进度。如需调整收货时间，请联系在线客服。' },
-      { id: 4, type: 'system',   time: '2026.10.12 16:00', title: '农残检测报告已生成', content: '您认养的果树已完成采摘前农残检测，共检测68项指标，全部未检出。检测报告符合有机产品标准，点击查看详细报告与第三方机构出具的编号。' },
-      { id: 5, type: 'order',    time: '2026.10.08 10:15', title: '订单已签收，感谢您的支持', content: '订单号：ORD20261005002 已成功签收。如有任何问题请及时联系客服，祝您品尝愉快！' }
-    ];
-
-    /* 合并后台「用户运营 › 消息通知」启用中的模板，与后台同源 */
-    function noticeMessages() {
-      if (typeof MallStore === 'undefined') return [];
-      var map = {
-        order_paid: 'order', order_shipped: 'order', order_refund: 'order',
-        activity_start: 'activity', system: 'system'
-      };
-      var today = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
-      return (MallStore.settings().notices || []).filter(function (n) {
-        return n.status !== 'off';
-      }).map(function (n, i) {
-        return {
-          id: 101 + i,
-          type: map[n.scene] || 'system',
-          time: n.updatedAt || today,
-          title: n.title || '通知',
-          content: n.content || ''
-        };
-      });
-    }
-    MESSAGE_DATA = MESSAGE_DATA.concat(noticeMessages());
+    /* 消息数据来自后端 sf_mall_notice（H5Data）；不再内置演示消息 */
+    var MESSAGE_DATA = [];
 
     var MESSAGE_READ_KEY = 'h5_messages_read';
 
     function readReadIds() {
-      try { var v = JSON.parse(localStorage.getItem(MESSAGE_READ_KEY) || '[]'); return Array.isArray(v) ? v : []; }
+      try { var v = JSON.parse(sessionStorage.getItem(MESSAGE_READ_KEY) || '[]'); return Array.isArray(v) ? v : []; }
       catch (e) { return []; }
     }
 
@@ -300,7 +274,7 @@
       if (!msg) return;
       // 标记已读并刷新列表
       var all = MESSAGE_DATA.map(function(m) { return m.id; }).concat(readReadIds());
-      localStorage.setItem(MESSAGE_READ_KEY, JSON.stringify(all.filter(function(v, i, a) { return a.indexOf(v) === i; })));
+      sessionStorage.setItem(MESSAGE_READ_KEY, JSON.stringify(all.filter(function(v, i, a) { return a.indexOf(v) === i; })));
       renderMessages();
       // 打开底部弹层显示完整内容
       var labelMap = { system: '系统通知', activity: '活动提醒', order: '订单通知' };
@@ -329,12 +303,25 @@
     }
 
     function markAllRead() {
-      localStorage.setItem(MESSAGE_READ_KEY, JSON.stringify(MESSAGE_DATA.map(function(m) { return m.id; })));
+      sessionStorage.setItem(MESSAGE_READ_KEY, JSON.stringify(MESSAGE_DATA.map(function(m) { return m.id; })));
       renderMessages();
       showToast('已全部标记为已读');
     }
 
-    renderMessages();
+    /* 初始化：从后端 sf_mall_notice 拉取消息 */
+    H5Data.ready.then(function () { return H5Data.list('notice'); }).then(function (list) {
+      var map = { order_paid: 'order', order_shipped: 'order', order_refund: 'order', activity_start: 'activity', system: 'system' };
+      MESSAGE_DATA = (list || []).filter(function (n) { return n.status !== 'off'; }).map(function (n, i) {
+        return {
+          id: i + 1,
+          type: map[n.scene] || 'system',
+          time: (n.updatedAt || n.createdAt || '').replace(/-/g, '.').slice(0, 16),
+          title: n.title || '通知',
+          content: n.content || ''
+        };
+      });
+      renderMessages();
+    });
 
     function showToast(message) {
       var toast = document.createElement('div');

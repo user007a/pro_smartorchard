@@ -8,6 +8,7 @@
   <script>H5Auth.require();</script>
   <script src="js/h5-back.js"></script>
   <script src="../applefarm_backhand/js/shared/adoption-store.js"></script>
+  <script src="js/h5-data.js"></script>
   <link rel="stylesheet" href="../applefarm_mobile/css/mobile-design-system.css">
   <style>
     /* ========== 页面专属样式 ========== */
@@ -111,7 +112,7 @@
       <div class="order-tab" data-tab="已取消">已取消</div>
     </div>
 
-    <!-- 订单列表（由 JS 动态渲染读取 localStorage 'h5_orders'） -->
+    <!-- 订单列表（由 JS 动态渲染，读取后端 sf_mall_order） -->
     <div id="orderList"></div>
 
     <!-- 底部导航 -->
@@ -149,20 +150,13 @@
     var currentTab = '全部';
     var focusOrderNo = (new URLSearchParams(location.search)).get('focus') || '';
 
-    function readOrders() {
-      try { return JSON.parse(localStorage.getItem('h5_orders') || '[]'); } catch (e) { return []; }
-    }
+    /* 订单数据来自后端 sf_mall_order（H5Data），内存缓存 */
+    var orderList = [];
+
+    function readOrders() { return orderList; }
 
     function statusOf(order) {
-      // 从 PC sales_order confirmShip 落库后推断状态
-      var shipped = false;
-      try {
-        shipped = JSON.parse(localStorage.getItem('h5_sales_orders') || '[]').some(function(s){
-          return s.orderNo === order.no || s.orderNo === order.id;
-        });
-      } catch (e) { shipped = false; }
-      if (order.status === '已取消') return '已取消';
-      if (shipped && order.status === '待发货') return '待收货';
+      // 状态由 H5Data 在映射时已归一为中文（含物流→待收货）
       return order.status || '待付款';
     }
 
@@ -177,28 +171,9 @@
       return '';
     }
 
-    /* 状态口径统一：
-   PC 后台 mall_order / sales_order 发货后写入 h5_sales_orders，
-   H5 需把「待收货」显式落库到 h5_orders，否则任何直接读 order.status
-   的第三方（如数据大屏 da_business）拿到的仍是「待发货」。 */
+    /* 状态口径统一：发货/物流信息已由 H5Data 在订单映射时并入（logistics→待收货） */
     function syncShippedStatus() {
-      var shippedNos = {};
-      try {
-        shippedNos = JSON.parse(localStorage.getItem('h5_sales_orders') || '[]').reduce(function(m, s) {
-          if (s && s.orderNo) m[s.orderNo] = true;
-          return m;
-        }, {});
-      } catch (e) { return false; }
-      if (!Object.keys(shippedNos).length) return false;
-      var list = readOrders(), changed = false;
-      list.forEach(function (o) {
-        if (o.status === '待发货' && (shippedNos[o.no] || shippedNos[o.id])) {
-          o.status = '待收货';
-          changed = true;
-        }
-      });
-      if (!changed) return false;
-      return writeOrders(list);
+      return false;
     }
 
     function renderOrders() {
@@ -236,28 +211,25 @@
       }
     }
 
-    function writeOrders(list) {
-      try { localStorage.setItem('h5_orders', JSON.stringify(list)); return true; }
-      catch (e) { showOrderToast('保存失败：浏览器存储不可用'); return false; }
+    /* 更新单条订单状态（走后端 sf_mall_order） */
+    function persistOrder(o) {
+      if (o._id != null) return H5Data.update('order', o._id, o);
+      return H5Data.create('order', o);
     }
 
     function cancelOrder(no) {
       if (!confirm('确定要取消订单 ' + no + '？')) return;
-      var list = readOrders();
-      var o = list.find(function(x){ return x.no === no; });
-      if (o) { o.status = '已取消'; o.statusCode = 'cancelled'; }
-      if (!writeOrders(list)) return;
+      var o = readOrders().find(function(x){ return x.no === no; });
+      if (o) { o.status = '已取消'; o.statusCode = 'cancelled'; persistOrder(o); }
       renderOrders();
       showOrderToast('订单已取消');
     }
 
     function payOrder(no) {
-      var list = readOrders();
-      var o = list.find(function(x){ return x.no === no; });
-      if (o) { o.status = '待发货'; o.statusCode = 'paid'; }
-      if (!writeOrders(list)) return;
+      var o = readOrders().find(function(x){ return x.no === no; });
+      if (o) { o.status = '待发货'; o.statusCode = 'paid'; persistOrder(o); }
 
-      /* 认养订单激活：待支付 → 已支付，果树转已认养并写入 H5 认养记录 */
+      /* 认养订单激活：待支付 → 已支付，果树转已认养 */
       var activated = 0;
       if (o && Array.isArray(o.adoptionOrders) && typeof AdoptionStore !== 'undefined') {
         o.adoptionOrders.forEach(function (adoptNo) {
@@ -276,33 +248,23 @@
     }
 
     function confirmReceipt(no) {
-      var list = readOrders();
-      var o = list.find(function(x){ return x.no === no; });
-      if (o) { o.status = '已完成'; o.statusCode = 'completed'; }
-      if (!writeOrders(list)) return;
+      var o = readOrders().find(function(x){ return x.no === no; });
+      if (o) { o.status = '已完成'; o.statusCode = 'completed'; persistOrder(o); }
       renderOrders();
       showOrderToast('已确认收货，感谢您的购买');
     }
 
-    /* 再次购买：同商品需合并数量，否则购物车出现重复行，
-       按 data-id 改数量会同时命中多行 */
+    /* 再次购买：同商品需合并数量，否则购物车出现重复行 */
     function reorder(no) {
-      var list = readOrders();
-      var o = list.find(function(x){ return x.no === no; });
+      var o = readOrders().find(function(x){ return x.no === no; });
       if (!o || !o.items || !o.items.length) return;
-      var cart = [];
-      try { cart = JSON.parse(localStorage.getItem('h5_cart') || '[]'); } catch (e) { cart = []; }
-      if (!Array.isArray(cart)) cart = [];
-      o.items.forEach(function(it){
-        var exist = null;
-        for (var i = 0; i < cart.length; i++) { if (String(cart[i].id) === String(it.id)) { exist = cart[i]; break; } }
-        if (exist) { exist.qty = (Number(exist.qty) || 1) + (Number(it.qty) || 1); }
-        else { cart.push(Object.assign({}, it, { qty: it.qty || 1, checked: true })); }
+      var jobs = o.items.map(function (it) {
+        return H5Data.cart.add({ id: it.id, name: it.name, spec: it.spec || it.desc, img: it.img, price: it.price, qty: it.qty || 1, checked: true });
       });
-      try { localStorage.setItem('h5_cart', JSON.stringify(cart)); }
-      catch (e) { showOrderToast('加入购物车失败：浏览器存储不可用'); return; }
-      showOrderToast('商品已加入购物车');
-      setTimeout(function(){ window.location.href = 'h5_cart.html'; }, 600);
+      Promise.all(jobs).then(function () {
+        showOrderToast('商品已加入购物车');
+        setTimeout(function(){ window.location.href = 'h5_cart.html'; }, 600);
+      });
     }
 
     /* 订单详情 / 物流：使用可滚动的底部弹层，替代 2.2s 自动消失的 toast，
@@ -358,9 +320,8 @@
     }
 
     function viewLogistics(no) {
-      var shipped = [];
-      try { shipped = JSON.parse(localStorage.getItem('h5_sales_orders') || '[]'); } catch (e) { shipped = []; }
-      var info = shipped.find(function(s){ return s.orderNo === no; });
+      var o = readOrders().find(function (x) { return x.no === no; });
+      var info = (o && o.logistics && o.logistics.length) ? o.logistics[o.logistics.length - 1] : null;
       if (!info) { showOrderToast('暂无物流信息，请耐心等待'); return; }
       openOrderSheet('物流信息',
         row('订单编号', escOrder(no)) +
@@ -387,7 +348,11 @@
       });
     });
 
-    renderOrders();
+    /* 初始化：异步拉取后端订单 */
+    H5Data.ready.then(function () { return H5Data.list('order'); }).then(function (list) {
+      orderList = list || [];
+      renderOrders();
+    });
   </script>
 </body>
 </html>

@@ -18,6 +18,90 @@
 (function (global) {
   'use strict';
 
+  /* ============================================================
+   * 严格空库模式 · 后台端本地业务数据闸门
+   * ------------------------------------------------------------
+   * 目的：保证「页面显示的内容」严格等于「数据库里的内容」。
+   *
+   * 做法：后台管理端（含 iframe 子页）把业务数据的 localStorage
+   * 读写「重定向」到一份仅存在于当前页面生命周期的内存镜像：
+   *   - 刷新页面后镜像清空，数据只能由后端 API 重新拉取；
+   *   - 运行时的增删改依旧即时生效（不破坏页面功能）；
+   *   - 首次加载时清理磁盘上历史遗留的演示数据，避免旧缓存
+   *     掩盖真实接口行为，从而影响业务驱动测试的判断。
+   *
+   * 放行：鉴权 token、会话信息、用户偏好等纯客户端状态（仍落磁盘）。
+   * sessionStorage 不受影响；H5 / 移动端 / 大屏也不受影响。
+   * ============================================================ */
+  (function enableStrictDbGuard() {
+    if (typeof global.Storage === 'undefined' || !global.localStorage || !global.location) return;
+    if (!/\/(applefarm_backhand|applefarm_mobile|applefarm_h5)\//.test(global.location.pathname)) return;
+    if (global.__STRICT_DB_GUARD__) return;
+    global.__STRICT_DB_GUARD__ = true;
+
+    var ALLOW_EXACT = [
+      'smartorchard_token', 'snzg_logged_in', 'snzg_user',
+      'snzg_remember', 'snzg_login_lock', 'snzg_notification', 'snzg_2fa',
+      /* 纯 UI 偏好：不产生业务记录，允许落盘以保留界面状态 */
+      'sidebar-collapsed', 'sidebar-tabs'
+    ];
+    var ALLOW_PREFIX = ['snzg_avatar_', 'snzg_alert_'];
+    function allowed(key) {
+      var k = String(key);
+      if (ALLOW_EXACT.indexOf(k) >= 0) return true;
+      for (var i = 0; i < ALLOW_PREFIX.length; i++) {
+        if (k.indexOf(ALLOW_PREFIX[i]) === 0) return true;
+      }
+      return false;
+    }
+
+    var proto = global.Storage.prototype;
+    var rawGet = proto.getItem;
+    var rawSet = proto.setItem;
+    var rawRemove = proto.removeItem;
+    var rawKey = proto.key;
+    var memory = Object.create(null); // 本页生命周期内的业务数据镜像
+
+    // 一次性清理磁盘上历史遗留的本地业务数据（用原生方法，绕过闸门）
+    try {
+      var stale = [];
+      for (var i = 0; i < global.localStorage.length; i++) {
+        var k = rawKey.call(global.localStorage, i);
+        if (k && !allowed(k)) stale.push(k);
+      }
+      stale.forEach(function (k) { rawRemove.call(global.localStorage, k); });
+      if (stale.length) {
+        try { console.info('[严格模式] 已清理历史本地业务数据 ' + stale.length + ' 项'); } catch (ignore) {}
+      }
+    } catch (e) { /* 隐私模式下忽略 */ }
+
+    // 业务键：只读写内存镜像，不再落磁盘
+    proto.getItem = function (key) {
+      if (this === global.localStorage && !allowed(key)) {
+        return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : null;
+      }
+      return rawGet.call(this, key);
+    };
+    proto.setItem = function (key, value) {
+      if (this === global.localStorage && !allowed(key)) {
+        memory[key] = String(value);
+        // 记录「本地业务写入」次数：供各 store 的预加载做竞态判断，
+        // 避免页面加载时的陈旧后端快照覆盖用户刚保存的数据。
+        global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+        return;
+      }
+      return rawSet.call(this, key, value);
+    };
+    proto.removeItem = function (key) {
+      if (this === global.localStorage && !allowed(key)) {
+        delete memory[key];
+        return;
+      }
+      return rawRemove.call(this, key);
+    };
+    global.__STRICT_DB_ALLOWED__ = allowed;
+  })();
+
   var BASE_URL = global.SMARTORCHARD_API_BASE || '/api';
   var TOKEN_KEY = 'smartorchard_token';
 

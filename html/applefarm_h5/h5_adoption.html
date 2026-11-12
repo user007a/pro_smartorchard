@@ -6,9 +6,8 @@
   <title>我的认养 - 移动商城</title>
   <script src="js/h5-auth.js"></script>
   <script>H5Auth.require();</script>
+  <script src="js/h5-data.js"></script>
   <script src="js/h5-back.js"></script>
-  <script src="../applefarm_backhand/js/shared/adoption-store.js"></script>
-  <script src="../applefarm_backhand/js/shared/device-store.js"></script>
   <link rel="stylesheet" href="../applefarm_mobile/css/mobile-design-system.css">
   <style>
     .adoption-section { padding: var(--space-4); padding-bottom: 100px; }
@@ -232,7 +231,7 @@
     </div>
 
     <div class="adoption-section" id="adoptionList">
-      <!-- 认养卡片由 js 依据 localStorage['snzg_adoptions'] 动态渲染 -->
+      <!-- 认养卡片由 js 依据后端 sf_adoption_tree 动态渲染 -->
     </div>
 
     <!-- 底部导航 -->
@@ -258,26 +257,29 @@
 
   <script>
     /* ============================================================
-     * 我的认养（T16 认养编号双源统一）
-     * 唯一数据源：localStorage['snzg_adoptions']
-     *   字段：{ id, treeName, status, adoptDate, ... }
-     *   id 为 AD-A1-001 形式，展示时统一去掉 AD- 前缀为 A1-001，
-     *   使 H5 展示编号与 h5_adoption_photos 的键、溯源查询保持一致。
+     * 我的认养（严格空库：数据来自后端 sf_adoption_tree）
+     * 唯一数据源：后端 sf_adoption_tree（resource = adoption_tree），
+     *   按当前会员归属（customer_id / adopter_phone）过滤，仅展示已认养果树。
+     *   字段映射（后端 snake_case → 前端 camelCase）：
+     *     tree_code → treeCode, tree_name → treeName, growth_stage → growthStage,
+     *     progress → progress, start_date → startDate, duration → duration,
+     *     year_fee → yearFee, plot_name → plotName, expire_time → expireTime,
+     *     customer_id → customerId, adopter_phone → adopterPhone,
+     *     camera_id → cameraId, open_scene → openScene
      * 无数据时显示空态并引导，不自动播种演示数据。
      * ============================================================ */
 
-    var ADOPTION_KEY = 'snzg_adoptions';
-    var LEGACY_ADOPTION_KEY = 'h5_adoptions';
-
     // status → 中文文案与样式类
     var STATUS_MAP = {
-      growing: { text: '生长中', cls: 'growing' },
-      harvest: { text: '已挂果', cls: 'harvest' },
-      active:   { text: '认养中', cls: 'active' }
+      growing:   { text: '生长中', cls: 'growing' },
+      flowering: { text: '开花期', cls: 'growing' },
+      fruiting:  { text: '已挂果', cls: 'harvest' },
+      harvest:   { text: '已挂果', cls: 'harvest' },
+      active:    { text: '认养中', cls: 'active' }
     };
 
     // 按认养状态推算生长进度（无进度字段时的兜底展示）
-    var PROGRESS_MAP = { active: 20, growing: 60, harvest: 85 };
+    var PROGRESS_MAP = { active: 20, growing: 60, flowering: 45, fruiting: 70, harvest: 85 };
 
     function escHtml(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -290,19 +292,25 @@
       return String(id == null ? '' : id).trim().replace(/^AD-/i, '').trim();
     }
 
-    function readAdoptions() {
-      var keys = [ADOPTION_KEY, LEGACY_ADOPTION_KEY];
-      for (var i = 0; i < keys.length; i++) {
-        try {
-          var raw = localStorage.getItem(keys[i]);
-          if (!raw) continue;
-          var v = JSON.parse(raw);
-          if (Array.isArray(v)) {
-            return v.filter(function (x) { return x && typeof x === 'object'; });
-          }
-        } catch (e) { /* 损坏数据跳过，尝试下一个来源 */ }
+    /* 内存数据：后端拉取的认养果树列表 */
+    var adoptionTrees = [];
+    var photoCache = null;
+
+    function findTree(code) {
+      for (var i = 0; i < adoptionTrees.length; i++) {
+        var t = adoptionTrees[i];
+        if (normalizeTreeId(t && (t.treeCode || t.id)) === normalizeTreeId(code)) return t;
       }
-      return [];
+      return null;
+    }
+
+    // 当前会员归属判断（customer_id 或 adopter_phone）
+    function isMine(item) {
+      var m = (typeof H5Data !== 'undefined' && H5Data.currentMember) ? H5Data.currentMember() : null;
+      if (!m) return false;
+      if (item.customerId && String(item.customerId) === String(m.id)) return true;
+      if (m.phone && String(item.adopterPhone || '') === String(m.phone)) return true;
+      return false;
     }
 
     // 日期兼容：2026.06.01 / 2026-06-01 / ISO
@@ -314,43 +322,32 @@
       return s;
     }
 
-    // 设备管理 ↔ H5：按果树编号回溯 AdoptionStore 的 cameraId，再取 DeviceStore 摄像头档案
     var CAMERA_STATUS_TEXT = { online: '在线', warning: '告警', offline: '离线' };
 
+    /* 实景监控：依据果树档案的 camera_id / open_scene 判定是否开放 */
     function resolveMonitor(item) {
-      var S = window.AdoptionStore;
-      var D = window.DeviceStore;
-      var code = normalizeTreeId(item && (item.id || item.treeNo));
-      if (!S || !code || typeof S.findTree !== 'function') return null;
-      var tree = null;
-      try { tree = S.findTree(code); } catch (e) { tree = null; }
-      if (!tree || !tree.cameraId || tree.openMonitor === false) return null;
-      var camera = null;
-      if (D && typeof D.cameras === 'function') {
-        try {
-          camera = D.cameras().filter(function (c) {
-            return c.id === tree.cameraId || c.code === tree.cameraId;
-          })[0] || null;
-        } catch (e) { camera = null; }
-      }
+      var code = normalizeTreeId(item && (item.treeCode || item.id));
+      var cameraId = item && item.cameraId;
+      if (!code || !cameraId) return null;
+      if (item.openScene === 0 || item.openScene === false) return null;
       return {
-        treeCode: tree.treeCode,
-        cameraId: tree.cameraId,
-        camera: camera
+        treeCode: code,
+        cameraId: cameraId,
+        camera: { name: '监控摄像头', code: String(cameraId), status: 'online' }
       };
     }
 
     function cardHtml(item) {
-      var treeId = normalizeTreeId(item.id) || normalizeTreeId(item.treeNo) || '—';
-      var st = STATUS_MAP[item.status] || { text: item.status || '认养中', cls: 'active' };
+      var treeId = normalizeTreeId(item.treeCode) || normalizeTreeId(item.id) || '—';
+      var st = STATUS_MAP[item.growthStage] || { text: item.growthStage || '认养中', cls: 'active' };
       var progress = Number(item.progress);
-      if (isNaN(progress) || progress <= 0) progress = PROGRESS_MAP[item.status] || 60;
+      if (isNaN(progress) || progress <= 0) progress = PROGRESS_MAP[item.growthStage] || 60;
       progress = Math.max(0, Math.min(100, progress));
-      var name = item.treeName || item.name || '认养果树';
-      var period = item.period || item.years || '3年';
-      var fee = item.fee || item.price || '—';
-      var area = item.area || item.plotArea || (name + '果园');
-      var expect = item.expectHarvest || item.harvestDate || '—';
+      var name = item.treeName || '认养果树';
+      var period = (item.duration != null && item.duration !== '') ? (item.duration + '年') : '3年';
+      var fee = item.yearFee != null ? ('¥' + item.yearFee) : '—';
+      var area = item.plotName || item.baseName || (name + '果园');
+      var expect = item.expireTime || '—';
       var mon = resolveMonitor(item);
       var monText = mon
         ? ((mon.camera && mon.camera.name) || mon.cameraId) +
@@ -370,7 +367,7 @@
         '</div>' +
         '<div class="adoption-details">' +
           '<div class="detail-row"><span class="detail-label">认养时间</span>' +
-            '<span class="detail-value">' + escHtml(fmtAdoptDate(item.adoptDate)) + '</span></div>' +
+            '<span class="detail-value">' + escHtml(fmtAdoptDate(item.startDate)) + '</span></div>' +
           '<div class="detail-row"><span class="detail-label">认养周期</span>' +
             '<span class="detail-value">' + escHtml(period) + '</span></div>' +
           '<div class="detail-row"><span class="detail-label">认养费用</span>' +
@@ -396,7 +393,9 @@
     function renderAdoptions() {
       var box = document.getElementById('adoptionList');
       if (!box) return;
-      var list = readAdoptions();
+      var list = adoptionTrees.filter(function (t) {
+        return t && t.status === 'adopted' && isMine(t);
+      });
 
       if (!list.length) {
         box.innerHTML =
@@ -427,49 +426,70 @@
     // 成长相册占位图（本地实拍图片，真实存在；原 images/adoption_default.jpg 不存在）
     var PHOTO_FALLBACK = 'images/apple_tree_orchard.jpg';
 
+    /* 成长相册数据源：后端 sf_adoption_photo（resource = adoption_photo），
+       照片地址经 sf_file（resource = file）的 store_path 解析 */
+    function loadPhotos() {
+      if (photoCache) return Promise.resolve(photoCache);
+      return Promise.all([H5Data.list('adoption_photo'), H5Data.list('file')]).then(function (res) {
+        var photos = res[0] || [];
+        var files = res[1] || [];
+        var fm = {};
+        files.forEach(function (f) { fm[String(f.id)] = f.storePath || f.fileName || ''; });
+        var map = {};
+        photos.forEach(function (p) {
+          var tid = String(p.treeId);
+          if (!map[tid]) map[tid] = [];
+          map[tid].push({
+            url: fm[String(p.fileId)] || PHOTO_FALLBACK,
+            time: p.shootTime || p.createdAt,
+            stage: p.stage || '成长'
+          });
+        });
+        photoCache = map;
+        return map;
+      });
+    }
+
     function viewPhotos(treeId) {
-      // 从 localStorage 读取果树成长相册（H5-B-020）：按时间倒序展示照片墙
-      // 数据结构：{ [果树编号]: [{ url, time, stage }] }，与后台「认养成长相册」共用
-      // 兼容两种键：统一编号 A1-001 与 snzg_adoptions 的 AD-A1-001
-      var list = [];
-      try {
-        var all = JSON.parse(localStorage.getItem('h5_adoption_photos') || '{}');
-        if (all && typeof all === 'object' && !Array.isArray(all)) {
-          if (Array.isArray(all[treeId])) list = all[treeId];
-          else if (Array.isArray(all['AD-' + treeId])) list = all['AD-' + treeId];
+      var code = normalizeTreeId(treeId);
+      var tree = findTree(code);
+      var treeKey = tree ? String(tree.id) : code;
+      loadPhotos().then(function (map) {
+        var list = map[treeKey] || map['AD-' + treeKey] || [];
+        var html;
+        if (!list.length) {
+          html = '<div style="text-align:center;color:#999;padding:32px;">暂无照片。认养后工作人员将上传果树成长照片。</div>';
+        } else {
+          html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">' +
+            list.map(function (p) {
+              return '<div style="background:#f6f8f6;border-radius:8px;overflow:hidden;">' +
+                '<img src="' + (p.url || PHOTO_FALLBACK) + '" alt="果树成长照片" ' +
+                'style="width:100%;height:120px;object-fit:cover;" ' +
+                'onerror="this.onerror=null;this.src=\'' + PHOTO_FALLBACK + '\';" ' +
+                'onload="if(!this.naturalWidth){this.onerror&&this.onerror();}">' +
+                '<div style="padding:6px 8px;font-size:11px;color:#666;">' +
+                new Date(p.time).toLocaleDateString() + ' · ' + (p.stage || '成长') +
+                '</div></div>';
+            }).join('') + '</div>';
         }
-      } catch (e) { list = []; }
-      var html;
-      if (!list.length) {
-        html = '<div style="text-align:center;color:#999;padding:32px;">暂无照片。认养后工作人员将上传果树成长照片。</div>';
-      } else {
-        html = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">' +
-          list.map(function(p){
-            // url 为空或加载失败时，回退到本地占位图
-            return '<div style="background:#f6f8f6;border-radius:8px;overflow:hidden;">' +
-              '<img src="' + (p.url || PHOTO_FALLBACK) + '" alt="果树成长照片" ' +
-              'style="width:100%;height:120px;object-fit:cover;" ' +
-              'onerror="this.onerror=null;this.src=\'' + PHOTO_FALLBACK + '\';" ' +
-              'onload="if(!this.naturalWidth){this.onerror&&this.onerror();}">' +
-              '<div style="padding:6px 8px;font-size:11px;color:#666;">' +
-              new Date(p.time).toLocaleDateString() + ' · ' + (p.stage || '成长') +
-              '</div></div>';
-          }).join('') + '</div>';
-      }
-      var overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
-      overlay.innerHTML = '<div style="background:#fff;border-radius:10px;width:90%;max-width:420px;max-height:80vh;overflow-y:auto;padding:16px;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
-        '<h3 style="margin:0;">果树相册 ' + treeId + '</h3>' +
-        '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;">×</button>' +
-        '</div>' + html +
-        '</div>';
-      document.body.appendChild(overlay);
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;';
+        overlay.innerHTML = '<div style="background:#fff;border-radius:10px;width:90%;max-width:420px;max-height:80vh;overflow-y:auto;padding:16px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+          '<h3 style="margin:0;">果树相册 ' + code + '</h3>' +
+          '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;">×</button>' +
+          '</div>' + html +
+          '</div>';
+        document.body.appendChild(overlay);
+      }).catch(function () {
+        showToast('照片加载失败，请稍后重试');
+      });
     }
 
     // 实景监控面板：展示设备管理绑定的摄像头档案（原型阶段为演示画面）
     function viewMonitor(treeId) {
-      var mon = resolveMonitor({ id: treeId });
+      var tree = findTree(normalizeTreeId(treeId));
+      var mon = resolveMonitor(tree);
       if (!mon) { showToast('该果树暂未开放实景监控'); return; }
       var cam = mon.camera || {};
       var rows = [
@@ -513,10 +533,15 @@
     style.textContent = '@keyframes fadeInOut { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.8)} 20%{opacity:1;transform:translate(-50%,-50%) scale(1)} 80%{opacity:1} 100%{opacity:0} }';
     document.head.appendChild(style);
 
-    // 认养列表渲染：进入页面时读一次，后台/其他标签页写入后自动同步
-    renderAdoptions();
-    window.addEventListener('storage', function (e) {
-      if (e.key === ADOPTION_KEY || e.key === LEGACY_ADOPTION_KEY) renderAdoptions();
+    /* 初始化：拉取后端认养果树列表后渲染（严格空库，无本地播种） */
+    H5Data.ready.then(function () {
+      return H5Data.list('adoption_tree');
+    }).then(function (list) {
+      adoptionTrees = list || [];
+      renderAdoptions();
+    }).catch(function () {
+      adoptionTrees = [];
+      renderAdoptions();
     });
   </script>
 </body>

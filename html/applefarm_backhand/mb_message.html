@@ -289,10 +289,11 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mobile-ops-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 /* ============================================================
  * 消息推送与公告（移动端运营 · 消息与同步）
- * 数据源：MobileOpsStore / localStorage['mb_messages']
+ * 严格空库模式：数据一律来自后端 API（sf_mb_message），页面不再播种演示数据
  *   结构：[{ id, category, title, content, time, target, enabled,
  *            publisher, source, createdAt }]
  *   category：ai AI / alert 预警 / farming 农事 / device 设备 / notice 通知
@@ -300,7 +301,6 @@
  *   publisher：发布人（后台账号姓名，留痕展示）
  *   读取方  ：applefarm_mobile/mb_home.html 首页滚动消息栏
  *             （仅取 enabled:true 且 target 为 mobile/all）
- *   首次访问时沿用移动端原有 8 条硬编码消息初始化
  * ============================================================ */
 
 /* 当前编辑中的消息 id（null = 新增） */
@@ -314,49 +314,70 @@ var TARGET_TEXT = {
   mobile: '移动端作业人员', all: '全部用户'
 };
 
-/* 移动端 mb_home.html 原硬编码的 8 条滚动消息（首次访问时写入，保证两端一致） */
-var SEED_MESSAGES = [
-  { category: 'ai', title: '95%地块进入膨大期，建议加强水肥管理', content: '根据物候期监测模型分析，当前基地95%的苹果树已进入果实膨大期。此阶段是果实快速生长的关键时期，对水分和养分需求较大。建议适当增加灌溉频次，追施磷钾肥促进果实发育。', time: '2026-09-21 09:30', target: 'mobile' },
-  { category: 'alert', title: 'B3区土壤湿度超标88%，建议及时排水降湿', content: 'B3区土壤湿度传感器监测数据显示当前湿度达88%，高于适宜范围上限（80%），且超过预警阈值85%。长期高湿度将导致根系缺氧腐烂，影响果实正常发育。建议立即安排排水降湿作业，检查排水沟渠是否畅通。', time: '2026-09-21 08:15', target: 'mobile' },
-  { category: 'farming', title: '今日已完成A1区套袋作业3200株', content: 'A1区套袋作业已按计划完成，共套袋3200株花牛苹果树。使用双层纸袋，套袋质量合格率98%。作业人员：张三、李四、王五。预计明日继续完成A2区套袋作业。', time: '2026-09-21 17:00', target: 'mobile' },
-  { category: 'device', title: '气象站3号传感器数据异常，已修复', content: '气象站3号温度传感器在上午10:20出现数据异常波动，经技术人员现场排查，发现为传感器接线松动导致。已于14:00完成修复，当前数据恢复正常。建议定期检查设备连接状态。', time: '2026-09-21 14:30', target: 'mobile' },
-  { category: 'ai', title: '明日锈病风险中等，建议喷施多菌灵', content: '病虫害预测模型分析显示，明日气象条件（湿度75%、温度22-28°C、有降雨概率）有利于苹果锈病孢子传播。当前锈病风险等级为"中等"。建议明日喷施多菌灵进行预防性防治。', time: '2026-09-21 07:00', target: 'mobile' },
-  { category: 'notice', title: '今日下午2点套袋技术培训，请准时参加', content: '为提高套袋作业质量，今日下午2点在基地会议室举办套袋技术培训。培训内容包括：套袋时机选择、纸袋类型选用、套袋操作规范、套袋后管理等。请相关作业人员准时参加。', time: '2026-09-21 10:00', target: 'mobile' },
-  { category: 'ai', title: '预测下月收购价上升3-5%，建议适时销售', content: '市场价格预测模型分析显示，受今年全国苹果产量预估下降8%影响，预计下月花牛苹果收购价格将上涨3-5%。当前收购价约3.2元/斤，建议根据果实成熟度和市场行情适时安排销售。', time: '2026-09-20 16:00', target: 'mobile' },
-  { category: 'alert', title: '本周末有雷阵雨，请做好防涝排水准备', content: '气象预报显示本周末（周六、周日）将有雷阵雨天气，预计累计降雨量30-50mm。请提前检查果园排水沟渠，确保排水畅通。低洼地块需特别注意防涝，避免积水影响果树根系。', time: '2026-09-20 18:00', target: 'mobile' }
-];
+/* ---------- 数据源（严格空库模式） ---------- */
+var MESSAGE_RESOURCE = 'mb_message';
+/* 消息缓存：由 loadMessages() 从后端 API 异步填充，页面不再读写 localStorage 播种 */
+let msgData = [];
 
-/* ---------- 数据读写（统一走 MobileOpsStore） ---------- */
-function writeAll(list) {
-  if (!MobileOpsStore.writeList(MobileOpsStore.KEYS.messages, list)) {
-    Toast.error('本地存储写入失败，消息未能保存');
-    return false;
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapMessageRow(row) {
+  return {
+    id: row.id,
+    category: row.category || 'notice',
+    title: row.title || '',
+    content: row.content || '',
+    time: row.publish_time || '',
+    target: row.target || 'mobile',
+    enabled: row.status !== 'disabled' && row.status !== 'inactive',
+    publisher: row.publisher || '',
+    source: row.source || 'pc',
+    createdAt: row.created_at || ''
+  };
+}
+
+/* 表格状态提示：加载中 / 暂无数据 / 加载失败 */
+function setMsgStatus(text, isError) {
+  var body = document.getElementById('msgBody');
+  var empty = document.getElementById('emptyHint');
+  if (body) body.innerHTML = '';
+  if (empty) {
+    empty.style.display = 'block';
+    empty.textContent = text;
+    empty.style.color = isError ? 'var(--error, #d03050)' : '';
   }
+  ['statTotal', 'statOn', 'statAi', 'statAlert'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = '0';
+  });
+}
+
+/* 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示；不写 localStorage */
+function loadMessages() {
+  if (!window.Api) { setMsgStatus('数据加载失败：接口未就绪', true); return; }
+  setMsgStatus('正在加载数据...', false);
+  Api.get(MESSAGE_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      setMsgStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true);
+      return;
+    }
+    var list = (r.data && r.data.list) || [];
+    msgData = list.map(mapMessageRow);
+    if (!msgData.length) { setMsgStatus('暂无数据', false); return; }
+    renderTable();
+  }).catch(function (e) {
+    setMsgStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+  });
+}
+
+/* ---------- 数据读写（仅内存缓存，保证增删改交互即时生效） ---------- */
+function writeAll(list) {
+  msgData = list;
   return true;
 }
 
-/* 首次访问：沿用移动端原有 8 条消息并回写，保持两端一致 */
+/* 数据源：loadMessages() 从后端填充的内存缓存，不再读 localStorage / 播种 */
 function readList() {
-  var list = MobileOpsStore.list('messages');
-  if (!list.length) {
-    list = SEED_MESSAGES.map(function (m, i) {
-      return {
-        id: i + 1,
-        category: m.category,
-        title: m.title,
-        content: m.content,
-        time: m.time,
-        target: m.target || 'mobile',
-        enabled: true,
-        publisher: '系统管理员',
-        source: 'pc',
-        createdAt: m.time
-      };
-    });
-    writeAll(list);
-    return list;
-  }
-  return list;
+  return msgData;
 }
 
 function esc(s) {
@@ -420,7 +441,7 @@ function renderTable() {
     empty.style.display = 'block';
     empty.textContent = all.length
       ? '没有符合条件的消息，试试调整筛选条件'
-      : '暂无消息，点击右上角「新增消息」创建第一条';
+      : '暂无数据';
     return;
   }
   empty.style.display = 'none';
@@ -609,6 +630,8 @@ function submitEdit() {
 /* ---------- 初始化 ---------- */
 document.addEventListener('DOMContentLoaded', function () {
   MobileOpsStore.ready();
+  // 严格空库模式：数据一律由后端 API 拉取，不再读 localStorage 或播种演示数据
+  loadMessages();
   MobileOpsStore.subscribe(function (key) {
     if (key === MobileOpsStore.KEYS.messages) renderTable();
   });
@@ -637,7 +660,6 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });
-  renderTable();
 });
 </script>
 </body>

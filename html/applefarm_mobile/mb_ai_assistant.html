@@ -800,6 +800,8 @@
     </div>
   </div>
 
+  <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
   <script>
     // 数据
     const questionsData = {
@@ -1142,26 +1144,26 @@
 
     function loadAiConfig() {
       try {
-        var raw = localStorage.getItem('mb_ai_config');
-        if (!raw) return false;
-        var v = JSON.parse(raw);
+        /* 纯在线：AI 分类/热门问题来自后端 sf_mb_ai_* ，经 MobileOpsStore 桥接 */
+        var v = (window.MobileOpsStore && typeof MobileOpsStore.readObj === 'function')
+          ? MobileOpsStore.readObj('aiConfig') : null;
         if (!v || typeof v !== 'object') return false;
         if (Array.isArray(v.categories) && v.categories.length) {
           var cleaned = v.categories
-            .filter(function (c) { return c && c.id && c.name; })
-            .map(function (c) { return { id: String(c.id), name: String(c.name) }; });
+            .map(function (c) { return { id: String(c.category_id || c.id || ''), name: String(c.category_name || c.name || '') }; })
+            .filter(function (c) { return c.id && c.name; });
           if (cleaned.length) uiCategories = cleaned;
         }
         if (Array.isArray(v.hotQuestions) && v.hotQuestions.length) {
           var qClean = v.hotQuestions
             .filter(function (q) { return q && q.question; })
-            .map(function (q) { return { id: q.id, question: String(q.question), category: q.category ? String(q.category) : '' }; })
+            .map(function (q) { return { id: q.id, question: String(q.question), category: q.category_id ? String(q.category_id) : (q.category ? String(q.category) : '') }; })
             .filter(function (q) { return q.question.length > 0; });
           if (qClean.length) uiHotQuestions = qClean;
         }
         return true;
       } catch (e) {
-        // 损坏 JSON 一律回退默认，不让页面崩溃
+        // 损坏数据一律回退默认，不让页面崩溃
         return false;
       }
     }
@@ -1203,13 +1205,15 @@
     // 在脚本末尾 DOMContentLoaded 时调用
     bootstrapFromConfig();
 
-    // 监听外部修改（跨页面管理）：从 storage 事件接收，自动刷新
-    window.addEventListener('storage', function (e) {
-      if (e.key === 'mb_ai_config') {
-        bootstrapFromConfig();
-        renderQuestions();
-      }
-    });
+    // 后端预加载完成后重载分类与热门问题（严格空库：数据来自数据库）
+    if (window.MobileOpsStore && MobileOpsStore.subscribe) {
+      MobileOpsStore.subscribe(function (key) {
+        if (!key || key === MobileOpsStore.KEYS.aiConfig) {
+          bootstrapFromConfig();
+          renderQuestions();
+        }
+      });
+    }
 
     function switchTab(tab) {
       document.getElementById('tabQa').classList.toggle('active', tab === 'qa');
@@ -1640,17 +1644,17 @@
       document.getElementById('inputBox').value = '';
     }
 
-    /* aiHistory 读取统一兜底：脏数据不应让问答流程整体崩掉 */
+    /* aiHistory 会话内聊天记录：改用 sessionStorage（随会话，不落 localStorage 业务键） */
     function readAiHistory() {
       try {
-        var raw = localStorage.getItem('aiHistory');
+        var raw = sessionStorage.getItem('aiHistory');
         if (!raw) return [];
         var v = JSON.parse(raw);
         return Array.isArray(v) ? v : [];
       } catch (e) { return []; }
     }
     function writeAiHistory(list) {
-      try { localStorage.setItem('aiHistory', JSON.stringify(list)); return true; }
+      try { sessionStorage.setItem('aiHistory', JSON.stringify(list)); return true; }
       catch (e) { return false; }
     }
 

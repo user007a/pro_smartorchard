@@ -192,7 +192,7 @@
           <tbody id="postBody"></tbody>
         </table>
       </div>
-      <div id="emptyHint" class="empty-state" style="display:none;">暂无社区内容</div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无数据</div>
     </div>
   </main>
 </div>
@@ -215,19 +215,24 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mall-store.js"></script>
-<script src="js/shared/demo-seed.js"></script>
+<script src="../common/js/api.js"></script>
+<!-- 严格空库模式：演示数据播种已停用，数据一律来自后端 API -->
 <script>
 /* ============================================================
- * 社区审核（商城管理）
- * 数据源（H5 端 h5_community.html 写入）：
- *   h5_community_posts    数组，{ id: 'P'+时间戳, author, content, time }
- *   h5_community_comments 对象，{ [postId]: [{ text, time }] }
- *   h5_community_likes    对象，{ [postId]: number }
- *   注：后两者是对象而非数组，读取必须容错
+ * 社区审核 —— 严格空库模式
+ * 数据源：Api.get('mall_post') -> sf_mall_post
+ *   (id, author, content, images, topic, like_count, comment_count,
+ *    publish_time, status, audit_by, audit_at, reject_reason)
+ * 字段映射：
+ *   status 页面 approved <-> DB published（pending/rejected 同名）
+ *   likes    <-> like_count ; comments <-> comment_count
+ *   评论明细：DB 无明细表，详情列表显示「暂无评论明细」，计数取 comment_count
+ * 空库显示「暂无数据」，不写入 localStorage。
  * ============================================================ */
-var POSTS_KEY = 'h5_community_posts';
-var COMMENTS_KEY = 'h5_community_comments';
-var LIKES_KEY = 'h5_community_likes';
+var postList = [];
+var dataLoaded = false;
+var STATUS_TO_DB = { pending: 'pending', approved: 'published', rejected: 'rejected' };
+var STATUS_FROM_DB = { pending: 'pending', published: 'approved', approved: 'approved', rejected: 'rejected' };
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -235,43 +240,52 @@ function esc(s) {
   });
 }
 
-function readPosts() {
-  if (typeof MallStore !== 'undefined') return MallStore.posts();
-  try {
-    var v = JSON.parse(localStorage.getItem(POSTS_KEY) || '[]');
-    return Array.isArray(v) ? v : [];
-  } catch (e) {
-    return [];
+function mapPost(r) {
+  var imgs = [];
+  try { var v = JSON.parse(r.images || '[]'); if (Array.isArray(v)) imgs = v; } catch (e) { imgs = []; }
+  var t = r.publish_time || r.created_at || '';
+  return {
+    id: String(r.id),
+    author: r.author || '匿名用户',
+    content: r.content || '',
+    images: imgs,
+    topic: r.topic || '',
+    status: STATUS_FROM_DB[r.status] || 'pending',
+    time: t,
+    auditBy: r.audit_by || '',
+    auditAt: r.audit_at || '',
+    rejectReason: r.reject_reason || '',
+    likes: Number(r.like_count) || 0,
+    comments: Number(r.comment_count) || 0,
+    ts: new Date(t || 0).getTime() || 0
+  };
+}
+
+function setTableState(bodyId, emptyId, msg, colspan) {
+  var body = document.getElementById(bodyId);
+  var empty = document.getElementById(emptyId);
+  if (empty) empty.style.display = 'none';
+  if (body) body.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align:center;color:var(--text-tertiary);padding:24px 0;">' + esc(msg) + '</td></tr>';
+}
+
+function loadData() {
+  dataLoaded = false;
+  setTableState('postBody', 'emptyHint', '加载中...', 8);
+  if (!window.Api || !Api.get) {
+    setTableState('postBody', 'emptyHint', '数据加载失败：Api 未就绪', 8);
+    return;
   }
-}
-
-function writePosts(list) {
-  try {
-    localStorage.setItem(POSTS_KEY, JSON.stringify(list));
-  } catch (e) {
-    Toast.error('本地存储写入失败，动态未能保存');
-  }
-}
-
-/* 评论 / 点赞为对象映射，需容错 null 与非对象 */
-function readMap(key) {
-  try {
-    var v = JSON.parse(localStorage.getItem(key) || '{}');
-    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
-  } catch (e) {
-    return {};
-  }
-}
-
-function commentsOf(id) {
-  var map = readMap(COMMENTS_KEY);
-  var arr = map[id];
-  return Array.isArray(arr) ? arr : [];
-}
-
-function likesOf(id) {
-  var n = Number(readMap(LIKES_KEY)[id]);
-  return isNaN(n) || n < 0 ? 0 : n;
+  Api.get('mall_post', { page: 1, size: 500, sort: 'id', order: 'desc' }).then(function (res) {
+    if (!res || !res.ok) {
+      setTableState('postBody', 'emptyHint', '数据加载失败：' + ((res && res.message) || '请检查登录状态与网络'), 8);
+      return;
+    }
+    postList = ((res.data && res.data.list) || []).map(mapPost);
+    dataLoaded = true;
+    renderTable();
+  }).catch(function (err) {
+    setTableState('postBody', 'emptyHint', '数据加载失败：' + ((err && err.message) || '请检查登录状态与网络'), 8);
+  });
 }
 
 function fmtTime(iso) {
@@ -290,27 +304,7 @@ function todayStr() {
 
 /* 汇总行：按时间倒序（无法解析时间的排在最后） */
 function buildRows() {
-  var likes = readMap(LIKES_KEY);
-  var cmts = readMap(COMMENTS_KEY);
-  return readPosts().filter(function (p) { return p && typeof p === 'object'; }).map(function (p) {
-    var lc = Number(likes[p.id]);
-    var cc = Array.isArray(cmts[p.id]) ? cmts[p.id].length : 0;
-    return {
-      id: p.id,
-      author: p.author || '匿名用户',
-      content: p.content || '',
-      images: Array.isArray(p.images) ? p.images : [],
-      topic: p.topic || '',
-      status: p.status || 'approved',
-      time: p.time || '',
-      auditBy: p.auditBy || '',
-      auditAt: p.auditAt || '',
-      rejectReason: p.rejectReason || '',
-      likes: isNaN(lc) || lc < 0 ? 0 : lc,
-      comments: cc,
-      ts: new Date(p.time || 0).getTime() || 0
-    };
-  }).sort(function (a, b) { return b.ts - a.ts; });
+  return postList.slice().sort(function (a, b) { return b.ts - a.ts; });
 }
 
 function renderStats(rows) {
@@ -341,6 +335,7 @@ function filteredRows() {
 }
 
 function renderTable() {
+  if (!dataLoaded) return;
   var all = buildRows();
   var rows = filteredRows();
   renderStats(all);
@@ -350,7 +345,7 @@ function renderTable() {
 
   if (!rows.length) {
     body.innerHTML = '';
-    emptyHint.textContent = all.length ? '未找到匹配的动态' : '暂无社区内容';
+    emptyHint.textContent = all.length ? '未找到匹配的动态' : '暂无数据';
     emptyHint.style.display = 'block';
     return;
   }
@@ -360,16 +355,16 @@ function renderTable() {
     var initial = esc((r.author || '我').charAt(0));
     var statusText = { pending: '待审核', approved: '已通过', rejected: '已驳回' }[r.status] || r.status;
     var imagesHtml = r.images.length ? '<div class="post-images">' + r.images.slice(0, 3).map(function (src) {
-      return '<img src="' + esc(src) + '" alt="" onerror="this.style.display=\'none\'">';
+      return '<img src="' + esc(src) + '" alt="" onerror="this.remove()">';
     }).join('') + '</div>' : '';
-    var actions = '<button class="action-btn detail" onclick="openDetail(\'' + esc(r.id) + '\')">查看详情</button>';
+    var actions = '<button class="action-btn detail" data-post-detail="' + esc(r.id) + '">查看详情</button>';
     if (r.status === 'pending') {
-      actions += '<button class="action-btn download" onclick="reviewPost(\'' + esc(r.id) + '\',\'approved\')">通过</button>' +
-                 '<button class="action-btn delete" onclick="reviewPost(\'' + esc(r.id) + '\',\'rejected\')">驳回</button>';
+      actions += '<button class="action-btn download" data-post-review="' + esc(r.id) + '" data-review-status="approved">通过</button>' +
+                 '<button class="action-btn delete" data-post-review="' + esc(r.id) + '" data-review-status="rejected">驳回</button>';
     } else if (r.status === 'rejected') {
-      actions += '<button class="action-btn download" onclick="reviewPost(\'' + esc(r.id) + '\',\'approved\')">恢复</button>';
+      actions += '<button class="action-btn download" data-post-review="' + esc(r.id) + '" data-review-status="approved">恢复</button>';
     }
-    actions += '<button class="action-btn delete" onclick="removePost(\'' + esc(r.id) + '\')">删除</button>';
+    actions += '<button class="action-btn delete" data-post-del="' + esc(r.id) + '">删除</button>';
     return '<tr>' +
       '<td class="checkbox-col">' + (i + 1) + '</td>' +
       '<td class="text-mono" style="font-size:var(--font-size-xs);">' + esc(fmtTime(r.time)) + '</td>' +
@@ -400,20 +395,10 @@ function openDetail(id) {
   }
   if (!r) { Toast.error('未找到该动态'); return; }
 
-  var list = commentsOf(id);
-  var commentsHtml = list.length
-    ? list.map(function (c) {
-        var o = c || {};
-        return '<div class="comment-item">' +
-          '<div class="comment-text">' + esc(o.text || '') + '</div>' +
-          '<div class="comment-time">' + esc(fmtTime(o.time)) + '</div>' +
-        '</div>';
-      }).join('')
-    : '<div style="color:var(--text-tertiary);font-size:var(--font-size-sm);padding:8px 0;">该动态暂无评论</div>';
-
+  var commentsHtml = '<div style="color:var(--text-tertiary);font-size:var(--font-size-sm);padding:8px 0;">暂无评论明细</div>';
   var statusText = { pending: '待审核', approved: '已通过', rejected: '已驳回' }[r.status] || r.status;
   var imagesHtml = r.images.length ? '<div class="detail-block"><div class="detail-label">动态图片</div><div class="post-images">' +
-    r.images.map(function (src) { return '<img src="' + esc(src) + '" alt="" onerror="this.style.display=\'none\'">'; }).join('') + '</div></div>' : '';
+    r.images.map(function (src) { return '<img src="' + esc(src) + '" alt="" onerror="this.remove()">'; }).join('') + '</div></div>' : '';
 
   document.getElementById('detailBody').innerHTML =
     '<div class="detail-block"><div class="detail-label">作者</div>' +
@@ -429,7 +414,7 @@ function openDetail(id) {
     imagesHtml +
     '<div class="detail-block"><div class="detail-label">互动数据</div>' +
       '<div class="detail-value">点赞 ' + r.likes + ' 次 · 评论 ' + r.comments + ' 条</div></div>' +
-    '<div class="detail-block"><div class="detail-label">评论列表（' + list.length + '）</div>' + commentsHtml + '</div>';
+    '<div class="detail-block"><div class="detail-label">评论明细</div>' + commentsHtml + '</div>';
 
   document.getElementById('detailModal').classList.add('show');
 }
@@ -442,10 +427,17 @@ function reviewPost(id, status) {
     reason = reason.trim();
     if (!reason) { Toast.warning('驳回原因不能为空'); return; }
   }
-  var r = MallStore.reviewPost(id, status, reason, '后台管理员');
-  if (!r.ok) { Toast.error(r.error || '审核失败'); return; }
-  renderTable();
-  Toast.success(status === 'approved' ? '动态已通过审核' : '动态已驳回');
+  var body = {
+    status: STATUS_TO_DB[status] || status,
+    audit_by: '后台管理员',
+    audit_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    reject_reason: status === 'rejected' ? reason : ''
+  };
+  Api.update('mall_post', id, body).then(function (res) {
+    if (!res || !res.ok) { Toast.error((res && res.message) || '审核失败'); return; }
+    loadData();
+    Toast.success(status === 'approved' ? '动态已通过审核' : '动态已驳回');
+  }).catch(function (err) { Toast.error((err && err.message) || '审核失败'); });
 }
 
 function closeDetailModal() {
@@ -455,28 +447,32 @@ function closeDetailModal() {
 function removePost(id) {
   ConfirmDialog.show({
     title: '删除动态',
-    message: '确定删除动态「' + id + '」吗？删除后 H5 社区页将不再展示该内容及其评论，此操作不可撤销。',
+    message: '确定删除动态「' + id + '」吗？此操作不可撤销。',
     onConfirm: function () {
-      if (typeof MallStore !== 'undefined') {
-        var r = MallStore.removePost(id);
-        if (!r.ok) { Toast.error(r.error || '删除失败'); return; }
-      } else {
-        writePosts(readPosts().filter(function (p) { return p && p.id !== id; }));
-      }
-      renderTable();
-      Toast.success('动态已删除，关联评论与点赞已清理');
+      Api.remove('mall_post', id).then(function (res) {
+        if (!res || !res.ok) { Toast.error((res && res.message) || '删除失败'); return; }
+        loadData();
+        Toast.success('动态已删除');
+      }).catch(function (err) { Toast.error((err && err.message) || '删除失败'); });
     }
   });
 }
 
+/* 事件代理 */
+document.addEventListener('click', function (e) {
+  var d = e.target.closest && e.target.closest('[data-post-detail]');
+  var rev = e.target.closest && e.target.closest('[data-post-review]');
+  var del = e.target.closest && e.target.closest('[data-post-del]');
+  if (d) openDetail(d.getAttribute('data-post-detail'));
+  else if (rev) reviewPost(rev.getAttribute('data-post-review'), rev.getAttribute('data-review-status'));
+  else if (del) removePost(del.getAttribute('data-post-del'));
+});
+
 document.addEventListener('DOMContentLoaded', function () {
-  // 演示数据播种：仅在社区为空时写入 24 条动态 + 对应点赞/评论
-  DemoSeed.ensure('community');
-  if (typeof MallStore !== 'undefined') MallStore.migrate();
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });
-  renderTable();
+  loadData();
 });
 </script>
 </body>

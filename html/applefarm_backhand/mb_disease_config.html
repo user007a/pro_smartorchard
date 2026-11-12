@@ -240,7 +240,6 @@
         <div class="page-subtitle">维护移动端「病虫害识别」页用到的文件名启发式识别规则</div>
       </div>
       <div class="page-actions">
-        <button class="jg-btn" onclick="resetSeed()" title="还原为移动端初始的 7 条规则">恢复默认</button>
         <button class="jg-btn" onclick="refreshAll()">刷新</button>
         <button class="jg-btn jg-btn-primary" onclick="openRuleModal()">新增规则</button>
       </div>
@@ -283,7 +282,7 @@
           <tbody id="ruleBody"></tbody>
         </table>
       </div>
-      <div id="emptyHint" class="empty-state" style="display:none;">暂无识别规则，请新增规则</div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无数据</div>
     </div>
   </main>
 </div>
@@ -322,7 +321,7 @@
         </div>
       </div>
       <div class="modal-field">
-        <label>防治要点<span style="color:var(--error);">*</span></label>
+        <label>防治要点（数据库暂无此字段，不入库）</label>
         <textarea id="rulePreventInput" placeholder="每行一条防治要点"
           style="min-height:140px;"
           maxlength="600"></textarea>
@@ -343,168 +342,29 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mobile-ops-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 /* ============================================================
- * 病害识别规则配置（T13）
- * 数据源：localStorage['mb_disease_rules']
- * 单条结构：
- *   { id, keyword: [str], disease, risk ('high'|'medium'|'low'),
- *     confidence: Number, prevent: [str], enabled: Boolean }
- * 移动端 mb_disease.html 读取同一存储；未配置时回到本文件 SEED 默认值（来自原 DEMO_RULES）。
- *
- * 移动端使用细节：
- *   - keyword 用于对上传图片的文件名做小写匹配，命中即返回该规则
- *   - 禁用（enabled=false）规则不参与匹配
- *   - 无命中时按文件名哈希稳定映射到第一条启用的规则（沿用移动端原逻辑）
+ * 病害识别规则配置（T13）—— 严格空库模式
+ * 数据源：Api.get('mb_disease_rule') -> sf_mb_disease_rule
+ *   (id, disease_name, match_keywords, confidence, risk_level, status)
+ * 字段映射：
+ *   disease <-> disease_name
+ *   keyword <-> match_keywords (逗号分隔字符串)
+ *   risk    <-> risk_level (high/medium/low <-> 高/中/低)
+ *   confidence <-> confidence
+ *   enabled <-> status (active/disabled)
+ *   防治要点：DB 无对应列，保留输入控件但不入库、不编造
+ * 空库显示「暂无数据」，不内置演示记录，不写入 localStorage。
  * ============================================================ */
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'mb_disease_rules';
-
-  /* 把原 7 条 DEMO_RULES 的 HTML <br> 拆成纯文本数组，每行就是一条独立防治要点 */
-  var SEED_RULES = [
-    { id: 'rule_rot',
-      keyword: ['rot', 'fub', '腐烂'],
-      disease: '苹果腐烂病',
-      risk: 'high',
-      confidence: 91,
-      prevent: [
-        '及时刮除病斑并涂抹杀菌剂（如戊唑醇）',
-        '剪除病枝集中烧毁，减少侵染源',
-        '增施有机肥、控制负载，增强树势',
-        '冬季清园，树干涂白防冻防病'
-      ],
-      enabled: true },
-    { id: 'rule_ring',
-      keyword: ['ring', 'lunwen', '轮纹'],
-      disease: '苹果轮纹病',
-      risk: 'high',
-      confidence: 92,
-      prevent: [
-        '及时清除病枝病果',
-        '春季发芽前喷布波尔多液',
-        '谢花后喷施甲基托布津',
-        '加强果园排水通风'
-      ],
-      enabled: true },
-    { id: 'rule_spot',
-      keyword: ['spot', 'leaf', '斑点', '落叶'],
-      disease: '苹果斑点落叶病',
-      risk: 'medium',
-      confidence: 88,
-      prevent: [
-        '清除落叶与病枝，减少病原',
-        '谢花后喷多抗霉素或代森锰锌',
-        '生长期视病情间隔 10~15 天连喷 2~3 次',
-        '平衡施肥，避免偏施氮肥'
-      ],
-      enabled: true },
-    { id: 'rule_red',
-      keyword: ['red', 'spider', 'mite', 'hongzhizhu', '红蜘蛛'],
-      disease: '红蜘蛛虫害',
-      risk: 'high',
-      confidence: 90,
-      prevent: [
-        '冬季刮除粗老树皮、清除越冬螨卵',
-        '萌芽前喷石硫合剂或矿物油',
-        '发生期喷阿维菌素、螺螨酯，注意轮换',
-        '保护捕食螨、草蛉等天敌'
-      ],
-      enabled: true },
-    { id: 'rule_aphid',
-      keyword: ['aphid', 'ya', '蚜虫'],
-      disease: '蚜虫虫害',
-      risk: 'medium',
-      confidence: 86,
-      prevent: [
-        '剪除虫梢，减少虫源',
-        '发生期喷吡虫啉、噻虫嗪',
-        '保护瓢虫、草蛉等天敌',
-        '避免偏施氮肥，防止徒长诱蚜'
-      ],
-      enabled: true },
-    { id: 'rule_anth',
-      keyword: ['anthracnose', '炭疽'],
-      disease: '苹果炭疽病',
-      risk: 'medium',
-      confidence: 85,
-      prevent: [
-        '清除病果、病枝，集中处理',
-        '套袋前喷保护性杀菌剂',
-        '生长期喷多菌灵、咪鲜胺等',
-        '加强通风透光，降低果园湿度'
-      ],
-      enabled: true },
-    { id: 'rule_healthy',
-      keyword: ['healthy', 'normal', 'ok', '健康', '正常'],
-      disease: '未发现明显病害',
-      risk: 'low',
-      confidence: 94,
-      prevent: [
-        '叶片、果面未见典型病斑',
-        '建议保持现有水肥与通风管理',
-        '定期巡园，早发现早防治',
-        '关注后续天气变化，做好预防'
-      ],
-      enabled: true }
-  ];
-
+  var ruleList = [];
   var RISK_TEXT = { high: '高风险', medium: '中风险', low: '低风险' };
-
-  function readAll() {
-    var v = MobileOpsStore.readList('diseaseRules');
-    if (!v.length) return null;
-    var cleaned = [];
-    v.forEach(function (r) {
-      if (!r || !r.disease) return;
-      if (!Array.isArray(r.keyword)) return;
-      if (!Array.isArray(r.prevent)) return;
-      cleaned.push(normalizeRule(r));
-    });
-    return cleaned;
-  }
-
-  function ensureSeed() {
-    var cur = readAll();
-    if (cur && cur.length) return cur;
-    var seed = SEED_RULES.slice().map(normalizeRule);
-    writeAll(seed);
-    return seed;
-  }
-
-  function normalizeRule(r) {
-    var kws = (r.keyword || [])
-      .map(function (k) { return String(k).trim().toLowerCase(); })
-      .filter(function (k) { return k.length > 0; });
-    var pts = (r.prevent || [])
-      .map(function (p) { return String(p).trim(); })
-      .filter(function (p) { return p.length > 0; });
-    var risk = r.risk;
-    if (risk !== 'high' && risk !== 'medium' && risk !== 'low') risk = 'medium';
-    var conf = Number(r.confidence);
-    if (!isFinite(conf) || conf < 1) conf = 80;
-    if (conf > 100) conf = 100;
-    var enabled = r.enabled === false ? false : true;
-    return {
-      id: r.id || ('rule_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
-      keyword: kws,
-      disease: String(r.disease),
-      risk: risk,
-      confidence: conf,
-      prevent: pts,
-      enabled: enabled
-    };
-  }
-
-  function writeAll(list, action) {
-    if (!MobileOpsStore.writeList(MobileOpsStore.KEYS.diseaseRules, list)) {
-      Toast.error('本地存储写入失败，请稍后重试');
-      return false;
-    }
-    MobileOpsStore.audit(action || '保存识别规则', 'diseaseRules', '', '共 ' + list.length + ' 条规则');
-    return true;
-  }
+  var RISK_TO_DB = { high: '高', medium: '中', low: '低' };
+  var RISK_FROM_DB = { '高': 'high', '中': 'medium', '低': 'low',
+    high: 'high', medium: 'medium', low: 'low' };
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -512,23 +372,55 @@
     });
   }
 
-  function genId() {
-    return 'rule_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  function mapRule(r) {
+    var kws = String(r.match_keywords || '')
+      .split(/[\s,,，]+/)
+      .map(function (k) { return k.trim().toLowerCase(); })
+      .filter(function (k) { return k.length > 0; });
+    var conf = Number(r.confidence);
+    if (!isFinite(conf) || conf < 1) conf = 80;
+    if (conf > 100) conf = 100;
+    return {
+      id: String(r.id),
+      keyword: kws,
+      disease: r.disease_name || '',
+      risk: RISK_FROM_DB[r.risk_level] || 'medium',
+      confidence: conf,
+      prevent: [],
+      enabled: r.status !== 'disabled'
+    };
+  }
+
+  function setTableState(bodyId, emptyId, msg, colspan) {
+    var body = document.getElementById(bodyId);
+    var empty = document.getElementById(emptyId);
+    if (empty) empty.style.display = 'none';
+    if (body) body.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align:center;color:var(--text-tertiary);padding:24px 0;">' + esc(msg) + '</td></tr>';
+  }
+
+  function loadData() {
+    setTableState('ruleBody', 'emptyHint', '加载中...', 6);
+    if (!window.Api || !Api.get) {
+      setTableState('ruleBody', 'emptyHint', '数据加载失败：Api 未就绪', 6);
+      return;
+    }
+    Api.get('mb_disease_rule', { page: 1, size: 500, sort: 'id', order: 'asc' }).then(function (res) {
+      if (!res || !res.ok) {
+        setTableState('ruleBody', 'emptyHint', '数据加载失败：' + ((res && res.message) || '请检查登录状态与网络'), 6);
+        return;
+      }
+      ruleList = ((res.data && res.data.list) || []).map(mapRule);
+      refreshAll();
+    }).catch(function (err) {
+      setTableState('ruleBody', 'emptyHint', '数据加载失败：' + ((err && err.message) || '请检查登录状态与网络'), 6);
+    });
   }
 
   function parseKeywordInput(text) {
-    // 同时支持空格、中文逗号、英文逗号分隔
     return String(text || '')
       .split(/[\s,,，]+/)
       .map(function (k) { return k.trim().toLowerCase(); })
       .filter(function (k) { return k.length > 0; });
-  }
-
-  function parsePreventInput(text) {
-    return String(text || '')
-      .split(/\r?\n/)
-      .map(function (p) { return p.trim(); })
-      .filter(function (p) { return p.length > 0; });
   }
 
   /* ====================== 渲染 ====================== */
@@ -550,17 +442,17 @@
     var empty = document.getElementById('emptyHint');
     if (!list.length) {
       body.innerHTML = '';
+      empty.textContent = '暂无数据';
       empty.style.display = 'block';
       return;
     }
     empty.style.display = 'none';
     body.innerHTML = list.map(function (r) {
       var kwHtml = r.keyword.map(function (k) { return '<span class="kw-tag">' + esc(k) + '</span>'; }).join('');
-      var preventSummary = r.prevent.length ? r.prevent.length + ' 条要点' : '无要点';
       return '<tr>' +
         '<td>' +
           '<div class="cell-title">' + esc(r.disease) + '</div>' +
-          '<div class="cell-sub">' + esc(preventSummary) + '</div>' +
+          '<div class="cell-sub">防治要点：—</div>' +
         '</td>' +
         '<td><div>' + kwHtml + '</div></td>' +
         '<td><span class="risk-tag ' + esc(r.risk) + '">' + esc(RISK_TEXT[r.risk]) + '</span></td>' +
@@ -576,9 +468,8 @@
   }
 
   function refreshAll() {
-    var data = ensureSeed();
-    renderStats(data);
-    renderTable(data);
+    renderStats(ruleList);
+    renderTable(ruleList);
   }
 
   /* ====================== 弹窗 ====================== */
@@ -597,16 +488,14 @@
     paintToggle();
 
     if (id) {
-      var data = readAll();
-      if (!data) return;
       var target = null;
-      data.forEach(function (r) { if (r.id === id) target = r; });
+      ruleList.forEach(function (r) { if (r.id === id) target = r; });
       if (!target) { Toast.error('未找到该规则'); return; }
       document.getElementById('ruleDiseaseInput').value = target.disease || '';
       document.getElementById('ruleKeywordInput').value = (target.keyword || []).join(' ');
       document.getElementById('ruleRiskInput').value = target.risk || 'medium';
       document.getElementById('ruleConfInput').value = String(target.confidence || 85);
-      document.getElementById('rulePreventInput').value = (target.prevent || []).join('\n');
+      document.getElementById('rulePreventInput').value = '';
       pendingEnabled = target.enabled !== false;
       paintToggle();
     }
@@ -636,95 +525,56 @@
     var kwArr = parseKeywordInput(document.getElementById('ruleKeywordInput').value);
     var risk = document.getElementById('ruleRiskInput').value;
     var conf = Number(document.getElementById('ruleConfInput').value);
-    var prevent = parsePreventInput(document.getElementById('rulePreventInput').value);
 
     if (!disease) { Toast.warning('请填写病害名称'); return; }
     if (!kwArr.length) { Toast.warning('请至少填写一个匹配关键字'); return; }
     if (risk !== 'high' && risk !== 'medium' && risk !== 'low') risk = 'medium';
     if (!isFinite(conf) || conf < 1 || conf > 100) { Toast.warning('置信度需在 1~100 之间'); return; }
-    if (!prevent.length) { Toast.warning('请填写至少一条防治要点'); return; }
 
-    var data = ensureSeed();
-    if (editingId) {
-      var hit = false;
-      data.forEach(function (r) {
-        if (r.id === editingId) {
-          r.disease = disease;
-          r.keyword = kwArr;
-          r.risk = risk;
-          r.confidence = conf;
-          r.prevent = prevent;
-          r.enabled = pendingEnabled;
-          hit = true;
-        }
-      });
-      if (!hit) { Toast.error('未找到该规则'); return; }
-      if (writeAll(data, '编辑识别规则')) {
-        closeRuleModal();
-        refreshAll();
-        Toast.success('规则已更新');
-      }
-    } else {
-      data.push({
-        id: genId(),
-        disease: disease,
-        keyword: kwArr,
-        risk: risk,
-        confidence: conf,
-        prevent: prevent,
-        enabled: pendingEnabled
-      });
-      if (writeAll(data, '新增识别规则')) {
-        closeRuleModal();
-        refreshAll();
-        Toast.success('已新增识别规则');
-      }
-    }
+    var isEdit = !!editingId;
+    var body = {
+      disease_name: disease,
+      match_keywords: kwArr.join(','),
+      risk_level: RISK_TO_DB[risk] || '中',
+      confidence: conf,
+      status: pendingEnabled ? 'active' : 'disabled'
+    };
+    var req = isEdit
+      ? Api.update('mb_disease_rule', editingId, body)
+      : Api.create('mb_disease_rule', body);
+    req.then(function (res) {
+      if (!res || !res.ok) { Toast.error((res && res.message) || '保存失败'); return; }
+      closeRuleModal();
+      loadData();
+      Toast.success(isEdit ? '规则已更新' : '已新增识别规则');
+    }).catch(function (err) { Toast.error((err && err.message) || '保存失败'); });
   }
 
   function toggleRule(id) {
-    var data = readAll();
-    if (!data) return;
-    var hit = false, target = null;
-    data.forEach(function (r) { if (r.id === id) { r.enabled = !r.enabled; hit = true; target = r; } });
-    if (!hit) { Toast.error('未找到该规则'); return; }
-    if (writeAll(data, target.enabled ? '启用识别规则' : '停用识别规则')) {
-      refreshAll();
-      Toast.success('已' + (target.enabled ? '启用' : '停用') + '规则');
-    }
+    var target = null;
+    ruleList.forEach(function (r) { if (r.id === id) target = r; });
+    if (!target) { Toast.error('未找到该规则'); return; }
+    var next = !target.enabled;
+    Api.update('mb_disease_rule', id, { status: next ? 'active' : 'disabled' }).then(function (res) {
+      if (!res || !res.ok) { Toast.error((res && res.message) || '操作失败'); return; }
+      loadData();
+      Toast.success('已' + (next ? '启用' : '停用') + '规则');
+    }).catch(function (err) { Toast.error((err && err.message) || '操作失败'); });
   }
 
   function deleteRule(id) {
-    var data = readAll();
-    if (!data) return;
     var target = null;
-    data.forEach(function (r) { if (r.id === id) target = r; });
+    ruleList.forEach(function (r) { if (r.id === id) target = r; });
     if (!target) { Toast.error('未找到该规则'); return; }
     ConfirmDialog.show({
       title: '删除识别规则',
       message: '确认删除「' + (target.disease || id) + '」规则？删除后该病害将无法被命中。',
       onConfirm: function () {
-        var cur = readAll();
-        cur = cur.filter(function (r) { return r.id !== id; });
-        if (writeAll(cur, '删除识别规则')) {
-          refreshAll();
+        Api.remove('mb_disease_rule', id).then(function (res) {
+          if (!res || !res.ok) { Toast.error((res && res.message) || '删除失败'); return; }
+          loadData();
           Toast.success('规则已删除');
-        }
-      }
-    });
-  }
-
-  /* ====================== 默认还原 ====================== */
-  function resetSeed() {
-    ConfirmDialog.show({
-      title: '恢复默认规则',
-      message: '将所有识别规则还原为移动端内置的 7 条默认规则。继续？',
-      onConfirm: function () {
-        var seed = SEED_RULES.slice().map(normalizeRule);
-        if (writeAll(seed, '恢复默认识别规则')) {
-          refreshAll();
-          Toast.success('已恢复默认规则');
-        }
+        }).catch(function (err) { Toast.error((err && err.message) || '删除失败'); });
       }
     });
   }
@@ -739,18 +589,12 @@
     else if (delEl) deleteRule(delEl.getAttribute('data-del-rule'));
   });
 
-  /* ====================== 启动 ====================== */
-  window.addEventListener('storage', function (e) {
-    if (e.key === STORAGE_KEY) refreshAll();
-  });
-
   document.addEventListener('DOMContentLoaded', function () {
-    refreshAll();
+    loadData();
   });
 
   /* 暴露给内联 onclick */
-  window.refreshAll = refreshAll;
-  window.resetSeed = resetSeed;
+  window.refreshAll = loadData;
   window.openRuleModal = openRuleModal;
   window.closeRuleModal = closeRuleModal;
   window.submitRule = submitRule;

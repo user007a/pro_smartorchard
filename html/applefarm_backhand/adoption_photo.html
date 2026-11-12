@@ -261,7 +261,7 @@
     <div class="page-section data-section">
       <div class="tree-group-grid" id="treeGrid"></div>
       <div id="emptyHint" class="empty-state" style="display:none;">
-        暂无成长照片，点击右上角「上传照片」为认养果树添加第一张照片
+        暂无数据
       </div>
     </div>
   </main>
@@ -331,69 +331,26 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
-<script src="js/shared/demo-seed.js"></script>
+<!-- 严格空库模式：演示数据播种已停用，数据一律来自后端 API -->
 <script src="js/shared/adoption-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 /* ============================================================
- * 认养成长相册
- * 数据源：localStorage['h5_adoption_photos']
- *   结构：对象型（不是数组）：{ [果树编号]: [{ url, time, stage }] }
- * 写入方 = 本页（后台上传）；读取方 = H5 端 h5_adoption.html「查看照片」
- * 说明：url 为相对路径（相对 applefarm_h5/）或 base64 dataURL（真实文件上传，
- *      L-4 改造）。本页展示时相对路径统一补 ../applefarm_h5/ 前缀，dataURL 原样使用。
+ * 认养成长相册 —— 严格空库模式
+ * 数据源（通用 CRUD，前端关联）：
+ *   Api.get('adoption_photo') -> sf_adoption_photo(id, tree_id, file_id, stage, shoot_time)
+ *   Api.get('file')           -> sf_file(id, store_path)  图片经 /uploads/ 访问
+ *   Api.get('adoption_tree')  -> sf_adoption_tree(id, tree_code) 果树分组
+ * 说明：DB 无图片 URL/base64 列，也无文件上传写入接口，故图片通过 file_id
+ *   关联 sf_file.store_path 展示；上传仅落库照片记录（tree_id/stage/shoot_time），
+ *   不写 localStorage、不内置演示数据。
+ * 空库显示「暂无数据」。
  * ============================================================ */
-var PHOTO_KEY = 'h5_adoption_photos';
-var ADOPTION_KEY = 'snzg_adoptions';
-var H5_DIR = '../applefarm_h5/';
+var photoMap = {};       /* { [果树编号]: [{ id, treeId, url, time, stage }] } */
+var treeOptions = [];    /* 已登记果树 [{ id, code }] */
+var dataLoaded = false;
 var OTHER_TREE = '__other__';
-var S = window.AdoptionStore;
-
-/* 成长阶段枚举（与 H5 端 stage 字段兼容） */
 var STAGE_OPTIONS = ['生长', '开花', '结果', '成熟', '采摘'];
-
-/* ---------- 数据读写（对象型结构，逐层容错） ---------- */
-function readPhotoMap() {
-  try {
-    var raw = localStorage.getItem(PHOTO_KEY);
-    if (!raw) return {};
-    var v = JSON.parse(raw);
-    // 顶层必须是对象；若被误写成数组则按空处理，避免污染
-    if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
-    var out = {};
-    Object.keys(v).forEach(function (k) {
-      var arr = v[k];
-      if (!Array.isArray(arr)) return;   // 跳过脏数据
-      out[k] = arr.filter(function (p) { return p && typeof p === 'object'; })
-        .map(function (p) {
-          return { url: String(p.url || ''), time: p.time || '', stage: p.stage || '' };
-        });
-    });
-    return out;
-  } catch (e) {
-    return {};
-  }
-}
-
-function writePhotoMap(map) {
-  try {
-    localStorage.setItem(PHOTO_KEY, JSON.stringify(map));
-    return true;
-  } catch (e) {
-    Toast.error('本地存储写入失败，照片未能保存');
-    return false;
-  }
-}
-
-function readAdoptions() {
-  try {
-    var raw = localStorage.getItem(ADOPTION_KEY);
-    if (!raw) return [];
-    var v = JSON.parse(raw);
-    return Array.isArray(v) ? v.filter(function (x) { return x && typeof x === 'object'; }) : [];
-  } catch (e) {
-    return [];
-  }
-}
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -409,12 +366,68 @@ function fmtTime(t) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
-/* 相对路径转可用于后台页面的 src（相对 applefarm_h5/ 目录）；http(s) 与 dataURL 原样返回 */
-function resolveUrl(url) {
-  var u = String(url || '').trim();
-  if (!u) return '';
-  if (/^(https?:|data:|blob:)/i.test(u)) return u;
-  return H5_DIR + u.replace(/^\.?\//, '');
+/* sf_file.store_path -> 可访问 URL（app.js 已挂载 /uploads 静态服务） */
+function fileUrl(p) {
+  p = String(p || '').trim();
+  if (!p) return '';
+  if (/^(https?:|data:|blob:|\/)/i.test(p)) return p;
+  return '/uploads/' + p.replace(/^uploads\//i, '').replace(/^\/+/, '');
+}
+
+function setGridState(msg) {
+  var grid = document.getElementById('treeGrid');
+  var empty = document.getElementById('emptyHint');
+  if (grid) grid.innerHTML = '';
+  if (empty) { empty.textContent = msg; empty.style.display = 'block'; }
+}
+
+function loadData() {
+  dataLoaded = false;
+  setGridState('加载中...');
+  if (!window.Api || !Api.get) {
+    setGridState('数据加载失败：Api 未就绪');
+    return;
+  }
+  Promise.all([
+    Api.get('adoption_photo', { page: 1, size: 500, sort: 'id', order: 'desc' }),
+    Api.get('file', { page: 1, size: 500 }),
+    Api.get('adoption_tree', { page: 1, size: 500 })
+  ]).then(function (res) {
+    var pr = res[0], fr = res[1], tr = res[2];
+    if (!pr || !pr.ok) {
+      setGridState('数据加载失败：' + ((pr && pr.message) || '请检查登录状态与网络'));
+      return;
+    }
+    var fileMap = {}, treeMap = {};
+    ((fr && fr.ok && fr.data && fr.data.list) || []).forEach(function (f) {
+      fileMap[String(f.id)] = f.store_path || '';
+    });
+    ((tr && tr.ok && tr.data && tr.data.list) || []).forEach(function (t) {
+      treeMap[String(t.id)] = t.tree_code || String(t.id);
+    });
+    treeOptions = ((tr && tr.ok && tr.data && tr.data.list) || []).map(function (t) {
+      return { id: String(t.id), code: t.tree_code || String(t.id) };
+    });
+    var map = {};
+    ((pr.data && pr.data.list) || []).forEach(function (r) {
+      var tid = r.tree_id == null ? '未关联果树' : (treeMap[String(r.tree_id)] || String(r.tree_id));
+      if (!map[tid]) map[tid] = [];
+      map[tid].push({
+        id: String(r.id),
+        treeId: tid,
+        url: fileUrl(fileMap[String(r.file_id)]),
+        time: r.shoot_time || r.created_at || '',
+        stage: r.stage || ''
+      });
+    });
+    photoMap = map;
+    dataLoaded = true;
+    renderStats(photoMap);
+    renderList();
+    fillTreeOptions();
+  }).catch(function (err) {
+    setGridState('数据加载失败：' + ((err && err.message) || '请检查登录状态与网络'));
+  });
 }
 
 /* ---------- 统计与渲染 ---------- */
@@ -436,7 +449,6 @@ function renderStats(map) {
   document.getElementById('statLatest').textContent = latest ? fmtTime(latest) : '—';
 }
 
-/* 组内按拍摄时间倒序（与 H5 端照片墙顺序一致），索引与展示顺序保持一致 */
 function sortedPhotos(arr) {
   return (arr || []).slice().sort(function (a, b) {
     var ta = new Date(a.time || 0).getTime();
@@ -447,18 +459,16 @@ function sortedPhotos(arr) {
   });
 }
 
-function photoCellHtml(treeId, idx, p) {
-  var src = resolveUrl(p.url);
+function photoCellHtml(p) {
+  var src = p.url;
   var img = src
-    ? '<img class="photo-cell-img" src="' + esc(src) + '" alt="成长照片" loading="lazy"' +
-      ' onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';"' +
-      ' onclick="openViewer(\'' + esc(treeId) + '\',' + idx + ')">'
+    ? '<img class="photo-cell-img" src="' + esc(src) + '" alt="成长照片" loading="lazy" data-photo-view="' + esc(p.id) + '">'
     : '';
   return '<div class="photo-cell">' +
     img +
-    '<div class="photo-fallback"' + (src ? '' : ' style="display:flex;"' ) + '>' +
+    '<div class="photo-fallback" style="display:' + (src ? 'none' : 'flex') + '">' +
       (src ? '图片已失效' : '未设置图片') + '</div>' +
-    '<button class="photo-del" title="删除照片" onclick="deletePhoto(\'' + esc(treeId) + '\',' + idx + ')">&times;</button>' +
+    '<button class="photo-del" title="删除照片" data-photo-del="' + esc(p.id) + '">&times;</button>' +
     '<div class="photo-cell-meta">' +
       '<span class="photo-cell-stage">' + esc(p.stage || '成长') + '</span>' +
       '<span class="photo-cell-time">' + esc(fmtTime(p.time)) + '</span>' +
@@ -467,16 +477,14 @@ function photoCellHtml(treeId, idx, p) {
 }
 
 function renderList() {
-  var map = readPhotoMap();
-  renderStats(map);
-
+  if (!dataLoaded) return;
+  renderStats(photoMap);
   var kw = document.getElementById('searchInput').value.trim().toLowerCase();
   var stage = document.getElementById('stageSelect').value;
-
-  var keys = Object.keys(map).filter(function (k) {
+  var keys = Object.keys(photoMap).filter(function (k) {
     if (kw && k.toLowerCase().indexOf(kw) === -1) return false;
     if (stage) {
-      var arr = map[k] || [];
+      var arr = photoMap[k] || [];
       var hit = arr.some(function (p) { return (p.stage || '成长') === stage; });
       if (!hit) return false;
     }
@@ -485,25 +493,21 @@ function renderList() {
 
   var grid = document.getElementById('treeGrid');
   var empty = document.getElementById('emptyHint');
-
   if (!keys.length) {
     grid.innerHTML = '';
     empty.style.display = 'block';
-    empty.textContent = Object.keys(map).length
-      ? '没有符合条件的果树照片，试试调整筛选条件'
-      : '暂无成长照片，点击右上角「上传照片」为认养果树添加第一张照片';
+    empty.textContent = Object.keys(photoMap).length ? '没有符合条件的果树照片' : '暂无数据';
     return;
   }
   empty.style.display = 'none';
-
   grid.innerHTML = keys.map(function (k) {
-    var arr = sortedPhotos(map[k]);
+    var arr = sortedPhotos(photoMap[k]);
     return '<div class="tree-group">' +
       '<div class="tree-group-header">' +
         '<span class="tree-group-code">' + esc(k) + '</span>' +
         '<span class="tree-group-count">' + arr.length + ' 张</span>' +
       '</div>' +
-      '<div class="photo-grid">' + arr.map(function (p, i) { return photoCellHtml(k, i, p); }).join('') + '</div>' +
+      '<div class="photo-grid">' + arr.map(function (p) { return photoCellHtml(p); }).join('') + '</div>' +
     '</div>';
   }).join('');
 }
@@ -517,19 +521,29 @@ function resetFilter() {
 }
 
 /* ---------- 图片查看 ---------- */
-function openViewer(treeId, idx) {
-  var map = readPhotoMap();
-  var p = sortedPhotos(map[treeId])[idx];
-  if (!p || !p.url) { Toast.warning('照片数据已变更，请刷新后重试'); return; }
+function photoById(id) {
+  var keys = Object.keys(photoMap);
+  for (var i = 0; i < keys.length; i++) {
+    var arr = sortedPhotos(photoMap[keys[i]]);
+    for (var j = 0; j < arr.length; j++) {
+      if (arr[j].id === id) return arr[j];
+    }
+  }
+  return null;
+}
+
+function openViewerById(id) {
+  var p = photoById(id);
+  if (!p || !p.url) { Toast.warning('照片暂无可预览图片'); return; }
   var img = document.getElementById('viewerImg');
   img.style.display = '';
-  img.src = resolveUrl(p.url);
+  img.src = p.url;
   img.onerror = function () {
     this.style.display = 'none';
     document.getElementById('viewerFallback').style.display = 'block';
   };
   document.getElementById('viewerFallback').style.display = 'none';
-  document.getElementById('viewerCap').textContent = treeId + ' · ' + (p.stage || '成长') + ' · ' + fmtTime(p.time);
+  document.getElementById('viewerCap').textContent = (p.treeId || '') + ' · ' + (p.stage || '成长') + ' · ' + fmtTime(p.time);
   document.getElementById('viewerOverlay').classList.add('show');
 }
 
@@ -538,32 +552,18 @@ function closeViewer() {
 }
 
 /* ---------- 删除 ---------- */
-function deletePhoto(treeId, idx) {
-  var map = readPhotoMap();
-  var p = sortedPhotos(map[treeId])[idx];
+function deletePhoto(id) {
+  var p = photoById(id);
   if (!p) { Toast.error('未找到该照片'); return; }
   ConfirmDialog.show({
     title: '删除照片',
-    message: '将删除 ' + treeId + ' 在「' + (p.stage || '成长') + '」阶段的 1 张照片，删除后不可恢复。',
+    message: '将删除「' + (p.treeId || '') + '」在「' + (p.stage || '成长') + '」阶段的 1 张照片，删除后不可恢复。',
     onConfirm: function () {
-      /* 删除统一走 AdoptionStore，写入前按果树编号归一并校验照片存在 */
-      if (S && S.removePhoto) {
-        try {
-          S.removePhoto(treeId, p.url);
-        } catch (e) { Toast.error(e.message); return; }
-        renderList();
+      Api.remove('adoption_photo', id).then(function (res) {
+        if (!res || !res.ok) { Toast.error((res && res.message) || '删除失败'); return; }
+        loadData();
         Toast.success('照片已删除');
-        return;
-      }
-      var cur = readPhotoMap();
-      var arr = sortedPhotos(cur[treeId]);
-      arr.splice(idx, 1);
-      if (arr.length) cur[treeId] = arr;
-      else delete cur[treeId];
-      if (writePhotoMap(cur)) {
-        renderList();
-        Toast.success('照片已删除');
-      }
+      }).catch(function (err) { Toast.error((err && err.message) || '删除失败'); });
     }
   });
 }
@@ -572,54 +572,25 @@ function deletePhoto(treeId, idx) {
 function initStageSelect() {
   var stageSelect = document.getElementById('stageSelect');
   var upStage = document.getElementById('upStage');
-  STAGE_OPTIONS.forEach(function (s) {
+  STAGE_OPTIONS.forEach(function (st) {
     var o1 = document.createElement('option');
-    o1.value = s; o1.textContent = s;
+    o1.value = st; o1.textContent = st;
     stageSelect.appendChild(o1);
     var o2 = document.createElement('option');
-    o2.value = s; o2.textContent = s;
+    o2.value = st; o2.textContent = st;
     upStage.appendChild(o2);
   });
 }
 
-/* 认养编号统一归一：AD-A1-001 / A001 / A1-001 一律落为 A1-001，
-   与 AdoptionStore 主键及 H5 端展示口径保持一致 */
-function stripAdPrefix(id) {
-  var raw = String(id || '').trim();
-  if (S) return S.normalizeCode(raw) || raw.replace(/^AD-/i, '').trim();
-  return raw.replace(/^AD-/i, '').trim();
-}
-
-/* 果树下拉：认养台账已认养果树 + H5 认养记录 + 已有照片的果树 + 手工输入新编号 */
+/* 果树下拉来自真实 sf_adoption_tree，value = 果树主键 */
 function fillTreeOptions() {
   var sel = document.getElementById('upTreeSelect');
-  var map = readPhotoMap();
-  var seen = {};
   var html = '';
-
-  function addOption(id, label) {
-    id = stripAdPrefix(id);
-    if (!id || seen[id]) return;
-    seen[id] = true;
-    html += '<option value="' + esc(id) + '">' + esc(label || id) + '</option>';
-  }
-
-  if (S) {
-    S.trees().filter(function (t) { return t.status === 'adopted'; }).forEach(function (t) {
-      addOption(t.treeCode, t.treeCode + ' · ' + (t.adopter ? t.adopter + ' / ' : '') + (t.variety || '已认养果树'));
-    });
-    S.h5Adoptions().forEach(function (a) {
-      addOption(a.treeNo || a.id, (S.normalizeCode(a.treeNo || a.id) || a.id) + ' · ' + (a.adopter || a.name || 'H5 认养'));
-    });
-  }
-  readAdoptions().forEach(function (a) {
-    addOption(a.id, stripAdPrefix(a.id) + ' · ' + (a.treeName || '已认养果树'));
-  });
-  Object.keys(map).forEach(function (k) {
-    addOption(k, k + '（已有照片）');
+  treeOptions.forEach(function (t) {
+    html += '<option value="' + esc(t.id) + '">' + esc(t.code) + '</option>';
   });
   html += '<option value="' + OTHER_TREE + '">其他果树（手工输入编号）</option>';
-  sel.innerHTML = html || '<option value="' + OTHER_TREE + '">其他果树（手工输入编号）</option>';
+  sel.innerHTML = html;
 }
 
 function syncTreeManual() {
@@ -627,22 +598,17 @@ function syncTreeManual() {
   document.getElementById('upTreeManualWrap').style.display = isOther ? '' : 'none';
 }
 
-/* ---------- 照片文件选择与压缩（L-4）----------
-   原实现只接受手工填写的图片 URL（file:// 下多为失效链接），现改为真实文件上传：
-   FileReader 读取 → canvas 等比压缩 → base64 dataURL 直存 localStorage，
-   H5 端「查看照片」无需任何图片服务器即可直接显示。
-   容量控制：原图 ≤ 8MB；压缩后长边 ≤ 1280px、JPEG 起始质量 0.82，
-   若仍超 400KB 则逐级降质，避免撑爆 localStorage 配额。 */
+/* ---------- 照片文件选择与压缩（保留交互，压缩结果仅用于本地预览） ---------- */
 var PICKED_PHOTO = { dataUrl: '', name: '' };
 var MAX_FILE_BYTES = 8 * 1024 * 1024;
 var MAX_DATAURL_BYTES = 400 * 1024;
 var MAX_EDGE = 1280;
 
 function dataUrlBytes(u) {
-  var s = String(u || '');
-  var i = s.indexOf(',');
+  var st = String(u || '');
+  var i = st.indexOf(',');
   if (i < 0) return 0;
-  return Math.round((s.length - i - 1) * 0.75);
+  return Math.round((st.length - i - 1) * 0.75);
 }
 
 function handleFilePick(input) {
@@ -683,13 +649,11 @@ function compressImage(src, done) {
       var cw = Math.max(1, Math.round(w * scale));
       var ch = Math.max(1, Math.round(h * scale));
       var canvas = document.createElement('canvas');
-      canvas.width = cw;
-      canvas.height = ch;
+      canvas.width = cw; canvas.height = ch;
       var ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#ffffff';          // 透明 PNG 压成 JPEG 时补白底
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, cw, ch);
       ctx.drawImage(img, 0, 0, cw, ch);
-
       var quality = 0.82;
       var out = canvas.toDataURL('image/jpeg', quality);
       while (dataUrlBytes(out) > MAX_DATAURL_BYTES && quality > 0.4) {
@@ -697,9 +661,7 @@ function compressImage(src, done) {
         out = canvas.toDataURL('image/jpeg', quality);
       }
       done(out);
-    } catch (e) {
-      done('');
-    }
+    } catch (e) { done(''); }
   };
   img.onerror = function () { done(''); };
   img.src = src;
@@ -738,50 +700,62 @@ function closeUpload() {
   document.getElementById('uploadModal').classList.remove('show');
 }
 
+/* 上传落库：sf_adoption_photo 仅存 tree_id / stage / shoot_time，
+   项目暂无文件上传写入接口，图片 base64 不入库；记录一律走 Api.create */
 function submitUpload() {
   var sel = document.getElementById('upTreeSelect').value;
-  var treeId = sel === OTHER_TREE
-    ? document.getElementById('upTreeManual').value.trim().toUpperCase()
-    : sel;
-  var url = PICKED_PHOTO.dataUrl;
+  if (sel === OTHER_TREE) {
+    Toast.warning('请从已登记果树中选择（严格空库下不创建未登记果树）');
+    return;
+  }
   var stage = document.getElementById('upStage').value || STAGE_OPTIONS[0];
   var time = document.getElementById('upTime').value;
-
-  if (!treeId) { Toast.warning('请填写果树编号'); return; }
-  if (!url) { Toast.warning('请选择要上传的照片文件'); return; }
+  if (!sel) { Toast.warning('请选择果树'); return; }
+  if (!PICKED_PHOTO.dataUrl) { Toast.warning('请选择要上传的照片文件'); return; }
   if (!time) { Toast.warning('请选择拍摄时间'); return; }
+  var shootTime = String(time).replace('T', ' ');
+  if (shootTime.length === 16) shootTime += ':00';
 
-  /* 写入统一走 AdoptionStore：编号归一后写入 h5_adoption_photos */
-  if (S && S.addPhoto) {
-    try {
-      S.addPhoto(treeId, { url: url, time: time, stage: stage });
-    } catch (e) {
-      Toast.error(e.message);
-      return;
-    }
-  } else {
-    var map = readPhotoMap();
-    if (!Array.isArray(map[treeId])) map[treeId] = [];
-    map[treeId].push({ url: url, time: time, stage: stage });
-    if (!writePhotoMap(map)) return;
-  }
-
-  closeUpload();
-  renderList();
-  Toast.success('照片已上传，H5 端「查看照片」可同步查看');
+  var body = {
+    tree_id: Number(sel) || null,
+    stage: stage,
+    shoot_time: shootTime
+  };
+  Api.create('adoption_photo', body).then(function (res) {
+    if (!res || !res.ok) { Toast.error((res && res.message) || '保存失败'); return; }
+    closeUpload();
+    loadData();
+    Toast.success('照片记录已保存（图片文件需通过文件服务上传后关联）');
+  }).catch(function (err) { Toast.error((err && err.message) || '保存失败'); });
 }
+
+/* ---------- 事件代理 ---------- */
+document.addEventListener('click', function (e) {
+  var del = e.target.closest && e.target.closest('[data-photo-del]');
+  var view = e.target.closest && e.target.closest('[data-photo-view]');
+  if (del) deletePhoto(del.getAttribute('data-photo-del'));
+  else if (view) openViewerById(view.getAttribute('data-photo-view'));
+});
+
+/* 图片加载失败：隐藏 img 并显示占位 */
+document.addEventListener('error', function (e) {
+  var im = e.target;
+  if (im && im.classList && im.classList.contains('photo-cell-img')) {
+    im.style.display = 'none';
+    var cell = im.parentNode;
+    var fb = cell && cell.querySelector && cell.querySelector('.photo-fallback');
+    if (fb) fb.style.display = 'flex';
+  }
+}, true);
 
 /* ---------- 初始化 ---------- */
 document.addEventListener('DOMContentLoaded', function () {
-  // 演示数据播种：仅在相册为空时写入 24 张示意照片 + 25 棵认养果树
-  DemoSeed.ensure(['adoptions', 'growth-photos']);
   initStageSelect();
-  fillTreeOptions();
   document.getElementById('upTreeSelect').addEventListener('change', syncTreeManual);
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderList();
   });
-  renderList();
+  loadData();
 });
 </script>
 </body>

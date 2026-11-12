@@ -1,39 +1,27 @@
 /**
  * 消费者 H5 · 促销活动数据层
  * --------------------------------------------------------------
- * 统一读取后台「商城管理 / 促销活动管理」维护的活动清单（localStorage['mall_promotions']），
- * 后台未初始化时回退到内置默认清单，保证 H5 端可独立运行。
+ * 严格空库模式：活动清单来自后端 sf_mall_promotion（resource='promotion'），
+ * 不再读写 localStorage、不内置默认播种。
  *
- * 暴露 API：
+ * 暴露 API（签名与既有 H5 页面保持一致）：
  *   MallPromotions.ready        Promise，初始化完成
  *   MallPromotions.all()        全部活动
- *   MallPromotions.onSale()     当前有效活动（已启用且在起止日期内）
- *   MallPromotions.byTarget(t)  按展示位置筛选（order 首页最新活动 / goods 商品页活动）
+ *   MallPromotions.onSale()     当前有效活动（启用且在起止日期内）
+ *   MallPromotions.byTarget(t)  按展示位置筛选
  *   MallPromotions.get(id)      按活动 ID 取活动
- *   MallPromotions.subscribe(fn) 订阅活动变更（含后台跨标签页更新）
+ *   MallPromotions.isOnSale(p)  是否有效
+ *   MallPromotions.subscribe(fn)
  *   MallPromotions.esc(s)       HTML 转义
- *   MallPromotions.DEFAULT_PROMOTIONS 内置默认清单
  */
-
 (function (global) {
   'use strict';
 
-  var KEY = 'mall_promotions';
-
-  /* 与后台 mall_promotion.html 的 DEFAULT_PROMOTIONS 保持一致
-     id 使用 H5 端 activityProducts 的键名，便于弹窗复用
-     注：endDate 取未来固定日期，保证首次播种后首页活动位仍可见 */
-  var DEFAULT_PROMOTIONS = [
-    { id: 'springActivity', title: '春季果树认养特惠活动', subTitle: '认养果树享8折优惠，赠送有机肥料套装',
-      price: 1510, original: 1888, img: 'images/apple_spring_orchard.jpg', tag: '限时活动',
-      startDate: '2026-03-01', endDate: '2026-12-31', status: 'on', target: 'order' },
-    { id: 'groupBuy', title: '花牛苹果拼团特惠', subTitle: '3人成团，立减20元，优质花牛苹果5斤装',
-      price: 48, original: 68, img: 'images/apple_groupbuy_boxes.jpg', tag: '拼团',
-      startDate: '2026-03-01', endDate: '2026-12-31', status: 'on', target: 'order' }
-  ];
-
   var subs = [];
-  var cache = null;
+  var cache = [];
+  var loadPromise = null;
+
+  function H5Data() { return global.H5Data; }
 
   function today() {
     var d = new Date();
@@ -41,48 +29,29 @@
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
   }
 
-  function read() {
-    try {
-      var raw = localStorage.getItem(KEY);
-      if (!raw) return null;
-      var v = JSON.parse(raw);
-      return Array.isArray(v) && v.length ? v : null;
-    } catch (e) {
-      return null;
-    }
+  function load() {
+    if (loadPromise) return loadPromise;
+    var d = H5Data();
+    loadPromise = (d && typeof d.list === 'function')
+      ? d.list('promotion')
+      : Promise.resolve([]);
+    loadPromise = loadPromise.then(function (list) {
+      cache = Array.isArray(list) ? list : [];
+      emit();
+      return cache;
+    }).catch(function () {
+      cache = [];
+      return cache;
+    });
+    return loadPromise;
   }
 
-  function all() {
-    if (cache) return cache;
-    var list = null;
-    /* 优先读取后台统一数据层：带 SKU 绑定 / 投放渠道 / 活动库存 */
-    if (global.MallStore && typeof global.MallStore.activePromotions === 'function') {
-      try {
-        var backend = global.MallStore.activePromotions();
-        if (backend && backend.length) list = backend;
-      } catch (e) { list = null; }
-    }
-    if (!list) list = read();
-    // key 已存在但内容损坏/为空数组时视为「后台主动清空」，不静默回填默认
-    if (!list && !keyExists()) {
-      list = DEFAULT_PROMOTIONS.map(function (p) { return Object.assign({}, p); });
-      try { localStorage.setItem(KEY, JSON.stringify(list)); } catch (e) { /* 只读降级 */ }
-    }
-    cache = list || [];
-    return cache;
-  }
-
-  function keyExists() {
-    try {
-      return localStorage.getItem(KEY) !== null;
-    } catch (e) {
-      return false;
-    }
-  }
+  function all() { return cache; }
 
   /* 活动是否在有效期内（未配置日期视为长期有效） */
   function isOnSale(p) {
     if (!p || p.status === 'off') return false;
+    if (p.status === 'ended' || p.status === 'stopped') return false;
     var t = today();
     if (p.startDate && t < p.startDate) return false;
     if (p.endDate && t > p.endDate) return false;
@@ -90,20 +59,14 @@
   }
 
   function emit() {
-    cache = null;
     var list = all();
     subs.forEach(function (fn) {
       try { fn(list); } catch (e) { /* 单个订阅异常不影响其他 */ }
     });
   }
 
-  global.addEventListener('storage', function (e) {
-    if (e.key === KEY) emit();
-  });
-
   global.MallPromotions = {
-    KEY: KEY,
-    DEFAULT_PROMOTIONS: DEFAULT_PROMOTIONS,
+    KEY: 'promotion',
     all: all,
     onSale: function () {
       return all().filter(isOnSale);
@@ -114,7 +77,7 @@
     get: function (id) {
       var list = all();
       for (var i = 0; i < list.length; i++) {
-        if (list[i].id === id) return list[i];
+        if (list[i].id === id || list[i].title === id) return list[i];
       }
       return null;
     },
@@ -127,6 +90,6 @@
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
       });
     },
-    ready: Promise.resolve(all())
+    ready: load()
   };
 })(window);

@@ -136,15 +136,15 @@
           <div class="block-info">
             <div class="block-item">
               <div class="item-label">区块高度</div>
-              <div class="item-value" id="latestBlock" style="color:var(--accent-green);">#1,847,323</div>
+              <div class="item-value" id="latestBlock" style="color:var(--accent-green);">—</div>
             </div>
             <div class="block-item">
               <div class="item-label">上链记录数</div>
-              <div class="item-value" id="latestTxCount">23</div>
+              <div class="item-value" id="latestTxCount">—</div>
             </div>
             <div class="block-item">
               <div class="item-label">最新上链时间</div>
-              <div class="item-value" id="latestTime" style="color:var(--accent-teal);">2026-09-20 17:50:00</div>
+              <div class="item-value" id="latestTime" style="color:var(--accent-teal);">—</div>
             </div>
           </div>
         </div>
@@ -227,6 +227,7 @@
   <span id="toastMessage">操作成功</span>
 </div>
 
+<script src="../common/js/api.js"></script>
 <script src="js/shared/harvest-store.js"></script>
 <script src="js/shared/trace-store.js"></script>
 <script>
@@ -269,24 +270,101 @@ function realHash(code, time) {
   var seed = (code || '') + '|' + (time || '');
   return '0x' + sha256Hex(seed).substring(0, 60);
 }
-/* 存证事件统一来自 TraceStore：每条事件都是一次链式存证，验证结果实时计算 */
-function loadChainEvents() {
-  if (!window.TraceStore) return [];
-  return TraceStore.events().map(function (ev) {
-    var r = TraceStore.verifyEvent(ev.id);
-    return {
-      id: ev.id, title: ev.title || '溯源事件', type: ev.type || 'event',
-      code: ev.code || '', batchNo: ev.batchNo || '',
-      hash: ev.hash || '', prevHash: ev.prevHash || '', txId: ev.txId || '',
-      block: ev.blockHeight || 0, time: ev.chainTime || '',
-      summary: ev.summary || '', payload: ev.payload || {},
-      contract: ev.contract || '', node: ev.node || '', tsa: ev.tsa || '',
-      status: r.ok ? 'passed' : 'failed',
-      reason: r.reason || ''
-    };
+/* 严格空库模式：存证事件一律来自后端 API（sf_trace_blockchain），不再使用本地演示数据 */
+var CHAIN_RESOURCE = 'trace_blockchain';
+var mockData = [];
+
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapChainRow(row) {
+  var payload = {};
+  if (row.payload) {
+    try { payload = JSON.parse(row.payload); } catch (e) { payload = {}; }
+  }
+  var vs = String(row.verify_status || '');
+  var status = vs.indexOf('未通过') >= 0 ? 'failed'
+             : (vs.indexOf('验证中') >= 0 ? 'pending' : 'passed');
+  return {
+    id: row.id,
+    title: row.title || row.event || '溯源事件',
+    type: row.event_type || 'event',
+    code: row.trace_code || '',
+    batchNo: row.batch_no || '',
+    hash: row.tx_hash || '',
+    prevHash: row.prev_hash || '',
+    txId: row.tx_hash || '',
+    block: row.block_height || 0,
+    time: row.chain_time || '',
+    summary: row.summary || '',
+    payload: payload,
+    contract: row.contract || '',
+    node: row.node || '',
+    tsa: row.tsa || '',
+    status: status,
+    reason: row.verify_reason || ''
+  };
+}
+
+/* 表格状态提示：加载中 / 暂无数据 / 加载失败 */
+function setChainStatus(text, isError) {
+  var tbody = document.getElementById('dataTableBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:' +
+    (isError ? 'var(--error, #d03050)' : 'var(--text-secondary, #6b7b6b)') + ';">' + text + '</td></tr>';
+  var pager = document.getElementById('pagination-container');
+  if (pager) pager.innerHTML = '';
+}
+
+/* 顶部最新区块信息取自当前加载到的真实存证数据 */
+function renderLatestBlock() {
+  var maxHeight = 0, latestTime = '';
+  mockData.forEach(function (d) {
+    var h = Number(d.block) || 0;
+    if (h > maxHeight) maxHeight = h;
+    if (d.time && d.time > latestTime) latestTime = d.time;
+  });
+  document.getElementById('latestBlock').textContent = maxHeight ? '#' + maxHeight.toLocaleString() : '—';
+  document.getElementById('latestTxCount').textContent = mockData.length ? mockData.length : '—';
+  document.getElementById('latestTime').textContent = latestTime || '—';
+}
+
+/* 若 URL 带 ?code=xxx，定位该溯源码的存证事件 */
+function applyUrlCode() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (!code) return;
+    const hit = mockData.filter(d => d.code === code);
+    if (hit.length) {
+      Pagination.updateData(hit);
+      viewDetail(hit[hit.length - 1].id);
+    } else {
+      showToast('未找到该溯源码的存证记录');
+    }
+  } catch (e) { /* 忽略解析错误 */ }
+}
+
+/* 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示；不写 localStorage */
+function loadChainData() {
+  if (!window.Api) { setChainStatus('数据加载失败：接口未就绪', true); return; }
+  setChainStatus('正在加载数据...', false);
+  Api.get(CHAIN_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      setChainStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true);
+      return;
+    }
+    var list = (r.data && r.data.list) || [];
+    mockData = list.map(mapChainRow);
+    renderLatestBlock();
+    if (!mockData.length) { setChainStatus('暂无数据', false); return; }
+    Pagination.init({
+      currentPage: 1, pageSize: 10, data: mockData,
+      containerId: 'pagination-container', tbodyId: 'dataTableBody',
+      renderRow: renderChainRow
+    });
+    applyUrlCode();
+  }).catch(function (e) {
+    setChainStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
   });
 }
-var mockData = [];
 
 // 验证状态说明：批次检测报告已过期时，对应存证校验不通过
 const VERIFY_TEXT = { passed: '已通过', failed: '未通过', pending: '验证中' };
@@ -484,39 +562,9 @@ function verifyWholeChain() {
   openModal('verifyModal');
 }
 
-// 页面初始化
+// 页面初始化：严格空库模式下异步从后端 API 取数
 document.addEventListener('DOMContentLoaded', function() {
-  mockData = loadChainEvents();
-  const stats = window.TraceStore ? TraceStore.chainStats() : { latestHeight: 0, total: 0, latestTime: '' };
-
-  // 最新区块信息取自当前存证数据
-  document.getElementById('latestBlock').textContent = stats.latestHeight ? '#' + Number(stats.latestHeight).toLocaleString() : '—';
-  document.getElementById('latestTxCount').textContent = stats.total || mockData.length;
-  document.getElementById('latestTime').textContent = stats.latestTime || '—';
-
-  Pagination.init({
-    currentPage: 1,
-    pageSize: 10,
-    data: mockData,
-    containerId: 'pagination-container',
-    tbodyId: 'dataTableBody',
-    renderRow: renderChainRow
-  });
-
-  // 若 URL 带 ?code=xxx，自动定位该溯源码的存证事件（溯源编码页"上链"入口）
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    if (code) {
-      const hit = mockData.filter(d => d.code === code);
-      if (hit.length) {
-        Pagination.updateData(hit);
-        viewDetail(hit[hit.length - 1].id);
-      } else {
-        showToast('未找到该溯源码的存证记录');
-      }
-    }
-  } catch (e) { /* 忽略解析错误 */ }
+  loadChainData();
 });
 
 // 点击遮罩关闭弹窗

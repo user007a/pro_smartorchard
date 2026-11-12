@@ -459,17 +459,9 @@
   const passwordError = document.getElementById('passwordError');
   const loginBtn = document.getElementById('loginBtn');
 
-  // ===== 账号库（演示用；生产环境应由后端 API 提供） =====
-  const USERS = [
-    { username: 'admin',    password: 'admin123',    role: '超级管理员',   realName: '系统管理员' },
-    { username: 'manager',  password: 'manager123',  role: '企业管理员',   realName: '惠加宁' },
-    { username: 'farmer',   password: 'farmer123',   role: '农技员',       realName: '黄忠坚' },
-    { username: 'worker',   password: 'worker123',   role: '普通农工',     realName: '张才孙' },
-    { username: 'demo',     password: 'demo123',     role: '演示账号',     realName: '演示用户', disabled: true }
-  ];
-
-  // ===== 账号覆盖表（来自用户设置页修改密码/停用账号；localStorage） =====
-  const USER_ACCOUNTS_KEY = 'snzg_user_accounts';
+  // ===== 严格空库模式：不再内置任何本地账号库 =====
+  // 账号密码完全由后端 sf_user 表管理，登录必须经 Api.login 后端鉴权拿 token，
+  // 前端不保留任何写死账号/密码，避免「本地假密码库」导致无 token 也能进后台。
   const REMEMBER_KEY = 'snzg_remember';
   const REMEMBER_DAYS = 7;
 
@@ -478,34 +470,6 @@
   }
   function decodeB64(str) {
     try { return decodeURIComponent(escape(atob(String(str)))); } catch (e) { return ''; }
-  }
-  // 合并内置账号库与 localStorage 覆盖表，返回 username -> {password,realName,role,phone,disabled}
-  function getAccountMap() {
-    const map = {};
-    USERS.forEach(function(u) {
-      map[u.username] = {
-        password: u.password, realName: u.realName, role: u.role,
-        phone: u.phone || '', disabled: !!u.disabled
-      };
-    });
-    try {
-      const raw = localStorage.getItem(USER_ACCOUNTS_KEY);
-      if (raw) {
-        const ov = JSON.parse(raw) || {};
-        Object.keys(ov).forEach(function(k) {
-          const base = map[k] || { password: '', realName: k, role: '普通农工', phone: '', disabled: false };
-          const o = ov[k] || {};
-          map[k] = {
-            password: o.password !== undefined ? o.password : base.password,
-            realName: o.realName || base.realName,
-            role: o.role || base.role,
-            phone: o.phone !== undefined ? o.phone : base.phone,
-            disabled: o.disabled !== undefined ? !!o.disabled : base.disabled
-          };
-        });
-      }
-    } catch (e) {}
-    return map;
   }
 
   // 锁定状态（用户名 -> { until, count }）
@@ -598,12 +562,20 @@
     // 显示加载状态
     loginBtn.classList.add('loading');
 
-    // 优先尝试后端登录（真实 MySQL 鉴权）；后端不可用时回退本地账号库
+    // 严格空库模式：登录必须经后端鉴权并拿到 token（Api.login 成功后写入
+    // localStorage['smartorchard_token']）。禁止回退本地账号库，否则无 token 也能进后台，
+    // 各 store 会回退到 localStorage 假数据。后端失败 / 网络异常 / 后端不可达时
+    // 一律在登录页明确报错，不允许跳转 index.html。
+    function showServiceError() {
+      loginBtn.classList.remove('loading');
+      setError('数据服务未连接，请检查后端与数据库');
+    }
+
     if (typeof Api !== 'undefined' && Api.login) {
       Api.login({ username: username, password: password }).then(function (res) {
         loginBtn.classList.remove('loading');
         if (res && res.ok && res.data) {
-          // 后端登录成功
+          // 后端登录成功：写登录态与用户信息，token 已由 Api.login 写入 localStorage
           clearFail(username);
           sessionStorage.setItem(SESSION_KEY, '1');
           sessionStorage.setItem(USER_KEY, JSON.stringify({
@@ -622,57 +594,19 @@
           return;
         }
         if (res && res._unauthorized) {
+          // 账号密码错误：沿用原有错误提示，不视为数据服务不可用
           setError('账号或密码错误');
           return;
         }
-        // 后端不可用/未返回 → 回退本地账号库
-        localLogin();
+        // 后端返回 ok:false / 未返回数据（含网络异常、后端不可达）：明确报错
+        showServiceError();
       }).catch(function () {
-        loginBtn.classList.remove('loading');
-        localLogin();
+        // 请求异常：明确报错
+        showServiceError();
       });
     } else {
-      localLogin();
-    }
-
-    function localLogin() {
-      loginBtn.classList.remove('loading');
-      // 鉴权：账号是否存在（内置账号库 + 用户设置覆盖表）
-      const accounts = getAccountMap();
-      const user = accounts[username];
-      if (!user) {
-        usernameError.textContent = '账号不存在，请检查后重试';
-        usernameError.classList.add('show');
-        passwordError.classList.remove('show');
-        return;
-      }
-      if (user.disabled) {
-        usernameError.classList.remove('show');
-        setError('账号已停用，请联系管理员');
-        return;
-      }
-      if (user.password !== password) {
-        const rec = bumpFail(username);
-        usernameError.classList.remove('show');
-        const left = MAX_ATTEMPTS - rec.count;
-        if (left > 0) setError('密码错误，还剩 ' + left + ' 次尝试机会');
-        else setError('账号已锁定 15 分钟');
-        return;
-      }
-      clearFail(username);
-      if (document.getElementById('rememberMe').checked) {
-        localStorage.setItem(REMEMBER_KEY, JSON.stringify({
-          username: username, password: encodeB64(password),
-          expireAt: Date.now() + REMEMBER_DAYS * 24 * 60 * 60 * 1000
-        }));
-      } else {
-        localStorage.removeItem(REMEMBER_KEY);
-      }
-      sessionStorage.setItem(SESSION_KEY, '1');
-      sessionStorage.setItem(USER_KEY, JSON.stringify({
-        username: username, realName: user.realName, role: user.role, loginAt: Date.now()
-      }));
-      window.location.href = 'index.html';
+      // Api 未加载（脚本缺失）：后端不可用
+      showServiceError();
     }
   }
 
@@ -682,21 +616,19 @@
     try { saved = JSON.parse(localStorage.getItem(REMEMBER_KEY)); } catch (e) {}
     if (!saved || !saved.username) return;
 
-    // 7 天免登录：未过期且账号密码仍有效，直接进入系统首页
-    if (saved.expireAt && Date.now() < saved.expireAt) {
-      var acc = getAccountMap()[saved.username];
-      var pwd = saved.password ? decodeB64(saved.password) : '';
-      if (acc && !acc.disabled && acc.password === pwd) {
-        sessionStorage.setItem(SESSION_KEY, '1');
-        sessionStorage.setItem(USER_KEY, JSON.stringify({
-          username: saved.username,
-          realName: acc.realName,
-          role: acc.role,
-          loginAt: Date.now()
-        }));
-        window.location.href = 'index.html';
-        return;
-      }
+    // 7 天免登录：严格空库模式下必须已经持有后端 token（即上次经 Api.login 成功登录），
+    // 不再用本地账号库兜底自动写入登录态，避免与 index.html 登录守卫冲突造成循环跳转。
+    // 未过期、token 存在时直接进入系统首页（账号密码有效性由后端 token 保证，前端不再比对本地密码）。
+    if (saved.expireAt && Date.now() < saved.expireAt && localStorage.getItem('smartorchard_token')) {
+      sessionStorage.setItem(SESSION_KEY, '1');
+      sessionStorage.setItem(USER_KEY, JSON.stringify({
+        username: saved.username,
+        realName: saved.username,
+        role: '管理员',
+        loginAt: Date.now()
+      }));
+      window.location.href = 'index.html';
+      return;
     }
 
     // 回填用户名 + 密码

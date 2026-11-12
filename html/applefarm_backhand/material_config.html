@@ -76,7 +76,7 @@
             <div class="page-subtitle">统一维护仓库与农资分类，物资模块各页面共用同一份字典</div>
           </div>
           <div class="page-actions">
-            <button class="jg-btn" onclick="resetDict()">恢复默认字典</button>
+            <button class="jg-btn" onclick="loadData()">刷新数据</button>
           </div>
         </div>
 
@@ -331,8 +331,79 @@
   </div>
 </div>
 
+<script src="../common/js/api.js"></script>
 <script src="js/material-dict.js"></script>
 <script>
+/* 严格空库模式：仓库与分类字典均来自真实接口，禁止本地假数据兜底 */
+var warehouseList = [];
+var categoryList = [];
+
+/* 数据库记录 -> 页面展示对象 */
+function mapWarehouse(r) {
+  return {
+    id: String(r.id),
+    code: r.warehouse_code || '',
+    name: r.warehouse_name || '',
+    type: r.warehouse_type || '常温库',
+    manager: r.manager || '',
+    managerPhone: r.manager_phone || '',
+    capacity: (r.capacity === null || r.capacity === undefined) ? '' : String(r.capacity),
+    address: r.address || '',
+    isDefault: Number(r.is_default) === 1,
+    status: r.status === 'disabled' ? 'disabled' : 'enabled',
+    remark: r.remark || '',
+    images: []
+  };
+}
+
+function mapCategory(r) {
+  return {
+    id: String(r.id),
+    code: r.category_code || '',
+    name: r.category_name || '',
+    parentId: r.parent_id ? String(r.parent_id) : '',
+    defaultUnit: r.default_unit || '',
+    defaultWarehouse: r.default_warehouse_id ? String(r.default_warehouse_id) : '',
+    defaultLocation: r.default_location || '',
+    dangerous: Number(r.is_danger) === 1,
+    safetyInterval: r.safety_interval || '',
+    licenseRequired: !!r.qualification,
+    status: r.status === 'disabled' ? 'disabled' : 'enabled',
+    remark: ''
+  };
+}
+
+function setBodyState(tbodyId, text, colspan) {
+  document.getElementById(tbodyId).innerHTML =
+    '<tr><td colspan="' + colspan + '" style="text-align:center;color:var(--text-tertiary);padding:32px;">' + escapeHtml(text) + '</td></tr>';
+}
+
+/* 从真实接口加载两份字典；加载中 / 空态 / 错误态均在此处理 */
+function loadData() {
+  setBodyState('warehouseBody', '加载中...', 11);
+  setBodyState('categoryBody', '加载中...', 12);
+  Promise.all([
+    Api.get('material_warehouse', { page: 1, size: 500, sort: 'id', order: 'asc' }),
+    Api.get('material_category', { page: 1, size: 500, sort: 'id', order: 'asc' })
+  ]).then(function (results) {
+    var wr = results[0], cr = results[1];
+    if (!wr || !wr.ok || !cr || !cr.ok) {
+      var msg = '数据加载失败：' + ((wr && wr.message) || (cr && cr.message) || '请检查登录状态与网络');
+      setBodyState('warehouseBody', msg, 11);
+      setBodyState('categoryBody', msg, 12);
+      return;
+    }
+    warehouseList = ((wr.data && wr.data.list) || []).map(mapWarehouse);
+    categoryList = ((cr.data && cr.data.list) || []).map(mapCategory);
+    renderWarehouses();
+    renderCategories();
+  }).catch(function (err) {
+    var msg = '数据加载失败：' + (err && err.message ? err.message : '网络异常');
+    setBodyState('warehouseBody', msg, 11);
+    setBodyState('categoryBody', msg, 12);
+  });
+}
+
 var warehouseEditingId = '';
 var categoryEditingId = '';
 var warehouseImages = [];
@@ -443,16 +514,16 @@ function switchTab(tab) {
 }
 
 function renderWarehouses() {
-  var list = MaterialDict.getWarehouses();
+  var list = warehouseList;
   var body = document.getElementById('warehouseBody');
   if (!list.length) {
-    body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-tertiary);padding:32px;">暂无仓库，请点击「新增仓库」</td></tr>';
+    body.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-tertiary);padding:32px;">暂无数据，请点击「新增仓库」</td></tr>';
     return;
   }
   body.innerHTML = list.map(function (w, index) {
     return '<tr>' +
       '<td>' + (index + 1) + '</td>' +
-      '<td><strong>' + escapeHtml(w.id) + '</strong></td>' +
+      '<td><strong>' + escapeHtml(w.code || w.id) + '</strong></td>' +
       '<td>' + escapeHtml(w.name) + '</td>' +
       '<td>' + escapeHtml(w.type || '-') + '</td>' +
       '<td>' + escapeHtml(w.manager || '-') + '</td>' +
@@ -470,10 +541,10 @@ function renderWarehouses() {
 }
 
 function renderCategories() {
-  var list = MaterialDict.getCategories();
+  var list = categoryList;
   var body = document.getElementById('categoryBody');
   if (!list.length) {
-    body.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-tertiary);padding:32px;">暂无分类，请点击「新增分类」</td></tr>';
+    body.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--text-tertiary);padding:32px;">暂无数据，请点击「新增分类」</td></tr>';
     return;
   }
   var nameMap = {};
@@ -482,7 +553,7 @@ function renderCategories() {
     var parentName = c.parentId ? (nameMap[c.parentId] || '-') : '-';
     return '<tr>' +
       '<td>' + (index + 1) + '</td>' +
-      '<td><strong>' + escapeHtml(c.id) + '</strong></td>' +
+      '<td><strong>' + escapeHtml(c.code || c.id) + '</strong></td>' +
       '<td>' + escapeHtml(c.name) + '</td>' +
       '<td>' + escapeHtml(parentName) + '</td>' +
       '<td>' + escapeHtml(c.defaultUnit || '-') + '</td>' +
@@ -506,10 +577,10 @@ function openWarehouseModal(id) {
   form.reset();
   var data = null;
   if (id) {
-    data = MaterialDict.getWarehouses().filter(function (w) { return w.id === id; })[0];
+    data = warehouseList.filter(function (w) { return w.id === id; })[0];
   }
   document.getElementById('warehouseTitle').textContent = id ? '编辑仓库' : '新增仓库';
-  document.getElementById('warehouseId').value = data ? data.id : '自动生成';
+  document.getElementById('warehouseId').value = data ? (data.code || data.id) : '自动生成';
   document.getElementById('warehouseName').value = data ? data.name : '';
   document.getElementById('warehouseType').value = (data && data.type) || '常温库';
   document.getElementById('warehouseManager').value = data ? (data.manager || '') : '';
@@ -533,61 +604,49 @@ function closeWarehouseModal() {
 function saveWarehouse() {
   var name = document.getElementById('warehouseName').value.trim();
   if (!name) { alert('请填写仓库名称'); return; }
-  var list = MaterialDict.getWarehouses();
-  if (list.some(function (w) { return w.name === name && w.id !== warehouseEditingId; })) {
+  if (warehouseList.some(function (w) { return w.name === name && w.id !== warehouseEditingId; })) {
     alert('仓库名称已存在'); return;
   }
   var capacityValue = document.getElementById('warehouseCapacity').value.trim();
-  var capacityUnit = document.getElementById('warehouseCapacityUnit').value;
-  var payload = {
-    name: name,
-    type: document.getElementById('warehouseType').value,
+  /* 严格按 sf_material_warehouse 的列构造请求体；仓库图片 UI 保留，但表无对应列故不落库 */
+  var body = {
+    warehouse_name: name,
+    warehouse_type: document.getElementById('warehouseType').value,
     manager: document.getElementById('warehouseManager').value.trim(),
-    managerPhone: document.getElementById('warehouseManagerPhone').value.trim(),
-    capacity: capacityValue ? capacityValue + ' ' + capacityUnit : '',
-    images: warehouseImages.slice(),
-    isDefault: document.getElementById('warehouseIsDefault').value === 'true',
+    manager_phone: document.getElementById('warehouseManagerPhone').value.trim(),
+    capacity: capacityValue ? Number(capacityValue) : null,
     address: document.getElementById('warehouseAddress').value.trim(),
-    status: document.getElementById('warehouseStatus').value,
+    is_default: document.getElementById('warehouseIsDefault').value === 'true' ? 1 : 0,
+    status: document.getElementById('warehouseStatus').value === 'disabled' ? 'disabled' : 'active',
     remark: document.getElementById('warehouseRemark').value.trim()
   };
-  if (warehouseEditingId) {
-    list = list.map(function (w) {
-      return w.id === warehouseEditingId ? Object.assign({}, w, payload) : w;
-    });
-  } else {
-    var seq = 0;
-    list.forEach(function (w) {
-      var n = parseInt(String(w.id).replace(/\D/g, ''), 10);
-      if (!isNaN(n) && n > seq) seq = n;
-    });
-    payload.id = 'wh' + (seq + 1);
-    list.push(payload);
+  if (!warehouseEditingId) {
+    body.warehouse_code = 'WH' + Date.now();
   }
-  if (payload.isDefault) {
-    var keepId = warehouseEditingId || payload.id;
-    list = list.map(function (w) {
-      return w.id === keepId ? w : Object.assign({}, w, { isDefault: false });
-    });
-  }
-  MaterialDict.setWarehouses(list);
-  closeWarehouseModal();
-  renderWarehouses();
+  var req = warehouseEditingId
+    ? Api.update('material_warehouse', warehouseEditingId, body)
+    : Api.create('material_warehouse', body);
+  req.then(function (res) {
+    if (!res || !res.ok) { alert('保存失败：' + ((res && res.message) || '请检查登录状态')); return; }
+    closeWarehouseModal();
+    loadData();
+  });
 }
 
 function deleteWarehouse(id) {
-  var list = MaterialDict.getWarehouses();
-  if (list.length <= 1) { alert('至少保留一个仓库'); return; }
+  if (warehouseList.length <= 1) { alert('至少保留一个仓库'); return; }
   if (!confirm('确定删除该仓库吗？')) return;
-  MaterialDict.setWarehouses(list.filter(function (w) { return w.id !== id; }));
-  renderWarehouses();
+  Api.remove('material_warehouse', id).then(function (res) {
+    if (!res || !res.ok) { alert('删除失败：' + ((res && res.message) || '请检查登录状态')); return; }
+    loadData();
+  });
 }
 
 function openCategoryModal(id) {
   categoryEditingId = id || '';
   var form = document.getElementById('categoryForm');
   form.reset();
-  var all = MaterialDict.getCategories();
+  var all = categoryList;
   var data = null;
   if (id) {
     data = all.filter(function (c) { return c.id === id; })[0];
@@ -597,9 +656,11 @@ function openCategoryModal(id) {
   }).map(function (c) {
     return { value: c.id, label: c.name };
   }), '无（顶级分类）');
-  MaterialDict.fillSelect('categoryWarehouse', MaterialDict.warehouseNames(), '不指定');
+  MaterialDict.fillSelect('categoryWarehouse', warehouseList.map(function (w) {
+    return { value: w.id, label: w.name };
+  }), '不指定');
   document.getElementById('categoryTitle').textContent = id ? '编辑分类' : '新增分类';
-  document.getElementById('categoryId').value = data ? data.id : '';
+  document.getElementById('categoryId').value = data ? data.code : '';
   document.getElementById('categoryId').readOnly = !!data;
   document.getElementById('categoryName').value = data ? data.name : '';
   document.getElementById('categoryParent').value = data ? (data.parentId || '') : '';
@@ -619,57 +680,52 @@ function closeCategoryModal() {
 }
 
 function saveCategory() {
-  var id = document.getElementById('categoryId').value.trim();
+  var code = document.getElementById('categoryId').value.trim();
   var name = document.getElementById('categoryName').value.trim();
-  if (!id || !name) { alert('分类编码与名称必填'); return; }
-  var list = MaterialDict.getCategories();
-  if (list.some(function (c) { return (c.id === id || c.name === name) && c.id !== categoryEditingId; })) {
+  if (!code || !name) { alert('分类编码与名称必填'); return; }
+  if (categoryList.some(function (c) { return (c.code === code || c.name === name) && c.id !== categoryEditingId; })) {
     alert('分类编码或名称已存在'); return;
   }
-  var payload = {
-    id: id,
-    name: name,
-    parentId: document.getElementById('categoryParent').value,
-    defaultUnit: document.getElementById('categoryUnit').value.trim(),
-    defaultWarehouse: document.getElementById('categoryWarehouse').value,
-    defaultLocation: document.getElementById('categoryLocation').value.trim(),
-    dangerous: document.getElementById('categoryDangerous').value === 'true',
-    safetyInterval: document.getElementById('categoryInterval').value.trim(),
-    licenseRequired: document.getElementById('categoryLicense').value === 'true',
-    status: document.getElementById('categoryStatus').value,
-    remark: document.getElementById('categoryRemark').value.trim()
+  /* 严格按 sf_material_category 的列构造请求体 */
+  var body = {
+    category_code: code,
+    category_name: name,
+    parent_id: document.getElementById('categoryParent').value || null,
+    default_unit: document.getElementById('categoryUnit').value.trim(),
+    default_warehouse_id: document.getElementById('categoryWarehouse').value || null,
+    default_location: document.getElementById('categoryLocation').value.trim(),
+    is_danger: document.getElementById('categoryDangerous').value === 'true' ? 1 : 0,
+    safety_interval: document.getElementById('categoryInterval').value.trim(),
+    qualification: document.getElementById('categoryLicense').value === 'true' ? '需提供经营许可证/登记证' : null,
+    status: document.getElementById('categoryStatus').value === 'disabled' ? 'disabled' : 'active'
   };
-  if (categoryEditingId) {
-    list = list.map(function (c) {
-      return c.id === categoryEditingId ? payload : c;
-    });
-  } else {
-    list.push(payload);
-  }
-  MaterialDict.setCategories(list);
-  closeCategoryModal();
-  renderCategories();
+  var req = categoryEditingId
+    ? Api.update('material_category', categoryEditingId, body)
+    : Api.create('material_category', body);
+  req.then(function (res) {
+    if (!res || !res.ok) { alert('保存失败：' + ((res && res.message) || '请检查登录状态')); return; }
+    closeCategoryModal();
+    loadData();
+  });
 }
 
 function deleteCategory(id) {
-  var list = MaterialDict.getCategories();
-  if (list.length <= 1) { alert('至少保留一个分类'); return; }
+  if (categoryList.length <= 1) { alert('至少保留一个分类'); return; }
   if (!confirm('确定删除该分类吗？已建档农资不受影响。')) return;
-  MaterialDict.setCategories(list.filter(function (c) { return c.id !== id; }));
-  renderCategories();
+  Api.remove('material_category', id).then(function (res) {
+    if (!res || !res.ok) { alert('删除失败：' + ((res && res.message) || '请检查登录状态')); return; }
+    loadData();
+  });
 }
 
 function resetDict() {
-  if (!confirm('将恢复默认的仓库与分类字典，已修改内容会丢失，是否继续？')) return;
-  MaterialDict.reset();
-  renderWarehouses();
-  renderCategories();
+  /* 严格空库模式下不再写入默认字典，仅从真实接口重新加载 */
+  loadData();
 }
 
 document.getElementById('warehouseImageInput').addEventListener('change', handleWarehouseImagePick);
 
-renderWarehouses();
-renderCategories();
+loadData();
 </script>
 </body>
 </html>

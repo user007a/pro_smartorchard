@@ -858,38 +858,42 @@
     // 字典中新增 / 未知类型：默认图标 + 默认配色，保证不空白、不报错
     var DEFAULT_TASK_TYPE_ICON = { color: 'green', svg: '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/>' };
 
-    // 从共享字典读取 FARMING_TYPE 并拆成类型清单；读不到返回 null
-    function getFarmingTypes() {
-      var raw = null;
-      try { raw = localStorage.getItem(DICT_STORAGE_KEY); } catch (e) { raw = null; }
-      if (!raw) return null;
-      var arr = null;
-      try { arr = JSON.parse(raw); } catch (e) { return null; }
-      if (!arr || !arr.length) return null;
-      for (var i = 0; i < arr.length; i++) {
-        var item = arr[i];
-        if (!item || item.code !== 'FARMING_TYPE' || !item.value) continue;
-        var list = [];
-        var rawVal = String(item.value).trim();
-        if (rawVal.charAt(0) === '[') {
-          // 后台编辑表单保存的 JSON 结构：[{value,label,sort,remark}]
-          try {
-            JSON.parse(rawVal).forEach(function (it) {
-              var n = (it && (it.label || it.value || it.name)) || '';
-              if (n) list.push(String(n).trim());
-            });
-          } catch (e2) { list = []; }
-        } else {
-          // 逗号分隔字符串：疏果,套袋,喷药,...
-          var parts = rawVal.split(/[,，]/);
-          for (var j = 0; j < parts.length; j++) {
-            var nm = parts[j].trim();
-            if (nm) list.push(nm);
-          }
+    // 解析字典值（JSON 数组或逗号分隔字符串）为类型清单
+    function parseFarmingTypeValue(rawVal) {
+      var list = [];
+      rawVal = String(rawVal || '').trim();
+      if (!rawVal) return null;
+      if (rawVal.charAt(0) === '[') {
+        try {
+          JSON.parse(rawVal).forEach(function (it) {
+            var n = (it && (it.label || it.value || it.name)) || '';
+            if (n) list.push(String(n).trim());
+          });
+        } catch (e2) { list = []; }
+      } else {
+        var parts = rawVal.split(/[,，]/);
+        for (var j = 0; j < parts.length; j++) {
+          var nm = parts[j].trim();
+          if (nm) list.push(nm);
         }
-        return list.length ? list : null;
       }
-      return null;
+      return list.length ? list : null;
+    }
+
+    // 从后端字典读取 FARMING_TYPE（sf_dict）；读不到回调 null
+    function getFarmingTypes(cb) {
+      if (window.Api && typeof Api.dict === 'function') {
+        Api.dict('FARMING_TYPE').then(function (res) {
+          if (res && res.ok && res.data) {
+            var rawVal = (res.data.dict_value != null) ? String(res.data.dict_value) : '';
+            cb(parseFarmingTypeValue(rawVal));
+          } else {
+            cb(null);
+          }
+        }).catch(function () { cb(null); });
+      } else {
+        cb(null);
+      }
     }
 
     // 生成单个九宫格项（未知类型走默认图标）
@@ -907,19 +911,20 @@
     function renderTaskTypeGrid() {
       var grid = document.querySelector('.task-type-grid');
       if (!grid) return;
-      var types = getFarmingTypes();
-      if (!types) return;
-      var html = '';
-      for (var i = 0; i < types.length; i++) html += buildTaskTypeItem(types[i]);
-      grid.innerHTML = html;
-      // 已选中的类型若仍在列表内，恢复高亮
-      if (selectedTaskType) {
-        var items = document.querySelectorAll('.task-type-item');
-        for (var k = 0; k < items.length; k++) {
-          var nameEl = items[k].querySelector('.task-type-name');
-          if (nameEl && nameEl.textContent === selectedTaskType) items[k].classList.add('active');
+      getFarmingTypes(function (types) {
+        if (!types || !types.length) return;
+        var html = '';
+        for (var i = 0; i < types.length; i++) html += buildTaskTypeItem(types[i]);
+        grid.innerHTML = html;
+        // 已选中的类型若仍在列表内，恢复高亮
+        if (selectedTaskType) {
+          var items = document.querySelectorAll('.task-type-item');
+          for (var k = 0; k < items.length; k++) {
+            var nameEl = items[k].querySelector('.task-type-name');
+            if (nameEl && nameEl.textContent === selectedTaskType) items[k].classList.add('active');
+          }
         }
-      }
+      });
     }
 
     function selectQuickTask(task) {
@@ -1021,10 +1026,10 @@
       renderTaskTypeGrid(); // 农事类型九宫格：优先用后台字典渲染
     });
 
-    // 后台修改数据字典后，同源页面广播 storage 事件，移动端同步刷新九宫格
-    window.addEventListener('storage', function (e) {
-      if (!e.key || e.key === DICT_STORAGE_KEY) renderTaskTypeGrid();
-    });
+    // 后端字典就绪后自动刷新九宫格（严格空库：字典来自数据库）
+    if (window.MobileStore && MobileStore.ready) {
+      MobileStore.ready.then(function () { renderTaskTypeGrid(); });
+    }
   </script>
 </body>
 </html>

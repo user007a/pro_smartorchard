@@ -618,7 +618,7 @@
       <div class="detail-content">
         <div class="detail-row">
           <label>预警标题</label>
-          <span id="detailTitle">病虫害预警：红蜘蛛虫害爆发风险</span>
+          <span id="detailTitle">-</span>
         </div>
         <div class="detail-row">
           <label>预警类型</label>
@@ -634,11 +634,11 @@
         </div>
         <div class="detail-row">
           <label>涉及地块</label>
-          <span id="detailLocation">天水麦积区基地 - 地块A1、A2、A3</span>
+          <span id="detailLocation">-</span>
         </div>
         <div class="detail-row">
           <label>预警时间</label>
-          <span id="detailTime">2026-09-20 11:00</span>
+          <span id="detailTime">-</span>
         </div>
         <div class="detail-row">
           <label>当前状态</label>
@@ -665,15 +665,15 @@
           <div class="threshold-info">
             <div class="threshold-item">
               <span class="threshold-label">当前值</span>
-              <span class="threshold-value" id="thresholdCurrent">8头/叶</span>
+              <span class="threshold-value" id="thresholdCurrent">-</span>
             </div>
             <div class="threshold-item">
               <span class="threshold-label">预警阈值</span>
-              <span class="threshold-value" id="thresholdLimit">5头/叶</span>
+              <span class="threshold-value" id="thresholdLimit">-</span>
             </div>
             <div class="threshold-item">
               <span class="threshold-label">历史趋势</span>
-              <span class="threshold-value" id="thresholdTrend">呈上升趋势</span>
+              <span class="threshold-value" id="thresholdTrend">-</span>
             </div>
           </div>
         </div>
@@ -704,9 +704,6 @@
           <option value="">请选择受理人</option>
           <option value="植保组">植保组</option>
           <option value="技术员">技术员</option>
-          <option value="黄忠坚">黄忠坚</option>
-          <option value="惠加宁">惠加宁</option>
-          <option value="张才孙">张才孙</option>
         </select>
         <textarea class="execute-textarea" id="executeRemark" placeholder="请输入处理备注..."></textarea>
         <div class="execute-hint">处置类动作 → 已闭环；加强监测 → 处理中；灌溉 / 施肥 / 加固等 → 已转工单</div>
@@ -749,9 +746,6 @@
           <option value="">请选择受理人</option>
           <option value="植保组">植保组</option>
           <option value="技术员">技术员</option>
-          <option value="黄忠坚">黄忠坚</option>
-          <option value="惠加宁">惠加宁</option>
-          <option value="张才孙">张才孙</option>
         </select>
       </div>
       <div class="form-group">
@@ -806,11 +800,44 @@
 
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="../common/js/api.js"></script>
 <script src="js/shared/alert-data.js"></script>
 <script>
   // 数据来源：共享数据源 AlertStore（详见 js/shared/alert-data.js）
   // 本页面只负责农事预警（type='farming'）的视图与交互。
   let filteredData = AlertStore.byType('farming');
+  /* ===== 严格空库模式：加载 / 空 / 错误态 =====
+   * 数据由已严格化的 AlertStore 后端桥接（alert/aggregate）提供，
+   * 页面层不重复取数：init 显示加载中，backend-loaded 后渲染真实数据。 */
+  var __alertReady = false;
+  function __alertTbody(html) {
+    var tbody = document.getElementById('dataTableBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="99" style="text-align:center;padding:24px;color:var(--text-tertiary);">' + html + '</td></tr>';
+    var pg = document.getElementById('pagination-container');
+    if (pg) pg.innerHTML = '';
+  }
+  function __alertState(kind, msg) {
+    __alertTbody(kind === 'loading' ? '加载中...' : ('数据加载失败：' + (msg || '')));
+  }
+  function __alertBootstrap(onReady) {
+    __alertState('loading');
+    if (window.Api && Api.isLoggedIn && !Api.isLoggedIn()) {
+      __alertState('error', '未登录或登录已失效，请重新登录');
+      return;
+    }
+    if (window.AlertStore && typeof AlertStore.subscribe === 'function') {
+      AlertStore.subscribe(function (reason) {
+        if (reason === 'init') { __alertState('loading'); return; }
+        __alertReady = true;
+        onReady();
+      });
+    }
+    // 后端长时间无响应时给出错误态，避免一直停留在「加载中」
+    setTimeout(function () {
+      if (!__alertReady) __alertState('error', '无法获取预警数据，请检查网络或后端服务');
+    }, 8000);
+  }
+
 
   document.addEventListener('DOMContentLoaded', function() {
     Pagination.init({
@@ -822,14 +849,8 @@
       renderRow: renderRow
     });
 
-    // 订阅共享数据源变化（来自其他标签页 / 后台其他页面 / 移动端的处理动作）
-    if (window.AlertStore && typeof AlertStore.subscribe === 'function') {
-      AlertStore.subscribe(function(reason){
-        if (reason === 'init' || (typeof reason === 'string' && reason.indexOf('status:') === 0) || reason === 'reset') {
-          refreshDataFromStore();
-        }
-      });
-    }
+    __alertBootstrap(refreshDataFromStore);
+    
 
     document.addEventListener('click', function(e) {
       const btn = e.target.closest('.action-btn');
@@ -1244,7 +1265,11 @@
       });
     }
     filteredData = arr;
-    if (window.Pagination) Pagination.updateData(filteredData);
+    if (!arr.length) {
+      __alertTbody('暂无数据');
+    } else if (window.Pagination) {
+      Pagination.updateData(filteredData);
+    }
     if (window.Chart && window.Chart.loadECharts) window.Chart.loadECharts().then(renderCharts);
   }
 </script>

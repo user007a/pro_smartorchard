@@ -60,6 +60,7 @@
 
   /** 从后端聚合接口拉取溯源数据，成功后合并进内存并通知 */
   function preloadFromBackend() {
+    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -67,19 +68,21 @@
       return api.get('trace/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
+        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
+        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = global.TraceMapper.toAggregate(res.data);
         var d = ensure();
         // 后端数据合并进 store 内存（空数组时保留默认种子兜底）
-        d.batches = (agg.batches && agg.batches.length) ? agg.batches : d.batches;
-        d.codes = (agg.codes && agg.codes.length) ? agg.codes : d.codes;
-        d.events = (agg.events && agg.events.length) ? agg.events : d.events;
-        d.scans = (agg.scans && agg.scans.length) ? agg.scans : d.scans;
-        d.labelTemplates = (agg.labelTemplates && agg.labelTemplates.length) ? agg.labelTemplates : d.labelTemplates;
-        d.inspections = (agg.inspections && agg.inspections.length) ? agg.inspections : d.inspections;
-        d.labelStock = (agg.labelStock && Object.keys(agg.labelStock).length) ? agg.labelStock : d.labelStock;
-        d.printJobs = (agg.printJobs && agg.printJobs.length) ? agg.printJobs : d.printJobs;
-        d.recalls = (agg.recalls && agg.recalls.length) ? agg.recalls : d.recalls;
-        d.showTemplates = (agg.showTemplates && agg.showTemplates.length) ? agg.showTemplates : d.showTemplates;
+        d.batches = agg.batches || [];
+        d.codes = agg.codes || [];
+        d.events = agg.events || [];
+        d.scans = agg.scans || [];
+        d.labelTemplates = agg.labelTemplates || [];
+        d.inspections = agg.inspections || [];
+        d.labelStock = agg.labelStock || d.labelStock;
+        d.printJobs = agg.printJobs || [];
+        d.recalls = agg.recalls || [];
+        d.showTemplates = agg.showTemplates || [];
         save();
         commit('backend-loaded');
         backendReady = true;
@@ -169,86 +172,16 @@
   ];
 
   // 兜底批次（HarvestStore 不可用时）
-  var BATCH_FALLBACK = [
-    ['PC-20260901-001', 'D-001', 'HS-2026-001', 'PP-2026-001', '2026-09-01', '一级', 1250, '5kg/箱', 'shipped', 2],
-    ['PC-20260902-002', 'D-002', 'HS-2026-002', 'PP-2026-002', '2026-09-02', '一级', 890, '5kg/箱', 'shipped', 2],
-    ['PC-20260903-003', 'D-003', 'HS-2026-003', 'PP-2026-003', '2026-09-03', '二级', 1560, '4kg/箱', 'packed', 2],
-    ['PC-20260904-004', 'D-004', 'HS-2026-004', 'PP-2026-004', '2026-09-04', '一级', 780, '5kg/箱', 'packed', 1],
-    ['PC-20260905-005', 'D-005', 'HS-2026-005', 'PP-2026-005', '2026-09-05', '二级', 1100, '5kg/箱', 'packed', 1],
-    ['PC-20260906-006', 'D-006', 'HS-2026-006', 'PP-2026-006', '2026-09-06', '三级', 920, '4kg/箱', 'packed', 1],
-    ['PC-20260907-007', 'D-007', 'HS-2026-007', 'PP-2026-007', '2026-09-07', '一级', 1340, '5kg/箱', 'packed', 1],
-    ['PC-20260908-008', 'D-008', 'HS-2026-008', 'PP-2026-008', '2026-09-08', '二级', 650, '5kg/箱', 'packed', 1],
-    ['PC-20260909-009', 'D-009', 'HS-2026-009', 'PP-2026-009', '2026-09-09', '一级', 1420, '4kg/箱', 'stored', 1],
-    ['PC-20260910-010', 'D-010', 'HS-2026-010', 'PP-2026-010', '2026-09-10', '二级', 870, '4kg/箱', 'stored', 1],
-    ['PC-20260911-011', 'D-011', 'HS-2026-011', 'PP-2026-011', '2026-09-11', '一级', 1680, '5kg/箱', 'stored', 1],
-    ['PC-20260912-012', 'D-012', 'HS-2026-012', 'PP-2026-012', '2026-09-12', '三级', 720, '6kg/箱', 'stored', 1],
-    ['PC-20260913-013', 'D-013', 'HS-2026-013', 'PP-2026-013', '2026-09-13', '一级', 1200, '5kg/箱', 'stored', 1],
-    ['PC-20260914-014', 'D-014', 'HS-2026-014', 'PP-2026-014', '2026-09-14', '二级', 980, '5kg/箱', 'stored', 1],
-    ['PC-20260915-015', 'D-015', 'HS-2026-015', 'PP-2026-015', '2026-09-15', '一级', 1550, '4kg/箱', 'stored', 1],
-    ['PC-20260916-016', 'D-016', 'HS-2026-016', 'PP-2026-016', '2026-09-16', '二级', 830, '4kg/箱', 'pending', 1],
-    ['PC-20260917-017', 'D-017', 'HS-2026-017', 'PP-2026-017', '2026-09-17', '一级', 1120, '5kg/箱', 'pending', 1],
-    ['PC-20260918-018', 'D-018', 'HS-2026-018', 'PP-2026-018', '2026-09-18', '三级', 690, '5kg/箱', 'pending', 1],
-    ['PC-20260919-019', 'D-019', 'HS-2026-019', 'PP-2026-019', '2026-09-19', '一级', 1380, '4kg/箱', 'pending', 1],
-    ['PC-20260920-020', 'D-020', 'HS-2026-020', 'PP-2026-020', '2026-09-20', '二级', 950, '6kg/箱', 'pending', 1]
-  ];
+  /* 严格空库模式：不内置演示批次，批次一律来自真实采收记录或后端 /api/trace/aggregate */
+  var BATCH_FALLBACK = [];
 
   // 追溯码样例（与历史页面保持一致）
-  var CODE_SEED = [
-    ['SNZG-20260901-0001', 'PC-20260901-001', '2026-09-01 16:20:00', 'active', 'SN20260614102', '标准版履历模板', 156, '2026-09-22 14:30:00'],
-    ['SNZG-20260901-0002', 'PC-20260901-001', '2026-09-01 16:35:00', 'active', 'SN20260611105', '标准版履历模板', 98, '2026-09-21 11:20:00'],
-    ['SNZG-20260902-0003', 'PC-20260902-002', '2026-09-02 15:10:00', 'active', 'SN20260608108', '有机认证版模板', 134, '2026-09-22 09:15:00'],
-    ['SNZG-20260902-0004', 'PC-20260902-002', '2026-09-02 15:25:00', 'active', 'SN20260602114', '有机认证版模板', 87, '2026-09-20 16:40:00'],
-    ['SNZG-20260903-0005', 'PC-20260903-003', '2026-09-03 17:00:00', 'inactive', '', '精简版履历模板', 0, ''],
-    ['SNZG-20260903-0006', 'PC-20260903-003', '2026-09-03 17:12:00', 'inactive', '', '精简版履历模板', 0, ''],
-    ['SNZG-20260904-0007', 'PC-20260904-004', '2026-09-04 16:40:00', 'inactive', '', '标准版履历模板', 0, ''],
-    ['SNZG-20260905-0008', 'PC-20260905-005', '2026-09-05 16:05:00', 'active', 'SN20260530117', '标准版履历模板', 112, '2026-09-19 10:05:00'],
-    ['SNZG-20260906-0009', 'PC-20260906-006', '2026-09-06 15:48:00', 'inactive', '', '精简版履历模板', 0, ''],
-    ['SNZG-20260907-0010', 'PC-20260907-007', '2026-09-07 17:20:00', 'inactive', '', '标准版履历模板', 0, ''],
-    ['SNZG-20260908-0011', 'PC-20260908-008', '2026-09-08 16:30:00', 'inactive', '', '标准版履历模板', 0, ''],
-    ['SNZG-20260909-0012', 'PC-20260909-009', '2026-09-09 15:55:00', 'inactive', '', '精简版履历模板', 0, ''],
-    ['SNZG-20260910-0013', 'PC-20260910-010', '2026-09-10 16:15:00', 'inactive', '', '精简版履历模板', 0, ''],
-    ['SNZG-20260911-0014', 'PC-20260911-011', '2026-09-11 17:05:00', 'inactive', '', '标准版履历模板', 0, ''],
-    ['SNZG-20260912-0015', 'PC-20260912-012', '2026-09-12 16:50:00', 'active', 'SN20260527120', '品牌故事版模板', 76, '2026-09-21 15:25:00'],
-    ['SNZG-20260913-0016', 'PC-20260913-013', '2026-09-13 15:35:00', 'inactive', '', '标准版履历模板', 0, ''],
-    ['SNZG-20260914-0017', 'PC-20260914-014', '2026-09-14 16:45:00', 'inactive', '', '标准版履历模板', 0, ''],
-    ['SNZG-20260915-0018', 'PC-20260915-015', '2026-09-15 17:15:00', 'inactive', '', '精简版履历模板', 0, ''],
-    ['SNZG-20260916-0019', 'PC-20260916-016', '2026-09-16 15:20:00', 'inactive', '', '精简版履历模板', 0, ''],
-    ['SNZG-20260917-0020', 'PC-20260917-017', '2026-09-17 16:25:00', 'active', 'SN20260526121', '标准版履历模板', 64, '2026-09-20 09:35:00'],
-    ['SNZG-20260918-0021', 'PC-20260918-018', '2026-09-18 17:30:00', 'expired', '', '标准版履历模板', 42, '2026-09-22 14:00:00'],
-    ['SNZG-20260919-0022', 'PC-20260919-019', '2026-09-19 16:10:00', 'expired', '', '精简版履历模板', 29, '2026-09-21 10:20:00'],
-    ['SNZG-20260920-0023', 'PC-20260920-020', '2026-09-20 15:40:00', 'inactive', '', '标准版履历模板', 0, '']
-  ];
+  var CODE_SEED = [];
 
-  var TEMPLATE_SEED = [
-    {
-      id: 'TPL-STD', name: '标准版履历模板', version: 3, status: 'active',
-      layout: { size: '60×40mm', material: '铜版纸', fields: ['产品名称', '批次号', '追溯码', '二维码', '检测结论', '产地'] },
-      versions: [
-        { version: 1, at: '2026-07-01', note: '初版：产品 + 追溯码' },
-        { version: 2, at: '2026-08-10', note: '增加检测结论与产地' },
-        { version: 3, at: '2026-09-01', note: '增加短链二维码容错等级 H' }
-      ]
-    },
-    {
-      id: 'TPL-ORG', name: '有机认证版模板', version: 2, status: 'active',
-      layout: { size: '60×60mm', material: '防水合成纸', fields: ['产品名称', '批次号', '追溯码', '二维码', '有机认证', '检测报告编号'] },
-      versions: [
-        { version: 1, at: '2026-07-15', note: '初版' },
-        { version: 2, at: '2026-08-20', note: '增加检测报告编号' }
-      ]
-    },
-    {
-      id: 'TPL-LITE', name: '精简版履历模板', version: 1, status: 'active',
-      layout: { size: '40×30mm', material: '热敏纸', fields: ['产品名称', '批次号', '二维码'] },
-      versions: [{ version: 1, at: '2026-07-01', note: '初版' }]
-    }
-  ];
+  var TEMPLATE_SEED = [];
 
-  var LABEL_STOCK_SEED = {
-    '花牛苹果专用标签（双层纸袋型）': 12500,
-    '花牛苹果专用标签（透气膜袋型）': 8200,
-    '秦冠专用标签': 6800
-  };
+  /* 严格空库模式：不内置演示标签库存 */
+  var LABEL_STOCK_SEED = {};
 
   var INSPECTION_INSTITUTIONS = [
     '甘肃省农产品质量安全检测中心',
@@ -576,34 +509,14 @@
         idx++;
       }
     }
-    // 一条异地高频异常样例
-    out.push({
-      id: 'SCN-' + pad(out.length + 1, 5),
-      code: 'SNZG-20260901-0001',
-      at: '2026-09-23 02:16:00',
-      source: 'H5',
-      region: '广东省深圳市',
-      device: 'Android · Chrome',
-      result: 'risk',
-      riskFlag: 'channel',
-      riskReason: '短时间内异地高频查询，疑似窜货'
-    });
+    /* 严格空库模式：不追加任何演示扫码样例 */
     return out;
   }
 
   function seedTemplates() { return clone(TEMPLATE_SEED); }
 
   /* 溯源展示模板（C端履历展示模板，区别于标签打印模板） */
-  var SHOW_TEMPLATE_SEED = [
-    { id: 'ST-001', name: '标准版履历模板', product: '花牛苹果', modules: ['基地介绍','种植管理','施肥喷药','农残检测','采摘入库'], boundBatches: ['PC-20260901-001'], createTime: '2026-08-25', status: 'active', desc: '适用于一般批次溯源，包含核心农事与检测环节' },
-    { id: 'ST-002', name: '精简版履历模板', product: '花牛苹果', modules: ['基地介绍','采摘入库'], boundBatches: ['PC-20260911-011'], createTime: '2026-08-28', status: 'active', desc: '精简展示，仅保留产地与采收信息' },
-    { id: 'ST-003', name: '有机认证版模板', product: '花牛苹果', modules: ['基地介绍','种植管理','施肥喷药','农残检测','企业认证'], boundBatches: ['PC-20260902-002'], createTime: '2026-09-02', status: 'active', desc: '有机产品专用，突出检测与认证' },
-    { id: 'ST-004', name: '礼盒装版模板', product: '礼盒装苹果', modules: ['基地介绍','采摘入库','冷链配送'], boundBatches: [], createTime: '2026-09-03', status: 'active', desc: '礼品套装专用模板' },
-    { id: 'ST-005', name: '认养农业版模板', product: '花牛苹果', modules: ['基地介绍','种植管理','采摘入库'], boundBatches: [], createTime: '2026-09-13', status: 'active', desc: '认养果树所产果实使用' },
-    { id: 'ST-006', name: '秦冠专属版模板', product: '秦冠苹果', modules: ['基地介绍','种植管理','采摘入库'], boundBatches: ['PC-20260920-020'], createTime: '2026-09-18', status: 'active', desc: '秦冠品种专用' },
-    { id: 'ST-007', name: '金帅专属版模板', product: '金帅苹果', modules: ['基地介绍','种植管理','采摘入库'], boundBatches: ['PC-20260910-010'], createTime: '2026-09-08', status: 'active', desc: '金帅品种专用' },
-    { id: 'ST-008', name: '果园直发版模板', product: '花牛苹果', modules: ['基地介绍','采摘入库','冷链配送'], boundBatches: [], createTime: '2026-09-19', status: 'active', desc: '果园直发批次使用' }
-  ];
+  var SHOW_TEMPLATE_SEED = [];
   function seedShowTemplates() { return clone(SHOW_TEMPLATE_SEED); }
   function seedStock() {
     var stored = readJSON(MOBILE_LABEL_STOCK_KEY, null);
@@ -612,77 +525,33 @@
   }
 
   function seedPrintJobs() {
-    return [
-      {
-        id: 'PJ-20260901-001', batchNo: 'PC-20260901-001', labelName: '花牛苹果专用标签（双层纸袋型）',
-        templateId: 'TPL-STD', templateVersion: 3, qty: 2, operator: '管理员',
-        status: 'printed', reprintOf: '', reason: '', createdAt: '2026-09-01 17:40:00',
-        codes: ['SNZG-20260901-0001', 'SNZG-20260901-0002']
-      },
-      {
-        id: 'PJ-20260905-002', batchNo: 'PC-20260905-005', labelName: '花牛苹果专用标签（透气膜袋型）',
-        templateId: 'TPL-STD', templateVersion: 3, qty: 1, operator: '包装组',
-        status: 'reprinted', reprintOf: 'PJ-20260905-001', reason: '首次打印条码偏移',
-        createdAt: '2026-09-05 18:10:00', codes: ['SNZG-20260905-0008']
-      },
-      {
-        id: 'PJ-20260912-003', batchNo: 'PC-20260912-012', labelName: '秦冠专用标签',
-        templateId: 'TPL-LITE', templateVersion: 1, qty: 1, operator: '包装组',
-        status: 'scrapped', reprintOf: '', reason: '标签受潮报废',
-        createdAt: '2026-09-12 17:25:00', codes: ['SNZG-20260912-0015']
-      }
-    ];
+    /* 严格空库模式：不内置演示打印任务 */
+    return [];
   }
 
   function seedRecalls() {
-    return [{
-      id: 'RC-20260921-001', batchNo: 'PC-20260920-020', reason: '检测报告被撤销，主动召回',
-      scope: '已发货 950kg', operator: '质量负责人', status: 'active', createdAt: '2026-09-21 09:30:00'
-    }];
+    /* 严格空库模式：不内置演示召回记录 */
+    return [];
   }
 
   function seedChannelAlerts() {
-    return [
-      {
-        id: 'CA-20260923-001', level: 'high', type: '窜货预警', code: 'SNZG-20260901-0001',
-        batchNo: 'PC-20260901-001', region: '广东省深圳市', message: '授权销售区域为甘肃/陕西，深圳出现高频扫码',
-        at: '2026-09-23 02:16:00', status: 'open'
-      },
-      {
-        id: 'CA-20260922-002', level: 'medium', type: '重复扫码', code: 'SNZG-20260918-0021',
-        batchNo: 'PC-20260918-018', region: '甘肃省天水市', message: '同一码 10 分钟内被查询 18 次',
-        at: '2026-09-22 14:05:00', status: 'open'
-      }
-    ];
+    /* 严格空库模式：不内置演示窜货预警 */
+    return [];
   }
 
   function seedRegulatoryReports() {
-    return [{
-      id: 'RG-20260922-001', batchNo: 'PC-20260901-001', type: '农产品质量安全追溯报送',
-      period: '2026-09', status: 'submitted', submittedAt: '2026-09-22 10:00:00',
-      receiver: '天水市农业农村局', operator: '管理员'
-    }];
+    /* 严格空库模式：不内置演示监管报送记录 */
+    return [];
   }
 
   function seedApiKeys() {
-    return [{
-      id: 'AK-001', name: '监管平台只读接口', keyMasked: 'sk_live_••••••••3f7a',
-      scope: 'trace:read, report:read', calls: 1284, status: 'active', createdAt: '2026-08-01 09:00:00',
-      lastUsedAt: '2026-09-22 16:20:00'
-    }];
+    /* 严格空库模式：不内置演示 API 密钥 */
+    return [];
   }
 
   function seedCodeSegments() {
-    return [
-      {
-        id: 'SEG-2026-09A', prefix: 'SNZG-202609', total: 5000, used: 23,
-        status: 'active', risk: 'low', allocatedAt: '2026-09-01 08:00:00'
-      },
-      {
-        id: 'SEG-2026-10A', prefix: 'SNZG-202610', total: 3000, used: 0,
-        status: 'frozen', risk: 'medium', allocatedAt: '2026-10-01 08:00:00'
-      }
-    ];
+    /* 严格空库模式：不内置演示码段 */
+    return [];
   }
 
   /* 事件链构建 */
@@ -747,11 +616,7 @@
   }
 
   function seedAudit() {
-    return [
-      { id: 'AUD-0001', at: '2026-09-01 17:40:00', actor: '管理员', action: '生成追溯码', target: 'PC-20260901-001', detail: '生成 2 个追溯码' },
-      { id: 'AUD-0002', at: '2026-09-07 18:05:00', actor: '质检员', action: '检测报告缺失', target: 'PC-20260907-007', detail: '批次无有效检测报告，赋码已拦截' },
-      { id: 'AUD-0003', at: '2026-09-21 09:30:00', actor: '质量负责人', action: '发起召回', target: 'PC-20260920-020', detail: '检测报告撤销，主动召回' }
-    ];
+    return [];
   }
 
   function shortUrlOf(codeRec) {
@@ -1732,18 +1597,8 @@
   /* ============================================================
    * 基地环境 / 证据包 / 配置 / 统计
    * ============================================================ */
-  function stringSeed(s) {
-    var h = 0;
-    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-    return h;
-  }
   function environmentOf(batchNo) {
     var b = batch(batchNo) || {};
-    var seed = stringSeed(b.base || b.batchNo || 'base');
-    var now = new Date();
-    var weatherAt = fmtDateTime(addMinutes(now, -(seed % 18 + 4)));
-    var soilAt = fmtDateTime(addMinutes(now, -(seed % 25 + 6)));
-    var harvest = b.harvestDate || todayStr();
     return {
       batchNo: b.batchNo || batchNo,
       base: b.base || '',
@@ -1751,31 +1606,12 @@
       vrUrl: 'vr_panorama.html?base=' + encodeURIComponent(b.base || ''),
       videoUrl: (ensure().config.baseVideoUrl || ''),
       videoAvailable: !!ensure().config.baseVideoUrl,
-      weather: {
-        temp: (12 + seed % 9).toFixed(1),
-        humidity: 52 + seed % 28,
-        rainfall: (seed % 9) / 2,
-        wind: (1 + seed % 5).toFixed(1),
-        condition: ['晴', '多云', '阴', '晴间多云'][seed % 4],
-        updatedAt: weatherAt,
-        source: '基地气象站 WS-' + pad(seed % 6 + 1, 2)
-      },
-      soil: {
-        temp: (11 + seed % 7).toFixed(1),
-        moisture: 18 + seed % 16,
-        ph: (6.2 + (seed % 8) / 10).toFixed(1),
-        ec: 1150 + seed % 181,
-        updatedAt: soilAt,
-        source: '土壤墒情仪 SM-' + pad(seed % 5 + 1, 2)
-      },
-      captures: [
-        { key: 'planting', name: '种植管理', file: 'trace_planting.jpg', time: shiftDate(harvest, -35) + ' 09:20:00' },
-        { key: 'pruning', name: '修剪疏果', file: 'trace_pruning.jpg', time: shiftDate(harvest, -18) + ' 10:10:00' },
-        { key: 'bagging', name: '套袋保护', file: 'trace_bagging.jpg', time: shiftDate(harvest, -9) + ' 08:40:00' },
-        { key: 'testing', name: '采前检测', file: 'trace_testing.jpg', time: shiftDate(harvest, -1) + ' 15:30:00' },
-        { key: 'harvest', name: '采摘入库', file: 'trace_harvest.jpg', time: harvest + ' 11:20:00' }
-      ],
-      updatedAt: weatherAt
+      /* 严格空库模式：环境监测读数（气象/土壤）与生长过程证据图片均来自真实数据，
+         空库时返回空结构，页面显示“暂无数据”，不再用批次号伪随机生成演示读数 */
+      weather: null,
+      soil: null,
+      captures: [],
+      updatedAt: ''
     };
   }
   function config() { var d = ensure(); d.config.inspectionRequired = true; return clone(d.config); }

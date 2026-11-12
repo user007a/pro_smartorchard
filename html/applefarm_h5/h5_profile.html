@@ -7,6 +7,7 @@
   <script src="js/h5-auth.js"></script>
   <script>H5Auth.require();</script>
   <script src="js/h5-back.js"></script>
+  <script src="js/h5-data.js"></script>
   <script src="../applefarm_backhand/js/shared/mall-store.js"></script>
   <link rel="stylesheet" href="../applefarm_mobile/css/mobile-design-system.css">
   <style>
@@ -324,32 +325,24 @@
       if (totalSpend >= 1000) return { name: '金卡会员', levelTag: 'gold' };
       return { name: '普通会员', levelTag: 'normal' };
     }
-    function readArr(key) {
-      try { var v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; }
-      catch (e) { return []; }
-    }
+    function readArr(key) { return []; }
+    /* 订单已按当前会员过滤（H5Data），直接累加金额 */
     function currentUserSpend(orders) {
-      var loginUser = sessionStorage.getItem('loginUser') || '';
       if (!Array.isArray(orders) || !orders.length) return 0;
       var s = 0;
       for (var i = 0; i < orders.length; i++) {
         var o = orders[i] || {};
-        var byUser = !loginUser || (o.user === loginUser) || (o.userName === loginUser) || (o.username === loginUser);
-        if (!byUser) continue;
-        var amt = parseFloat(o.amount || o.totalAmount || o.total || 0);
+        if (o.statusCode === 'cancelled') continue;
+        var amt = parseFloat(o.total || o.amount || o.totalAmount || 0);
         if (!isNaN(amt)) s += amt;
       }
       return s;
     }
     function pickDefaultAddress(loginUser) {
-      var list = readArr('h5_addresses');
-      // 优先匹配当前用户名，其次取第一个设默认的，最后取第一个
-      var matchUser = list.filter(function (a) { return a && a.user === loginUser; });
-      var def = matchUser.find(function (a) { return a.default; });
+      var list = addressList;
+      var def = list.find(function (a) { return a && a.default; });
       if (def) return def;
-      def = list.find(function (a) { return a && a.default; });
-      if (def) return def;
-      return matchUser[0] || list[0] || null;
+      return list[0] || null;
     }
 
     function setFirstText(el, value) {
@@ -363,8 +356,8 @@
     }
 
     function renderProfile() {
-      var loginUser = sessionStorage.getItem('loginUser') || '';
-      var orders = readArr('h5_orders');
+      var loginUser = H5Auth.isLoggedIn() ? (H5Auth.displayName() || H5Auth.currentUser()) : '';
+      var orders = orderList;
       var spend = currentUserSpend(orders);
       var level = computeMemberLevel(spend);
 
@@ -380,8 +373,7 @@
       var levelEl = document.getElementById('profileLevel');
       var regEl = document.getElementById('profileRegistered');
       setFirstText(nameEl, loginUser || '未登录');
-      var cache = {};
-      try { cache = JSON.parse(sessionStorage.getItem('loginUserProfile') || '{}'); } catch (e) {}
+      var cache = H5Auth.profile() || {};
       var phone = cache.phone || '';
       setFirstText(phoneEl, phone ? maskPhone(phone) : '未设置');
       if (levelEl) levelEl.textContent = level.name;
@@ -410,16 +402,23 @@
       if (s.length === 11) return s.substr(0, 3) + '****' + s.substr(7);
       return s;
     }
-    renderProfile();
-    document.addEventListener('DOMContentLoaded', renderProfile);
-    window.addEventListener('storage', function (e) {
-      if (e.key && (/^h5_|^snzg_/).test(e.key)) renderProfile();
+    /* 数据内存缓存 + 异步初始化 */
+    var addressList = [];
+    var orderList = [];
+    H5Data.ready.then(function () {
+      return Promise.all([H5Data.address.list(), H5Data.list('order')]);
+    }).then(function (res) {
+      addressList = res[0] || [];
+      orderList = res[1] || [];
+      renderProfile();
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+      H5Data.ready.then(function () { renderProfile(); });
     });
 
     function manageAddress() {
-      // 地址管理：使用 localStorage 持久化地址列表，支持新增/编辑/设为默认
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) {}
+      // 地址管理：数据来自后端 sf_mall_address（H5Data.address）
+      var list = addressList;
       var html = '';
       if (!list.length) {
         html = '<p style="text-align:center;color:#999;margin:24px 0;">暂无地址，请点击下方新增</p>';
@@ -466,8 +465,6 @@
     }
 
     function saveAddress() {
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) {}
       var name = document.getElementById('addrName').value.trim();
       var phone = document.getElementById('addrPhone').value.trim();
       var region = document.getElementById('addrRegion').value.trim();
@@ -476,27 +473,36 @@
       var editIdx = window.__addrEditIdx;
       if (!name || !phone || !detail) { showToast('请填写完整'); return; }
       if (!/^1\d{10}$/.test(phone)) { showToast('手机号格式不正确'); return; }
-      // 地址归属到当前登录用户，多账号切换时互不串数据
-      var addr = { name: name, phone: phone, region: region, detail: detail, default: isDefault,
-                   user: H5Auth.currentUser() };
-      if (isDefault) list.forEach(function(a){ a.default = false; });
-      if (editIdx != null && editIdx >= 0) {
-        list[editIdx] = addr;
-      } else {
-        list.push(addr);
+      var addr = { name: name, phone: phone, region: region, detail: detail, default: isDefault };
+      var jobs = [];
+      if (isDefault) {
+        addressList.forEach(function (a) {
+          if (a.default && a._id != null) { a.default = false; jobs.push(H5Data.address.save(a)); }
+        });
       }
-      if (!list.some(function(a){ return a.default; }) && list.length) list[0].default = true;
-      localStorage.setItem('h5_addresses', JSON.stringify(list));
-      window.__addrEditIdx = null;
-      closeModal();
-      manageAddress();
-      showToast('地址已保存');
+      var editing = (editIdx != null && editIdx >= 0) ? addressList[editIdx] : null;
+      if (editing && editing._id != null) {
+        addr._id = editing._id;
+        if (editIdx != null && editIdx >= 0) addressList[editIdx] = addr;
+        jobs.push(H5Data.address.save(addr));
+      } else {
+        addressList.push(addr);
+        jobs.push(H5Data.address.save(addr).then(function (res) {
+          if (res && res.ok && res.data && res.data.insertId) addr._id = res.data.insertId;
+        }));
+      }
+      if (!addressList.some(function (a) { return a.default; }) && addressList.length) addressList[0].default = true;
+      Promise.all(jobs).then(function () {
+        window.__addrEditIdx = null;
+        closeModal();
+        manageAddress();
+        renderProfile();
+        showToast('地址已保存');
+      });
     }
 
     function editAddress(idx) {
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) {}
-      var a = list[idx];
+      var a = addressList[idx];
       if (!a) return;
       window.__addrEditIdx = idx;
       manageAddress();
@@ -509,24 +515,26 @@
 
     function deleteAddress(idx) {
       if (!confirm('确定删除该地址？')) return;
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) {}
-      list.splice(idx, 1);
-      localStorage.setItem('h5_addresses', JSON.stringify(list));
+      var a = addressList[idx];
+      if (a && a._id != null) H5Data.address.remove(a._id);
+      addressList.splice(idx, 1);
       closeModal();
       manageAddress();
+      renderProfile();
       showToast('地址已删除');
     }
 
     var INVOICE_STATUS = { pending: '待开票', issued: '已开票', rejected: '已驳回' };
 
     function viewInvoices() {
-      // 发票申请由结算页（h5_checkout.html）下单时写入 h5_invoices，开票/驳回状态由后台「发票管理」回写
-      var list = [];
-      try {
-        list = JSON.parse(localStorage.getItem('h5_invoices') || '[]');
+      // 发票数据来自后端 sf_mall_invoice（H5Data）
+      H5Data.list('invoice').then(function (list) {
         if (!Array.isArray(list)) list = [];
-      } catch (e) { list = []; }
+        renderInvoices(list);
+      });
+    }
+
+    function renderInvoices(list) {
       var html = '';
       if (!list.length) {
         html = '<p style="text-align:center;color:#999;margin:24px 0;">暂无发票记录，结算时勾选「需要发票」即可申请</p>';

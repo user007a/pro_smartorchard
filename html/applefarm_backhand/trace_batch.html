@@ -393,6 +393,7 @@
   <span id="toastMessage">操作成功</span>
 </div>
 
+<script src="../common/js/api.js"></script>
 <script src="js/shared/harvest-store.js"></script>
 <script src="js/shared/trace-store.js"></script>
 <script>
@@ -403,77 +404,108 @@
  * 产品集（证书签发源）：花牛苹果 / 金帅苹果 / 秦冠苹果 / 礼盒装苹果
  * ============================================================ */
 
-// 产品集（与证书签发保持一致）
-const PRODUCT_SOURCE = ['花牛苹果', '金帅苹果', '秦冠苹果', '礼盒装苹果'];
-
-// 基地（取自基地管理 enterprise_base.html）
-const BASE_SOURCE = ['天水麦积区基地', '天水秦州基地', '青岛莱西基地', '龙口南山基地', '天水甘谷基地', '甘肃吉县苹果园', '甘肃麦积区苹果园', '天水麦积区苹果基地', '甘肃麦积区苹果基地', '天水张家川县基地'];
-
-// 地块（取自地块管理 enterprise_plot.html 的 mockPlotData）
-const PLOT_SOURCE = [
-  {code:'D-001',name:'东区1号地',base:'天水麦积区基地',variety:'花牛苹果'},
-  {code:'D-002',name:'东区2号地',base:'天水麦积区基地',variety:'花牛苹果'},
-  {code:'D-003',name:'西区1号地',base:'天水麦积区基地',variety:'金帅'},
-  {code:'D-004',name:'北区1号地',base:'天水秦州基地',variety:'花牛苹果'},
-  {code:'D-005',name:'南区1号地',base:'天水秦州基地',variety:'花牛苹果'},
-  {code:'D-006',name:'中区1号地',base:'甘肃吉县苹果园',variety:'花牛苹果'},
-  {code:'D-007',name:'南区2号地',base:'甘肃麦积区苹果园',variety:'花牛苹果'},
-  {code:'D-008',name:'西区2号地',base:'天水麦积区苹果基地',variety:'花牛苹果'},
-  {code:'D-009',name:'北区2号地',base:'甘肃麦积区苹果基地',variety:'花牛苹果'},
-  {code:'D-010',name:'东区3号地',base:'天水麦积区苹果基地',variety:'金帅'},
-  {code:'D-011',name:'南区3号地',base:'甘肃麦积区苹果园',variety:'花牛苹果'},
-  {code:'D-012',name:'西区3号地',base:'天水麦积区苹果基地',variety:'秦冠'},
-  {code:'D-013',name:'北区3号地',base:'甘肃麦积区苹果基地',variety:'花牛苹果'},
-  {code:'D-014',name:'中区2号地',base:'甘肃吉县苹果园',variety:'花牛苹果'},
-  {code:'D-015',name:'东区4号地',base:'天水麦积区苹果基地',variety:'花牛苹果'},
-  {code:'D-016',name:'南区4号地',base:'甘肃麦积区苹果园',variety:'金帅'},
-  {code:'D-017',name:'西区4号地',base:'天水麦积区苹果基地',variety:'花牛苹果'},
-  {code:'D-018',name:'北区4号地',base:'甘肃麦积区苹果基地',variety:'花牛苹果'},
-  {code:'D-019',name:'中区3号地',base:'甘肃吉县苹果园',variety:'花牛苹果'},
-  {code:'D-020',name:'东区5号地',base:'天水麦积区苹果基地',variety:'秦冠'},
-  {code:'D-021',name:'东区6号地',base:'甘肃吉县苹果园',variety:'花牛苹果'},
-  {code:'D-022',name:'西区5号地',base:'天水张家川县基地',variety:'金帅'}
-];
-
-// 采收计划（取自采收计划 harvest_plan.html）
-const PLAN_SOURCE = Array.from({length:20}, (_, i) => 'HS-2026-' + String(i + 1).padStart(3, '0'));
+/* 严格空库模式：产品 / 基地 / 地块 / 采收计划下拉数据一律来自后端 API，
+   不再使用写死的示例数组 */
+let PRODUCT_SOURCE = [];
+let BASE_SOURCE = [];
+let PLOT_SOURCE = [];
+let PLAN_SOURCE = [];
 
 // 品种 → 产品（证书签发源）映射
 const VARIETY_PRODUCT = { '花牛苹果':'花牛苹果', '金帅':'金帅苹果', '秦冠':'秦冠苹果' };
 
-// 批次主数据（2026 年 9 月采收季）
-const mockBatchData = [
-  {id:'BAT001',batchNo:'PC-20260901-001',plotCode:'D-001',planNo:'HS-2026-001',processNo:'PP-2026-001',harvestDate:'2026-09-01',grade:'一级',quantity:1250,spec:'5kg/箱',traceCount:2,status:'shipped',remark:'首批采摘，果面光洁'},
-  {id:'BAT002',batchNo:'PC-20260902-002',plotCode:'D-002',planNo:'HS-2026-002',processNo:'PP-2026-002',harvestDate:'2026-09-02',grade:'一级',quantity:890,spec:'5kg/箱',traceCount:2,status:'shipped',remark:'甜度达标，优先发货'},
-  {id:'BAT003',batchNo:'PC-20260903-003',plotCode:'D-003',planNo:'HS-2026-003',processNo:'PP-2026-003',harvestDate:'2026-09-03',grade:'二级',quantity:1560,spec:'4kg/箱',traceCount:2,status:'packed',remark:'金帅早熟品种'},
-  {id:'BAT004',batchNo:'PC-20260904-004',plotCode:'D-004',planNo:'HS-2026-004',processNo:'PP-2026-004',harvestDate:'2026-09-04',grade:'一级',quantity:780,spec:'5kg/箱',traceCount:1,status:'packed',remark:''},
-  {id:'BAT005',batchNo:'PC-20260905-005',plotCode:'D-005',planNo:'HS-2026-005',processNo:'PP-2026-005',harvestDate:'2026-09-05',grade:'二级',quantity:1100,spec:'5kg/箱',traceCount:1,status:'packed',remark:'本批次曾发生病虫害，已复检合格'},
-  {id:'BAT006',batchNo:'PC-20260906-006',plotCode:'D-006',planNo:'HS-2026-006',processNo:'PP-2026-006',harvestDate:'2026-09-06',grade:'三级',quantity:920,spec:'4kg/箱',traceCount:1,status:'packed',remark:''},
-  {id:'BAT007',batchNo:'PC-20260907-007',plotCode:'D-007',planNo:'HS-2026-007',processNo:'PP-2026-007',harvestDate:'2026-09-07',grade:'一级',quantity:1340,spec:'5kg/箱',traceCount:1,status:'packed',remark:''},
-  {id:'BAT008',batchNo:'PC-20260908-008',plotCode:'D-008',planNo:'HS-2026-008',processNo:'PP-2026-008',harvestDate:'2026-09-08',grade:'二级',quantity:650,spec:'5kg/箱',traceCount:1,status:'packed',remark:''},
-  {id:'BAT009',batchNo:'PC-20260909-009',plotCode:'D-009',planNo:'HS-2026-009',processNo:'PP-2026-009',harvestDate:'2026-09-09',grade:'一级',quantity:1420,spec:'4kg/箱',traceCount:1,status:'stored',remark:'优质果'},
-  {id:'BAT010',batchNo:'PC-20260910-010',plotCode:'D-010',planNo:'HS-2026-010',processNo:'PP-2026-010',harvestDate:'2026-09-10',grade:'二级',quantity:870,spec:'4kg/箱',traceCount:1,status:'stored',remark:'金帅品种'},
-  {id:'BAT011',batchNo:'PC-20260911-011',plotCode:'D-011',planNo:'HS-2026-011',processNo:'PP-2026-011',harvestDate:'2026-09-11',grade:'一级',quantity:1680,spec:'5kg/箱',traceCount:1,status:'stored',remark:''},
-  {id:'BAT012',batchNo:'PC-20260912-012',plotCode:'D-012',planNo:'HS-2026-012',processNo:'PP-2026-012',harvestDate:'2026-09-12',grade:'三级',quantity:720,spec:'6kg/箱',traceCount:1,status:'stored',remark:'秦冠品种，果形端正'},
-  {id:'BAT013',batchNo:'PC-20260913-013',plotCode:'D-013',planNo:'HS-2026-013',processNo:'PP-2026-013',harvestDate:'2026-09-13',grade:'一级',quantity:1200,spec:'5kg/箱',traceCount:1,status:'stored',remark:''},
-  {id:'BAT014',batchNo:'PC-20260914-014',plotCode:'D-014',planNo:'HS-2026-014',processNo:'PP-2026-014',harvestDate:'2026-09-14',grade:'二级',quantity:980,spec:'5kg/箱',traceCount:1,status:'stored',remark:''},
-  {id:'BAT015',batchNo:'PC-20260915-015',plotCode:'D-015',planNo:'HS-2026-015',processNo:'PP-2026-015',harvestDate:'2026-09-15',grade:'一级',quantity:1550,spec:'4kg/箱',traceCount:1,status:'stored',remark:'高产'},
-  {id:'BAT016',batchNo:'PC-20260916-016',plotCode:'D-016',planNo:'HS-2026-016',processNo:'PP-2026-016',harvestDate:'2026-09-16',grade:'二级',quantity:830,spec:'4kg/箱',traceCount:1,status:'pending',remark:'金帅品种，正在装箱'},
-  {id:'BAT017',batchNo:'PC-20260917-017',plotCode:'D-017',planNo:'HS-2026-017',processNo:'PP-2026-017',harvestDate:'2026-09-17',grade:'一级',quantity:1120,spec:'5kg/箱',traceCount:1,status:'pending',remark:'高产批次'},
-  {id:'BAT018',batchNo:'PC-20260918-018',plotCode:'D-018',planNo:'HS-2026-018',processNo:'PP-2026-018',harvestDate:'2026-09-18',grade:'三级',quantity:690,spec:'5kg/箱',traceCount:1,status:'pending',remark:''},
-  {id:'BAT019',batchNo:'PC-20260919-019',plotCode:'D-019',planNo:'HS-2026-019',processNo:'PP-2026-019',harvestDate:'2026-09-19',grade:'一级',quantity:1380,spec:'4kg/箱',traceCount:1,status:'pending',remark:''},
-  {id:'BAT020',batchNo:'PC-20260920-020',plotCode:'D-020',planNo:'HS-2026-020',processNo:'PP-2026-020',harvestDate:'2026-09-20',grade:'二级',quantity:950,spec:'6kg/箱',traceCount:1,status:'pending',remark:'秦冠品种，待包装'}
-];
+// 批次数据缓存：由 fetchBatches() 从后端 API 异步填充
+let mockBatchData = [];
 
 const STATUS_TEXT = { pending:'待包装', stored:'已入库', packed:'已包装', shipped:'已发货' };
 
-/* ---------- 批次数据源 ----------
-   统一由 TraceStore 提供；批次由采收记录生成，检测报告 / 追溯码 / 存证同源。 */
-function loadBatches() {
-  return TraceStore.batches();
+/* 严格空库模式：批次一律来自后端 API（sf_trace_batch），loadBatches 仅返回当前缓存 */
+var BATCH_RESOURCE = 'trace_batch';
+function loadBatches() { return mockBatchData; }
+function saveBatches() { /* 兼容旧调用：实际保存由表单交互完成 */ }
+
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapBatchRow(row) {
+  return {
+    id: row.id,
+    batchNo: row.batch_no || '',
+    plotCode: row.plot_code || '',
+    plotName: row.plot_name || '',
+    planNo: row.harvest_plan_code || row.source_record_code || '',
+    processNo: row.process_code || '',
+    harvestDate: row.harvest_date || '',
+    grade: row.grade || '',
+    quantity: row.harvest_amount || 0,
+    spec: row.spec || '',
+    traceCount: Number(row.code_count) || 0,
+    status: row.status || 'pending',
+    remark: row.remark || '',
+    product: row.product_name || '',
+    base: row.base_name || '',
+    variety: row.variety || ''
+  };
 }
-function saveBatches() {
-  // 兼容旧调用：实际保存由 TraceStore.saveBatch 完成
+
+/* 表格状态提示：加载中 / 暂无数据 / 加载失败 */
+function setBatchStatus(text, isError) {
+  var tbody = document.getElementById('dataTableBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:32px;color:' +
+    (isError ? 'var(--error, #d03050)' : 'var(--text-secondary, #6b7b6b)') + ';">' + text + '</td></tr>';
+  var pager = document.getElementById('pagination-container');
+  if (pager) pager.innerHTML = '';
+}
+
+/* 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示；不写 localStorage */
+function fetchBatches() {
+  if (!window.Api) { setBatchStatus('数据加载失败：接口未就绪', true); return; }
+  setBatchStatus('正在加载数据...', false);
+  Api.get(BATCH_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) { setBatchStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true); return; }
+    var list = (r.data && r.data.list) || [];
+    mockBatchData = list.map(mapBatchRow);
+    if (!mockBatchData.length) { setBatchStatus('暂无数据', false); return; }
+    Pagination.init({
+      currentPage: 1, pageSize: 10, data: mockBatchData,
+      containerId: 'pagination-container', tbodyId: 'dataTableBody',
+      renderRow: renderBatchRow
+    });
+  }).catch(function (e) {
+    setBatchStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+  });
+}
+
+/* 下拉选项来自后端 API：基地 / 地块 / 采收计划 / 产品字典 */
+function loadSelectOptions() {
+  if (!window.Api) return;
+  Promise.all([
+    Api.get('base', { page: 1, size: 500 }),
+    Api.get('plot', { page: 1, size: 500 }),
+    Api.get('harvest_plan', { page: 1, size: 500 }),
+    Api.get('dict', { page: 1, size: 500 })
+  ]).then(function (res) {
+    var bases = (res[0] && res[0].ok && res[0].data && res[0].data.list) || [];
+    var plots = (res[1] && res[1].ok && res[1].data && res[1].data.list) || [];
+    var plans = (res[2] && res[2].ok && res[2].data && res[2].data.list) || [];
+    var dicts = (res[3] && res[3].ok && res[3].data && res[3].data.list) || [];
+    BASE_SOURCE = bases.map(function (x) { return x.base_name || x.name || ''; }).filter(Boolean);
+    PLOT_SOURCE = plots.map(function (x) {
+      return { code: x.plot_code || x.code || '', name: x.plot_name || x.name || '', base: x.base_name || '', variety: x.variety || '' };
+    });
+    PLAN_SOURCE = plans.map(function (x) { return x.plan_no || x.plan_code || x.harvest_plan_code || ''; }).filter(Boolean);
+    PRODUCT_SOURCE = dicts.filter(function (x) { return (x.dict_code || '').indexOf('PRODUCT') >= 0; })
+      .map(function (x) { return x.dict_value || ''; }).filter(Boolean)
+      .join(',').split(/[,，]/).filter(Boolean);
+
+    var baseSel = document.getElementById('baseSelect');
+    if (baseSel) BASE_SOURCE.forEach(function (b) {
+      var opt = document.createElement('option'); opt.value = b; opt.textContent = b; baseSel.appendChild(opt);
+    });
+    var productSel = document.getElementById('productSelect');
+    if (productSel) PRODUCT_SOURCE.forEach(function (p) {
+      var opt = document.createElement('option'); opt.value = p; opt.textContent = p; productSel.appendChild(opt);
+    });
+    if (typeof initFormOptions === 'function') initFormOptions();
+  }).catch(function () { /* 下拉数据加载失败时保持为空 */ });
 }
 
 let currentDetailId = null;
@@ -533,9 +565,11 @@ const Pagination = {
 
 /* ---------- 工具 ---------- */
 function getPlot(code) { return PLOT_SOURCE.find(p => p.code === code) || {code:code, name:'-', base:'-', variety:'-'}; }
-function getProduct(batch) { return batch.product || VARIETY_PRODUCT[getPlot(batch.plotCode).variety] || '花牛苹果'; }
+function getProduct(batch) { return batch.product || VARIETY_PRODUCT[getPlot(batch.plotCode).variety] || '—'; }
 function inspectBadge(batchNo) {
-  const st = TraceStore.inspectionState(batchNo);
+  const st = (window.TraceStore && typeof TraceStore.inspectionState === 'function')
+    ? TraceStore.inspectionState(batchNo) : null;
+  if (!st) return '<span class="status-tag inactive">—</span>';
   if (st.hasValid) return '<span class="status-tag active">有效</span>';
   if (!st.latest) return '<span class="status-tag inactive">缺失</span>';
   const map = { expired: '已过期', revoked: '已撤销', invalid: '不合格', pending: '待出报告' };
@@ -607,7 +641,7 @@ function resetSearch() {
   document.getElementById('productSelect').value = '';
   document.getElementById('statusSelect').value = '';
   document.getElementById('searchInput').value = '';
-  Pagination.updateData(loadBatches());
+  fetchBatches();
   showToast('已重置筛选条件');
 }
 
@@ -656,7 +690,7 @@ function showDetail(id) {
     <div class="detail-grid"><span class="detail-label">已生成追溯码</span><span class="detail-value">${item.codeCount} 个</span></div>
     <div class="detail-grid"><span class="detail-label">检测报告</span><span class="detail-value">${inspectBadge(item.batchNo)} ${insText}</span></div>
     <div class="detail-grid"><span class="detail-label">赋码门禁</span><span class="detail-value" style="color:${gateColor};">${gate.message}</span></div>
-    <div class="detail-grid"><span class="detail-label">基地实景</span><span class="detail-value">VR ${env.vrUrl ? '已接入' : '未接入'} · 视频 ${env.videoAvailable ? '已接入' : '监控快照'} · 气象 ${env.weather.updatedAt} · 墒情 ${env.soil.updatedAt}</span></div>
+    <div class="detail-grid"><span class="detail-label">基地实景</span><span class="detail-value">VR ${env.vrUrl ? '已接入' : '未接入'} · 视频 ${env.videoAvailable ? '已接入' : '监控快照'} · 气象 ${env.weather ? env.weather.updatedAt : '暂无数据'} · 墒情 ${env.soil ? env.soil.updatedAt : '暂无数据'}</span></div>
     <div class="detail-grid"><span class="detail-label">状态</span><span class="detail-value"><span class="status-tag ${item.status === 'shipped' ? 'active' : item.status === 'pending' ? 'inactive' : 'warning'}">${item.statusText}</span></span></div>
     <div class="detail-grid"><span class="detail-label">备注</span><span class="detail-value">${item.remark || '—'}</span></div>
   `;
@@ -739,7 +773,7 @@ function setSelectValue(el, value) {
 }
 
 function showEdit(id) {
-  const batch = TraceStore.batch(id) || TraceStore.batches().find(b => b.batchNo === id);
+  const batch = loadBatches().find(b => b.id === id || b.batchNo === id);
   if (!batch) return;
   currentEditId = batch.id;
   const item = enrich(batch);
@@ -768,7 +802,7 @@ function saveBatch() {
   if (!/^PC-\d{8}-\d{3}$/.test(batchNo)) { showToast('批次号格式应为 PC-YYYYMMDD-NNN', 'error'); return; }
   if (!quantity || Number(quantity) <= 0) { showToast('请输入采收数量', 'error'); return; }
 
-  const exists = TraceStore.batches().some(b => b.batchNo === batchNo && b.id !== currentEditId);
+  const exists = loadBatches().some(b => b.batchNo === batchNo && b.id !== currentEditId);
   if (exists) { showToast('批次号已存在', 'error'); return; }
 
   const plotCode = document.getElementById('editPlot').value;
@@ -797,7 +831,7 @@ function saveBatch() {
   if (!res.ok) { showToast(res.message || '保存失败', 'error'); return; }
   showToast(currentEditId ? '批次已保存' : '批次已创建');
   closeModal('editModal');
-  Pagination.updateData(loadBatches());
+  fetchBatches();
 }
 
 /* ---------- 从采收记录建批 ---------- */
@@ -843,7 +877,7 @@ function confirmHarvestBatch() {
   if (!res.ok) { showToast(res.message || '建批失败', 'error'); return; }
   showToast('已从采收记录创建批次 ' + r.batchNo);
   closeModal('harvestModal');
-  Pagination.updateData(loadBatches());
+  fetchBatches();
 }
 
 /* ---------- 检测报告 ---------- */
@@ -969,7 +1003,7 @@ function saveInspectionForm() {
     if (!res.ok) { showToast(res.message || '保存失败', 'error'); return; }
     showToast('检测报告已保存');
     closeModal('inspectionModal');
-    Pagination.updateData(loadBatches());
+    fetchBatches();
   });
 }
 
@@ -991,36 +1025,16 @@ function showToast(message, type = 'success') {
   setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
-/* ---------- 初始化 ---------- */
+/* ---------- 初始化：严格空库模式下异步从后端 API 取数 ---------- */
 document.addEventListener('DOMContentLoaded', function() {
-  const baseSelect = document.getElementById('baseSelect');
-  BASE_SOURCE.forEach(b => {
-    const opt = document.createElement('option');
-    opt.value = b; opt.textContent = b;
-    baseSelect.appendChild(opt);
-  });
-
-  const productSelect = document.getElementById('productSelect');
-  PRODUCT_SOURCE.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p; opt.textContent = p;
-    productSelect.appendChild(opt);
-  });
-
   initFormOptions();
+  setBatchStatus('正在加载数据...', false);
+  fetchBatches();
+  loadSelectOptions();
 
-  Pagination.init({
-    currentPage: 1,
-    pageSize: 10,
-    data: loadBatches(),
-    containerId: 'pagination-container',
-    tbodyId: 'dataTableBody',
-    renderRow: renderBatchRow
-  });
-
-  TraceStore.subscribe(function () {
-    Pagination.updateData(loadBatches());
-  });
+  if (window.TraceStore && typeof TraceStore.subscribe === 'function') {
+    TraceStore.subscribe(function () { fetchBatches(); });
+  }
 
   // 点击遮罩关闭
   document.querySelectorAll('.modal-overlay').forEach(overlay => {

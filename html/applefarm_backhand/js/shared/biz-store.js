@@ -64,6 +64,7 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
+    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -71,14 +72,16 @@
       return api.get('biz/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
+        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
+        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = global.BizMapper.toAggregate(res.data);
         var e = ensure();
-        if (agg.revenueMix && agg.revenueMix.length) e.revenueMix = agg.revenueMix;
-        if (agg.costStructure && agg.costStructure.length) e.costStructure = agg.costStructure;
-        if (agg.baseProfit && agg.baseProfit.length) e.baseProfit = agg.baseProfit;
-        if (agg.metrics && agg.metrics.length) e.metrics = agg.metrics;
-        if (agg.receivable && agg.receivable.aging && agg.receivable.aging.length) e.receivable.aging = agg.receivable.aging;
-        if (agg.customerRank && agg.customerRank.length) e.customerRank = agg.customerRank;
+        e.revenueMix = agg.revenueMix || [];
+        e.costStructure = agg.costStructure || [];
+        e.baseProfit = agg.baseProfit || [];
+        e.metrics = agg.metrics || [];
+        e.receivable.aging = (agg.receivable && agg.receivable.aging) || [];
+        e.customerRank = agg.customerRank || [];
         save();
         notify('backend-loaded');
       }
@@ -111,120 +114,30 @@
 
   var STORAGE_KEY = 'applefarm_biz_v1';
 
+  /* 严格空库模式：经营分析数据一律来自后端 /api/biz/aggregate，
+     这里只保留结构骨架，业务数组全部为空、标量归零，绝不内置演示经营数据。 */
   var DEFAULT_DATA = {
     schemaVersion: 3,
-    fiscalYear: '2026 财年',
-
-    // 收入构成（万元，合计须等于 totalRevenue）
-    // 口径：与利润报表地块汇总 / 报表总览一致（2026 年 753.10 万元）
-    revenueMix: [
-      { name:'认养收入', value:291.58, ratio:38.7, channel:'企业 / 家庭果园' },
-      { name:'批发收入', value:256.45, ratio:34.1, channel:'产地批发 / 商超直供' },
-      { name:'零售收入', value:107.29, ratio:14.2, channel:'电商 / 门店' },
-      { name:'观光采摘', value:65.76,  ratio:8.7,  channel:'园区采摘 / 研学' },
-      { name:'其他收入', value:32.02,  ratio:4.3,  channel:'技术服务 / 代储' }
-    ],
-    totalRevenue: 753.1,
-    revenueTarget: 960,
-
-    // 近 12 月营收趋势（万元，合计须等于 totalRevenue）
-    revenueTrend: [
-      { month:'1月', value:50.53 }, { month:'2月', value:54.07 }, { month:'3月', value:60.19 },
-      { month:'4月', value:66.91 }, { month:'5月', value:75.06 }, { month:'6月', value:81.26 },
-      { month:'7月', value:74.35 }, { month:'8月', value:68.24 }, { month:'9月', value:73.43 },
-      { month:'10月', value:62.29 }, { month:'11月', value:47.17 }, { month:'12月', value:39.59 }
-    ],
-
-    // 成本结构（五类科目，万元；名称与成本科目配置对齐）
-    costStructure: [
-      { name:'农资投入', value:125.38, ratio:28.5 },
-      { name:'人工用工', value:115.26, ratio:26.2 },
-      { name:'设备维护', value:104.70, ratio:23.8 },
-      { name:'采收物流', value:56.31,  ratio:12.8 },
-      { name:'其他费用', value:38.29,  ratio:8.7 }
-    ],
-    totalCost: 439.94,
-
-    // 各基地利润分解（万元）— 由利润报表地块数据按基地主数据聚合，合计 = 净利润
-    baseProfit: [
-      { base:'天水秦州基地',     profit:104.79, revenue:237.83, cost:133.04, rate:44.1 },
-      { base:'天水清水县基地',   profit:84.42,  revenue:197.60, cost:113.18, rate:42.7 },
-      { base:'天水武山县基地',   profit:81.80,  revenue:210.60, cost:128.80, rate:38.8 },
-      { base:'天水张家川县基地', profit:42.15,  revenue:107.07, cost:64.92,  rate:39.4 }
-    ],
-
-    // 应收账款账龄（万元）
-    receivable: {
-      balance: 412,
-      over60: 14,
-      aging: [
-        { name:'30 天以内', value:186, ratio:45 },
-        { name:'31-60 天',   value:168, ratio:41 },
-        { name:'61-90 天',   value:42,  ratio:10 },
-        { name:'90 天以上',  value:16,  ratio:4 }
-      ],
-      turnoverDays: 38,
-      badDebt: 0
-    },
-
-    // 经营指标
-    metrics: [
-      { name:'毛利率',     value:41.6, unit:'%',  qoq: 1.2,  better:'up' },
-      { name:'净利率',     value:41.6, unit:'%',  qoq: 0.6,  better:'up' },
-      { name:'应收周转',   value:38,   unit:'天', qoq:-3,   better:'down' },
-      { name:'库存周转',   value:12,   unit:'天', qoq:5,    better:'down' },
-      { name:'坪效产值',   value:1.86, unit:'万元/亩', qoq:0.08, better:'up' },
-      { name:'人均产值',   value:118,  unit:'万元/人', qoq:9,  better:'up' }
-    ],
-
-    // 销售渠道占比（按营收口径，与收入构成一致，保证同一金额只有一处口径）
-    channelMix: [
-      { name:'认养收入', value:38.7 },
-      { name:'批发收入', value:34.1 },
-      { name:'零售收入', value:14.2 },
-      { name:'观光采摘', value:8.7 },
-      { name:'其他收入', value:4.3 }
-    ],
-
-    // 客户/渠道排行（按回款金额，万元；与销售管理客户回款排行同源）
-    customerRank: [
-      { rank:1,  name:'北京XX超市',  amount:86.5, type:'批发客户' },
-      { rank:2,  name:'上海XX电商',  amount:82.8, type:'批发客户' },
-      { rank:3,  name:'武汉XX超市',  amount:78.4, type:'批发客户' },
-      { rank:4,  name:'无锡XX电商',  amount:74.2, type:'批发客户' },
-      { rank:5,  name:'成都XX电商',  amount:61.8, type:'批发客户' },
-      { rank:6,  name:'苏州XX电商',  amount:54.5, type:'批发客户' },
-      { rank:7,  name:'广州XX水果店', amount:24.9, type:'批发客户' },
-      { rank:8,  name:'深圳XX电商',  amount:24.7, type:'批发客户' },
-      { rank:9,  name:'青岛XX超市',  amount:22.6, type:'批发客户' },
-      { rank:10, name:'郭女士',      amount:19.7, type:'认养客户' }
-    ],
-
-    // 认养（金额口径与收入构成中的「认养收入」一致）
-    adoption: {
-      orders: 1377,
-      amount: 291.58,
-      renewRate: 76.4,
-      renewed: 1052,
-      avgPrice: 2118
-    },
-
-    // 近 5 年营收/净利对比（万元）
-    yearly: [
-      { year:'2021', revenue:1820, profit:268 },
-      { year:'2022', revenue:2050, profit:318 },
-      { year:'2023', revenue:2280, profit:362 },
-      { year:'2024', revenue:2460, profit:398 },
-      { year:'2025', revenue:2656, profit:428 }
-    ],
-
-    // 其他
-    netProfit: 313.16,
-    netProfitYoy: -26.8,
-    grossProfit: 313.16,
-    repurchaseRate: 62,
-    avgOrderValue: 328,
-    totalOrders: 69
+    fiscalYear: '',
+    revenueMix: [],
+    totalRevenue: 0,
+    revenueTarget: 0,
+    revenueTrend: [],
+    costStructure: [],
+    totalCost: 0,
+    baseProfit: [],
+    receivable: { balance: 0, over60: 0, aging: [], turnoverDays: 0, badDebt: 0 },
+    metrics: [],
+    channelMix: [],
+    customerRank: [],
+    adoption: { orders: 0, amount: 0, renewRate: 0, renewed: 0, avgPrice: 0 },
+    yearly: [],
+    netProfit: 0,
+    netProfitYoy: 0,
+    grossProfit: 0,
+    repurchaseRate: 0,
+    avgOrderValue: 0,
+    totalOrders: 0
   };
 
   /* ---------------- 读写与广播 ---------------- */

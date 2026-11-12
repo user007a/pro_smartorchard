@@ -62,6 +62,7 @@ window.MobileOpsStore = (function () {
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
+    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -69,6 +70,8 @@ window.MobileOpsStore = (function () {
       return api.get('mobile-ops/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
+        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
+        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = window.MobileOpsMapper.toAggregate(res.data);
         var map = {
           feedbacks: agg.feedbacks, expertQuestions: agg.expertQuestions, staff: agg.staff,
@@ -76,9 +79,9 @@ window.MobileOpsStore = (function () {
           diseaseRules: agg.diseaseRules, faultKb: agg.faultKb,
         };
         Object.keys(map).forEach(function (k) {
-          if (map[k] && map[k].length) writeList(KEYS[k], map[k]);
+          writeList(KEYS[k], map[k] || []);
         });
-        if ((agg.aiCategories && agg.aiCategories.length) || (agg.aiQuestions && agg.aiQuestions.length)) {
+        if (true) { // 严格模式：空库也以后端结果为准
           writeObj(KEYS.aiConfig, { categories: agg.aiCategories || [], hotQuestions: agg.aiQuestions || [] });
         }
       }

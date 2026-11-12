@@ -468,6 +468,7 @@
   <script src="js/mall-coupons.js"></script>
   <script src="js/mall-promotions.js"></script>
   <script src="js/h5-auth.js"></script>
+  <script src="js/h5-data.js"></script>
   <script>
     function navigateTo(page) { window.location.href = page; }
 
@@ -630,17 +631,18 @@
       el.classList.add('selected');
     }
 
+    /* 收货地址数据源：后端 sf_mall_address（内存 addressList，初始化时异步拉取） */
+    var addressList = [];
     /* 读取默认收货地址快照（供后台订单售后/对账使用） */
     function snapshotAddress() {
-      var list = [];
-      try { list = JSON.parse(localStorage.getItem('h5_addresses') || '[]'); } catch (e) { list = []; }
+      var list = addressList;
       if (!Array.isArray(list)) list = [];
       var def = list.filter(function (a) { return a && a.default; })[0] || list[0];
       if (!def) return { name: '刘友宝', phone: '15111480531', region: '湖南省长沙市', detail: '麓云路159号佳境小区15#1406' };
       return { name: def.name || '', phone: def.phone || '', region: def.region || '', detail: def.detail || '' };
     }
 
-    // 提交订单 - 从商品弹窗直接下单，落库 h5_orders（与结算页同一数据结构）
+    // 提交订单 - 从商品弹窗直接下单，落库后端 sf_mall_order（与结算页同一数据结构）
     function submitOrder() {
       if (!H5Auth.requireAction('请先登录后再提交订单')) return;
       if (!preventDoubleClick('submitOrder', function() {
@@ -669,23 +671,25 @@
           createdAt: new Date().toISOString(),
           logistics: []
         };
-        var list;
-        try { list = JSON.parse(localStorage.getItem('h5_orders') || '[]'); } catch (e) { list = []; }
-        if (!Array.isArray(list)) list = [];
-        list.unshift(order);
-        localStorage.setItem('h5_orders', JSON.stringify(list));
-        showToast('订单已生成：' + orderNo + '，使用' + payment + (needInvoice ? '，已申请发票' : ''));
-        closeProductModal();
-        setTimeout(function() { window.location.href = 'h5_order.html?focus=' + orderNo; }, 1000);
+        H5Data.create('order', order).then(function (res) {
+          if (res && res.ok) {
+            showToast('订单已生成：' + orderNo + '，使用' + payment + (needInvoice ? '，已申请发票' : ''));
+            closeProductModal();
+            setTimeout(function() { window.location.href = 'h5_order.html?focus=' + orderNo; }, 1000);
+          } else {
+            showToast('订单保存失败：' + ((res && res.message) || '服务暂不可用'));
+          }
+        }).catch(function () {
+          showToast('订单保存失败：服务暂不可用');
+        });
       }, 2000)) {
         showToast('订单正在提交中，请稍候...');
       }
     }
 
-    function readCart() {
-      try { return JSON.parse(localStorage.getItem('h5_cart') || '[]'); }
-      catch (e) { return []; }
-    }
+    /* 购物车数据源：后端 sf_mall_cart（内存 cartItems，初始化时异步拉取） */
+    var cartItems = [];
+    function readCart() { return cartItems; }
     function syncCartBadge() {
       var n = readCart().reduce(function(s, i) { return s + (Number(i.qty) || 1); }, 0);
       var badge = document.querySelector('[data-cart-badge]');
@@ -693,10 +697,6 @@
         badge.textContent = n;
         badge.style.display = n > 0 ? '' : 'none';
       }
-    }
-    function writeCart(list) {
-      localStorage.setItem('h5_cart', JSON.stringify(list));
-      syncCartBadge();
     }
     document.addEventListener('DOMContentLoaded', syncCartBadge);
 
@@ -718,8 +718,9 @@
         found.qty = (Number(found.qty) || 1) + qty;
         found.price = Number(p.price) || found.price;
         found.spec = MallProducts.specOf(p);
+        H5Data.cart.update(found).then(function () { syncCartBadge(); });
       } else {
-        list.push({
+        var item = {
           id: productId,
           name: p.name,
           spec: MallProducts.specOf(p),
@@ -728,9 +729,15 @@
           qty: qty,
           img: p.img,
           checked: true
+        };
+        H5Data.cart.add(item).then(function () {
+          // 新增项写入成功后回到内存列表，_id 由后端生成，后续可增量更新
+          H5Data.cart.list().then(function (rows) { cartItems = rows || []; syncCartBadge(); });
         });
+        list.push(item);
+        cartItems = list;
+        syncCartBadge();
       }
-      writeCart(list);
       showToast('已加入购物车');
     }
 
@@ -773,6 +780,14 @@
     })();
 
     /* ========== 初始化 ========== */
+    H5Data.ready.then(function () {
+      return Promise.all([H5Data.cart.list(), H5Data.address.list()]);
+    }).then(function (res) {
+      cartItems = res[0] || [];
+      addressList = res[1] || [];
+      syncCartBadge();
+    });
+
     MallProducts.ready.then(function () {
       renderProductList();
       MallProducts.subscribe(renderProductList);

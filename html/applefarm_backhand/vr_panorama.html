@@ -284,6 +284,7 @@
   <span id="toastMessage">操作成功</span>
 </div>
 
+<script src="../common/js/api.js"></script>
 <script src="js/shared/vr-store.js"></script>
 <script src="js/shared/vr-mapper.js"></script>
 <script>
@@ -303,42 +304,9 @@ const ORCHARD_IMGS = [
   IMG + 'apple_redfuji_box.jpg'
 ];
 
-/* 基地主数据：与企业基地管理 22 个基地保持一致 */
-const BASE_LIST = [
-  '天水麦积区基地', '天水秦州基地', '青岛莱西基地', '龙口南山基地',
-  '天水甘谷基地', '招远金岭基地', '天水梨乡基地', '海阳万米海滩基地',
-  '牟平养马岛基地', '福山张格庄基地', '芝罘岛基地', '开发区八角基地',
-  '高新区科技基地', '昆嵛山生态基地', '长岛海洋基地', '日照岚山基地',
-  '潍坊诸城基地', '临沂沂水基地', '泰安肥城基地', '济宁曲阜基地',
-  '滨州阳信基地', '德州乐陵基地'
-];
-
-/* 地块主数据：与企业管理 - 地块管理 mockPlotData 一致 */
-const PLOT_MASTER = [
-  { code: 'D-001', name: '东区1号地', enterprise: '天水麦积区基地' },
-  { code: 'D-002', name: '东区2号地', enterprise: '天水麦积区基地' },
-  { code: 'D-003', name: '西区1号地', enterprise: '天水麦积区基地' },
-  { code: 'D-004', name: '北区1号地', enterprise: '天水秦州区基地' },
-  { code: 'D-005', name: '南区1号地', enterprise: '天水甘谷县基地' },
-  { code: 'D-006', name: '中区1号地', enterprise: '天水秦安县基地' },
-  { code: 'D-007', name: '南区2号地', enterprise: '天水清水县基地' },
-  { code: 'D-008', name: '西区2号地', enterprise: '天水武山县基地' },
-  { code: 'D-009', name: '北区2号地', enterprise: '天水张家川县基地' },
-  { code: 'D-010', name: '东区3号地', enterprise: '天水麦积区基地' },
-  { code: 'D-011', name: '南区3号地', enterprise: '天水秦州区基地' },
-  { code: 'D-012', name: '西区3号地', enterprise: '天水甘谷县基地' },
-  { code: 'D-013', name: '北区3号地', enterprise: '天水清水县基地' },
-  { code: 'D-014', name: '中区2号地', enterprise: '天水武山县基地' },
-  { code: 'D-015', name: '东区4号地', enterprise: '天水张家川县基地' },
-  { code: 'D-016', name: '南区4号地', enterprise: '天水麦积区基地' },
-  { code: 'D-017', name: '西区4号地', enterprise: '天水秦州区基地' },
-  { code: 'D-018', name: '北区4号地', enterprise: '天水甘谷县基地' },
-  { code: 'D-019', name: '中区3号地', enterprise: '天水秦安县基地' },
-  { code: 'D-020', name: '东区5号地', enterprise: '天水清水县基地' },
-  { code: 'D-021', name: '南区5号地', enterprise: '天水武山县基地' },
-  { code: 'D-022', name: '西区5号地', enterprise: '天水张家川县基地' },
-  { code: 'D-023', name: '北区5号地', enterprise: '天水麦积区基地' }
-];
+/* 严格空库模式：基地 / 地块主数据一律来自后端 API，不再使用写死的示例数组 */
+let BASE_LIST = [];
+let PLOT_MASTER = [];
 
 const STATUS_MAP = {
   published:  { text: '已发布', cls: 'success' },
@@ -355,17 +323,83 @@ const TYPE_MAP = {
   viewpoint: '观景台'
 };
 
-// VR 场景数据源：统一来自 VrStore（后端 sf_vr_scene 表），不再使用 mock
-function getScenes() {
-  return (window.VrStore && typeof window.VrStore.scenes === 'function')
-    ? window.VrStore.scenes()
-    : [];
-}
-let mockData = getScenes();
-let filteredData = [...mockData];
+/* 严格空库模式：场景数据一律来自后端 API（sf_vr_scene），不再使用本地演示数据 */
+var SCENE_RESOURCE = 'vr_scene';
+
+/* 场景数据源：由 loadScenes() 异步填充，getScenes 仅返回当前缓存（兼容历史调用） */
+function getScenes() { return mockData; }
+let mockData = [];
+let filteredData = [];
 let currentEditId = null;
 let pendingFile = null;
 let pendingDeleteId = null;
+
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapSceneRow(row) {
+  return {
+    id: row.id,
+    code: row.scene_code || row.code || '',
+    name: row.name || '',
+    base: row.base_name || '',
+    type: row.scene_type || 'entrance',
+    status: row.scene_status || 'draft',
+    image: row.image || '',
+    plotCode: row.plot_code || '',
+    plotName: row.plot_name || '',
+    date: row.shot_date || '',
+    resolution: row.resolution || '',
+    views: Number(row.views) || 0,
+    desc: row.desc || ''
+  };
+}
+
+/* 场景卡片区状态提示：加载中 / 暂无数据 / 加载失败 */
+function setSceneStatus(text, isError) {
+  var grid = document.getElementById('sceneGrid');
+  if (grid) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:' +
+    (isError ? 'var(--error, #d03050)' : 'var(--text-secondary, #6b7b6b)') + ';">' + text + '</div>';
+  var empty = document.getElementById('emptyState');
+  if (empty) empty.style.display = 'none';
+  var count = document.getElementById('resultCount');
+  if (count) count.textContent = '0';
+}
+
+/* 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示；不写 localStorage */
+function loadScenes() {
+  if (!window.Api) { setSceneStatus('数据加载失败：接口未就绪', true); return; }
+  setSceneStatus('正在加载数据...', false);
+  Api.get(SCENE_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      setSceneStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true);
+      return;
+    }
+    var list = (r.data && r.data.list) || [];
+    mockData = list.map(mapSceneRow);
+    filteredData = mockData.slice();
+    if (!mockData.length) { setSceneStatus('暂无数据', false); return; }
+    renderScenes();
+  }).catch(function (e) {
+    setSceneStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+  });
+}
+
+/* 基地 / 地块下拉数据来自后端 API，取不到时保持为空 */
+function loadBaseData() {
+  if (!window.Api) return;
+  Api.get('base', { page: 1, size: 500 }).then(function (r) {
+    if (r && r.ok && r.data && r.data.list) {
+      BASE_LIST = r.data.list.map(function (x) { return x.base_name || x.name || ''; }).filter(Boolean);
+      fillBaseOptions();
+    }
+  });
+  Api.get('plot', { page: 1, size: 500 }).then(function (r) {
+    if (r && r.ok && r.data && r.data.list) {
+      PLOT_MASTER = r.data.list.map(function (x) {
+        return { code: x.plot_code || x.code || '', name: x.plot_name || x.name || '', enterprise: x.base_name || '' };
+      });
+    }
+  });
+}
 
 /* 基地名归一化：忽略「基地」与末尾行政区后缀，用于匹配地块归属 */
 function normBase(name) {
@@ -380,13 +414,9 @@ function getPlotsByBase(baseName) {
 
 document.addEventListener('DOMContentLoaded', function() {
   fillBaseOptions();
-  function renderSceneList() {
-    mockData = getScenes();
-    filteredData = mockData.slice();
-    renderScenes();
-  }
-  renderSceneList();
-  window.addEventListener('vrStoreChange', renderSceneList);
+  loadScenes();
+  loadBaseData();
+  window.addEventListener('vrStoreChange', loadScenes);
   bindUploadArea();
 
   const nameInput = document.getElementById('editName');
@@ -722,8 +752,7 @@ function saveEdit() {
   }
 
   closeModal('editModal');
-  mockData = getScenes();
-  searchData();
+  loadScenes();
 }
 
 function togglePublish(id) {
@@ -733,8 +762,7 @@ function togglePublish(id) {
   const S = window.VrStore;
   if (S && typeof S.saveScene === 'function') S.saveScene(item);
   showToast(item.status === 'published' ? '场景已发布' : '场景已下架');
-  mockData = getScenes();
-  searchData();
+  loadScenes();
 }
 
 function confirmDelete(id) {
@@ -750,8 +778,7 @@ function doDelete() {
   if (S && typeof S.removeScene === 'function') S.removeScene(pendingDeleteId);
   closeModal('confirmModal');
   showToast('场景已删除');
-  mockData = getScenes();
-  searchData();
+  loadScenes();
 }
 
 function openModal(id) { document.getElementById(id).classList.add('active'); }

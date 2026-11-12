@@ -285,7 +285,7 @@
           <tbody id="questionBody"></tbody>
         </table>
       </div>
-      <div id="emptyHint" class="empty-state" style="display:none;">暂无咨询提问</div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无数据</div>
     </div>
 
     <!-- 专家名录 -->
@@ -344,37 +344,77 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
-<script src="js/shared/demo-seed.js"></script>
+<!-- 严格空库模式：演示数据播种已停用，数据一律来自后端 API -->
 <script src="js/shared/mobile-ops-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 /* ============================================================
  * 专家咨询回复（移动端运营 · 用户服务）
- * 数据源：MobileOpsStore / localStorage['smartorchard_expert_questions']
- *   写入方 = 移动端 mb_expert.html（提问，source=mobile/operator=当前登录人）
- *   专家名录 = 作业人员账号中 isExpert=true 的账号（mb_staff_accounts）
- *   字段：{ id, title, desc, status, time, source, operator, operatorId,
- *           expert?, reply?, replyTime?, replyBy? }
+ * 【严格空库模式】咨询列表一律来自后端 API（GET /api/mb_expert_consult），
+ *   不再使用任何本地演示种子 / 假数据兜底。专家名录取自已桥接真实后端的
+ *   MobileOpsStore 作业人员账号，答复仍沿用该 Store 写链路。
  *   status 枚举：pending 待回复 / replied 已回复
  * ============================================================ */
+
+var CONSULT_RESOURCE = 'mb_expert_consult';
+var consultRows = [];
+
+// 数据库字段(snake_case) -> 页面视图字段映射
+function mapConsultRow(row) {
+  return {
+    id: row.id,
+    title: row.title || '',
+    desc: row.content || '',
+    status: row.status || 'pending',
+    time: row.question_time || row.created_at || '',
+    source: row.source || 'mobile',
+    operator: row.questioner || row.operator || '',
+    operatorId: '',
+    expert: '',
+    reply: row.expert_reply || '',
+    replyTime: row.reply_time || '',
+    replyBy: row.operator || ''
+  };
+}
+
+// 列表三态：加载中 / 暂无数据 / 失败
+function setConsultStatus(text, isError) {
+  var body = document.getElementById('questionBody');
+  var hint = document.getElementById('emptyHint');
+  if (hint) hint.style.display = 'none';
+  if (body) body.innerHTML = '<tr><td colspan="99" style="text-align:center;padding:32px;color:' +
+    (isError ? '#cf1322' : 'var(--text-tertiary)') + ';">' + esc(text) + '</td></tr>';
+}
+
+// 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示
+function loadConsultations() {
+  if (!window.Api) { setConsultStatus('数据加载失败：接口未就绪', true); return; }
+  setConsultStatus('正在加载数据...', false);
+  Api.get(CONSULT_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      setConsultStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true);
+      return;
+    }
+    var list = (r.data && r.data.list) || [];
+    consultRows = list.map(mapConsultRow);
+    renderTable();
+  }).catch(function (e) {
+    setConsultStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+  });
+}
 
 var STATUS_TEXT = {
   pending: '待回复',
   replied: '已回复'
 };
 
-/* 后台尚未标记农技专家时的兜底名录，与移动端「问专家」页保持一致 */
-var FALLBACK_EXPERTS = [
-  { name: '王教授', title: '农业大学果树学教授', tags: '苹果栽培 / 病虫害防治 / 施肥管理' },
-  { name: '李农艺师', title: '资深苹果种植专家', tags: '物候期管理 / 水肥一体化 / 采收技术' }
-];
-
+/* 严格空库模式：删除写死的兜底专家名录，专家一律取自后端桥接的作业人员账号 */
 var currentId = null;
 
 function expertList() {
   var staff = MobileOpsStore.list('staff').filter(function (s) {
     return s.isExpert && s.status !== 'disabled';
   });
-  if (!staff.length) return FALLBACK_EXPERTS;
   return staff.map(function (s) {
     return {
       name: s.name,
@@ -385,7 +425,7 @@ function expertList() {
 }
 
 function readList() {
-  return MobileOpsStore.list('expertQuestions');
+  return consultRows;
 }
 
 function writeList(list) {
@@ -527,7 +567,12 @@ function submitReply() {
 function renderExpertDirectory() {
   var box = document.getElementById('expertDirectory');
   if (!box) return;
-  box.innerHTML = expertList().map(function (e) {
+  var list = expertList();
+  if (!list.length) {
+    box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px;">暂无数据</div>';
+    return;
+  }
+  box.innerHTML = list.map(function (e) {
     return '<div class="expert-card">' +
       '<div class="expert-avatar">' + esc(String(e.name).slice(0, 1)) + '</div>' +
       '<div>' +
@@ -554,8 +599,7 @@ function renderExpertOptions() {
 
 document.addEventListener('DOMContentLoaded', function () {
   MobileOpsStore.ready();
-  // 演示数据播种：仅在移动端尚未提问时写入 25 条示意咨询
-  DemoSeed.ensure('expert-questions');
+  // 严格空库模式：演示数据播种已停用，数据一律来自后端 API
   renderExpertOptions();
   renderExpertDirectory();
   MobileOpsStore.subscribe(function (key) {
@@ -568,7 +612,8 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });
-  renderTable();
+  // 严格空库模式：列表由后端 API 异步取数并渲染三态
+  loadConsultations();
 });
 </script>
 </body>

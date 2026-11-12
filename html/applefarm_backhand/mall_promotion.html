@@ -134,7 +134,7 @@
         <div class="page-subtitle">维护 H5 首页「最新活动」与商品页的活动位，配置价格区间与起止时间</div>
       </div>
       <div class="page-actions">
-        <button class="jg-btn" onclick="resetToH5Default()">恢复 H5 默认</button>
+        <button class="jg-btn" onclick="resetToH5Default()">刷新数据</button>
         <button class="jg-btn jg-btn-primary" onclick="openEdit()">新增活动</button>
       </div>
     </div>
@@ -203,7 +203,7 @@
           <tbody id="promotionBody"></tbody>
         </table>
       </div>
-      <div id="emptyHint" class="empty-state" style="display:none;">暂无促销活动</div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无数据</div>
     </div>
   </main>
 </div>
@@ -219,7 +219,7 @@
       <div class="form-row">
         <div class="form-field">
           <label>活动 ID<span style="color:var(--error);">*</span></label>
-          <input type="text" id="editId" placeholder="如 springActivity">
+          <input type="text" id="editId" placeholder="如 PM001">
         </div>
         <div class="form-field">
           <label>活动角标</label>
@@ -343,62 +343,71 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mall-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 /* ============================================================
  * 促销活动管理（商城管理）
- * 数据源：localStorage['mall_promotions']
- *   初始值 = H5 端 index.html 原硬编码的两张活动卡（springActivity / groupBuy）
- *   字段：{ id, title, subTitle, price, original, img, tag, startDate, endDate, status, target }
- *   target 枚举：order 首页最新活动区 / goods 商品页活动位
+ * 严格空库模式：活动一律来自后端 API（sf_mall_promotion），不再使用本地演示数据/播种
  * ============================================================ */
+var PROMOTION_RESOURCE = 'mall_promotion';
 var PROMOTION_KEY = 'mall_promotions';
+var promotionsData = [];
+var promotionLoadState = 'loading';
+var promotionLoadError = '';
 
 var TARGET_TEXT = { order: '首页最新活动', goods: '商品页活动' };
 var TYPE_TEXT = { discount: '折扣', cash: '满减', group: '拼团', seckill: '秒杀', adopt: '认养特惠', gift: '赠品' };
 var SCOPE_TEXT = { all: '全场', sku: '指定商品', category: '指定分类' };
 
-/* 与 H5 js/mall-promotions.js 的 DEFAULT_PROMOTIONS 保持一致 */
-var DEFAULT_PROMOTIONS = [
-  { id: 'springActivity', title: '春季果树认养特惠活动', subTitle: '认养果树享8折优惠，赠送有机肥料套装',
-    price: 1510, original: 1888, img: 'images/apple_spring_orchard.jpg', tag: '限时活动',
-    startDate: '2026-03-01', endDate: '2026-12-31', status: 'on', target: 'order' },
-  { id: 'groupBuy', title: '花牛苹果拼团特惠', subTitle: '3人成团，立减20元，优质花牛苹果5斤装',
-    price: 48, original: 68, img: 'images/apple_groupbuy_boxes.jpg', tag: '拼团',
-    startDate: '2026-03-01', endDate: '2026-12-31', status: 'on', target: 'order' }
-];
-
 var editingId = null;
 
-function readAll() {
-  try {
-    var raw = localStorage.getItem(PROMOTION_KEY);
-    if (!raw) return null;
-    var v = JSON.parse(raw);
-    return Array.isArray(v) && v.length ? v : null;
-  } catch (e) {
-    return null;
-  }
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapPromotionRow(row) {
+  return {
+    id: row.id == null ? (row.promotion_name || '') : String(row.id),
+    title: row.promotion_name || '',
+    subTitle: row.subtitle || '',
+    type: row.promotion_type || 'discount',
+    price: Number(row.price_range) || 0,
+    original: Number(row.original) || 0,
+    img: row.img || '',
+    tag: row.tag || '',
+    scope: row.scope || 'all',
+    skuIds: String(row.product_ids || '').split(',').filter(Boolean),
+    channel: row.channel || 'h5',
+    limitPerUser: Number(row.limit_per_user) || 0,
+    totalStock: Number(row.total_stock) || 0,
+    usedStock: Number(row.used_stock) || 0,
+    priority: Number(row.priority) || 10,
+    memberOnly: row.member_only === 1 || row.member_only === '1' || row.member_only === true,
+    startDate: String(row.start_date || '').slice(0, 10),
+    endDate: String(row.end_date || '').slice(0, 10),
+    target: row.target || 'order',
+    status: row.status === 'off' ? 'off' : 'on'
+  };
 }
 
-/* 首次访问时从 H5 原硬编码活动播种；key 已存在但为空数组视为「后台主动清空」，不再回填默认 */
-function readPromotions() {
-  var list = readAll();
-  if (!list && !keyExists()) {
-    list = DEFAULT_PROMOTIONS.map(function (p) { return Object.assign({}, p); });
-    writeList(list);
-  }
-  return typeof MallStore !== 'undefined' ? MallStore.promotions() : (list || []);
+/* 异步取数：加载中 / 暂无数据 / 加载失败三态，不写 localStorage */
+function loadPromotions() {
+  if (!window.Api) { promotionLoadState = 'error'; promotionLoadError = '接口未就绪'; renderTable(); return; }
+  promotionLoadState = 'loading'; promotionLoadError = ''; renderTable();
+  Api.get(PROMOTION_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      promotionLoadState = 'error'; promotionLoadError = (r && r.message) || '请求异常';
+      promotionsData = []; renderTable(); return;
+    }
+    promotionsData = ((r.data && r.data.list) || []).map(mapPromotionRow);
+    promotionLoadState = 'ok'; renderTable();
+  }).catch(function (e) {
+    promotionLoadState = 'error'; promotionLoadError = (e && e.message) || '网络异常';
+    promotionsData = []; renderTable();
+  });
 }
 
-function keyExists() {
-  try {
-    return localStorage.getItem(PROMOTION_KEY) !== null;
-  } catch (e) {
-    return false;
-  }
-}
+function readPromotions() { return promotionsData; }
 
 function writeList(list) {
+  promotionsData = list;
   if (typeof MallStore !== 'undefined') {
     var ok = true;
     list.forEach(function (p) {
@@ -473,6 +482,13 @@ function filteredList() {
 }
 
 function renderTable() {
+  if (promotionLoadState !== 'ok') {
+    var msg = promotionLoadState === 'loading' ? '正在加载数据...' : ('数据加载失败：' + promotionLoadError);
+    document.getElementById('promotionBody').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-secondary,#6b7b6b);">' + esc(msg) + '</td></tr>';
+    document.getElementById('emptyHint').style.display = 'none';
+    ['statTotal', 'statOn', 'statEnd', 'statReady', 'statOrder'].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = '0'; });
+    return;
+  }
   var list = filteredList();
   renderStats();
 
@@ -522,8 +538,18 @@ function renderTable() {
 
 var productsCache = [];
 
+/* 关联商品下拉来自后端 API（sf_mall_product），取不到就为空 */
 function loadProducts() {
-  productsCache = typeof MallStore !== 'undefined' ? MallStore.products() : [];
+  if (!window.Api) { productsCache = []; fillSkuOptions(); return; }
+  Api.get('mall_product', { page: 1, size: 500 }).then(function (r) {
+    productsCache = (r && r.ok && r.data && r.data.list) ? r.data.list.map(function (p) {
+      return { id: p.product_code || (p.id == null ? '' : String(p.id)), name: p.product_name || '', spec: p.spec || '' };
+    }) : [];
+    fillSkuOptions();
+  }).catch(function () { productsCache = []; fillSkuOptions(); });
+}
+
+function fillSkuOptions() {
   var sel = document.getElementById('editSkuIds');
   if (!sel) return;
   sel.innerHTML = productsCache.map(function (p) {
@@ -576,7 +602,7 @@ function openEdit(id) {
   document.getElementById('editPriority').value = p ? (p.priority || 10) : 10;
   document.getElementById('editMemberOnly').checked = !!(p && p.memberOnly);
 
-  loadProducts();
+  fillSkuOptions();
   var selected = p && Array.isArray(p.skuIds) ? p.skuIds : [];
   Array.prototype.forEach.call(document.getElementById('editSkuIds').options, function (opt) {
     opt.selected = selected.indexOf(opt.value) >= 0;
@@ -638,19 +664,16 @@ function submitEdit() {
 
   if (payload.scope === 'sku' && !skuIds.length) { Toast.warning('请选择至少一个关联商品'); return; }
 
-  if (typeof MallStore !== 'undefined') {
-    var result = MallStore.savePromotion(payload);
-    if (!result.ok) { Toast.warning(result.error || '活动保存失败'); return; }
-  } else {
-    if (editingId) {
-      for (var k = 0; k < list.length; k++) {
-        if (list[k].id === editingId) { list[k] = payload; break; }
-      }
-    } else {
-      list.push(payload);
-    }
-    if (!writeList(list)) return;
-  }
+  var item = Object.assign({
+    subTitle: '', img: '', tag: '', scope: 'all', skuIds: [], channel: 'h5',
+    limitPerUser: 0, totalStock: 0, usedStock: 0, priority: 10, memberOnly: false,
+    startDate: '', endDate: '', target: 'order', status: 'on'
+  }, payload);
+  var idx = -1;
+  for (var m = 0; m < list.length; m++) { if (list[m].id === (editingId || payload.id)) { idx = m; break; } }
+  if (idx >= 0) item = Object.assign({}, list[idx], item);
+  if (idx >= 0) list[idx] = item; else list.push(item);
+  if (!writeList(list)) return;
 
   closeEditModal();
   renderTable();
@@ -678,23 +701,22 @@ function removePromotion(id) {
       if (typeof MallStore !== 'undefined') {
         var r = MallStore.removePromotion(id);
         if (!r.ok) { Toast.error(r.error || '删除失败'); return; }
-      } else {
-        writeList(readPromotions().filter(function (p) { return p.id !== id; }));
       }
+      promotionsData = promotionsData.filter(function (p) { return p.id !== id; });
       renderTable();
       Toast.success('活动已删除');
     }
   });
 }
 
+/* 严格空库模式：不再写死默认活动，改为从数据库重新加载 */
 function resetToH5Default() {
   ConfirmDialog.show({
-    title: '恢复默认',
-    message: '将丢弃后台所有改动，恢复为 H5 端内置的 2 个默认活动。是否继续？',
+    title: '重新加载',
+    message: '重新从数据库加载活动？当前未保存的改动将被丢弃。',
     onConfirm: function () {
-      try { localStorage.removeItem(PROMOTION_KEY); } catch (e) { /* 忽略 */ }
-      renderTable();
-      Toast.success('已恢复 H5 默认活动');
+      loadPromotions();
+      Toast.success('已重新加载活动');
     }
   });
 }
@@ -704,7 +726,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });
-  renderTable();
+  loadPromotions();
 });
 </script>
 </body>

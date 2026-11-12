@@ -450,6 +450,7 @@
 <script src="js/shared/mobile-bridge.js"></script>
 <script src="js/shared/harvest-store.js"></script>
 <script src="js/shared/trace-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
 /* ============================================================
@@ -458,35 +459,14 @@
  * 生成时强制选择采收批次；二维码指向 H5 溯源端 trace_h5.html?code=xxx
  * ============================================================ */
 
-// 批次主数据（与 trace_batch.html 保持一致）
-const BATCH_SOURCE = [
-  {batchNo:'PC-20260901-001',plotCode:'D-001',plotName:'东区1号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-01'},
-  {batchNo:'PC-20260902-002',plotCode:'D-002',plotName:'东区2号地',base:'天水麦积区基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-02'},
-  {batchNo:'PC-20260903-003',plotCode:'D-003',plotName:'西区1号地',base:'天水麦积区基地',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-03'},
-  {batchNo:'PC-20260904-004',plotCode:'D-004',plotName:'北区1号地',base:'天水秦州基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-04'},
-  {batchNo:'PC-20260905-005',plotCode:'D-005',plotName:'南区1号地',base:'天水秦州基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-05'},
-  {batchNo:'PC-20260906-006',plotCode:'D-006',plotName:'中区1号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-06'},
-  {batchNo:'PC-20260907-007',plotCode:'D-007',plotName:'南区2号地',base:'甘肃麦积区苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-07'},
-  {batchNo:'PC-20260908-008',plotCode:'D-008',plotName:'西区2号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-08'},
-  {batchNo:'PC-20260909-009',plotCode:'D-009',plotName:'北区2号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-09'},
-  {batchNo:'PC-20260910-010',plotCode:'D-010',plotName:'东区3号地',base:'天水麦积区苹果基地',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-10'},
-  {batchNo:'PC-20260911-011',plotCode:'D-011',plotName:'南区3号地',base:'甘肃麦积区苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-11'},
-  {batchNo:'PC-20260912-012',plotCode:'D-012',plotName:'西区3号地',base:'天水麦积区苹果基地',product:'秦冠苹果',spec:'6kg/箱',harvestDate:'2026-09-12'},
-  {batchNo:'PC-20260913-013',plotCode:'D-013',plotName:'北区3号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-13'},
-  {batchNo:'PC-20260914-014',plotCode:'D-014',plotName:'中区2号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-14'},
-  {batchNo:'PC-20260915-015',plotCode:'D-015',plotName:'东区4号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-15'},
-  {batchNo:'PC-20260916-016',plotCode:'D-016',plotName:'南区4号地',base:'甘肃麦积区苹果园',product:'金帅苹果',spec:'4kg/箱',harvestDate:'2026-09-16'},
-  {batchNo:'PC-20260917-017',plotCode:'D-017',plotName:'西区4号地',base:'天水麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-17'},
-  {batchNo:'PC-20260918-018',plotCode:'D-018',plotName:'北区4号地',base:'甘肃麦积区苹果基地',product:'花牛苹果',spec:'5kg/箱',harvestDate:'2026-09-18'},
-  {batchNo:'PC-20260919-019',plotCode:'D-019',plotName:'中区3号地',base:'甘肃吉县苹果园',product:'花牛苹果',spec:'4kg/箱',harvestDate:'2026-09-19'},
-  {batchNo:'PC-20260920-020',plotCode:'D-020',plotName:'东区5号地',base:'天水麦积区苹果基地',product:'秦冠苹果',spec:'6kg/箱',harvestDate:'2026-09-20'}
-];
+/* ===== 严格空库模式：追溯码 / 订单 / 模板 一律来自后端 API ===== */
+const CODE_RESOURCE = 'trace_code';
+const ORDER_RESOURCE = 'sales_order';
+const TEMPLATE_RESOURCE = 'trace_template';
 
-// 关联订单（取自销售订单 sales_order.html）
-const ORDER_SOURCE = ['SN20260614102','SN20260611105','SN20260608108','SN20260602114','SN20260530117','SN20260527120','SN20260526121'];
-
-// 展示模板（取自溯源配置 trace_config.html）
-const TEMPLATE_SOURCE = ['标准版履历模板','精简版履历模板','品牌故事版模板','有机认证版模板'];
+let codeList = [];          // 追溯码主数据（API 缓存）
+let orderOptions = [];      // 关联订单下拉
+let templateOptions = [];   // 展示模板下拉
 
 const STATUS_TEXT = { inactive:'未激活', active:'已激活', expired:'已过期' };
 
@@ -506,11 +486,11 @@ function getBatchInfo(batchNo) {
 function enrichCode(item) {
   const b = getBatchInfo(item.batch);
   return Object.assign({}, item, {
-    product: b.product,
-    spec: b.spec,
-    base: b.base,
-    plotCode: b.plotCode,
-    plotName: b.plotName,
+    product: item.product || b.product,
+    spec: item.spec || b.spec,
+    base: item.base || b.base,
+    plotCode: item.plotCode || b.plotCode,
+    plotName: item.plotName || b.plotName,
     statusText: STATUS_TEXT[item.status] || item.status
   });
 }
@@ -744,11 +724,12 @@ function openGenerateModal(presetBatch) {
     getBatchSource().map(b => `<option value="${b.batchNo}">${b.batchNo} · ${b.product} · ${b.plotCode} ${b.plotName}</option>`).join('');
 
   document.getElementById('generateOrder').innerHTML = '<option value="">暂不关联</option>' +
-    ORDER_SOURCE.map(o => `<option value="${o}">${o}</option>`).join('');
+    orderOptions.map(o => `<option value="${o}">${o}</option>`).join('');
 
   const templateNames = TraceStore.templates().filter(t => t.status !== 'disabled').map(t => t.name);
+  const names = templateNames.length ? templateNames : templateOptions;
   document.getElementById('generateTemplate').innerHTML = '<option value="">使用默认模板</option>' +
-    (templateNames.length ? templateNames : TEMPLATE_SOURCE).map(t => `<option value="${t}">${t}</option>`).join('');
+    names.map(t => `<option value="${t}">${t}</option>`).join('');
 
   batchSelect.value = presetBatch || '';
   document.getElementById('generateCount').value = '10';
@@ -796,44 +777,121 @@ function confirmGenerate() {
   if (!res.ok) { showToast(res.message || '生成失败', 'error'); return; }
 
   closeModal('generateModal');
-  Pagination.updateData(allCodes());
+  loadCodes();
   showToast(`已生成 ${count} 个追溯码，批次：${batchNo}`);
 }
 
-/* ---------- 批次真源：TraceStore ---------- */
+/* ---------- 批次主数据：严格空库模式下由 sf_trace_batch 提供 ---------- */
+let batchSource = [];
+
 function getBatchSource() {
-  return TraceStore.batches().map(function (x) {
-    return {
-      batchNo: x.batchNo,
-      plotCode: x.plotCode || '-',
-      plotName: x.plotName || x.plotCode || '-',
-      base: x.base || '-',
-      product: x.product || x.variety || '花牛苹果',
-      spec: x.spec || '-',
-      harvestDate: x.harvestDate || '-'
-    };
+  return batchSource;
+}
+
+// 数据库字段(snake_case) -> 批次下拉视图字段映射
+function mapBatchSourceRow(row) {
+  return {
+    batchNo: row.batch_no || '',
+    plotCode: row.plot_code || '-',
+    plotName: row.plot_name || row.plot_code || '-',
+    base: row.base_name || '-',
+    product: row.product_name || row.variety || '-',
+    spec: row.spec || '-',
+    harvestDate: row.harvest_date || '-'
+  };
+}
+
+// 异步取数：批次下拉与追溯码详情的地块信息
+function loadBatchSource() {
+  if (!window.Api) return;
+  Api.get('trace_batch', { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) return;
+    var list = (r.data && r.data.list) || [];
+    batchSource = list.map(mapBatchSourceRow);
+    var sel = document.getElementById('batchSelect');
+    if (sel) {
+      batchSource.forEach(function (b) {
+        var opt = document.createElement('option');
+        opt.value = b.batchNo;
+        opt.textContent = b.batchNo + ' · ' + b.product + ' · ' + b.plotCode + ' ' + b.plotName;
+        sel.appendChild(opt);
+      });
+    }
+  }).catch(function () {});
+}
+
+/* ===== 严格空库模式：追溯码主数据由后端 API 提供 ===== */
+// 数据库字段(snake_case) -> 页面视图字段映射
+function mapCodeRow(row) {
+  return {
+    code: row.trace_code || '',
+    batch: row.batch_no || '',
+    product: row.product_name || '',
+    spec: row.spec || '',
+    base: row.origin || '',
+    plotCode: row.plot_code || '',
+    plotName: '',
+    time: row.generate_time || '',
+    status: row.status || 'inactive',
+    order: row.order_no || '',
+    template: row.template_name || '',
+    queries: Number(row.queries) || 0,
+    shortCode: row.short_code || ''
+  };
+}
+
+// 表格状态：加载中 / 暂无数据 / 失败
+function setCodeStatus(text, isError) {
+  var tbody = document.getElementById('dataTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:28px 0;color:' +
+    (isError ? '#cf1322' : 'var(--text-tertiary)') + ';">' + text + '</td></tr>';
+}
+
+// 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示；不写 localStorage
+function loadCodes() {
+  if (!window.Api) { setCodeStatus('数据加载失败：接口未就绪', true); return; }
+  setCodeStatus('正在加载数据...', false);
+  Api.get(CODE_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      setCodeStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true);
+      return;
+    }
+    var list = (r.data && r.data.list) || [];
+    codeList = list.map(mapCodeRow);
+    if (!codeList.length) { setCodeStatus('暂无数据', false); return; }
+    Pagination.updateData(codeList);
+  }).catch(function (e) {
+    setCodeStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
   });
 }
 
-/* ---------- 追溯码持久化（key: smartorchard_trace_codes） ---------- */
-const CODE_STORE_KEY = 'smartorchard_trace_codes';
-function loadCodes() {
-  try {
-    const raw = localStorage.getItem(CODE_STORE_KEY);
-    if (raw) {
-      const v = JSON.parse(raw);
-      if (Array.isArray(v)) return v;
-    }
-  } catch (e) { /* 忽略 */ }
-  return [];
-}
-function saveCodes(list) {
-  localStorage.setItem(CODE_STORE_KEY, JSON.stringify(list));
+// 订单下拉：来自 sf_sales_order.order_code
+function loadOrderOptions() {
+  if (!window.Api) return;
+  Api.get(ORDER_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) return;
+    var list = (r.data && r.data.list) || [];
+    orderOptions = list.map(function (x) { return x.order_code || ''; }).filter(Boolean);
+  }).catch(function () {});
 }
 
-// 全部追溯码 = TraceStore 单一真源
+// 模板下拉：来自 sf_trace_template.template_name
+function loadTemplateOptions() {
+  if (!window.Api) return;
+  Api.get(TEMPLATE_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) return;
+    var list = (r.data && r.data.list) || [];
+    templateOptions = list.map(function (x) { return x.template_name || ''; }).filter(Boolean);
+  }).catch(function () {});
+}
+
+/* 严格空库模式：历史本地持久化入口停用，数据一律来自后端 API */
+function saveCodes(list) { /* no-op：不再写本地业务数据 */ }
+
+// 全部追溯码 = API 缓存
 function allCodes() {
-  return TraceStore.codes();
+  return codeList;
 }
 
 // 标签库存（与移动端「标签领用」共用同一份本地存储）
@@ -1082,14 +1140,8 @@ function showToast(message, type = 'success') {
 
 // 页面初始化
 document.addEventListener('DOMContentLoaded', function() {
-  // 搜索栏批次下拉
-  const batchSelect = document.getElementById('batchSelect');
-  getBatchSource().forEach(b => {
-    const opt = document.createElement('option');
-    opt.value = b.batchNo;
-    opt.textContent = `${b.batchNo} · ${b.product} · ${b.plotCode} ${b.plotName}`;
-    batchSelect.appendChild(opt);
-  });
+  // 严格空库模式：搜索栏批次下拉由 loadBatchSource() 异步填充
+  loadBatchSource();
 
   // 批次选择联动带出产品/规格/产地
   document.getElementById('generateBatch').addEventListener('change', syncBatchFields);
@@ -1107,14 +1159,19 @@ document.addEventListener('DOMContentLoaded', function() {
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
-    data: allCodes(),
+    data: [],
     containerId: 'pagination-container',
     tbodyId: 'dataTableBody',
     renderRow: renderCodeRow
   });
 
+  // 严格空库模式：追溯码 / 订单 / 模板均由后端 API 异步取数（含加载/空/错误三态）
+  loadCodes();
+  loadOrderOptions();
+  loadTemplateOptions();
+
   TraceStore.subscribe(function () {
-    Pagination.updateData(allCodes());
+    loadCodes();
     refreshLabelStock();
   });
 

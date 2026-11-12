@@ -10,6 +10,7 @@
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <!-- 共享数据层（toast 轻提示） -->
   <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/enterprise-store.js"></script>
   <style>
     /* 移除重复的 :root 变量定义，使用设计系统变量 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; padding-bottom: 66px; }
@@ -247,8 +248,26 @@
 
     function readPlotMaster() {
       try {
-        var arr = JSON.parse(localStorage.getItem(PLOT_MASTER_KEY) || 'null');
-        return Array.isArray(arr) ? arr : [];
+        /* 纯在线：地块来自后端 sf_plot（经 EnterpriseStore 桥接） */
+        var rows = (window.EnterpriseStore && typeof EnterpriseStore.plots === 'function')
+          ? EnterpriseStore.plots() : [];
+        if (!Array.isArray(rows)) return [];
+        var STATUS_TEXT = { normal: '正常', warning: '预警', danger: '危险', fallow: '休耕', maintain: '维护中' };
+        return rows.map(function (p) {
+          return {
+            id: p.id || p.code || '',
+            code: p.id || p.code || '',
+            name: p.name || '',
+            enterprise: p.baseName || '',
+            area: p.area != null ? p.area : '',
+            variety: p.varietyCode || '',
+            year: p.plantYear || '',
+            status: p.plotStatus || 'normal',
+            statusText: STATUS_TEXT[p.plotStatus] || '正常',
+            manager: p.managerId != null ? String(p.managerId) : '',
+            lng: p.lng, lat: p.lat
+          };
+        });
       } catch (e) {
         return [];
       }
@@ -263,10 +282,9 @@
       return (age > 0 ? age : 1) + '年';
     }
 
-    // 按状态筛选后的列表；无主数据时回退 4 条兜底
+    // 按状态筛选后的列表（严格空库：无后端数据即空态）
     function currentPlots() {
       var all = readPlotMaster();
-      if (!all.length) all = FALLBACK_PLOTS;
       if (!statusFilter) return all;
       return all.filter(function (p) { return p.status === statusFilter; });
     }
@@ -404,11 +422,12 @@
       applyZoom();
     }
 
-    // 跨页同步：后台改地块（其它标签页 / iframe 写入）后刷新本页列表
-    window.addEventListener('storage', function (e) {
-      if (e && e.key && e.key !== PLOT_MASTER_KEY) return;
-      renderPlotList();
-    });
+    // 后端预加载完成后重渲染（严格空库：数据来自数据库）
+    if (window.EnterpriseStore && EnterpriseStore.subscribe) {
+      EnterpriseStore.subscribe(function (reason) {
+        renderPlotList();
+      });
+    }
     // 从后台切回本页时兜底刷新
     window.addEventListener('focus', renderPlotList);
 

@@ -758,6 +758,7 @@
     function doLogout() {
       sessionStorage.removeItem('isLoggedIn');
       sessionStorage.removeItem('loginUser');
+      if (window.Api && typeof Api.logout === 'function') Api.logout();
       window.location.href = 'mb_login.html';
     }
 
@@ -769,7 +770,7 @@
 
     function closeDetail() { document.getElementById('detailModal').classList.remove('show'); }
 
-    /* 消息读取：优先 MobileOpsStore（后台消息推送与公告），无该层时回退直读 mb_messages */
+    /* 消息读取：来自后端 sf_mb_message，经 MobileOpsStore 桥接（严格空库） */
     var OPS_MSG_CAT = {
       ai: { cls: 'system', tag: 'AI 分析' },
       alert: { cls: 'warning', tag: '预警通知' },
@@ -781,12 +782,6 @@
       var list = [];
       if (window.MobileOpsStore && typeof MobileOpsStore.list === 'function') {
         try { list = MobileOpsStore.list('messages') || []; } catch (e) { list = []; }
-      } else {
-        try {
-          var raw = localStorage.getItem('mb_messages');
-          var v = raw ? JSON.parse(raw) : [];
-          list = Array.isArray(v) ? v : [];
-        } catch (e) { list = []; }
       }
       return list.filter(function (m) {
         if (!m || m.enabled === false) return false;

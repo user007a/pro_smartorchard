@@ -21,7 +21,8 @@
     var baseDir = selfEl.src.replace(/[^\/]*$/, '');
     var deps = [
       { name: 'Api', src: baseDir + '../../../common/js/api.js' },
-      { name: 'AdoptionMapper', src: baseDir + 'adoption-mapper.js' }
+      { name: 'AdoptionMapper', src: baseDir + 'adoption-mapper.js' },
+      { name: 'PlotStore', src: baseDir + 'plot-store.js' }
     ];
     var pending = deps.filter(function (d) { return !global[d.name]; });
     if (!pending.length) return Promise.resolve();
@@ -49,6 +50,7 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
+    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -56,10 +58,12 @@
       return api.get('adoption/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
+        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
+        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = global.AdoptionMapper.toAggregate(res.data);
         var e = ensure();
         ['trees', 'orders', 'harvests', 'farmings'].forEach(function (k) {
-          if (agg[k] && agg[k].length) e[k] = agg[k];
+          e[k] = agg[k] || [];
         });
         save();
         notify('backend-loaded');
@@ -243,42 +247,11 @@
    * 种子数据：24 棵已认养 + 6 棵可认养池（与 H5/证书/相册编号一致）
    * ============================================================ */
 
-  var SEED_ADOPTED = [
-    ['A1-001', '花牛苹果', '刘友宝', '15111480531', 'harvest', 85, '2026-03-15', 1888, '麦积区 A区 3号地块', 8],
-    ['A1-002', '花牛苹果', '陈晓梅', '13907312876', 'growing', 62, '2026-04-02', 1888, '麦积区 A区 3号地块', 8],
-    ['A1-003', '花牛苹果', '王志强', '13607315290', 'active', 24, '2026-09-18', 1888, '麦积区 A区 4号地块', 7],
-    ['A1-004', '花牛苹果', '李文博', '15807316621', 'growing', 58, '2026-05-11', 1888, '麦积区 A区 4号地块', 9],
-    ['A1-005', '嘎拉苹果', '周雅琴', '18907312245', 'harvest', 88, '2026-03-28', 2188, '麦积区 B区 2号地块', 6],
-    ['A1-006', '嘎拉苹果', '吴国栋', '13707318890', 'growing', 66, '2026-04-19', 2188, '麦积区 B区 2号地块', 6],
-    ['A1-007', '花牛苹果', '郑小雨', '15116320984', 'active', 18, '2026-09-25', 1888, '麦积区 B区 5号地块', 7],
-    ['A1-008', '秦冠', '孙建国', '13307312567', 'growing', 71, '2026-04-30', 1588, '白水 A区 1号地块', 10],
-    ['A1-009', '秦冠', '马丽娟', '18007314472', 'harvest', 91, '2026-03-08', 1588, '白水 A区 1号地块', 10],
-    ['A1-010', '花牛苹果', '胡海洋', '15907315530', 'active', 12, '2026-10-06', 1888, '白水 A区 3号地块', 7],
-    ['A2-001', '花牛苹果', '徐丽华', '13707316618', 'growing', 64, '2026-05-22', 1888, '宜川 A区 2号地块', 8],
-    ['A2-002', '嘎拉苹果', '高志远', '13907312209', 'harvest', 86, '2026-03-21', 2188, '宜川 A区 2号地块', 6],
-    ['A2-003', '花牛苹果', '林美玲', '18807313371', 'active', 20, '2026-09-28', 1888, '宜川 A区 4号地块', 7],
-    ['A2-004', '红富士', '罗建军', '13407319965', 'growing', 55, '2026-06-08', 2488, '宜川 A区 4号地块', 9],
-    ['A2-005', '红富士', '梁雪梅', '15207310042', 'growing', 59, '2026-05-30', 2488, '宜川 A区 6号地块', 9],
-    ['A3-001', '花牛苹果', '宋佳琪', '15907314458', 'harvest', 90, '2026-03-12', 1888, '招远 1号地块', 8],
-    ['A3-002', '花牛苹果', '唐国华', '13807317763', 'growing', 60, '2026-05-16', 1888, '招远 1号地块', 7],
-    ['A3-003', '嘎拉苹果', '冯雅静', '13707315590', 'active', 15, '2026-10-09', 2188, '招远 3号地块', 6],
-    ['A3-004', '秦冠', '邓卫东', '18107312237', 'growing', 68, '2026-04-24', 1588, '天水秦州 6号地块', 10],
-    ['A3-005', '花牛苹果', '彭晓燕', '13507318846', 'growing', 57, '2026-06-15', 1888, '天水秦州 6号地块', 8],
-    ['A3-006', '红富士', '蒋宏伟', '18907310073', 'harvest', 84, '2026-03-25', 2488, '天水福山 2号地块', 9],
-    ['A4-001', '花牛苹果', '谢文轩', '13307316628', 'active', 22, '2026-09-21', 1888, '青岛崂山 2号地块', 7],
-    ['A4-002', '嘎拉苹果', '韩雪梅', '13707312296', 'growing', 61, '2026-05-07', 2188, '潍坊寿光 3号地块', 6],
-    ['A4-003', '秦冠', '曹立军', '15907315564', 'growing', 65, '2026-04-30', 1588, '临沂沂水 5号地块', 10],
-    ['A4-004', '花牛苹果', '袁淑芬', '15207318830', 'active', 16, '2026-10-03', 1888, '泰安肥城 4号地块', 7]
-  ];
+  /* 严格空库模式：演示认养数据已清空，数据一律来自后端 API */
+  var SEED_ADOPTED = [];
 
-  var SEED_POOL = [
-    ['A1-011', '花牛苹果', 8, 399, 'available', true],
-    ['A1-025', '花牛苹果', 8, 429, 'available', true],
-    ['G1-012', '嘎拉苹果', 6, 299, 'available', false],
-    ['Q1-008', '秦冠', 10, 459, 'available', true],
-    ['J1-015', '乔纳金', 7, 359, 'available', true],
-    ['X1-003', '新红星', 5, 279, 'available', true]
-  ];
+  /* 严格空库模式：演示认养数据已清空，数据一律来自后端 API */
+  var SEED_POOL = [];
 
   function benefitsOf(variety, price) {
     var yieldMap = { '花牛苹果': 120, '嘎拉苹果': 100, '红富士': 130, '秦冠': 110, '乔纳金': 105, '新红星': 95 };
@@ -299,32 +272,18 @@
   }
 
   /* ============================================================
-   * 基地 / 地块主数据：与企业管理「地块总表」共用 smartorchard_plot_master
+   * 基地 / 地块主数据：统一来自 PlotStore（sf_plot）
    * 认养果树只存 plotId/plotCode 外键，基地名与地块名由主数据解析，避免各页各写一套
    * ============================================================ */
-  var PLOT_MASTER_KEY = 'smartorchard_plot_master';
-
-  /* 主数据尚未播种时的兜底（与 enterprise_plot.html 首批 8 个地块保持一致） */
-  var PLOT_SEED = [
-    { id: 'PLOT001', code: 'D-001', name: '东区1号地', enterprise: '天水麦积区基地', area: 85, variety: '花牛苹果' },
-    { id: 'PLOT002', code: 'D-002', name: '东区2号地', enterprise: '天水麦积区基地', area: 92, variety: '花牛苹果' },
-    { id: 'PLOT003', code: 'D-003', name: '西区1号地', enterprise: '天水麦积区基地', area: 78, variety: '金帅' },
-    { id: 'PLOT004', code: 'D-004', name: '北区1号地', enterprise: '天水秦州区基地', area: 65, variety: '花牛苹果' },
-    { id: 'PLOT005', code: 'D-005', name: '南区1号地', enterprise: '天水甘谷县基地', area: 88, variety: '花牛苹果' },
-    { id: 'PLOT006', code: 'D-006', name: '中区1号地', enterprise: '天水秦安县基地', area: 65, variety: '花牛苹果' },
-    { id: 'PLOT007', code: 'D-007', name: '南区2号地', enterprise: '天水清水县基地', area: 88, variety: '花牛苹果' },
-    { id: 'PLOT008', code: 'D-008', name: '西区2号地', enterprise: '天水武山县基地', area: 110, variety: '花牛苹果' }
-  ];
-
   function plotMaster() {
-    var list = readJSON(PLOT_MASTER_KEY, null);
-    if (!Array.isArray(list) || !list.length) list = PLOT_SEED;
-    return list.filter(function (p) { return p && p.enterprise; }).map(function (p) {
+    if (!global.PlotStore) return [];
+    return global.PlotStore.plots().filter(function (p) { return p.base; }).map(function (p) {
       return {
         id: String(p.id || ''),
         code: String(p.code || ''),
         name: String(p.name || ''),
-        enterprise: String(p.enterprise || ''),
+        enterprise: String(p.base || ''),
+        base: String(p.base || ''),
         area: num(p.area),
         variety: String(p.variety || '')
       };
@@ -356,14 +315,14 @@
     var orders = [];
     var harvests = [];
     var farmings = [];
-    var stamp = new Date('2026-03-01T09:00:00').toISOString();
+    var stamp = new Date().toISOString();
 
     var plots = plotMaster();
 
     SEED_ADOPTED.forEach(function (r, i) {
       var code = r[0];
       var variety = r[1];
-      var plot = plots[i % plots.length];
+      var plot = plots.length ? plots[i % plots.length] : null;
       var start = r[6];
       var end = addYears(start, 3);
       var orderNo = 'AD-' + start.replace(/-/g, '') + '-' + pad(1001 + i, 4);
@@ -436,7 +395,7 @@
 
     SEED_POOL.forEach(function (r, i) {
       var code = r[0];
-      var plot = plots[(SEED_ADOPTED.length + i) % plots.length];
+      var plot = plots.length ? plots[(SEED_ADOPTED.length + i) % plots.length] : null;
       trees.push({
         id: 'T-' + code,
         treeCode: code,
@@ -471,12 +430,8 @@
     });
 
     /* 认养采收：历史已采 3 单 + 待采 1 单 */
-    var harvestSeed = [
-      ['A1-001', '2026-10-12', '到园采摘', 96, 'completed'],
-      ['A1-005', '2026-10-14', '冷链配送', 88, 'completed'],
-      ['A3-001', '2026-10-16', '到园采摘', 102, 'completed'],
-      ['A1-009', '2026-10-26', '到园采摘', 0, 'pending']
-    ];
+    /* 严格空库模式：不播种任何演示采收记录 */
+    var harvestSeed = [];
     harvestSeed.forEach(function (h, i) {
       var t = trees.filter(function (x) { return x.treeCode === h[0]; })[0];
       if (!t) return;
@@ -499,7 +454,7 @@
     });
 
     /* 认养农事：3 条已推送 */
-    ['A1-001', 'A2-002', 'A3-006'].forEach(function (code, i) {
+    [].forEach(function (code, i) {
       var t = trees.filter(function (x) { return x.treeCode === code; })[0];
       if (!t) return;
       farmings.push({
@@ -515,7 +470,7 @@
         ],
         count: 3,
         status: FARMING_STATUS.PUSHED,
-        bindTime: '2026-03-18',
+        bindTime: '',
         source: 'backend',
         remark: '',
         createdAt: stamp,

@@ -24,13 +24,29 @@
 (function (global) {
   'use strict';
 
-  var OPERATORS = [
-    '惠加宁', '黄忠坚', '徐水应', '朱泉龙', '陈小忠',
-    '廖春亮', '李建明', '李根', '张才孙', '刘全国',
-    '毛定卫', '叶三东', '周才贵', '程名高', '邓小华',
-    '周成友', '危红卫', '方超', '曹红英', '崔新根',
-    '超级用户'
-  ];
+  // 严格空库模式：不再硬编码虚构人名，人员下拉由真实用户表异步填充
+  var OPERATORS = [];
+
+  // 从真实用户表（sf_user）加载操作人列表，填充到 OPERATORS
+  function loadOperators() {
+    if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return Promise.resolve([]);
+    if (!global.Api.get) return Promise.resolve([]);
+    return global.Api.get('user', { size: 500 }).then(function (res) {
+      var list = (res && res.data && res.data.list) || [];
+      var names = [];
+      list.forEach(function (u) {
+        var n = u && (u.real_name || u.username || u.name);
+        n = n == null ? '' : String(n).trim();
+        if (n && names.indexOf(n) === -1) names.push(n);
+      });
+      OPERATORS.length = 0;
+      names.forEach(function (n) { OPERATORS.push(n); });
+      return names;
+    }).catch(function (e) {
+      console.warn('[DeviceUI] 加载操作人列表失败', e);
+      return [];
+    });
+  }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -270,6 +286,7 @@
     fillSelect: fillSelect,
     operators: operators,
     operatorOptions: operatorOptions,
+    loadOperators: loadOperators,
     current: null
   };
 })(window);

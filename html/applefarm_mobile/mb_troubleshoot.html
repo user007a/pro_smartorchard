@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html { font-size: 16px; }
@@ -192,14 +193,29 @@
       });
     }
 
-    /* 从 localStorage 读取知识库；无有效数据返回 null */
+    /* 从后端读取知识库（sf_mb_fault_kb，经 MobileOpsStore 桥接）；无有效数据返回 null */
     function readKB() {
       try {
-        var raw = localStorage.getItem(KB_KEY);
-        if (!raw) return null;
-        var v = JSON.parse(raw);
-        if (!Array.isArray(v) || !v.length) return null;
-        return v;
+        if (window.MobileOpsStore && typeof MobileOpsStore.list === 'function') {
+          var rows = MobileOpsStore.list('faultKb') || [];
+          var mapped = rows.map(function (r) {
+            var guide = [];
+            try { guide = r.steps ? JSON.parse(r.steps) : []; } catch (e) { guide = []; }
+            return {
+              id: r.id,
+              title: r.fault_title || '',
+              deviceType: r.device_type || '',
+              category: r.category || '',
+              severity: r.urgency || 'low',
+              symptom: '',
+              guide: Array.isArray(guide) ? guide : [],
+              order: r.step_count != null ? Number(r.step_count) : 0,
+              enabled: r.status !== 'inactive'
+            };
+          });
+          return mapped.length ? mapped : null;
+        }
+        return null;
       } catch (e) {
         return null;
       }
@@ -319,16 +335,16 @@
     /* 初始化渲染 */
     function initPage() {
       renderList();
+      var input = document.getElementById('faultSearch');
+      if (input) filterFaults(input.value);
     }
 
-    /* 监听同源其他页面（后台知识库）对 localStorage 的改动，实时同步 */
-    window.addEventListener('storage', function (e) {
-      if (!e || e.key == null || e.key === KB_KEY) {
-        renderList();
-        var input = document.getElementById('faultSearch');
-        if (input) filterFaults(input.value);
-      }
-    });
+    /* 后端预加载完成后重渲染（严格空库：数据来自数据库） */
+    if (window.MobileOpsStore && MobileOpsStore.subscribe) {
+      MobileOpsStore.subscribe(function (key) {
+        if (!key || key === MobileOpsStore.KEYS.faultKb) initPage();
+      });
+    }
 
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initPage);

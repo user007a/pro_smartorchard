@@ -459,7 +459,7 @@
  * 二维码：真实二维码库 qrcodejs + 溯源短链域名 https://t.snzg.cn
  * ============================================================ */
 
-const OPERATOR_LIST = ['惠加宁', '黄忠坚', '徐水应', '朱泉龙', '陈小忠', '廖春亮', '李建明', '李根', '张才孙', '刘全国', '毛定卫', '叶三东', '周才贵', '程名高', '邓小华', '周成友', '危红卫', '方超', '曹红英', '崔新根', '超级用户'];
+const OPERATOR_LIST = [];
 const PRODUCT_LIST = ['花牛苹果', '金帅苹果', '秦冠苹果', '礼盒装苹果'];
 
 let currentBatch = null;   // 当前选中批次的采收记录
@@ -869,9 +869,27 @@ document.addEventListener('DOMContentLoaded', function () {
   }).join('');
 
   const operatorSelect = document.getElementById('certOperator');
-  operatorSelect.innerHTML = OPERATOR_LIST.map(function (n) {
-    return '<option value="' + n + '">' + n + '</option>';
-  }).join('');
+  function fillOperators() {
+    operatorSelect.innerHTML = '<option value="">请选择操作员</option>' + OPERATOR_LIST.map(function (n) {
+      return '<option value="' + n + '">' + n + '</option>';
+    }).join('');
+  }
+  fillOperators();
+  // 从真实用户表加载操作员（严格空库：空库时仅超级用户或空）
+  if (typeof window.Api === 'object' && window.Api.get) {
+    window.Api.get('user', { size: 500 }).then(function (res) {
+      var list = (res && res.data && res.data.list) || [];
+      var names = [];
+      list.forEach(function (u) {
+        var n = u && (u.real_name || u.username || u.name);
+        n = n == null ? '' : String(n).trim();
+        if (n && names.indexOf(n) === -1) names.push(n);
+      });
+      OPERATOR_LIST.length = 0;
+      names.forEach(function (n) { OPERATOR_LIST.push(n); });
+      fillOperators();
+    }).catch(function () {});
+  }
 
   ['certTemplate', 'certProduct', 'certNetWeight', 'certGrade', 'certCustomer', 'certOperator'].forEach(function (id) {
     const el = document.getElementById(id);

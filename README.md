@@ -25,7 +25,7 @@
 ```
 前端   原生 HTML / CSS / JavaScript（不引入 Vue 等框架，保证 1:1 复刻原型）
 后端   Node.js + Express（单体服务，不拆微服务）
-数据库 MySQL 8.0（131 张表，sf_ 前缀）
+数据库 MySQL 8.0（143 张表，sf_ 前缀）
 部署   Docker Compose（前端 + 后端 + MySQL 三容器）
 ```
 
@@ -42,7 +42,7 @@
 docker compose up -d
 ```
 
-首次启动会自动完成：构建镜像 → 创建 MySQL 数据卷 → **建库建表（131 张表）→ 灌入种子数据** → 启动后端与前端。
+首次启动会自动完成：构建镜像 → 创建 MySQL 数据卷 → **建库建表（143 张表）→ 灌入基础系统数据（业务表为空）** → 启动后端与前端。
 
 等待约 1~2 分钟后访问：
 
@@ -64,9 +64,34 @@ docker compose ps              # 查看三个容器状态
 docker compose logs -f api     # 看后端日志
 docker compose restart api     # 只重启后端
 docker compose down            # 停止（保留数据）
-docker compose down -v         # 停止并清空数据（下次启动会重新灌种子）
+docker compose down -v         # 停止并清空数据卷（无需备份，重建流程见下）
 docker compose up -d --build   # 代码改了之后重新构建
 ```
+
+### 重建空库流程（交付前 / 业务驱动测试）
+
+> **严格空库模式**：本项目不使用任何本地业务数据兜底，页面数据 100% 来自真实数据库。
+> `schema.sql` 建全部业务表，`seed.sql` 只灌基础系统数据，业务表初始全部为空，
+> 由真实业务操作逐条产生数据。后端不可用或数据库未连接时，页面会明确报错并停留在登录页，
+> **不会用本地假数据伪装成正常数据**。交付客户前请基于空库做业务驱动测试。
+
+需要重建一套干净的空库时，按顺序执行：
+
+```bash
+# 1. 停止并清空数据卷（业务表本就为空，无需备份）
+docker compose down -v
+# 2. 重新启动容器
+docker compose up -d
+# 3. 导入表结构
+docker exec -i so-mysql mysql -uroot -proot smartorchard < server/db/schema.sql
+# 4. 导入基础系统数据（精简 seed，业务表保持为空）
+docker exec -i so-mysql mysql -uroot -proot smartorchard < server/db/seed.sql
+```
+
+> 导入后访问 `/api/health`，或用 `docker compose logs api` 确认后端已连上数据库。
+>
+> 说明：MySQL 首次初始化会自动执行 `/docker-entrypoint-initdb.d` 下的 `01_schema.sql` 与 `02_seed.sql`，
+> 因此上面第 3、4 步通常无需手工执行；仅当需要在已有数据卷上重建时，才用 `docker exec` 手动导入。
 
 ### 端口说明
 
@@ -108,8 +133,8 @@ docker exec -i so-mysql mysql -uroot -proot smartorchard_dev < server/db/schema.
 docker exec -i so-mysql mysql -uroot -proot smartorchard_dev < server/db/seed.sql
 ```
 
-- `schema.sql` —— 131 张表结构（唯一数据源）
-- `seed.sql` —— 演示种子数据，所有表都有数据
+- `schema.sql` —— 143 张表结构（唯一数据源）
+- `seed.sql` —— 严格空库初始化脚本，仅灌入系统基础数据（超级用户 admin、H5/移动端各 1 个演示账号、角色权限、菜单、数据字典、系统配置、通知偏好），其余业务表全空
 
 ### 第 3 步：启动后端
 
@@ -132,13 +157,16 @@ npm run dev               # 或 npm start
 
 ---
 
-## 五、演示账号
+## 五、初始账号（seed.sql 灌入）
 
 | 端 | 入口 | 账号 | 密码 |
 |---|---|---|---|
 | PC 后台 | `html/applefarm_backhand/login.html` | `admin` | `admin123` |
 | 移动端 | `html/applefarm_mobile/mb_login.html` | `zhangjg` | `123456` |
 | H5 会员 | `html/applefarm_h5/` | `13800000001` | `admin123` |
+
+> 以上账号由 `seed.sql` 作为系统基础数据灌入，可真实登录；除此之外所有业务表初始为空，
+> 页面数据一律由后端接口从数据库读取，本地不保留任何业务数据。
 
 ---
 
@@ -148,9 +176,6 @@ npm run dev               # 或 npm start
 pro_smartorchard/
 ├── docs/          需求与设计文档（不进入 Docker 镜像）
 │   ├── 需求说明书.md              主文档 V2.7
-│   ├── 数据设计约定.md            数据层铁律（开发必读）
-│   ├── 核心数据模型.md            ER 图与表结构
-│   ├── store与数据表映射规范.md   前后端打通模板
 │   └── ...
 ├── html/          四端前端页面 + common 公共资源
 │   ├── index.html  portal.html
@@ -203,10 +228,7 @@ pro_smartorchard/
         └─ save()  → 拆分聚合对象 → 批量 upsert 到各表
 ```
 
-- 后端不可用或未登录时，**自动回退 localStorage**，原型仍可运行
-- 每个模块的映射层写法见 [`docs/store与数据表映射规范.md`](docs/store与数据表映射规范.md)
-- 已完成样板：**设备模块**（13 张表，见 `docs/设备模块出入口映射改造记录.md`）
-
+- 本项目为**严格空库模式**，无任何本地业务数据兜底；后端不可用或鉴权失败时页面会明确报错，展示的数据一律来自真实数据库
 ---
 
 ## 九、后端接口一览
@@ -233,15 +255,17 @@ pro_smartorchard/
 ## 十、常见问题
 
 **Q：改了 `schema.sql` 后页面没变化？**
-A：需要重新导库。`schema.sql` 里的 `DROP TABLE IF EXISTS` 会重建表，数据会被清空，需再跑一遍 `seed.sql`。
-Docker 环境下执行 `docker compose down -v && docker compose up -d` 即可重建。
+A：需要重建数据库。`schema.sql` 里的 `DROP TABLE IF EXISTS` 会重建表，数据会被清空，需再跑一遍 `seed.sql`。
+Docker 环境下执行 `docker compose down -v && docker compose up -d` 即可完成重建：MySQL 首次初始化会自动执行
+`/docker-entrypoint-initdb.d` 下的 `01_schema.sql` 与 `02_seed.sql`，无需手工导入；若要在已有数据卷上手动重建，
+仍可用 `docker exec -i so-mysql mysql -uroot -proot smartorchard < server/db/schema.sql` 导入。
 
 **Q：页面提示"网络请求失败"？**
 A：后端没启动，或数据库配置不对。先访问 `/api/health` 确认后端活着；
 `docker compose logs api` 看后端日志。
 
 **Q：数据没进数据库？**
-A：检查浏览器控制台。若 `DeviceStore.isBackendReady()` 为 false，说明后端桥接未启用（通常是未登录），此时数据仍存 localStorage。
+A：检查浏览器控制台。若 `DeviceStore.isBackendReady()` 为 false，说明后端桥接未启用（通常是未登录或后端不可达），此时页面会明确报错。业务数据不在浏览器磁盘留存：本地写入已重定向为页面生命周期内的内存镜像，刷新即清空并由 API 重新拉取，不会留下任何本地业务数据。
 
 **Q：接口报错但看不到原因？**
 A：后端已做错误脱敏，不会暴露表名和 SQL。详细信息在 `docker compose logs api` 里。
@@ -259,7 +283,7 @@ A：在。密码由 MySQL 镜像的环境变量决定，只在首次创建数据
 | 阶段 | 状态 |
 |---|---|
 | 数据设计约定 / ER 图 / 目录规划 | ✅ 完成 |
-| 131 张表建表 + 种子数据 | ✅ 完成 |
+| 143 张表建表 + 基础系统数据初始化 | ✅ 完成 |
 | Node 后端骨架 + 三端登录 + 通用 CRUD | ✅ 完成 |
 | **Docker 一键部署** | ✅ **完成**（自动建库灌数，页面与接口同源） |
 | 前端数据层打通 | 🔄 设备模块样板已完成，其余 15 个模块待铺开 |

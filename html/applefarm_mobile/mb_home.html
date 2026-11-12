@@ -9,6 +9,7 @@
   <!-- 共享数据层 -->
   <script src="js/mobile-store.js"></script>
   <script src="../applefarm_backhand/js/shared/device-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
   <style>
     /* ========== 页面专属样式（仅保留设计系统未覆盖的部分） ========== */
 
@@ -891,9 +892,9 @@
 
     function readBackendMessages() {
       try {
-        var raw = localStorage.getItem(MSG_KEY);
-        if (!raw) return [];
-        var v = JSON.parse(raw);
+        /* 纯在线：消息来自后端 sf_mb_message，经 MobileOpsStore 桥接 */
+        var v = (window.MobileOpsStore && typeof MobileOpsStore.list === 'function')
+          ? MobileOpsStore.list('messages') : [];
         if (!Array.isArray(v)) return [];
         return v
           .filter(function (m) {
@@ -905,7 +906,7 @@
           .map(function (m) {
             return {
               category: CAT_TAG[m.category] ? m.category : 'notice',
-              time: m.time || '',
+              time: m.publishTime || m.time || '',
               title: String(m.title || ''),
               content: String(m.content || ''),
               publisher: String(m.publisher || '')
@@ -938,12 +939,6 @@
 
     function loadMessages() {
       var list = readBackendMessages();
-      if (!list.length) {
-        // 无后台数据时回退到内置 8 条，保证首页不空白
-        list = SEED_MESSAGES.map(function (m) {
-          return { category: m.category, time: m.time, title: m.title, content: m.content };
-        });
-      }
       list.sort(function (a, b) { return msgTime(b) - msgTime(a); });
       msgData = list.slice(0, MARQUEE_LIMIT);
       renderMarquee();
@@ -1017,11 +1012,13 @@
       }
     })();
 
-    // 滚动消息栏：从后台「消息推送与公告」读取，后台变更后同源其他标签页实时同步
+    // 滚动消息栏：从后端读取，预加载完成后重渲染
     loadMessages();
-    window.addEventListener('storage', function (e) {
-      if (e.key === MSG_KEY) loadMessages();
-    });
+    if (window.MobileOpsStore && MobileOpsStore.subscribe) {
+      MobileOpsStore.subscribe(function (key) {
+        if (!key || key === MobileOpsStore.KEYS.messages) loadMessages();
+      });
+    }
   </script>
   <script>
     /* ============================================================
@@ -1080,10 +1077,9 @@
       function readNews() {
         var list = [];
         try {
-          var raw = localStorage.getItem(NEWS_KEY);
-          if (raw) {
-            var parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) list = parsed;
+          /* 纯在线：资讯来自后端 sf_mb_news，经 MobileOpsStore 桥接 */
+          if (window.MobileOpsStore && typeof MobileOpsStore.newsList === 'function') {
+            list = MobileOpsStore.newsList({ publishedOnly: true }) || [];
           }
         } catch (e) {
           list = [];
@@ -1120,16 +1116,6 @@
         if (!box) return;
 
         var list = readNews();
-        if (!list.length) {
-          // 无后台数据时回退内置资讯，保证首页不空白
-          list = SEED_NEWS.map(function (n) {
-            return {
-              id: n.id, category: n.category, title: n.title,
-              publishTime: n.publishTime, viewCount: n.viewCount, top: n.top
-            };
-          });
-        }
-
         list.sort(function (a, b) {
           if (a.top !== b.top) return a.top ? -1 : 1;
           return newsTime(b.publishTime) - newsTime(a.publishTime);
@@ -1162,9 +1148,11 @@
       };
 
       renderHomeNews();
-      window.addEventListener('storage', function (e) {
-        if (e.key === NEWS_KEY) renderHomeNews();
-      });
+      if (window.MobileOpsStore && MobileOpsStore.subscribe) {
+        MobileOpsStore.subscribe(function (key) {
+          if (!key || key === MobileOpsStore.KEYS.news) renderHomeNews();
+        });
+      }
     })();
   </script>
   <script>

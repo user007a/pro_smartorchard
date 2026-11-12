@@ -10,6 +10,7 @@
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <!-- 移动端共享数据层 -->
   <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
   <style>
     /* Content */
     .content { padding: var(--space-4); padding-bottom: 80px; }
@@ -352,7 +353,7 @@
 
     function currentOperator() {
       try {
-        var u = JSON.parse(localStorage.getItem('smartorchard_current_user') || 'null');
+        var u = JSON.parse(sessionStorage.getItem('smartorchard_current_user') || 'null');
         return { name: (u && u.name) || '移动端用户', id: (u && u.username) || '' };
       } catch (e) {
         return { name: '移动端用户', id: '' };
@@ -361,13 +362,15 @@
 
     function renderExperts() {
       var box = document.getElementById('expertList');
-      var list = MobileStore.list(STAFF_KEY).filter(function (s) {
+      var staff = (window.MobileOpsStore && typeof MobileOpsStore.list === 'function')
+        ? MobileOpsStore.list('staff') : [];
+      var list = staff.filter(function (s) {
         return s && s.isExpert && s.status !== 'disabled';
       }).map(function (s) {
         return {
-          name: s.name,
-          title: (s.role === '管理员' ? '平台技术专家' : s.role) + (s.base ? ' · ' + s.base : ''),
-          tags: String(s.expertTitle || '农技咨询').split(/[\/、,，]/).map(function (t) { return t.trim(); }).filter(Boolean)
+          name: s.realName || s.name || s.account || '',
+          title: (s.role === '管理员' ? '平台技术专家' : (s.role || '专家')) + (s.baseId ? ' · ' + s.baseId : ''),
+          tags: String(s.expertise || s.expertTitle || '农技咨询').split(/[\/、,，]/).map(function (t) { return t.trim(); }).filter(Boolean)
         };
       });
       if (!list.length) list = FALLBACK_EXPERTS;
@@ -416,7 +419,19 @@
 
     function renderQuestions() {
       var box = document.getElementById('myQuestionList');
-      var list = MobileStore.list(QUESTION_KEY);
+      var src = (window.MobileOpsStore && typeof MobileOpsStore.list === 'function')
+        ? MobileOpsStore.list('expertQuestions') : [];
+      var list = src.map(function (q) {
+        return {
+          title: q.title || '',
+          desc: q.content || '',
+          status: q.status || 'pending',
+          reply: q.expertReply || '',
+          expert: q.operator || '专家',
+          replyTime: q.replyTime || '',
+          time: q.questionTime || ''
+        };
+      });
       if (!list.length) { box.innerHTML = ''; return; }
       box.innerHTML = list.map(function (q) {
         var answered = q.status === 'replied' && q.reply;
@@ -450,15 +465,18 @@
       if (desc.length < 5) { MobileStore.toast('问题描述至少 5 个字', 'warning'); return; }
 
       var me = currentOperator();
-      MobileStore.push(QUESTION_KEY, {
-        title: title,
-        desc: desc,
-        status: 'pending',
-        time: MobileStore.fmtTime(Date.now()),
-        source: 'mobile',
-        operator: me.name,
-        operatorId: me.id
-      });
+      if (window.MobileOpsStore && typeof MobileOpsStore.push === 'function') {
+        MobileOpsStore.push('expertQuestions', {
+          title: title,
+          content: desc,
+          questioner: me.name,
+          questionTime: MobileStore.fmtTime(Date.now()),
+          status: 'pending',
+          source: 'mobile',
+          operator: me.name,
+          operatorId: me.id
+        });
+      }
 
       closeAskModal();
       MobileStore.toast('提问已提交，专家将尽快回复', 'success');
@@ -468,10 +486,13 @@
     document.addEventListener('DOMContentLoaded', function () {
       renderExperts();
       renderQuestions();
-      MobileStore.subscribe(renderQuestions);
-      MobileStore.subscribe(function (key) {
-        if (key === STAFF_KEY) renderExperts();
-      });
+      /* 后端预加载完成后重渲染（严格空库：数据来自数据库） */
+      if (window.MobileOpsStore && MobileOpsStore.subscribe) {
+        MobileOpsStore.subscribe(function (key) {
+          if (!key || key === MobileOpsStore.KEYS.staff) renderExperts();
+          if (!key || key === MobileOpsStore.KEYS.expertQuestions) renderQuestions();
+        });
+      }
     });
   </script>
 </body>

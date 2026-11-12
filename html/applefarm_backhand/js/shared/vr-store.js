@@ -67,6 +67,7 @@
   }
 
   function preloadFromBackend() {
+    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -74,8 +75,10 @@
       return api.get('vr/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
+        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
+        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = global.VrMapper.toAggregate(res.data);
-        if (agg.scenes && agg.scenes.length) { inMemory = agg.scenes; save(); notify('backend-loaded'); }
+        inMemory = agg.scenes || []; save(); notify('backend-loaded');
       }
       return res;
     }).catch(function (err) {

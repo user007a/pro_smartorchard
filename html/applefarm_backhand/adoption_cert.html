@@ -461,17 +461,17 @@
       <div class="form-row">
         <div class="form-field">
           <label>模板名称<span style="color:var(--error);">*</span></label>
-          <input type="text" id="tplEditName" placeholder="如 标准认养证书">
+          <input type="text" id="tplEditName" placeholder="请输入模板名称">
         </div>
         <div class="form-field">
           <label>签发机构<span style="color:var(--error);">*</span></label>
-          <input type="text" id="tplEditIssuer" placeholder="如 智慧果园运营中心">
+          <input type="text" id="tplEditIssuer" placeholder="请输入签发机构">
         </div>
       </div>
       <div class="form-row">
         <div class="form-field">
           <label>落款单位</label>
-          <input type="text" id="tplEditOrg" placeholder="如 麦积区花牛镇基地">
+          <input type="text" id="tplEditOrg" placeholder="请输入落款单位">
         </div>
         <div class="form-field">
           <label>启用状态</label>
@@ -492,15 +492,16 @@
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
-<script src="js/shared/demo-seed.js"></script>
+<!-- 严格空库模式：演示数据播种已停用，数据一律来自后端 API -->
 <script src="js/shared/adoption-store.js"></script>
 <script src="js/shared/cert-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 /* ============================================================
  * 认养证书管理（消费类凭证）
- * 数据源：localStorage['adoption_certs']            证书主表
- *       localStorage['adoption_cert_templates']   证书模板
- *       localStorage['snzg_adoptions']            果树编号来源（H5 认养记录）
+ * 严格空库模式：证书与模板一律来自后端 API
+ *   sf_adoption_cert / sf_adoption_cert_template，页面不再播种演示数据
+ *   果树编号来源 = H5 认养记录（取不到时下拉为空）
  *
  * 字段见任务说明。本页面与 cert_manage.html（溯源合格证）
  * 是两套不同数据，签发机构/字段/生命周期都不同。
@@ -511,28 +512,110 @@ var TPL_KEY  = 'adoption_cert_templates';
 var H5_ADOPT_KEY = 'snzg_adoptions';
 var S = window.AdoptionStore;
 
-/* 默认种子数据：首次访问写入，确保页面可独立运行 */
-var DEFAULT_TEMPLATES = [
-  { id: 'TPL-001', name: '标准认养证书', issuer: '智慧果园运营中心', orgName: '麦积区花牛镇基地', enabled: true },
-  { id: 'TPL-002', name: '高端专属认养证书', issuer: '智慧果园运营中心', orgName: '甘肃天水果业集团', enabled: true },
-  { id: 'TPL-003', name: '纪念版认养证书', issuer: '智慧果园运营中心', orgName: '智慧果园', enabled: false }
-];
+/* ---------- 数据源（严格空库模式） ---------- */
+var CERT_RESOURCE = 'adoption_cert';
+var TPL_RESOURCE  = 'adoption_cert_template';
+/* 缓存：由 loadCerts() / loadTemplates() 从后端 API 异步填充，页面不再播种演示数据 */
+let certData = [];
+let tplData = [];
 
-var DEFAULT_CERTS = [
-  {
-    certNo: 'AD20260315001',
-    treeNo: 'A025', treeFull: 'AD-A025',
-    adopter: '张三',
-    periodStart: '2026-03-15', periodEnd: '2027-03-14',
-    variety: '花牛苹果', expectedYield: '约80斤',
-    base: '麦积区基地 A区', plot: '3号地块',
-    issueDate: '2026-03-15',
-    status: 'issued',
-    issuedBy: '管理员', issueTime: '2026-03-15 10:30',
-    revokeReason: '', templateId: 'TPL-001',
-    createTime: '2026-03-15 10:25'
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapCertRow(row) {
+  return {
+    certNo: row.cert_code || '',
+    treeNo: row.tree_id != null ? String(row.tree_id) : '',
+    treeFull: '',
+    adopter: row.adopter || '',
+    periodStart: row.period_start || '',
+    periodEnd: row.period_end || '',
+    variety: row.variety || '',
+    expectedYield: row.estimate_yield != null ? String(row.estimate_yield) : '',
+    base: row.base_name || '',
+    plot: row.plot_name || '',
+    issueDate: row.issue_date || '',
+    status: row.status || 'pending',
+    issuedBy: row.issuer || '',
+    issueTime: row.issue_time || '',
+    revokeReason: row.revoke_reason || '',
+    templateId: row.template_id != null ? String(row.template_id) : '',
+    createTime: row.created_at || '',
+    orderNo: row.order_code || '',
+    amount: row.amount
+  };
+}
+
+function mapTplRow(row) {
+  return {
+    id: row.id,
+    name: row.template_name || '',
+    issuer: row.issue_org || '',
+    orgName: row.sign_unit || '',
+    enabled: row.status !== 'disabled' && row.status !== 'inactive'
+  };
+}
+
+/* 表格状态提示：加载中 / 暂无数据 / 加载失败 */
+function setCertStatus(text, isError) {
+  var body = document.getElementById('certBody');
+  var empty = document.getElementById('certEmpty');
+  if (body) body.innerHTML = '';
+  if (empty) {
+    empty.style.display = 'block';
+    empty.textContent = text;
+    empty.style.color = isError ? 'var(--error, #d03050)' : '';
   }
-];
+  ['statTotal', 'statPending', 'statIssued', 'statRevoked'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = '0';
+  });
+}
+function setTplStatus(text, isError) {
+  var body = document.getElementById('tplBody');
+  var empty = document.getElementById('tplEmpty');
+  if (body) body.innerHTML = '';
+  if (empty) {
+    empty.style.display = 'block';
+    empty.textContent = text;
+    empty.style.color = isError ? 'var(--error, #d03050)' : '';
+  }
+}
+
+/* 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示；不写 localStorage */
+function loadCerts() {
+  if (!window.Api) { setCertStatus('数据加载失败：接口未就绪', true); return; }
+  setCertStatus('正在加载数据...', false);
+  Api.get(CERT_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      setCertStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true);
+      return;
+    }
+    var list = (r.data && r.data.list) || [];
+    certData = list.map(mapCertRow);
+    renderStats();
+    if (!certData.length) { setCertStatus('暂无数据', false); return; }
+    renderCertTable();
+  }).catch(function (e) {
+    setCertStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+  });
+}
+
+function loadTemplates() {
+  if (!window.Api) { setTplStatus('数据加载失败：接口未就绪', true); return; }
+  setTplStatus('正在加载数据...', false);
+  Api.get(TPL_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      setTplStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true);
+      return;
+    }
+    var list = (r.data && r.data.list) || [];
+    tplData = list.map(mapTplRow);
+    if (!tplData.length) { setTplStatus('暂无数据', false); return; }
+    renderTplTable();
+    refreshTplOptions();
+  }).catch(function (e) {
+    setTplStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+  });
+}
 
 var STATUS_TEXT = { pending: '待签发', issued: '已签发', revoked: '已撤销' };
 
@@ -565,16 +648,9 @@ function writeJSON(key, value) {
   catch (e) { Toast.error('本地存储写入失败'); return false; }
 }
 
-/* ---------- 数据：模板 ---------- */
-function readTemplates() {
-  var list = readJSON(TPL_KEY, null);
-  if (!list || list.length === 0) {
-    list = DEFAULT_TEMPLATES.map(function (t) { return Object.assign({}, t); });
-    writeJSON(TPL_KEY, list);
-  }
-  return list;
-}
-function writeTemplates(list) { return writeJSON(TPL_KEY, list); }
+/* ---------- 数据：模板（仅内存缓存，保证增删改交互即时生效） ---------- */
+function readTemplates() { return tplData; }
+function writeTemplates(list) { tplData = list; return true; }
 
 function genTplId() {
   var list = readTemplates();
@@ -586,16 +662,9 @@ function genTplId() {
   return 'TPL-' + String(max + 1).padStart(3, '0');
 }
 
-/* ---------- 数据：证书 ---------- */
-function readCerts() {
-  var list = readJSON(CERT_KEY, null);
-  if (!list || list.length === 0) {
-    list = DEFAULT_CERTS.map(function (c) { return Object.assign({}, c); });
-    writeJSON(CERT_KEY, list);
-  }
-  return list;
-}
-function writeCerts(list) { return writeJSON(CERT_KEY, list); }
+/* ---------- 数据：证书（仅内存缓存，保证增删改交互即时生效） ---------- */
+function readCerts() { return certData; }
+function writeCerts(list) { certData = list; return true; }
 
 /* 自动生成证书编号：AD + 年份 + 6 位序列 */
 function genCertNo() {
@@ -640,7 +709,7 @@ function readH5Trees() {
   return out;
 }
 
-/* 把可选果树追加到下拉框（含一些常用演示项，避免空） */
+/* 把可选果树追加到下拉框（数据来自 H5 认养记录，取不到时保持为空） */
 function refreshTreeOptions() {
   var sel = document.getElementById('certEditTree');
   if (!sel) return;
@@ -710,6 +779,7 @@ function renderCertTable() {
   if (!filtered.length) {
     tbody.innerHTML = '';
     empty.style.display = 'block';
+    empty.textContent = list.length ? '没有符合条件的证书，试试调整筛选条件' : '暂无数据';
     return;
   }
   empty.style.display = 'none';
@@ -753,6 +823,7 @@ function renderTplTable() {
   if (!list.length) {
     tbody.innerHTML = '';
     empty.style.display = 'block';
+    empty.textContent = '暂无数据';
     return;
   }
   empty.style.display = 'none';
@@ -901,45 +972,47 @@ function openCertDetail(certNo) {
   if (!c) { Toast.error('证书不存在'); return; }
   var body = document.getElementById('certDetailBody');
   var tplName = c.templateId ? getTplName(c.templateId) : '';
+  var dash = '—';
+  var treeLabel = [c.variety, c.treeNo ? '#' + c.treeNo : ''].filter(Boolean).join(' ') || dash;
   var previewHTML = ''
     + '<div class="cert-preview">'
     +   '<div class="cp-icon">🏆</div>'
     +   '<div class="cp-title">苹果树认养证书</div>'
     +   '<div class="cp-sub">ADOPTION CERTIFICATE</div>'
     +   '<div style="margin:14px 0 8px;color:#666;font-size:13px;">此证书郑重证明</div>'
-    +   '<div style="color:#333;font-size:14px;"><b>' + esc(c.adopter) + '</b> 已成功认养</div>'
-    +   '<div style="color:#b8962e;font-weight:700;font-size:18px;margin:6px 0;">' + esc((c.variety || '') + ' #' + (c.treeNo || '')) + '</div>'
-    +   '<div style="color:#666;font-size:12px;">认养期限：' + esc((c.periodStart || '-') + ' ~ ' + (c.periodEnd || '-')) + '</div>'
+    +   '<div style="color:#333;font-size:14px;"><b>' + esc(c.adopter || dash) + '</b> 已成功认养</div>'
+    +   '<div style="color:#b8962e;font-weight:700;font-size:18px;margin:6px 0;">' + esc(treeLabel) + '</div>'
+    +   '<div style="color:#666;font-size:12px;">认养期限：' + esc((c.periodStart || dash) + ' ~ ' + (c.periodEnd || dash)) + '</div>'
     +   '<div style="margin:14px 4px 0;border-top:1px dashed rgba(212,175,55,.4);padding-top:10px;text-align:left;">'
-    +     '<div class="cp-rows"><span class="cp-label">认养编号</span><span class="cp-value">' + esc(c.certNo) + '</span></div>'
-    +     '<div class="cp-rows"><span class="cp-label">认养人</span><span class="cp-value">' + esc(c.adopter) + '</span></div>'
-    +     '<div class="cp-rows"><span class="cp-label">品种</span><span class="cp-value">' + esc(c.variety || '-') + '</span></div>'
-    +     '<div class="cp-rows"><span class="cp-label">预估产量</span><span class="cp-value">' + esc(c.expectedYield || '-') + '</span></div>'
-    +     '<div class="cp-rows"><span class="cp-label">认养基地</span><span class="cp-value">' + esc((c.base || '-') + (c.plot ? ' ' + c.plot : '')) + '</span></div>'
+    +     '<div class="cp-rows"><span class="cp-label">认养编号</span><span class="cp-value">' + esc(c.certNo || dash) + '</span></div>'
+    +     '<div class="cp-rows"><span class="cp-label">认养人</span><span class="cp-value">' + esc(c.adopter || dash) + '</span></div>'
+    +     '<div class="cp-rows"><span class="cp-label">品种</span><span class="cp-value">' + esc(c.variety || dash) + '</span></div>'
+    +     '<div class="cp-rows"><span class="cp-label">预估产量</span><span class="cp-value">' + esc(c.expectedYield || dash) + '</span></div>'
+    +     '<div class="cp-rows"><span class="cp-label">认养基地</span><span class="cp-value">' + esc(((c.base || '') + (c.plot ? ' ' + c.plot : '')).trim() || dash) + '</span></div>'
     +   '</div>'
     +   '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:flex-end;color:#999;font-size:11px;">'
-    +     '<div>发证日期<br><b style="color:#333;">' + esc(c.issueDate || '-') + '</b></div>'
-    +     '<div style="border:1px solid #d4af37;border-radius:50%;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:#b8962e;font-size:12px;">智慧果园</div>'
+    +     '<div>发证日期<br><b style="color:#333;">' + esc(c.issueDate || dash) + '</b></div>'
+    +     '<div style="border:1px solid #d4af37;border-radius:50%;width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:#b8962e;font-size:12px;">' + esc(c.issuedBy || tplName || dash) + '</div>'
     +   '</div>'
     + '</div>';
 
   var html = ''
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;font-size:13px;margin-bottom:8px;">'
-    +   '<div>证书编号：<b>' + esc(c.certNo) + '</b></div>'
-    +   '<div>状态：<span class="status-tag ' + esc(c.status) + '">' + esc(STATUS_TEXT[c.status] || c.status) + '</span></div>'
-    +   '<div>果树编号：' + esc(c.treeNo || '-') + '</div>'
-    +   '<div>认养人：' + esc(c.adopter || '-') + '</div>'
-    +   '<div>认养期限：' + esc((c.periodStart || '-') + ' ~ ' + (c.periodEnd || '-')) + '</div>'
-    +   '<div>品种：' + esc(c.variety || '-') + '</div>'
-    +   '<div>预估产量：' + esc(c.expectedYield || '-') + '</div>'
-    +   '<div>基地/地块：' + esc((c.base || '-') + (c.plot ? ' / ' + c.plot : '')) + '</div>'
-    +   '<div>关联订单：' + esc(c.orderNo || '-') + '</div>'
-    +   '<div>认养金额：' + esc(c.amount ? '¥' + Number(c.amount).toLocaleString() : '-') + '</div>'
-    +   '<div>发证日期：' + esc(c.issueDate || '-') + '</div>'
-    +   '<div>签发时间：' + esc(c.issueTime || '-') + '</div>'
-    +   '<div>签发人：' + esc(c.issuedBy || '-') + '</div>'
-    +   '<div>使用模板：' + esc(tplName || '不指定') + '</div>'
-    +   '<div>创建时间：' + esc(c.createTime || '-') + '</div>'
+    +   '<div>证书编号：<b>' + esc(c.certNo || dash) + '</b></div>'
+    +   '<div>状态：<span class="status-tag ' + esc(c.status) + '">' + esc(STATUS_TEXT[c.status] || c.status || dash) + '</span></div>'
+    +   '<div>果树编号：' + esc(c.treeNo || dash) + '</div>'
+    +   '<div>认养人：' + esc(c.adopter || dash) + '</div>'
+    +   '<div>认养期限：' + esc((c.periodStart || dash) + ' ~ ' + (c.periodEnd || dash)) + '</div>'
+    +   '<div>品种：' + esc(c.variety || dash) + '</div>'
+    +   '<div>预估产量：' + esc(c.expectedYield || dash) + '</div>'
+    +   '<div>基地/地块：' + esc(((c.base || '') + (c.plot ? ' / ' + c.plot : '')).trim() || dash) + '</div>'
+    +   '<div>关联订单：' + esc(c.orderNo || dash) + '</div>'
+    +   '<div>认养金额：' + esc(c.amount ? '¥' + Number(c.amount).toLocaleString() : dash) + '</div>'
+    +   '<div>发证日期：' + esc(c.issueDate || dash) + '</div>'
+    +   '<div>签发时间：' + esc(c.issueTime || dash) + '</div>'
+    +   '<div>签发人：' + esc(c.issuedBy || dash) + '</div>'
+    +   '<div>使用模板：' + esc(tplName || dash) + '</div>'
+    +   '<div>创建时间：' + esc(c.createTime || dash) + '</div>'
     + '</div>'
     + previewHTML
     + (c.status === 'revoked' && c.revokeReason ? '<div class="revoke-tip">已撤销 · 原因：' + esc(c.revokeReason) + '</div>' : '');
@@ -1120,11 +1193,9 @@ function resetCertSearch() {
 
 /* ---------- 初始化 ---------- */
 document.addEventListener('DOMContentLoaded', function () {
-  // 演示数据播种：仅在证书/认养为空时写入 24 条证书 + 25 棵认养果树
-  DemoSeed.ensure(['adoptions', 'adoption-certs']);
-  renderStats();
-  renderCertTable();
-  renderTplTable();
+  // 严格空库模式：证书与模板一律由后端 API 拉取，不再播种演示数据
+  loadCerts();
+  loadTemplates();
   refreshTplOptions();
   refreshTreeOptions();
 });

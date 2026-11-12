@@ -530,7 +530,8 @@
 <script src="js/shared/mobile-bridge.js"></script>
 <script src="js/shared/harvest-store.js"></script>
 <script src="js/shared/trace-store.js"></script>
-<script src="js/shared/demo-seed.js"></script>
+<script src="../common/js/api.js"></script>
+<!-- 严格空库模式：演示数据播种已停用，数据一律来自后端 API -->
 <script>
 /* ============================================================
  * 标签管理
@@ -587,7 +588,7 @@ function readStock() {
 }
 
 /* 状态归一：pending 未审批 → 待审批，审批通过 → 待打印
- * 兼容演示数据：历史「待打印」记录若没有审批留痕（approvedBy/approveResult），
+ * 兼容历史数据：「待打印」记录若没有审批留痕（approvedBy/approveResult），
  * 视为尚未完成审批，展示为「待审批」，审批通过后写入留痕再转为「待打印」。 */
 function statusText(item) {
   if (!item) return '待审批';
@@ -622,7 +623,7 @@ function labelCodeOf(item) {
   return item.labelCode || item.code || '—';
 }
 function traceBatchNoOf(item) {
-  return item.traceBatchNo || 'PC-2026-001';
+  return item.traceBatchNo || '';
 }
 function labelTypeOf(item) {
   return item.labelType || '一物一码';
@@ -916,7 +917,7 @@ function doApprove(decision, remark) {
   var patch = {
     approveRemark: remark,
     approveTime: MobileBridge.stampNow(),
-    traceBatchNo: target ? traceBatchNoOf(target) : document.getElementById('apTraceBatchNo').textContent || 'PC-2026-001',
+    traceBatchNo: target ? traceBatchNoOf(target) : document.getElementById('apTraceBatchNo').textContent || '',
     labelType: (labelTypeSel && labelTypeSel.value) || (target ? labelTypeOf(target) : '一物一码')
   };
   var resultText = decision;
@@ -1020,57 +1021,52 @@ function saveStock() {
 
 /* ============================================================
  * 标签类型维护（移动端 mb_label.html 可选清单的权威源）
- *   localStorage['smartorchard_label_types']
- *   结构：[{ id, name, desc, unit, enabled }]
- * 首次访问播种原有 3 种标签（标签名/描述不丢失），并同步初始化库存键，
- * 保证「库存管理」可对新建类型设置库存。
+ * 严格空库模式：标签类型一律来自后端 API（sf_label_type），不再写死/播种
  * ============================================================ */
 var TYPE_KEY = 'smartorchard_label_types';
-var TYPE_SEED = [
-  { id: 'LB-A', name: '花牛苹果专用标签（双层纸袋型）', desc: '双层纸袋，防水防虫', unit: '张', enabled: true, stock: 12500 },
-  { id: 'LB-B', name: '花牛苹果专用标签（透气膜袋型）', desc: '透气膜袋，早熟品种适用', unit: '张', enabled: true, stock: 8200 },
-  { id: 'LB-C', name: '秦冠专用标签', desc: '三色可选，中熟品种', unit: '张', enabled: true, stock: 6800 }
-];
+var LABEL_TYPE_RESOURCE = 'label_type';
+var labelTypesData = [];
+var labelTypesLoadState = 'loading';
+var labelTypesLoadError = '';
 
 var typeWorking = [];
 
-/* 读取标签类型清单（原始结构） */
-function readTypes() {
-  try {
-    var raw = localStorage.getItem(TYPE_KEY);
-    if (raw) {
-      var v = JSON.parse(raw);
-      if (Array.isArray(v)) return v;
-    }
-  } catch (e) { /* 损坏时按空处理 */ }
-  return [];
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapLabelTypeRow(row) {
+  return {
+    id: row.label_code || (row.id == null ? '' : String(row.id)),
+    name: row.label_name || '',
+    desc: row.spec || row.label_type || '',
+    unit: '张',
+    enabled: row.status !== 'off' && row.status !== 'disabled'
+  };
 }
 
-/* 播种：仅在键缺失时写入，避免覆盖后台已维护的数据 */
-function seedLabelData() {
-  try {
-    if (!localStorage.getItem(TYPE_KEY)) {
-      var types = TYPE_SEED.map(function (t) {
-        return { id: t.id, name: t.name, desc: t.desc, unit: t.unit, enabled: true };
-      });
-      localStorage.setItem(TYPE_KEY, JSON.stringify(types));
+/* 异步取数：加载中 / 暂无数据 / 加载失败三态，不写 localStorage */
+function loadLabelTypes() {
+  if (!window.Api) { labelTypesLoadState = 'error'; labelTypesLoadError = '接口未就绪'; renderTypeRows(); return; }
+  labelTypesLoadState = 'loading'; labelTypesLoadError = ''; renderTypeRows();
+  Api.get(LABEL_TYPE_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      labelTypesLoadState = 'error'; labelTypesLoadError = (r && r.message) || '请求异常';
+      labelTypesData = []; typeWorking = []; renderTypeRows(); return;
     }
-    if (typeof MobileBridge !== 'undefined' && !localStorage.getItem(MobileBridge.KEYS.labelStock)) {
-      var stock = {};
-      TYPE_SEED.forEach(function (t) { stock[t.name] = t.stock; });
-      localStorage.setItem(MobileBridge.KEYS.labelStock, JSON.stringify(stock));
-    }
-  } catch (e) { /* 隐私模式等场景忽略播种失败 */ }
+    labelTypesData = ((r.data && r.data.list) || []).map(mapLabelTypeRow);
+    typeWorking = labelTypesData.map(function (t) { return Object.assign({}, t); });
+    labelTypesLoadState = 'ok'; renderTypeRows();
+  }).catch(function (e) {
+    labelTypesLoadState = 'error'; labelTypesLoadError = (e && e.message) || '网络异常';
+    labelTypesData = []; typeWorking = []; renderTypeRows();
+  });
 }
+
+/* 读取标签类型清单（页面级数据） */
+function readTypes() { return labelTypesData; }
 
 function openTypeModal() {
-  var list = readTypes();
-  if (!list.length) {
-    list = TYPE_SEED.map(function (t) {
-      return { id: t.id, name: t.name, desc: t.desc, unit: t.unit, enabled: true };
-    });
-  }
-  typeWorking = list.map(function (t) { return Object.assign({}, t); });
+  typeWorking = (labelTypesLoadState === 'ok')
+    ? readTypes().map(function (t) { return Object.assign({}, t); })
+    : [];
   renderTypeRows();
   document.getElementById('typeModal').classList.add('show');
 }
@@ -1081,8 +1077,14 @@ function closeTypeModal() {
 
 function renderTypeRows() {
   var box = document.getElementById('typeEditBox');
+  if (!box) return;
+  if (labelTypesLoadState !== 'ok') {
+    var msg = labelTypesLoadState === 'loading' ? '正在加载数据...' : ('数据加载失败：' + labelTypesLoadError);
+    box.innerHTML = '<div class="empty-state" style="padding:20px 0;">' + esc(msg) + '</div>';
+    return;
+  }
   if (!typeWorking.length) {
-    box.innerHTML = '<div class="empty-state" style="padding:20px 0;">暂无标签类型，点击下方按钮新增</div>';
+    box.innerHTML = '<div class="empty-state" style="padding:20px 0;">暂无数据，点击下方按钮新增</div>';
     return;
   }
   box.innerHTML = typeWorking.map(function (t, i) {
@@ -1141,6 +1143,8 @@ function saveTypes() {
     return;
   }
 
+  labelTypesData = list;
+  labelTypesLoadState = 'ok';
   /* 为新增类型补齐库存键，使「库存管理」可对其设置库存（不覆盖已有库存） */
   if (typeof MobileBridge !== 'undefined') {
     var stock = readStock();
@@ -1296,9 +1300,8 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 document.addEventListener('DOMContentLoaded', function () {
-  seedLabelData();
-  // 演示数据播种：仅在移动端尚未产生领用记录时写入 24 条示意申请
-  DemoSeed.ensure('label-records');
+  loadLabelTypes();
+  // 严格空库模式：演示数据播种已停用，数据一律来自后端 API
   renderTable();
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();

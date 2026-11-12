@@ -151,9 +151,16 @@
 <script src="js/page-actions.js"></script>
 <script src="js/components/chart.js"></script>
 <script src="js/shared/data-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 (function(){
   'use strict';
+
+  /* 严格空库模式：归集记录一律来自后端 API（sf_data_collection），不再依赖本地演示数据 */
+  var COLLECTION_RESOURCE = 'data_collection';
+  var collectionData = [];
+  var collectionLoadState = 'loading';
+  var collectionLoadError = '';
 
   function fmt(n){
     n = Number(n) || 0;
@@ -175,7 +182,45 @@
     ratioList : document.getElementById('ratioList')
   };
 
+  /* 数据库行(snake_case) → 页面渲染字段；id 规则与 DataMapper.rowToCollection 一致 */
+  function mapCollectionRow(row) {
+    return {
+      id: row.category || row.source || '',
+      source: row.source || '',
+      category: row.category || row.source || '',
+      amount: Number(row.collect_amount) || 0,
+      yoy: Number(row.yoy) || 0,
+      rate: Number(row.qualified_rate) || 0
+    };
+  }
+
+  /* 异步取数：加载中 / 暂无数据 / 加载失败三态，不写 localStorage */
+  function loadCollections() {
+    if (!window.Api) { collectionLoadState = 'error'; collectionLoadError = '接口未就绪'; renderAll(); return; }
+    collectionLoadState = 'loading'; collectionLoadError = ''; renderAll();
+    Api.get(COLLECTION_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+      if (!r || !r.ok) {
+        collectionLoadState = 'error'; collectionLoadError = (r && r.message) || '请求异常';
+        collectionData = []; renderAll(); return;
+      }
+      collectionData = ((r.data && r.data.list) || []).map(mapCollectionRow);
+      collectionLoadState = 'ok'; renderAll();
+    }).catch(function (e) {
+      collectionLoadState = 'error'; collectionLoadError = (e && e.message) || '网络异常';
+      collectionData = []; renderAll();
+    });
+  }
+
+  function statusText() {
+    return collectionLoadState === 'loading' ? '正在加载数据...' : ('数据加载失败：' + collectionLoadError);
+  }
+
   function renderStats(){
+    if (collectionLoadState !== 'ok') {
+      els.statCards.innerHTML = '<div class="stat-card"><div class="stat-label">数据状态</div>' +
+        '<div class="stat-value" style="font-size:16px;">' + esc(statusText()) + '</div></div>';
+      return;
+    }
     var s = DataStore.summary();
     els.statCards.innerHTML =
       '<div class="stat-card">' +
@@ -201,11 +246,15 @@
   }
 
   function renderTable(){
-    var list  = DataStore.collections();
+    if (collectionLoadState !== 'ok') {
+      els.tbody.innerHTML = '<tr class="empty-row"><td colspan="6">' + esc(statusText()) + '</td></tr>';
+      return;
+    }
+    var list  = collectionData;
     var total = list.reduce(function(sum, x){ return sum + (x.amount || 0); }, 0);
 
     if (!list.length){
-      els.tbody.innerHTML = '<tr class="empty-row"><td colspan="6">暂无归集数据</td></tr>';
+      els.tbody.innerHTML = '<tr class="empty-row"><td colspan="6">暂无数据</td></tr>';
       return;
     }
 
@@ -229,10 +278,14 @@
   }
 
   function renderRatio(){
-    var list  = DataStore.collections();
+    if (collectionLoadState !== 'ok') {
+      els.ratioList.innerHTML = '<div class="empty-state"><div class="empty-text">' + esc(statusText()) + '</div></div>';
+      return;
+    }
+    var list  = collectionData;
     var total = list.reduce(function(sum, x){ return sum + (x.amount || 0); }, 0);
     if (!list.length || !total){
-      els.ratioList.innerHTML = '<div class="empty-state"><div class="empty-text">暂无来源数据</div></div>';
+      els.ratioList.innerHTML = '<div class="empty-state"><div class="empty-text">暂无数据</div></div>';
       return;
     }
     els.ratioList.innerHTML = list.map(function(x){
@@ -249,6 +302,7 @@
   }
 
   function renderChart(){
+    if (collectionLoadState !== 'ok') return;
     var trend = DataStore.collectionTrend();
     Chart.line('#chart-collection-trend', {
       categories: trend.map(function(x){ return x.month; }),
@@ -281,7 +335,7 @@
   function openCollectionForm(id){
     var item = null;
     if (id){
-      item = DataStore.collections().filter(function(x){ return x.id === id; })[0] || null;
+      item = collectionData.filter(function(x){ return x.id === id; })[0] || null;
       if (!item){ Toast.show('归集记录不存在', 'error'); return; }
     }
 
@@ -313,6 +367,8 @@
           rate: data.rate
         });
         if (!res.ok){ Toast.show(res.message, 'error'); return false; }
+        collectionData = DataStore.collections();
+        renderAll();
         Toast.show(item ? '归集记录已更新，驾驶舱数据已同步' : '归集记录已新增，驾驶舱数据已同步', 'success');
         return true;
       }
@@ -322,11 +378,13 @@
   function editCollection(id){ openCollectionForm(id); }
 
   function deleteCollection(id){
-    var item = DataStore.collections().filter(function(x){ return x.id === id; })[0];
+    var item = collectionData.filter(function(x){ return x.id === id; })[0];
     if (!item) return;
     Confirm.delete('确定删除「' + esc(item.source) + '」的归集记录吗？删除后驾驶舱归集量与合格率将同步调整。').then(function(ok){
       if (!ok) return;
       DataStore.removeCollection(id);
+      collectionData = DataStore.collections();
+      renderAll();
       Toast.show('归集记录已删除', 'success');
     });
   }
@@ -376,7 +434,7 @@
 
   /* ---------------- 按本地原始记录重算归集量 ---------------- */
   function recalcCollections(){
-    Confirm.delete('将按本地原始记录重新统计各类归集量（农事记录、设备日志、H5 订单、溯源批次等），演示环境数据量较小，重算后数值会明显下降。是否继续？').then(function(ok){
+    Confirm.delete('将按本地原始记录重新统计各类归集量（农事记录、设备日志、H5 订单、溯源批次等），重算后数值可能变化。是否继续？').then(function(ok){
       if (!ok) return;
       var res = DataStore.recalcCollections(true);
       var applied = res.items.filter(function(x){ return !x.skipped; });
@@ -395,8 +453,10 @@
   window.recalcCollections = recalcCollections;
 
   DataStore.subscribe(function(){
+    if (collectionLoadState === 'ok') collectionData = DataStore.collections();
     renderAll();
   });
+  loadCollections();
 })();
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>

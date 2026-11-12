@@ -583,27 +583,27 @@
       <div class="detail-content">
         <div class="detail-row">
           <label>预警标题</label>
-          <span id="detailTitle">设备离线：水肥一体化设备离线超过30分钟</span>
+          <span id="detailTitle">-</span>
         </div>
         <div class="detail-row">
           <label>预警级别</label>
-          <span><span class="level-tag level-urgent" id="detailLevelTag">紧急</span></span>
+          <span><span class="level-tag level-urgent" id="detailLevelTag">-</span></span>
         </div>
         <div class="detail-row">
           <label>设备名称</label>
-          <span id="detailDevice">水肥一体化控制器-A01</span>
+          <span id="detailDevice">-</span>
         </div>
         <div class="detail-row">
           <label>安装位置</label>
-          <span id="detailLocation">天水麦积区基地 - 地块A1</span>
+          <span id="detailLocation">-</span>
         </div>
         <div class="detail-row">
           <label>预警时间</label>
-          <span id="detailTime">2026-09-20 10:30</span>
+          <span id="detailTime">-</span>
         </div>
         <div class="detail-row">
           <label>当前状态</label>
-          <span><span class="status-tag st-pending" id="detailStatusTag">待处理</span></span>
+          <span><span class="status-tag st-pending" id="detailStatusTag">-</span></span>
         </div>
         <div class="detail-row">
           <label>受理人</label>
@@ -619,16 +619,12 @@
         </div>
         <div class="detail-row">
           <label>预警描述</label>
-          <p id="detailDesc">设备已离线超过30分钟，请检查设备连接状态和网络状况。建议立即联系现场运维人员进行排查。</p>
+          <p id="detailDesc">-</p>
         </div>
         <div class="detail-row">
           <label>处理历史</label>
           <div class="detail-history">
-            <div class="history-item">
-              <span class="history-time">2026-09-20 10:30</span>
-              <span class="history-content">系统自动生成预警</span>
             </div>
-          </div>
         </div>
       </div>
     </div>
@@ -652,7 +648,7 @@
     <div class="modal-body">
       <div class="form-group">
         <label>设备名称</label>
-        <div class="form-value" id="handleDeviceName">水肥一体化控制器-A01</div>
+        <div class="form-value" id="handleDeviceName">-</div>
       </div>
       <div class="form-group">
         <label>处理方式</label>
@@ -670,9 +666,6 @@
           <option value="">请选择受理人</option>
           <option value="运维组">运维组</option>
           <option value="技术员">技术员</option>
-          <option value="黄忠坚">黄忠坚</option>
-          <option value="惠加宁">惠加宁</option>
-          <option value="张才孙">张才孙</option>
         </select>
       </div>
       <div class="form-group" id="handleTransferGroup" style="display:none;">
@@ -726,9 +719,6 @@
           <option value="">请选择受理人</option>
           <option value="运维组">运维组</option>
           <option value="技术员">技术员</option>
-          <option value="黄忠坚">黄忠坚</option>
-          <option value="惠加宁">惠加宁</option>
-          <option value="张才孙">张才孙</option>
         </select>
       </div>
       <div class="form-group">
@@ -807,11 +797,44 @@
     </div>
   </div>
 </div>
+<script src="../common/js/api.js"></script>
 <script src="js/shared/alert-data.js"></script>
 <script>
   // 数据来源：共享数据源 AlertStore（详见 js/shared/alert-data.js）
   // 本页面只负责设备预警（type='device'）的视图与交互。
   let filteredData = AlertStore.byType('device');
+  /* ===== 严格空库模式：加载 / 空 / 错误态 =====
+   * 数据由已严格化的 AlertStore 后端桥接（alert/aggregate）提供，
+   * 页面层不重复取数：init 显示加载中，backend-loaded 后渲染真实数据。 */
+  var __alertReady = false;
+  function __alertTbody(html) {
+    var tbody = document.getElementById('dataTableBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="99" style="text-align:center;padding:24px;color:var(--text-tertiary);">' + html + '</td></tr>';
+    var pg = document.getElementById('pagination-container');
+    if (pg) pg.innerHTML = '';
+  }
+  function __alertState(kind, msg) {
+    __alertTbody(kind === 'loading' ? '加载中...' : ('数据加载失败：' + (msg || '')));
+  }
+  function __alertBootstrap(onReady) {
+    __alertState('loading');
+    if (window.Api && Api.isLoggedIn && !Api.isLoggedIn()) {
+      __alertState('error', '未登录或登录已失效，请重新登录');
+      return;
+    }
+    if (window.AlertStore && typeof AlertStore.subscribe === 'function') {
+      AlertStore.subscribe(function (reason) {
+        if (reason === 'init') { __alertState('loading'); return; }
+        __alertReady = true;
+        onReady();
+      });
+    }
+    // 后端长时间无响应时给出错误态，避免一直停留在「加载中」
+    setTimeout(function () {
+      if (!__alertReady) __alertState('error', '无法获取预警数据，请检查网络或后端服务');
+    }, 8000);
+  }
+
   
   document.addEventListener('DOMContentLoaded', function() {
     Pagination.init({
@@ -823,15 +846,8 @@
       renderRow: renderRow
     });
 
-    // 订阅共享数据源变化（来自其他标签页 / 后台其他页面 / 移动端的处理动作）
-    if (window.AlertStore && typeof AlertStore.subscribe === 'function') {
-      AlertStore.subscribe(function(reason){
-        // 仅当变化与本类型相关时刷新
-        if (reason === 'init' || (typeof reason === 'string' && reason.indexOf('status:') === 0) || reason === 'reset') {
-          refreshDataFromStore();
-        }
-      });
-    }
+    __alertBootstrap(refreshDataFromStore);
+    
 
     document.addEventListener('click', function(e) {
       const btn = e.target.closest('.action-btn');
@@ -1218,7 +1234,11 @@
       });
     }
     filteredData = arr;
-    if (window.Pagination) Pagination.updateData(filteredData);
+    if (!arr.length) {
+      __alertTbody('暂无数据');
+    } else if (window.Pagination) {
+      Pagination.updateData(filteredData);
+    }
     if (window.Chart && window.Chart.loadECharts) {
       window.Chart.loadECharts().then(render);
     }

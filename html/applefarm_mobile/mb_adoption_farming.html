@@ -202,24 +202,30 @@
       if (nameEl) nameEl.textContent = currentTreeName;
     }
 
-    // 认养人：同棵树的最近一条挂牌记录优先，其次 C 端认养记录（snzg_adoptions）
+    // 认养订单缓存（纯在线：sf_adoption_order，供认养人反查）
+    var orderCache = [];
+
+    function loadAdoptionOrders() {
+      if (!window.Api || typeof window.Api.get !== 'function') return Promise.resolve();
+      return window.Api.get('adoption_order', { size: 500 }).then(function (res) {
+        if (res && res.ok && res.data && Array.isArray(res.data.list)) {
+          orderCache = res.data.list.map(function (row) {
+            return { orderNo: row.order_code || '', treeNo: row.tree_code || '', adopter: row.adopter || '' };
+          });
+        }
+      }).catch(function () { /* 忽略，保持空 → 显示「—」 */ });
+    }
+
+    // 认养人：同棵树的最近一条挂牌记录优先，其次 C 端认养订单（sf_adoption_order）
     function resolveAdopter(treeNo) {
       var tags = window.MobileStore ? MobileStore.list(MobileStore.KEYS.adoptionTag) : [];
       for (var i = 0; i < tags.length; i++) {
         var t = tags[i];
         if (t && t.kind !== 'farming_bind' && t.adopter && pickTreeNo(t.treeNo) === treeNo) return t.adopter;
       }
-      var list = [];
-      try {
-        var raw = localStorage.getItem('snzg_adoptions');
-        var v = raw ? JSON.parse(raw) : null;
-        if (Array.isArray(v)) list = v;
-      } catch (e) { list = []; }
-      for (var j = 0; j < list.length; j++) {
-        var a = list[j];
-        if (!a) continue;
-        var ids = [String(a.id || '').replace(/^AD-/i, ''), String(a.treeNo || '')];
-        if (ids.indexOf(treeNo) > -1) return a.adopter || a.userName || a.name || '';
+      for (var j = 0; j < orderCache.length; j++) {
+        var a = orderCache[j];
+        if (a && a.treeNo === treeNo && a.adopter) return a.adopter;
       }
       return '';
     }
@@ -286,12 +292,13 @@
 
     initTreeInfo();
 
-    /* 跨端同步：后台挂牌建档/认养归属变更后，重新解析当前果树认养人 */
-    window.addEventListener('storage', function (e) {
-      if (e.key && (e.key === 'smartorchard_adoption_tags' || e.key === 'snzg_adoptions' || e.key === 'applefarm_adoption_v1')) {
-        initTreeInfo();
-      }
-    });
+    // 预加载认养订单（供认养人反查），并订阅挂牌数据变化后重解析
+    loadAdoptionOrders();
+    if (window.MobileStore && typeof MobileStore.subscribe === 'function') {
+      MobileStore.subscribe(function (reason) {
+        if (reason === MobileStore.KEYS.adoptionTag) initTreeInfo();
+      });
+    }
   </script>
 </body>
 </html>

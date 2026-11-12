@@ -103,7 +103,7 @@
       <div class="mb-back-title">我的购物车</div>
     </div>
 
-    <!-- 购物车列表（由 localStorage['h5_cart'] 渲染） -->
+    <!-- 购物车列表（由后端 sf_mall_cart 渲染） -->
     <div class="cart-list" id="cartList"></div>
 
     <!-- 底部操作栏 -->
@@ -137,17 +137,27 @@
     </nav>
   </div>
 
+  <script src="js/h5-data.js"></script>
   <script src="js/mall-coupons.js"></script>
   <script>
-    var CART_KEY = 'h5_cart';
     var selectedCoupon = null; // { name, type:'cash'|'percent', value, min, pointsUsed }
 
-    /* ---------- 数据层：与商城/结算页共用 localStorage['h5_cart'] ---------- */
-    function readCart() {
-      try { var v = JSON.parse(localStorage.getItem(CART_KEY) || '[]'); return Array.isArray(v) ? v : []; }
-      catch (e) { return []; }
+    /* ---------- 数据层：购物车走后端 sf_mall_cart（H5Data.cart） ---------- */
+    var cartList = [];          // 内存购物车 [{_id, id, name, spec, price, qty, checked, img}]
+    var userPoints = 0;         // 会员积分（来自后端 sf_mall_member.points）
+
+    function readCart() { return cartList; }
+
+    /* 持久化整份购物车：有 _id 更新，无 _id 新增 */
+    function writeCart(list) {
+      cartList = list;
+      list.forEach(function (item) {
+        if (item._id != null) H5Data.cart.update(item);
+        else H5Data.cart.add(item).then(function (res) {
+          if (res && res.ok && res.data && res.data.insertId) item._id = res.data.insertId;
+        });
+      });
     }
-    function writeCart(list) { localStorage.setItem(CART_KEY, JSON.stringify(list)); }
 
     var CART_SPEC = { redFuji: '5斤装', gala: '5斤装', giftBox: '8斤装' };
 
@@ -164,7 +174,12 @@
       writeCart(list);
       window.location.href = 'h5_checkout.html';
     }
-    function clearCart() { writeCart([]); renderCart(); showToast('购物车已清空'); }
+    function clearCart() {
+      cartList.forEach(function (i) { if (i._id != null) H5Data.cart.remove(i._id); });
+      cartList = [];
+      renderCart();
+      showToast('购物车已清空');
+    }
 
     /* ---------- 渲染 ---------- */
     function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -242,8 +257,10 @@
 
     function removeItem(itemId) {
       if (!confirm('确定要删除该商品吗？')) return;
-      var list = readCart().filter(function(i) { return i.id !== itemId; });
-      writeCart(list);
+      var hit = null;
+      for (var i = 0; i < cartList.length; i++) { if (cartList[i].id === itemId) { hit = cartList[i]; break; } }
+      if (hit && hit._id != null) H5Data.cart.remove(hit._id);
+      cartList = cartList.filter(function(i) { return i.id !== itemId; });
       renderCart();
       showToast('已删除');
     }
@@ -296,13 +313,13 @@
     var POINTS_KEY = 'h5_points_used';
     function getPointsUsed() {
       var n = 0;
-      try { n = parseInt(localStorage.getItem(POINTS_KEY) || '0', 10); } catch (e) { n = 0; }
+      try { n = parseInt(sessionStorage.getItem(POINTS_KEY) || '0', 10); } catch (e) { n = 0; }
       return isNaN(n) || n < 0 ? 0 : n;
     }
     function setPointsUsed(n) {
       try {
-        if (n > 0) localStorage.setItem(POINTS_KEY, String(n));
-        else localStorage.removeItem(POINTS_KEY);
+        if (n > 0) sessionStorage.setItem(POINTS_KEY, String(n));
+        else sessionStorage.removeItem(POINTS_KEY);
       } catch (e) {}
     }
     function calcDiscount(total) {
@@ -317,27 +334,9 @@
       return round2(Math.min(Math.max(0, d), total));
     }
 
-    /* 可用积分：权威来源为 h5_points（由 h5_member.html 播种）；
-       若用户尚未进入会员中心（首次使用商城），此处做一次幂等兜底播种，
-       避免积分抵扣功能因缺数据而不可用。 */
+    /* 可用积分：来自后端会员档案 sf_mall_member.points（登录后由 H5Data 拉取） */
     function availablePoints() {
-      var pts = 0, raw = null;
-      try { raw = localStorage.getItem('h5_points'); } catch (e) { return 0; }
-      if (!raw) {
-        // 兜底播种：1280 积分（来源：历史消费返积分）
-        try {
-          localStorage.setItem('h5_points', JSON.stringify([
-            { amount: 1280, source: '消费返积分', time: new Date().toISOString() }
-          ]));
-        } catch (e) {}
-        return 1280;
-      }
-      try {
-        var list = JSON.parse(raw);
-        if (!Array.isArray(list)) return 0;
-        pts = list.reduce(function (s, p) { return s + (Number(p.amount) || 0); }, 0);
-      } catch (e) { return 0; }
-      return pts;
+      return userPoints;
     }
 
     // 优惠券/积分弹窗
@@ -386,7 +385,14 @@
       updateTotal();
     }
 
-    renderCart();
+    /* ---------- 初始化：异步拉取后端购物车与会员积分后渲染 ---------- */
+    H5Data.ready.then(function () { return H5Data.cart.list(); }).then(function (list) {
+      cartList = list;
+      renderCart();
+    });
+    H5Data.currentMemberRow().then(function (m) {
+      if (m) userPoints = m.points || 0;
+    });
 
     function showToast(message) {
       var toast = document.createElement('div');

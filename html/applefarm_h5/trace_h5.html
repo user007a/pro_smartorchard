@@ -286,6 +286,7 @@
   <script src="../applefarm_backhand/js/shared/harvest-store.js"></script>
   <script src="../applefarm_backhand/js/shared/trace-store.js"></script>
   <script src="js/trace-stages.js"></script>
+  <script src="js/h5-data.js"></script>
   <script>
     /* ============================================================
      * H5 溯源页 —— 由后台溯源编码生成的追溯码驱动
@@ -681,41 +682,39 @@
          3) ?tree= 对应的认养记录里显式绑定了 traceCode/batchCode → 使用该批次；
          4) 兜底：按编号中的数字稳定映射到某个批次，保证同一棵树每次访问结果一致；
          5) 两者都缺省 → 默认批次 SNZG-20260901-0001。 */
-    function findBoundCode(tree) {
-      var keys = ['snzg_adoptions', 'h5_adoptions'];
-      var norm = function (v) { return String(v == null ? '' : v).trim().replace(/^AD-/i, '').trim(); };
-      var want = norm(tree);
-      for (var i = 0; i < keys.length; i++) {
-        var arr = [];
-        try {
-          var v = JSON.parse(localStorage.getItem(keys[i]) || '[]');
-          if (Array.isArray(v)) arr = v;
-        } catch (e) { arr = []; }
-        for (var j = 0; j < arr.length; j++) {
-          var r = arr[j] || {};
-          if (norm(r.id) === want || norm(r.treeNo) === want) {
-            return r.traceCode || r.batchCode || r.code || '';
-          }
-        }
-      }
-      return '';
+    /* 果树 → 追溯码绑定关系：后端 sf_adoption_tree + sf_adoption_harvest
+       （严格空库：不再读 localStorage 认养键） */
+    var boundCodeCache = null;
+    var norm = function (v) { return String(v == null ? '' : v).trim().replace(/^AD-/i, '').trim(); };
+    function loadBoundCodes() {
+      if (boundCodeCache) return Promise.resolve(boundCodeCache);
+      return H5Data.ready.then(function () {
+        return Promise.all([H5Data.list('adoption_tree'), H5Data.list('adoption_harvest')]);
+      }).then(function (res) {
+        var trees = res[0] || [];
+        var harvests = res[1] || [];
+        var idToCode = {};
+        trees.forEach(function (t) { idToCode[String(t.id)] = norm(t.treeCode); });
+        var map = {};
+        harvests.forEach(function (h) {
+          var code = idToCode[String(h.treeId)];
+          if (code && h.traceCode) map[code] = h.traceCode;
+        });
+        boundCodeCache = map;
+        return map;
+      }).catch(function () { return {}; });
+    }
+    function findBoundCodeAsync(tree) {
+      if (!tree) return Promise.resolve('');
+      return loadBoundCodes().then(function (map) {
+        return map[norm(tree)] || '';
+      });
     }
 
-    function resolveTraceCode(params) {
-      // ?code= 完整追溯码；?c= 短码；两者都交给 TraceStore 统一识别
-      var raw = (params.get('code') || params.get('c') || '').trim();
-      if (raw) return raw;
-
-      var tree = (params.get('tree') || '').trim();
-      var codes = window.TraceStore ? TraceStore.codes() : [];
-      if (!tree) return codes.length ? codes[0].code : '';
-      if (window.TraceStore && TraceStore.code(tree)) return tree;
-
-      var bound = findBoundCode(tree);
-      if (bound && window.TraceStore && TraceStore.code(bound)) return bound;
-
+    /* 同步解析：?code= / ?c= 直接使用；?tree= 在异步绑定未命中时按编号稳定映射 */
+    function fallbackCodeForTree(tree, codes) {
       if (!codes.length) return '';
-      var digits = tree.replace(/[^0-9]/g, '');
+      var digits = String(tree).replace(/[^0-9]/g, '');
       var idx;
       if (digits) {
         idx = parseInt(digits, 10);
@@ -729,15 +728,37 @@
 
     document.addEventListener('DOMContentLoaded', function() {
       const params = new URLSearchParams(window.location.search);
-      const raw = resolveTraceCode(params);
-      const item = (window.TraceStore && raw) ? TraceStore.code(raw) : null;
-      const code = item ? item.code : raw;
-      renderTrace(code);
-      if (item) recordH5Scan(item.code);
+      const rawParam = (params.get('code') || params.get('c') || '').trim();
+      const treeParam = (params.get('tree') || '').trim();
+      const codes = window.TraceStore ? TraceStore.codes() : [];
 
-      // 后台调整「C 端展示配置」后，同源其他标签页可实时同步时间线
-      if (window.TraceStages && typeof TraceStages.subscribe === 'function') {
-        TraceStages.subscribe(function() { renderTrace(code); });
+      function resolve(raw) {
+        const item = (window.TraceStore && raw) ? TraceStore.code(raw) : null;
+        const code = item ? item.code : raw;
+        renderTrace(code);
+        if (item) recordH5Scan(item.code);
+        if (window.TraceStages && typeof TraceStages.subscribe === 'function') {
+          TraceStages.subscribe(function() { renderTrace(code); });
+        }
+      }
+
+      // 1) ?code= / ?c= 完整追溯码 / 短码 → 直接使用
+      if (rawParam) { resolve(rawParam); return; }
+
+      // 2) ?tree= 本身就是追溯码 → 直接使用
+      if (treeParam && window.TraceStore && TraceStore.code(treeParam)) {
+        resolve(treeParam);
+        return;
+      }
+
+      // 3) ?tree= 绑定追溯码 → 异步查后端；4) 兜底按编号稳定映射；5) 缺省默认批次
+      if (treeParam) {
+        findBoundCodeAsync(treeParam).then(function (bound) {
+          if (bound && window.TraceStore && TraceStore.code(bound)) { resolve(bound); return; }
+          resolve(fallbackCodeForTree(treeParam, codes));
+        });
+      } else {
+        resolve(codes.length ? codes[0].code : '');
       }
     });
   </script>

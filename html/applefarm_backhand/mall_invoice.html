@@ -203,7 +203,7 @@
           <tbody id="invoiceBody"></tbody>
         </table>
       </div>
-      <div id="emptyHint" class="empty-state" style="display:none;">暂无发票申请</div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无数据</div>
     </div>
   </main>
 </div>
@@ -274,40 +274,23 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mall-store.js"></script>
-<script src="js/shared/demo-seed.js"></script>
+<script src="../common/js/api.js"></script>
+<!-- 严格空库模式：演示数据播种已停用，数据一律来自后端 API -->
 <script>
 /* ============================================================
- * 发票管理（商城管理）
- * 数据源：localStorage['h5_invoices']
- *   写入方 = H5 h5_checkout.html（勾选 invoiceToggle 下单时追加）
- *   字段：{ id, title, amount, type, orderNo, applyTime, status }
- *   status 枚举：pending 待开票 / issued 已开票 / rejected 已驳回
- *   开票回写：status + issueTime + invoiceNo
- *   驳回回写：status + rejectReason
+ * 发票管理 —— 严格空库模式
+ * 数据源：Api.get('mall_invoice') -> sf_mall_invoice
+ *   (id, invoice_code, order_id, invoice_type, content_type, title, tax_no,
+ *    email, phone, title_type, amount, invoice_no, issue_time, reject_reason,
+ *    void_reason, reissue_of, operator, apply_time, status)
+ * status 枚举：pending/issued/rejected/void（页面值直接落库）
+ * 空库显示「暂无数据」，不写入 localStorage。
  * ============================================================ */
-var INVOICE_KEY = 'h5_invoices';
-
+var invoiceList = [];
+var dataLoaded = false;
 var STATUS_TEXT = { pending: '待开票', issued: '已开票', rejected: '已驳回', void: '已红冲' };
 var DEFAULT_TYPE = '电子普通发票';
-
 var currentId = null;
-
-function readAll() {
-  try {
-    var v = JSON.parse(localStorage.getItem(INVOICE_KEY) || '[]');
-    return Array.isArray(v) ? v : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function writeList(list) {
-  try {
-    localStorage.setItem(INVOICE_KEY, JSON.stringify(list));
-  } catch (e) {
-    Toast.error('本地存储写入失败，发票状态未能保存');
-  }
-}
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -323,52 +306,58 @@ function fmtTime(iso) {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
-/* 归一化：统一走 MallStore，自动补齐抬头类型、税号、邮箱等字段 */
-function normalize(raw) {
-  if (typeof MallStore !== 'undefined') return MallStore.invoices();
-  var list = [];
-  readAll().forEach(function (v, i) {
-    if (!v || typeof v !== 'object') return;
-    var amount = Number(v.amount);
-    list.push({
-      id: v.id || ('INV' + i),
-      titleType: v.titleType === 'company' ? 'company' : 'personal',
-      title: v.title || '（未填写抬头）',
-      taxNo: v.taxNo || '',
-      email: v.email || '',
-      phone: v.phone || '',
-      amount: isNaN(amount) || amount < 0 ? 0 : amount,
-      type: v.type || DEFAULT_TYPE,
-      contentType: v.contentType || '商品明细',
-      orderNo: v.orderNo || '',
-      applyTime: v.applyTime || v.createdAt || '',
-      status: STATUS_TEXT[v.status] ? v.status : 'pending',
-      invoiceNo: v.invoiceNo || '',
-      issueTime: v.issueTime || '',
-      rejectReason: v.rejectReason || '',
-      voidReason: v.voidReason || '',
-      reissueOf: v.reissueOf || ''
-    });
-  });
-  return list;
+function nowStr() {
+  return new Date().toISOString().slice(0, 19).replace('T', ' ');
 }
 
-function writeList(list) {
-  if (typeof MallStore !== 'undefined') {
-    var ok = true;
-    list.forEach(function (v) {
-      var r = MallStore.saveInvoice(v);
-      if (!r.ok) { Toast.error(r.error || '发票保存失败'); ok = false; }
-    });
-    return ok;
+function mapInvoice(r) {
+  return {
+    id: String(r.id),
+    invoiceCode: r.invoice_code || '',
+    titleType: r.title_type === 'company' ? 'company' : 'personal',
+    title: r.title || '（未填写抬头）',
+    taxNo: r.tax_no || '',
+    email: r.email || '',
+    phone: r.phone || '',
+    amount: Number(r.amount) || 0,
+    type: r.invoice_type || DEFAULT_TYPE,
+    contentType: r.content_type || '商品明细',
+    orderNo: r.order_id == null ? '' : String(r.order_id),
+    applyTime: r.apply_time || r.created_at || '',
+    status: STATUS_TEXT[r.status] ? r.status : 'pending',
+    invoiceNo: r.invoice_no || '',
+    issueTime: r.issue_time || '',
+    rejectReason: r.reject_reason || '',
+    voidReason: r.void_reason || '',
+    reissueOf: r.reissue_of || ''
+  };
+}
+
+function setTableState(bodyId, emptyId, msg, colspan) {
+  var body = document.getElementById(bodyId);
+  var empty = document.getElementById(emptyId);
+  if (empty) empty.style.display = 'none';
+  if (body) body.innerHTML = '<tr><td colspan="' + colspan + '" style="text-align:center;color:var(--text-tertiary);padding:24px 0;">' + esc(msg) + '</td></tr>';
+}
+
+function loadData() {
+  dataLoaded = false;
+  setTableState('invoiceBody', 'emptyHint', '加载中...', 9);
+  if (!window.Api || !Api.get) {
+    setTableState('invoiceBody', 'emptyHint', '数据加载失败：Api 未就绪', 9);
+    return;
   }
-  try {
-    localStorage.setItem(INVOICE_KEY, JSON.stringify(list));
-    return true;
-  } catch (e) {
-    Toast.error('本地存储写入失败，发票状态未能保存');
-    return false;
-  }
+  Api.get('mall_invoice', { page: 1, size: 500, sort: 'id', order: 'desc' }).then(function (res) {
+    if (!res || !res.ok) {
+      setTableState('invoiceBody', 'emptyHint', '数据加载失败：' + ((res && res.message) || '请检查登录状态与网络'), 9);
+      return;
+    }
+    invoiceList = ((res.data && res.data.list) || []).map(mapInvoice);
+    dataLoaded = true;
+    renderTable();
+  }).catch(function (err) {
+    setTableState('invoiceBody', 'emptyHint', '数据加载失败：' + ((err && err.message) || '请检查登录状态与网络'), 9);
+  });
 }
 
 function renderStats(list) {
@@ -388,8 +377,7 @@ function filteredList() {
   var status = document.getElementById('statusSelect').value;
   var type = document.getElementById('typeSelect').value;
   var kw = document.getElementById('searchInput').value.trim().toLowerCase();
-
-  return normalize().filter(function (v) {
+  return invoiceList.filter(function (v) {
     if (status && v.status !== status) return false;
     if (type && v.type !== type) return false;
     if (kw) {
@@ -401,7 +389,8 @@ function filteredList() {
 }
 
 function renderTable() {
-  var all = normalize();
+  if (!dataLoaded) return;
+  var all = invoiceList;
   var list = filteredList();
   renderStats(all);
 
@@ -410,7 +399,7 @@ function renderTable() {
 
   if (!list.length) {
     body.innerHTML = '';
-    emptyHint.textContent = all.length ? '未找到匹配的发票申请' : '暂无发票申请';
+    emptyHint.textContent = all.length ? '未找到匹配的发票申请' : '暂无数据';
     emptyHint.style.display = 'block';
     return;
   }
@@ -418,15 +407,15 @@ function renderTable() {
 
   body.innerHTML = list.map(function (v, i) {
     var isVat = v.type === '增值税专用发票';
-    var btns = '<button class="action-btn detail" onclick="openDetail(\'' + esc(v.id) + '\')">详情</button>';
+    var btns = '<button class="action-btn detail" data-inv-detail="' + esc(v.id) + '">详情</button>';
     if (v.status === 'pending') {
-      btns += '<button class="action-btn ship" onclick="openIssue(\'' + esc(v.id) + '\')">开票</button>' +
-              '<button class="action-btn delete" onclick="openReject(\'' + esc(v.id) + '\')">驳回</button>';
+      btns += '<button class="action-btn ship" data-inv-issue="' + esc(v.id) + '">开票</button>' +
+              '<button class="action-btn delete" data-inv-reject="' + esc(v.id) + '">驳回</button>';
     } else if (v.status === 'issued') {
-      btns += '<button class="action-btn detail" onclick="voidInvoice(\'' + esc(v.id) + '\')">红冲</button>' +
+      btns += '<button class="action-btn detail" data-inv-void="' + esc(v.id) + '">红冲</button>' +
               '<span style="font-size:var(--font-size-xs);color:var(--text-tertiary);">' + esc(v.invoiceNo) + '</span>';
     } else if (v.status === 'rejected') {
-      btns += '<button class="action-btn download" onclick="reissueInvoice(\'' + esc(v.id) + '\')">重新申请</button>';
+      btns += '<button class="action-btn download" data-inv-reissue="' + esc(v.id) + '">重新申请</button>';
     } else {
       btns += '<span style="font-size:var(--font-size-xs);color:var(--text-tertiary);">已红冲</span>';
     }
@@ -462,9 +451,8 @@ function closeModal(id) {
 }
 
 function findById(id) {
-  var list = normalize();
-  for (var i = 0; i < list.length; i++) {
-    if (list[i].id === id) return list[i];
+  for (var i = 0; i < invoiceList.length; i++) {
+    if (invoiceList[i].id === id) return invoiceList[i];
   }
   return null;
 }
@@ -493,7 +481,7 @@ function openDetail(id) {
   document.getElementById('detailModal').classList.add('show');
 }
 
-/* 开票：回写 status='issued' + issueTime + invoiceNo */
+/* 开票：回写 status='issued' + issue_time + invoice_no */
 function openIssue(id) {
   var v = findById(id);
   if (!v) { Toast.error('未找到该发票申请'); return; }
@@ -506,29 +494,18 @@ function openIssue(id) {
 function confirmIssue() {
   var no = document.getElementById('issueNo').value.trim();
   if (!no) { Toast.warning('请填写发票号码'); return; }
-  if (typeof MallStore !== 'undefined') {
-    var r = MallStore.updateInvoice(currentId, { status: 'issued', issueTime: new Date().toISOString(), invoiceNo: no, operator: '后台管理员' });
-    if (!r.ok) { Toast.error(r.error || '开票失败'); return; }
-  } else {
-    var raw = readAll();
-    var hit = false;
-    raw.forEach(function (v) {
-      if (v && v.id === currentId) {
-        v.status = 'issued';
-        v.issueTime = new Date().toISOString();
-        v.invoiceNo = no;
-        hit = true;
-      }
-    });
-    if (!hit) { Toast.error('未找到该发票申请'); return; }
-    writeList(raw);
-  }
-  closeModal('issueModal');
-  renderTable();
-  Toast.success('开票完成，发票号 ' + no);
+  var id = currentId;
+  Api.update('mall_invoice', id, {
+    status: 'issued', invoice_no: no, issue_time: nowStr(), operator: '后台管理员'
+  }).then(function (res) {
+    if (!res || !res.ok) { Toast.error((res && res.message) || '开票失败'); return; }
+    closeModal('issueModal');
+    loadData();
+    Toast.success('开票完成，发票号 ' + no);
+  }).catch(function (err) { Toast.error((err && err.message) || '开票失败'); });
 }
 
-/* 驳回：回写 status='rejected' + rejectReason */
+/* 驳回：回写 status='rejected' + reject_reason */
 function openReject(id) {
   var v = findById(id);
   if (!v) { Toast.error('未找到该发票申请'); return; }
@@ -546,26 +523,15 @@ function confirmReject() {
   closeModal('rejectModal');
   ConfirmDialog.show({
     title: '驳回发票申请',
-    message: '确定驳回「' + (v ? v.title : id) + '」的发票申请吗？驳回后 H5 端「发票管理」将显示该申请已被驳回。',
+    message: '确定驳回「' + (v ? v.title : id) + '」的发票申请吗？',
     onConfirm: function () {
-      if (typeof MallStore !== 'undefined') {
-        var r = MallStore.updateInvoice(id, { status: 'rejected', rejectReason: reason, operator: '后台管理员' });
-        if (!r.ok) { Toast.error(r.error || '驳回失败'); return; }
-      } else {
-        var raw = readAll();
-        var hit = false;
-        raw.forEach(function (x) {
-          if (x && x.id === id) {
-            x.status = 'rejected';
-            x.rejectReason = reason;
-            hit = true;
-          }
-        });
-        if (!hit) { Toast.error('未找到该发票申请'); return; }
-        writeList(raw);
-      }
-      renderTable();
-      Toast.success('已驳回该发票申请');
+      Api.update('mall_invoice', id, {
+        status: 'rejected', reject_reason: reason, operator: '后台管理员'
+      }).then(function (res) {
+        if (!res || !res.ok) { Toast.error((res && res.message) || '驳回失败'); return; }
+        loadData();
+        Toast.success('已驳回该发票申请');
+      }).catch(function (err) { Toast.error((err && err.message) || '驳回失败'); });
     }
   });
 }
@@ -578,39 +544,61 @@ function voidInvoice(id) {
   if (reason === null) return;
   reason = reason.trim();
   if (!reason) { Toast.warning('红冲原因不能为空'); return; }
-  var r = MallStore.updateInvoice(id, { status: 'void', voidReason: reason, operator: '后台管理员' });
-  if (!r.ok) { Toast.error(r.error || '红冲失败'); return; }
-  renderTable();
-  Toast.success('发票已红冲');
+  Api.update('mall_invoice', id, {
+    status: 'void', void_reason: reason, operator: '后台管理员'
+  }).then(function (res) {
+    if (!res || !res.ok) { Toast.error((res && res.message) || '红冲失败'); return; }
+    loadData();
+    Toast.success('发票已红冲');
+  }).catch(function (err) { Toast.error((err && err.message) || '红冲失败'); });
 }
 
 /* 重新申请：基于被驳回申请生成新的待开票记录 */
 function reissueInvoice(id) {
   var v = findById(id);
   if (!v) return;
-  var copy = Object.assign({}, v, {
-    id: 'INV' + Date.now(),
+  var body = {
+    invoice_code: 'INV' + Date.now(),
+    order_id: Number(v.orderNo) || null,
+    invoice_type: v.type,
+    content_type: v.contentType,
+    title: v.title,
+    tax_no: v.taxNo,
+    email: v.email,
+    phone: v.phone,
+    title_type: v.titleType,
+    amount: v.amount,
     status: 'pending',
-    invoiceNo: '',
-    issueTime: '',
-    rejectReason: '',
-    voidReason: '',
-    reissueOf: v.id,
-    applyTime: new Date().toISOString()
-  });
-  var r = MallStore.saveInvoice(copy);
-  if (!r.ok) { Toast.error(r.error || '重新申请失败'); return; }
-  renderTable();
-  Toast.success('已生成新的待开票申请');
+    apply_time: nowStr(),
+    reissue_of: v.invoiceCode || v.id,
+    operator: '后台管理员'
+  };
+  Api.create('mall_invoice', body).then(function (res) {
+    if (!res || !res.ok) { Toast.error((res && res.message) || '重新申请失败'); return; }
+    loadData();
+    Toast.success('已生成新的待开票申请');
+  }).catch(function (err) { Toast.error((err && err.message) || '重新申请失败'); });
 }
 
+/* 事件代理 */
+document.addEventListener('click', function (e) {
+  var d = e.target.closest && e.target.closest('[data-inv-detail]');
+  var issue = e.target.closest && e.target.closest('[data-inv-issue]');
+  var reject = e.target.closest && e.target.closest('[data-inv-reject]');
+  var vd = e.target.closest && e.target.closest('[data-inv-void]');
+  var re = e.target.closest && e.target.closest('[data-inv-reissue]');
+  if (d) openDetail(d.getAttribute('data-inv-detail'));
+  else if (issue) openIssue(issue.getAttribute('data-inv-issue'));
+  else if (reject) openReject(reject.getAttribute('data-inv-reject'));
+  else if (vd) voidInvoice(vd.getAttribute('data-inv-void'));
+  else if (re) reissueInvoice(re.getAttribute('data-inv-reissue'));
+});
+
 document.addEventListener('DOMContentLoaded', function () {
-  // 演示数据播种：仅在发票申请为空时写入 24 条示意申请
-  DemoSeed.ensure('invoices');
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });
-  renderTable();
+  loadData();
 });
 </script>
 </body>

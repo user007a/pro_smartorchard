@@ -51,6 +51,7 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
+    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -58,11 +59,13 @@
       return api.get('sales/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
+        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
+        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = global.SalesMapper.toAggregate(res.data);
         var e = ensure();
         var keys = ['customers', 'orders', 'payments', 'shipments', 'afterSales', 'pricePolicies', 'promotions', 'targets', 'statements'];
         keys.forEach(function (k) {
-          if (agg[k] && agg[k].length) e[k] = agg[k];
+          e[k] = agg[k] || [];
         });
         writeJSON(STORAGE_KEY, e);
         notify('backend-loaded');
@@ -97,7 +100,7 @@
   var STORAGE_KEY = 'applefarm_sales_v1';
   var VERSION = 1;
   var DAY = 86400000;
-  var NOW_REF = new Date('2026-11-10T10:00:00');
+  var NOW_REF = new Date();
 
   /* ---------------- 枚举 ---------------- */
   var ORDER_STATUS = {
@@ -322,58 +325,31 @@
   }
 
   /* ---------------- 种子数据 ---------------- */
-  var CUSTOMER_SEED = [
-    { code: 'C001', name: '北京XX超市', contact: '王经理', phone: '13800008888', type: 'wholesale', level: 'vip', region: '北京', address: '北京市朝阳区XX街道XX号', status: 'active', source: '商超直供', owner: '张伟', creditLimit: 1200000, creditDays: 30, amount: 86.5, received: 86.5, lastOrder: '2026-10-18', tags: ['核心客户', '账期30天'] },
-    { code: 'C002', name: '上海XX电商', contact: '李主管', phone: '13900009999', type: 'wholesale', level: 'vip', region: '上海', address: '上海市浦东新区XX路XX号', status: 'active', source: '电商平台', owner: '李静', creditLimit: 1500000, creditDays: 45, amount: 92.0, received: 92.0, lastOrder: '2026-10-20', tags: ['核心客户', '电商专供'] },
-    { code: 'C003', name: '李女士', contact: '李女士', phone: '13600001111', type: 'adoption', level: 'gold', region: '广东', address: '广州市天河区XX小区', status: 'active', source: '认养平台', owner: '王强', creditLimit: 0, creditDays: 0, amount: 8.6, received: 8.6, lastOrder: '2026-10-16', tags: ['认养客户'] },
-    { code: 'C004', name: '广州XX水果店', contact: '陈老板', phone: '13700002222', type: 'wholesale', level: 'gold', region: '广东', address: '广州市白云区XX市场', status: 'active', source: '批发市场', owner: '张伟', creditLimit: 500000, creditDays: 30, amount: 34.2, received: 24.9, lastOrder: '2026-09-02', tags: ['批发客户'] },
-    { code: 'C005', name: '张先生', contact: '张先生', phone: '13500003333', type: 'adoption', level: 'silver', region: '广东', address: '深圳市南山区XX小区', status: 'inactive', source: '认养平台', owner: '李静', creditLimit: 0, creditDays: 0, amount: 5.0, received: 5.0, lastOrder: '2026-08-28', tags: ['已流失'] },
-    { code: 'C006', name: '成都XX电商', contact: '周经理', phone: '13400004444', type: 'wholesale', level: 'gold', region: '四川', address: '成都市武侯区XX路', status: 'active', source: '电商平台', owner: '王强', creditLimit: 800000, creditDays: 30, amount: 61.8, received: 61.8, lastOrder: '2026-10-19', tags: ['电商客户'] },
-    { code: 'C007', name: '刘女士', contact: '刘女士', phone: '13300005555', type: 'adoption', level: 'gold', region: '浙江', address: '杭州市西湖区XX小区', status: 'active', source: '认养平台', owner: '张伟', creditLimit: 0, creditDays: 0, amount: 12.4, received: 8.0, lastOrder: '2026-09-12', tags: ['认养客户'] },
-    { code: 'C008', name: '杭州XX水果店', contact: '吴老板', phone: '13200006666', type: 'wholesale', level: 'silver', region: '浙江', address: '杭州市余杭区XX市场', status: 'active', source: '批发市场', owner: '李静', creditLimit: 200000, creditDays: 15, amount: 18.6, received: 18.6, lastOrder: '2026-10-11', tags: ['批发客户'] },
-    { code: 'C009', name: '王先生', contact: '王先生', phone: '13100007777', type: 'retail', level: 'silver', region: '江苏', address: '南京市鼓楼区XX路', status: 'inactive', source: '门店零售', owner: '王强', creditLimit: 0, creditDays: 0, amount: 6.8, received: 2.1, lastOrder: '2026-07-18', tags: ['待回款'] },
-    { code: 'C010', name: '武汉XX超市', contact: '赵经理', phone: '13000008888', type: 'wholesale', level: 'vip', region: '湖北', address: '武汉市洪山区XX路', status: 'active', source: '商超直供', owner: '张伟', creditLimit: 1200000, creditDays: 30, amount: 78.4, received: 78.4, lastOrder: '2026-10-20', tags: ['核心客户', '账期30天'] },
-    { code: 'C011', name: '陈女士', contact: '陈女士', phone: '18900009999', type: 'adoption', level: 'gold', region: '陕西', address: '西安市雁塔区XX小区', status: 'active', source: '认养平台', owner: '李静', creditLimit: 0, creditDays: 0, amount: 15.2, received: 15.2, lastOrder: '2026-10-14', tags: ['认养客户'] },
-    { code: 'C012', name: '深圳XX电商', contact: '黄经理', phone: '18800001111', type: 'wholesale', level: 'vip', region: '广东', address: '深圳市宝安区XX产业园', status: 'active', source: '电商平台', owner: '王强', creditLimit: 1500000, creditDays: 45, amount: 89.6, received: 41.2, lastOrder: '2026-07-10', tags: ['核心客户', '账期45天'] },
-    { code: 'C013', name: '赵女士', contact: '赵女士', phone: '18700002222', type: 'retail', level: 'silver', region: '重庆', address: '重庆市渝北区XX小区', status: 'active', source: '门店零售', owner: '张伟', creditLimit: 0, creditDays: 0, amount: 5.4, received: 5.4, lastOrder: '2026-10-05', tags: ['复购客户'] },
-    { code: 'C014', name: '南京XX水果店', contact: '孙老板', phone: '18600003333', type: 'wholesale', level: 'silver', region: '江苏', address: '南京市建邺区XX市场', status: 'active', source: '批发市场', owner: '李静', creditLimit: 300000, creditDays: 15, amount: 24.8, received: 17.6, lastOrder: '2026-09-20', tags: ['批发客户'] },
-    { code: 'C015', name: '周先生', contact: '周先生', phone: '18500004444', type: 'adoption', level: 'silver', region: '天津', address: '天津市南开区XX小区', status: 'active', source: '认养平台', owner: '王强', creditLimit: 0, creditDays: 0, amount: 7.2, received: 7.2, lastOrder: '2026-09-28', tags: ['认养客户'] },
-    { code: 'C016', name: '苏州XX电商', contact: '钱经理', phone: '18400005555', type: 'wholesale', level: 'gold', region: '江苏', address: '苏州市工业园区XX路', status: 'active', source: '电商平台', owner: '张伟', creditLimit: 800000, creditDays: 30, amount: 52.6, received: 52.6, lastOrder: '2026-10-17', tags: ['电商客户'] },
-    { code: 'C017', name: '徐女士', contact: '徐女士', phone: '18300006666', type: 'adoption', level: 'gold', region: '湖南', address: '长沙市岳麓区XX小区', status: 'active', source: '认养平台', owner: '李静', creditLimit: 0, creditDays: 0, amount: 10.8, received: 10.8, lastOrder: '2026-10-09', tags: ['认养客户'] },
-    { code: 'C018', name: '青岛XX超市', contact: '马经理', phone: '18200007777', type: 'wholesale', level: 'gold', region: '山东', address: '青岛市市南区XX路', status: 'active', source: '商超直供', owner: '王强', creditLimit: 600000, creditDays: 30, amount: 45.3, received: 22.6, lastOrder: '2026-08-02', tags: ['待回款'] },
-    { code: 'C019', name: '胡先生', contact: '胡先生', phone: '18100008888', type: 'retail', level: 'silver', region: '辽宁', address: '沈阳市和平区XX路', status: 'active', source: '门店零售', owner: '张伟', creditLimit: 0, creditDays: 0, amount: 6.2, received: 6.2, lastOrder: '2026-09-30', tags: ['复购客户'] },
-    { code: 'C020', name: '宁波XX水果店', contact: '朱老板', phone: '18000009999', type: 'wholesale', level: 'silver', region: '浙江', address: '宁波市鄞州区XX市场', status: 'active', source: '批发市场', owner: '李静', creditLimit: 300000, creditDays: 15, amount: 20.4, received: 14.9, lastOrder: '2026-09-26', tags: ['待回款'] },
-    { code: 'C021', name: '郭女士', contact: '郭女士', phone: '17800001111', type: 'adoption', level: 'vip', region: '福建', address: '厦门市思明区XX小区', status: 'active', source: '认养平台', owner: '王强', creditLimit: 0, creditDays: 0, amount: 19.6, received: 19.6, lastOrder: '2026-10-15', tags: ['认养客户', '高价值'] },
-    { code: 'C022', name: '无锡XX电商', contact: '秦经理', phone: '17700002222', type: 'wholesale', level: 'vip', region: '江苏', address: '无锡市滨湖区XX路', status: 'active', source: '电商平台', owner: '张伟', creditLimit: 1500000, creditDays: 45, amount: 74.2, received: 74.2, lastOrder: '2026-10-20', tags: ['核心客户', '账期45天'] },
-    { code: 'C023', name: '罗先生', contact: '罗先生', phone: '17600003333', type: 'retail', level: 'silver', region: '安徽', address: '合肥市蜀山区XX小区', status: 'active', source: '门店零售', owner: '李静', creditLimit: 0, creditDays: 0, amount: 5.8, received: 1.4, lastOrder: '2026-07-04', tags: ['待回款'] }
-  ];
+  var CUSTOMER_SEED = [];
 
   var PRODUCTS = {
     wholesale: [
-      { sku: 'SKU-HN-01', name: '花牛苹果', spec: '75mm 以上 / 10kg 箱', unit: 'kg', price: 17 },
-      { sku: 'SKU-FJ-01', name: '红富士苹果', spec: '80mm 以上 / 10kg 箱', unit: 'kg', price: 14 },
-      { sku: 'SKU-JS-01', name: '金帅苹果', spec: '70mm 以上 / 10kg 箱', unit: 'kg', price: 15 },
-      { sku: 'SKU-QG-01', name: '秦冠苹果', spec: '70mm 以上 / 10kg 箱', unit: 'kg', price: 15 }
+      { sku: 'SKU-HN-01', name: '花牛苹果', spec: '75mm 以上 / 10kg 箱', unit: 'kg', price: 0 },
+      { sku: 'SKU-FJ-01', name: '红富士苹果', spec: '80mm 以上 / 10kg 箱', unit: 'kg', price: 0 },
+      { sku: 'SKU-JS-01', name: '金帅苹果', spec: '70mm 以上 / 10kg 箱', unit: 'kg', price: 0 },
+      { sku: 'SKU-QG-01', name: '秦冠苹果', spec: '70mm 以上 / 10kg 箱', unit: 'kg', price: 0 }
     ],
     retail: [
-      { sku: 'SKU-GIFT-01', name: '精品礼盒装苹果', spec: '12 枚 / 盒', unit: '盒', price: 134 },
-      { sku: 'SKU-FAM-01', name: '家庭装苹果', spec: '10 斤 / 箱', unit: '箱', price: 118 },
-      { sku: 'SKU-GIFT-02', name: '花牛苹果礼盒', spec: '9 枚 / 盒', unit: '盒', price: 168 }
+      { sku: 'SKU-GIFT-01', name: '精品礼盒装苹果', spec: '12 枚 / 盒', unit: '盒', price: 0 },
+      { sku: 'SKU-FAM-01', name: '家庭装苹果', spec: '10 斤 / 箱', unit: '箱', price: 0 },
+      { sku: 'SKU-GIFT-02', name: '花牛苹果礼盒', spec: '9 枚 / 盒', unit: '盒', price: 0 }
     ],
     adoption: [
-      { sku: 'SKU-ADOPT-01', name: '认养果树（红富士·1年）', spec: '含全年管护与 20kg 配送', unit: '棵', price: 3980 },
-      { sku: 'SKU-ADOPT-02', name: '认养果树（花牛·1年）', spec: '含全年管护与 15kg 配送', unit: '棵', price: 2980 },
-      { sku: 'SKU-GIFT-02', name: '花牛苹果礼盒', spec: '9 枚 / 盒', unit: '盒', price: 168 }
+      { sku: 'SKU-ADOPT-01', name: '认养果树（红富士·1年）', spec: '含全年管护与 20kg 配送', unit: '棵', price: 0 },
+      { sku: 'SKU-ADOPT-02', name: '认养果树（花牛·1年）', spec: '含全年管护与 15kg 配送', unit: '棵', price: 0 },
+      { sku: 'SKU-GIFT-02', name: '花牛苹果礼盒', spec: '9 枚 / 盒', unit: '盒', price: 0 }
     ],
     tour: [
-      { sku: 'SKU-TOUR-01', name: '观光采摘套餐', spec: '2 大 1 小 / 份', unit: '份', price: 98 }
+      { sku: 'SKU-TOUR-01', name: '观光采摘套餐', spec: '2 大 1 小 / 份', unit: '份', price: 0 }
     ]
   };
 
-  var BASELINE_2025 = {
-    1: 558000, 2: 486000, 3: 621000, 4: 705000, 5: 762000, 6: 818000,
-    7: 906000, 8: 878000, 9: 842000, 10: 791000, 11: 702000, 12: 648000
-  };
+  var BASELINE_2025 = {};
 
   function buildCustomers() {
     return CUSTOMER_SEED.map(function (c, i) {
@@ -406,370 +382,50 @@
   }
 
   function buildSeedOrders(customers) {
-    var orders = [];
-    var seq = 0;
-    var batchPool = ['PC-20260901-001', 'PC-20260905-005', 'PC-20260910-008', 'PC-20260915-012'];
-    var payMethods = ['bank', 'wechat', 'alipay', 'offline'];
-    var shipCompanies = SHIP_COMPANIES;
-
-    customers.forEach(function (c, ci) {
-      var seed = CUSTOMER_SEED[ci] || {};
-      var totalYuan = (seed.amount || 0) * 10000;
-      var last = parseDate((seed.lastOrder || '2026-10-20') + 'T10:00:00') || NOW_REF;
-      var n = seed.amount >= 50 ? 4 : (seed.amount >= 20 ? 3 : 2);
-      var weights = n === 4 ? [0.4, 0.3, 0.2, 0.1] : (n === 3 ? [0.45, 0.35, 0.2] : [0.6, 0.4]);
-      var paidRatio = seed.amount > 0 ? Math.min(1, (seed.received || 0) / seed.amount) : 1;
-      var products = PRODUCTS[c.type] || PRODUCTS.retail;
-
-      for (var i = 0; i < n; i++) {
-        var d = new Date(last.getTime() - (n - 1 - i) * (42 + (ci % 4) * 7) * DAY);
-        d.setHours(9 + (ci % 8), (i * 13) % 60, 0, 0);
-        var target = Math.round(totalYuan * weights[i]);
-        var p = products[(ci + i) % products.length];
-        var qty;
-        if (p.unit === 'kg') {
-          qty = Math.max(10, Math.round(target / p.price / 10) * 10);
-        } else {
-          qty = Math.max(1, Math.round(target / p.price));
-        }
-        var goods = round2(qty * p.price);
-        var cancelled = (ci === 11 && i === 0) || (ci === 22 && i === 0);
-        var paidAmount = cancelled ? 0 : round2(goods * paidRatio);
-        if (ci === 1 && i === n - 1) paidAmount = 0;
-
-        var age = (NOW_REF.getTime() - d.getTime()) / DAY;
-        var status;
-        if (cancelled) status = 'cancelled';
-        else if (ci === 1 && i === n - 1) status = 'confirm';
-        else if (age > 75) status = paidAmount >= goods ? 'completed' : 'shipped';
-        else if (age > 30) status = paidAmount >= goods ? (i % 2 === 0 ? 'completed' : 'shipped') : 'shipped';
-        else status = paidAmount >= goods ? ((i % 2 === 0 || ci % 3 === 0) ? 'paid' : 'shipped') : 'paid';
-
-        var payStatus = paidAmount <= 0 ? 'unpaid' : (paidAmount >= goods ? 'paid' : 'partial');
-        var ymdStr = ymd(d);
-        var id = 'XS-' + ymdStr + '-' + pad(++seq, 4);
-        var createdAt = fmtDate(d) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':00';
-        var shipCompany = shipCompanies[ci % shipCompanies.length];
-        var shippedAt = status === 'shipped' || status === 'completed' || status === 'returning' || status === 'returned'
-          ? fmtDate(new Date(d.getTime() + 2 * DAY)) + ' 15:20:00' : '';
-        var receivedAt = status === 'completed' ? fmtDate(new Date(d.getTime() + 6 * DAY)) + ' 11:05:00' : '';
-
-        orders.push({
-          id: id,
-          no: id,
-          code: id,
-          type: c.type,
-          channel: c.type,
-          source: 'manual',
-          customerId: c.id,
-          customerName: c.name,
-          contact: c.contact,
-          phone: c.phone,
-          address: c.address,
-          items: [{
-            sku: p.sku,
-            name: p.name,
-            spec: p.spec,
-            unit: p.unit,
-            qty: qty,
-            price: p.price,
-            amount: goods
-          }],
-          goodsAmount: goods,
-          discount: 0,
-          freight: 0,
-          payableAmount: goods,
-          paidAmount: paidAmount,
-          deposit: 0,
-          payMethod: paidAmount > 0 ? payMethods[ci % payMethods.length] : '',
-          payStatus: payStatus,
-          status: status,
-          batchNo: c.type === 'wholesale' ? batchPool[ci % batchPool.length] : '',
-          traceCode: '',
-          receiver: c.contact,
-          receiverPhone: c.phone,
-          receiverAddress: c.address,
-          expectedDate: fmtDate(new Date(d.getTime() + 5 * DAY)),
-          owner: c.owner,
-          remark: '',
-          invoiceStatus: status === 'completed' && i % 3 === 0 ? 'issued' : 'none',
-          shipCompany: shippedAt ? shipCompany : '',
-          shipNo: shippedAt ? 'SF' + pad(100000000000 + ci * 137 + i * 29, 12) : '',
-          shippedAt: shippedAt,
-          receivedAt: receivedAt,
-          cancelledAt: cancelled ? fmtDate(new Date(d.getTime() + 1 * DAY)) + ' 10:00:00' : '',
-          cancelReason: cancelled ? '客户临时取消采购计划' : '',
-          createdAt: createdAt,
-          updatedAt: receivedAt || shippedAt || createdAt
-        });
-      }
-    });
-
-    /* 11 月订单：覆盖待付款 / 待发货，保证工作台有今日与本月数据 */
-    [
-      { ci: 12, date: '2026-11-08', hour: 9, status: 'pending', paid: 0, product: PRODUCTS.retail[0], qty: 2, owner: '张伟', channel: 'retail' },
-      { ci: 18, date: '2026-11-09', hour: 11, status: 'pending', paid: 0, product: PRODUCTS.retail[1], qty: 1, owner: '张伟', channel: 'retail' },
-      { ci: 7, date: '2026-11-07', hour: 14, status: 'paid', paid: 8500, product: PRODUCTS.wholesale[0], qty: 500, owner: '李静', channel: 'wholesale' },
-      { ci: 15, date: '2026-11-06', hour: 10, status: 'paid', paid: 18760, product: PRODUCTS.wholesale[1], qty: 1340, owner: '张伟', channel: 'wholesale' }
-    ].forEach(function (n, k) {
-      var c = customers[n.ci];
-      var d = new Date(n.date + 'T' + pad(n.hour) + ':20:00');
-      var goods = round2(n.qty * n.product.price);
-      var id = 'XS-' + ymd(d) + '-' + pad(++seq, 4);
-      var paidAmount = n.status === 'pending' ? 0 : (n.paid || goods);
-      orders.push({
-        id: id, no: id, code: id,
-        type: n.channel, channel: n.channel, source: 'manual',
-        customerId: c.id, customerName: c.name, contact: c.contact, phone: c.phone, address: c.address,
-        items: [{ sku: n.product.sku, name: n.product.name, spec: n.product.spec, unit: n.product.unit, qty: n.qty, price: n.product.price, amount: goods }],
-        goodsAmount: goods, discount: 0, freight: 0, payableAmount: goods, paidAmount: paidAmount, deposit: 0,
-        payMethod: paidAmount > 0 ? 'bank' : '', payStatus: paidAmount <= 0 ? 'unpaid' : (paidAmount >= goods ? 'paid' : 'partial'),
-        status: n.status,
-        batchNo: n.channel === 'wholesale' ? 'PC-20260915-012' : '', traceCode: '',
-        receiver: c.contact, receiverPhone: c.phone, receiverAddress: c.address,
-        expectedDate: fmtDate(new Date(d.getTime() + 3 * DAY)),
-        owner: n.owner, remark: '11 月新增订单',
-        invoiceStatus: 'none',
-        shipCompany: '', shipNo: '', shippedAt: '', receivedAt: '',
-        cancelledAt: '', cancelReason: '',
-        createdAt: fmtDate(d) + ' ' + pad(n.hour) + ':20:00', updatedAt: fmtDate(d) + ' ' + pad(n.hour) + ':20:00'
-      });
-    });
-
-
-    [12, 18, 22].forEach(function (ci, k) {
-      var c = customers[ci];
-      var p = PRODUCTS.tour[0];
-      var d = new Date(2026, 8 + (k % 2), 12 + k * 6, 10 + k, 30, 0, 0);
-      var qty = 35 + k * 18;
-      var goods = qty * p.price;
-      var id = 'XS-' + ymd(d) + '-' + pad(++seq, 4);
-      orders.push({
-        id: id, no: id, code: id,
-        type: 'tour', channel: 'tour', source: 'manual',
-        customerId: c.id, customerName: c.name, contact: c.contact, phone: c.phone, address: c.address,
-        items: [{ sku: p.sku, name: p.name, spec: p.spec, unit: p.unit, qty: qty, price: p.price, amount: goods }],
-        goodsAmount: goods, discount: 0, freight: 0, payableAmount: goods, paidAmount: goods, deposit: 0,
-        payMethod: 'wechat', payStatus: 'paid', status: 'completed',
-        batchNo: '', traceCode: '',
-        receiver: c.contact, receiverPhone: c.phone, receiverAddress: c.address,
-        expectedDate: fmtDate(d), owner: '王强', remark: '果园观光采摘团队',
-        invoiceStatus: 'none',
-        shipCompany: '', shipNo: '', shippedAt: '', receivedAt: fmtDate(d) + ' 16:00:00',
-        cancelledAt: '', cancelReason: '',
-        createdAt: fmtDate(d) + ' 10:00:00', updatedAt: fmtDate(d) + ' 16:00:00'
-      });
-    });
-
-    orders.sort(function (a, b) {
-      return (parseDate(b.createdAt) || 0) - (parseDate(a.createdAt) || 0);
-    });
-    return orders;
+    return [];
   }
 
   function buildSeedPayments(orders) {
-    var list = [];
-    var seq = 0;
-    orders.forEach(function (o, i) {
-      if (o.paidAmount <= 0 || o.status === 'cancelled') return;
-      var d = parseDate(o.createdAt) || NOW_REF;
-      d = new Date(d.getTime() + (1 + (i % 2)) * DAY);
-      var id = 'SK-' + ymd(d) + '-' + pad(++seq, 4);
-      list.push({
-        id: id,
-        orderId: o.id,
-        orderNo: o.no,
-        customerId: o.customerId,
-        customerName: o.customerName,
-        amount: o.paidAmount,
-        method: o.payMethod || 'bank',
-        paidAt: fmtDate(d) + ' 14:30:00',
-        operator: o.owner || '财务',
-        voucherNo: 'PZ' + ymd(d) + pad(i + 1, 3),
-        remark: o.payStatus === 'partial' ? '首期款' : '订单全款',
-        type: 'income'
-      });
-    });
-    return list;
+    return [];
   }
 
   function buildSeedShipments(orders) {
-    var list = [];
-    var seq = 0;
-    orders.forEach(function (o) {
-      if (!o.shippedAt) return;
-      var id = 'FH-' + ymd(o.shippedAt) + '-' + pad(++seq, 4);
-      list.push({
-        id: id,
-        orderId: o.id,
-        orderNo: o.no,
-        customerId: o.customerId,
-        customerName: o.customerName,
-        company: o.shipCompany,
-        trackingNo: o.shipNo,
-        shippedAt: o.shippedAt,
-        status: o.receivedAt ? 'signed' : 'shipped',
-        signedAt: o.receivedAt || '',
-        receiver: o.receiver,
-        receiverPhone: o.receiverPhone,
-        address: o.receiverAddress,
-        remark: '',
-        source: 'manual'
-      });
-    });
-    return list;
+    return [];
   }
 
   function buildSeedAfterSales(orders) {
-    function findOrder(code, index) {
-      var arr = orders.filter(function (o) { return o.customerId === code && o.status !== 'cancelled'; });
-      return arr[Math.min(index, arr.length - 1)] || null;
-    }
-    var list = [];
-    var specs = [
-      { code: 'C004', idx: 0, type: 'refund', reason: '到货后部分果品碰伤，协商补偿', amount: 3000, qty: 0, status: 'pending', handler: '' },
-      { code: 'C012', idx: 0, type: 'return', reason: '电商仓拒收，整批退回', amount: 5200, qty: 120, status: 'returning', handler: '王强' },
-      { code: 'C009', idx: 0, type: 'refund', reason: '客户取消复购，申请退款', amount: 2100, qty: 0, status: 'refunded', handler: '王强' },
-      { code: 'C020', idx: 1, type: 'exchange', reason: '礼盒外包装破损，申请换货', amount: 0, qty: 6, status: 'pending', handler: '' },
-      { code: 'C014', idx: 1, type: 'return', reason: '批次规格与合同不符', amount: 4600, qty: 90, status: 'returned', handler: '李静' }
-    ];
-    specs.forEach(function (s, i) {
-      var o = findOrder(s.code, s.idx);
-      if (!o) return;
-      var d = new Date((parseDate(o.createdAt) || NOW_REF).getTime() + (3 + i) * DAY);
-      var id = 'AS-' + ymd(d) + '-' + pad(i + 1, 4);
-      list.push({
-        id: id,
-        no: id,
-        orderId: o.id,
-        orderNo: o.no,
-        customerId: o.customerId,
-        customerName: o.customerName,
-        type: s.type,
-        reason: s.reason,
-        amount: s.amount,
-        qty: s.qty,
-        status: s.status,
-        applyAt: fmtDate(d) + ' 11:20:00',
-        handler: s.handler,
-        handledAt: s.handler ? fmtDate(new Date(d.getTime() + 2 * DAY)) + ' 16:40:00' : '',
-        remark: '',
-        restock: s.type === 'return' && s.status === 'returned'
-      });
-    });
-    return list;
+    return [];
   }
 
   function buildSeedStatements(customers, orders, payments) {
-    var periods = [
-      { code: 'C001', period: '2026-09' },
-      { code: 'C004', period: '2026-09' },
-      { code: 'C012', period: '2026-07' }
-    ];
-    var list = [];
-    periods.forEach(function (p, i) {
-      var c = customers.filter(function (x) { return x.code === p.code; })[0];
-      if (!c) return;
-      var os = orders.filter(function (o) {
-        return o.customerId === p.code && o.status !== 'cancelled' && o.createdAt.slice(0, 7) === p.period;
-      });
-      var amount = os.reduce(function (s, o) { return s + o.payableAmount; }, 0);
-      var paid = os.reduce(function (s, o) { return s + o.paidAmount; }, 0);
-      var id = 'DZ-' + p.period.replace('-', '') + '-' + pad(i + 1, 3);
-      list.push({
-        id: id,
-        no: id,
-        customerId: c.id,
-        customerName: c.name,
-        period: p.period,
-        orderIds: os.map(function (o) { return o.id; }),
-        orderCount: os.length,
-        amount: round2(amount),
-        paid: round2(paid),
-        balance: round2(amount - paid),
-        status: amount - paid <= 0 ? 'settled' : 'confirmed',
-        createdAt: p.period + '-28 17:00:00',
-        confirmedAt: p.period + '-28 17:00:00',
-        settledAt: amount - paid <= 0 ? p.period + '-28 17:00:00' : '',
-        remark: ''
-      });
-    });
-    return list;
+    return [];
   }
 
   function buildSeedTargets() {
-    var list = [];
-    for (var m = 1; m <= 12; m++) {
-      list.push({
-        id: 'TG-2026-' + pad(m, 2) + '-ALL',
-        period: '2026-' + pad(m, 2),
-        owner: '',
-        targetAmount: 800000,
-        targetOrders: 8,
-        remark: '月度销售目标'
-      });
-    }
-    [['张伟', 3300000, 26], ['李静', 3100000, 24], ['王强', 3200000, 24]].forEach(function (o) {
-      list.push({
-        id: 'TG-2026-ALL-' + o[0],
-        period: '2026',
-        owner: o[0],
-        targetAmount: o[1],
-        targetOrders: o[2],
-        remark: '年度销售目标'
-      });
-    });
-    list.push({
-      id: 'TG-2026-ALL',
-      period: '2026',
-      owner: '',
-      targetAmount: 9600000,
-      targetOrders: 80,
-      remark: '公司年度销售目标'
-    });
-    return list;
+    return [];
   }
 
   function buildSeedPolicies() {
-    return [
-      { id: 'PR-2026-001', name: '北京商超花牛协议价', customerId: 'C001', customerType: '', product: '花牛苹果', unit: 'kg', price: 16.2, minQty: 500, startDate: '2026-01-01', endDate: '2026-12-31', status: 'active', remark: '年度框架协议' },
-      { id: 'PR-2026-002', name: '武汉商超红富士直供价', customerId: 'C010', customerType: '', product: '红富士苹果', unit: 'kg', price: 13.6, minQty: 800, startDate: '2026-03-01', endDate: '2026-12-31', status: 'active', remark: '月结 30 天' },
-      { id: 'PR-2026-003', name: '企业团购礼盒价', customerId: '', customerType: 'wholesale', product: '精品礼盒装苹果', unit: '盒', price: 120, minQty: 50, startDate: '2026-01-01', endDate: '2026-12-31', status: 'active', remark: '适用于所有批发客户' },
-      { id: 'PR-2026-004', name: '认养客户续费礼盒价', customerId: '', customerType: 'adoption', product: '花牛苹果礼盒', unit: '盒', price: 128, minQty: 1, startDate: '2026-06-01', endDate: '2026-12-31', status: 'active', remark: '' },
-      { id: 'PR-2026-005', name: '春季秦冠电商专供价', customerId: 'C002', customerType: '', product: '秦冠苹果', unit: 'kg', price: 14.2, minQty: 1000, startDate: '2026-03-01', endDate: '2026-06-30', status: 'expired', remark: '' },
-      { id: 'PR-2026-006', name: '双十一花牛预售协议价', customerId: 'C016', customerType: '', product: '花牛苹果', unit: 'kg', price: 15.8, minQty: 600, startDate: '2026-11-01', endDate: '2026-11-30', status: 'active', remark: '' }
-    ];
+    return [];
   }
 
   function buildSeedPromotions() {
-    return [
-      { id: 'PM-2026-001', name: '中秋礼盒满减', type: 'fullReduction', scope: '零售礼盒', rule: '满 1000 元减 80 元', startDate: '2026-09-01', endDate: '2026-09-30', status: 'ended', remark: '' },
-      { id: 'PM-2026-002', name: '国庆批发折扣', type: 'discount', scope: '批发渠道', rule: '满 5 万元享 95 折', startDate: '2026-10-01', endDate: '2026-10-07', status: 'ended', remark: '' },
-      { id: 'PM-2026-003', name: '新客首单立减', type: 'cash', scope: '新客户', rule: '首单立减 50 元', startDate: '2026-01-01', endDate: '2026-12-31', status: 'active', remark: '与协议价不叠加' },
-      { id: 'PM-2026-004', name: '认养续费赠礼', type: 'gift', scope: '认养渠道', rule: '续费赠送家庭装 1 箱', startDate: '2026-10-01', endDate: '2026-12-31', status: 'active', remark: '' },
-      { id: 'PM-2026-005', name: '双十一零售预售', type: 'fullReduction', scope: '零售渠道', rule: '满 200 元减 30 元', startDate: '2026-11-01', endDate: '2026-11-11', status: 'active', remark: '' }
-    ];
+    return [];
   }
 
   function buildSeedState() {
-    var customers = buildCustomers();
-    var orders = buildSeedOrders(customers);
-    var payments = buildSeedPayments(orders);
-    var shipments = buildSeedShipments(orders);
-    var afterSales = buildSeedAfterSales(orders);
-    var statements = buildSeedStatements(customers, orders, payments);
     return {
       version: VERSION,
-      seededAt: nowIso(),
-      customers: customers,
-      orders: orders,
-      payments: payments,
-      shipments: shipments,
-      afterSales: afterSales,
-      pricePolicies: buildSeedPolicies(),
-      promotions: buildSeedPromotions(),
-      targets: buildSeedTargets(),
-      statements: statements
+      seededAt: '',
+      customers: [],
+      orders: [],
+      payments: [],
+      shipments: [],
+      afterSales: [],
+      pricePolicies: [],
+      promotions: [],
+      targets: [],
+      statements: []
     };
   }
 

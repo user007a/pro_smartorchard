@@ -32,7 +32,7 @@
       <p>配置订单、活动与系统通知模板，启用后同步至 H5 消息中心。</p>
     </div>
     <div class="mall-actions">
-      <button class="mall-btn" onclick="resetNotices()">恢复默认</button>
+      <button class="mall-btn" onclick="resetNotices()">刷新数据</button>
       <button class="mall-btn primary" onclick="openEdit()">新增通知模板</button>
     </div>
   </div>
@@ -93,7 +93,13 @@
 </div>
 
 <script src="js/shared/mall-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
+/* 严格空库模式：通知模板一律来自后端 API（sf_mall_notice），不再使用本地演示数据 */
+var NOTICE_RESOURCE = 'mall_notice';
+var noticesData = [];
+var noticeLoadState = 'loading';
+var noticeLoadError = '';
 var editingId = null;
 
 var SCENE = {
@@ -118,24 +124,51 @@ function toast(msg) {
   setTimeout(function () { el.remove(); }, 1800);
 }
 
-function list() {
-  return (MallStore.settings().notices || []).map(function (n, i) {
-    return {
-      id: n.id || ('NT-' + (i + 1)),
-      scene: n.scene || 'system',
-      title: n.title || '通知',
-      content: n.content || '',
-      status: n.status === 'off' ? 'off' : 'on',
-      updatedAt: n.updatedAt || ''
-    };
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapNoticeRow(row) {
+  return {
+    id: row.id == null ? (row.trigger_scene || '') : String(row.id),
+    scene: row.trigger_scene || 'system',
+    title: row.title || '',
+    content: row.content || '',
+    status: row.status === 'off' ? 'off' : 'on',
+    updatedAt: String(row.updated_at || row.created_at || '').slice(0, 10)
+  };
+}
+
+/* 异步取数：加载中 / 暂无数据 / 加载失败三态，不写 localStorage，无本地兜底 */
+function loadNotices() {
+  if (!window.Api) { noticeLoadState = 'error'; noticeLoadError = '接口未就绪'; render(); return; }
+  noticeLoadState = 'loading'; noticeLoadError = ''; render();
+  Api.get(NOTICE_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      noticeLoadState = 'error'; noticeLoadError = (r && r.message) || '请求异常';
+      noticesData = []; render(); return;
+    }
+    noticesData = ((r.data && r.data.list) || []).map(mapNoticeRow);
+    noticeLoadState = 'ok'; render();
+  }).catch(function (e) {
+    noticeLoadState = 'error'; noticeLoadError = (e && e.message) || '网络异常';
+    noticesData = []; render();
   });
 }
 
+/* 运行时增删改即时生效（数据留在内存，由 MallStore 持久化到后端） */
+function list() { return noticesData; }
+
 function save(listArr) {
+  noticesData = listArr;
   MallStore.saveSettings({ notices: listArr });
 }
 
 function render() {
+  if (noticeLoadState !== 'ok') {
+    var msg = noticeLoadState === 'loading' ? '正在加载数据...' : ('数据加载失败：' + noticeLoadError);
+    document.getElementById('body').innerHTML = '<tr><td colspan="6" class="mall-empty">' + esc(msg) + '</td></tr>';
+    document.getElementById('preview').innerHTML = '<div class="mall-empty" style="grid-column:1/-1;">' + esc(msg) + '</div>';
+    ['kpiTotal', 'kpiOn', 'kpiOrder', 'kpiOther'].forEach(function (id) { document.getElementById(id).textContent = '0'; });
+    return;
+  }
   var arr = list();
   document.getElementById('kpiTotal').textContent = arr.length;
   document.getElementById('kpiOn').textContent = arr.filter(function (n) { return n.status !== 'off'; }).length;
@@ -155,7 +188,7 @@ function render() {
         '<button class="mall-link" onclick="toggle(\'' + esc(n.id) + '\')">' + (n.status === 'off' ? '启用' : '停用') + '</button>' +
         '<button class="mall-link danger" onclick="remove(\'' + esc(n.id) + '\')">删除</button>' +
       '</div></td></tr>';
-  }).join('') || '<tr><td colspan="6" class="mall-empty">暂无通知模板</td></tr>';
+  }).join('') || '<tr><td colspan="6" class="mall-empty">暂无数据</td></tr>';
 
   document.getElementById('preview').innerHTML = arr.filter(function (n) { return n.status !== 'off'; }).map(function (n) {
     var s = SCENE[n.scene] || SCENE.system;
@@ -163,7 +196,7 @@ function render() {
       '<div class="msg-top"><span class="scene-tag ' + s.cls + '">' + s.text + '</span><span class="mall-sub">' + esc(n.updatedAt || '') + '</span></div>' +
       '<div class="msg-title">' + esc(n.title) + '</div>' +
       '<div class="msg-body">' + esc(n.content) + '</div></div>';
-  }).join('') || '<div class="mall-empty" style="grid-column:1/-1;">暂无启用中的通知</div>';
+  }).join('') || '<div class="mall-empty" style="grid-column:1/-1;">暂无数据</div>';
 }
 
 function openEdit(id) {
@@ -216,17 +249,14 @@ function remove(id) {
   toast('通知模板已删除');
 }
 
+/* 严格空库模式：不再写死默认模板，改为从数据库重新加载 */
 function resetNotices() {
-  if (!confirm('恢复默认通知模板？当前配置将被覆盖。')) return;
-  save([
-    { id: 'NT-01', scene: 'order_paid', title: '支付成功', content: '您的订单已支付成功，我们将尽快为您发货', status: 'on', updatedAt: '2026-11-10' },
-    { id: 'NT-02', scene: 'order_shipped', title: '宝贝已发货', content: '您的订单已发货，请注意查收', status: 'on', updatedAt: '2026-11-10' }
-  ]);
-  render();
-  toast('已恢复默认通知');
+  if (!confirm('重新从数据库加载通知模板？当前未保存的改动将被丢弃。')) return;
+  loadNotices();
+  toast('已重新加载通知模板');
 }
 
-render();
+document.addEventListener('DOMContentLoaded', loadNotices);
 </script>
 </body>
 </html>

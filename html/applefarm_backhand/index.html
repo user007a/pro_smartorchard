@@ -7,20 +7,26 @@
     <script>
         // ========== 登录守卫（L-2）==========
         // 后台壳页必须登录后才可访问：未登录立即跳回登录页，避免直接输入 index.html 绕过鉴权。
-        // 登录成功后 login.html 会写入 sessionStorage['snzg_logged_in']。
+        // 登录成功后 login.html 会写入 sessionStorage['snzg_logged_in']，
+        // 并由 Api.login 写入 localStorage['smartorchard_token']。
+        // 严格空库模式：二者必须同时存在，任一缺失都视为未登录，防止无 token 直入后台
+        // 导致各 store 回退到 localStorage 假数据。
         (function () {
             try {
-                if (sessionStorage.getItem('snzg_logged_in') !== '1') {
+                var loggedIn = sessionStorage.getItem('snzg_logged_in') === '1';
+                var hasToken = !!localStorage.getItem('smartorchard_token');
+                if (!loggedIn || !hasToken) {
                     window.location.replace('login.html');
                 }
             } catch (e) {
-                // sessionStorage 不可用（极端隐私模式）时跳登录页，避免无鉴权直入
+                // 存储不可用（极端隐私模式）时跳登录页，避免无鉴权直入
                 window.location.replace('login.html');
             }
         })();
     </script>
     <script src="vendor/tailwind.min.js"></script>
     <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+    <script src="../common/js/api.js"></script>
     <script src="js/shared/alert-data.js"></script>
     <style>
         * { font-family:-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
@@ -62,7 +68,7 @@
         <!-- 菜单区 -->
         <nav class="sidebar-nav flex-1 overflow-y-auto py-4 px-3 space-y-1">
             <!-- 系统首页 -->
-            <a href="home.html" target="mainFrame" onclick="openPage('home.html','首页')" class="flex items-center px-4 py-3 text-sm text-gray-300 hover:bg-white/10 rounded-md transition-all">
+            <a href="home.html" target="mainFrame" onclick="openPage('home.html','系统首页')" class="flex items-center px-4 py-3 text-sm text-gray-300 hover:bg-white/10 rounded-md transition-all">
                 <span class="iconify mr-3 text-lg" data-icon="ri:home-4-line"></span><span class="menu-text">系统首页</span>
             </a>
 
@@ -777,7 +783,7 @@
         };
 
         function setCrumb(title, url) {
-            if (!title || title === '首页') {   // 系统首页自身只显示一级面包屑
+            if (!title || title === '系统首页') {   // 系统首页自身只显示一级面包屑
                 crumbSep.style.display = 'none';
                 crumbGroupSep.style.display = 'none';
                 crumbGroup.style.display = 'none';
@@ -976,13 +982,8 @@
         })();
 
         // ========== 顶栏用户菜单（头像：角色信息 / 修改密码 / 退出登录） ==========
-        const TOP_ACCOUNTS = {
-            admin:   { password: 'admin123',   realName: '系统管理员', role: '超级管理员' },
-            manager: { password: 'manager123', realName: '惠加宁',     role: '企业管理员' },
-            farmer:  { password: 'farmer123',  realName: '黄忠坚',     role: '农技员' },
-            worker:  { password: 'worker123',  realName: '张才孙',     role: '普通农工' },
-            demo:    { password: 'demo123',    realName: '演示用户',   role: '演示账号' }
-        };
+        // 严格空库模式：不再内置任何账号 / 明文密码表，用户信息一律取真实登录写入的
+        // sessionStorage['snzg_user']；原密码校验走后端登录接口，改密写入走后端通用 CRUD。
         const topUserBtn = document.getElementById('topUserBtn');
         const topUserPanel = document.getElementById('topUserPanel');
 
@@ -1007,13 +1008,8 @@
                 const u = JSON.parse(sessionStorage.getItem('snzg_user') || 'null');
                 if (u && u.username) return u;
             } catch (e) {}
-            return { username: 'admin', realName: '系统管理员', role: '超级管理员' };
-        }
-        function topCurrentPassword(username) {
-            let ov = {};
-            try { ov = JSON.parse(localStorage.getItem('snzg_user_accounts') || '{}') || {}; } catch (e) {}
-            if (ov[username] && ov[username].password !== undefined) return ov[username].password;
-            return TOP_ACCOUNTS[username] ? TOP_ACCOUNTS[username].password : '';
+            // 未登录时返回空信息，不再回退到任何写死账号
+            return { username: '', realName: '', role: '' };
         }
 
         function topDoLogout() {
@@ -1030,25 +1026,34 @@
             const errEl = document.getElementById('topPwdError');
             const showErr = (msg) => { errEl.textContent = msg; errEl.classList.remove('hidden'); };
             errEl.classList.add('hidden');
+            if (!username) return showErr('登录信息缺失，请重新登录');
             if (!oldPwd) return showErr('请输入原密码');
-            if (oldPwd !== topCurrentPassword(username)) return showErr('原密码错误');
             if (!newPwd || newPwd.length < 6) return showErr('新密码至少 6 位');
             if (newPwd !== confirmPwd) return showErr('两次输入的新密码不一致');
 
-            let ov = {};
-            try { ov = JSON.parse(localStorage.getItem('snzg_user_accounts') || '{}') || {}; } catch (e) {}
-            const prev = ov[username] || {};
-            const base = TOP_ACCOUNTS[username] || {};
-            ov[username] = {
-                password: newPwd,
-                realName: prev.realName || base.realName || username,
-                role: prev.role || base.role || '普通农工',
-                phone: prev.phone || '',
-                disabled: !!prev.disabled
-            };
-            try { localStorage.setItem('snzg_user_accounts', JSON.stringify(ov)); } catch (e) {}
-            document.getElementById('topPwdModal').classList.add('hidden');
-            topToast('密码修改成功，请牢记新密码');
+            // 原密码校验走真实登录接口（MySQL + bcrypt），不再读任何本地账号库
+            Api.login({ username: username, password: oldPwd }).then(function (loginRes) {
+                if (!loginRes || !loginRes.ok) return showErr('原密码错误');
+                const userId = loginRes.data && loginRes.data.user && loginRes.data.user.id;
+                const tokenBackup = Api.getToken();
+                // 尝试通过后端写入新密码：sf_user.password 被通用 CRUD 的 SENSITIVE_FIELDS 排除，
+                // 且后端无专用改密接口，因此这里必然无法真正写入。
+                return Api.update('user', userId, { password: newPwd }).then(function (updRes) {
+                    if (!updRes || !updRes.ok) return showErr('密码修改失败：后端暂不支持该操作');
+                    // 万一后端将来支持：用新密码再登录一次做真实验证，绝不假装成功
+                    return Api.login({ username: username, password: newPwd }).then(function (verify) {
+                        if (verify && verify.ok) {
+                            document.getElementById('topPwdModal').classList.add('hidden');
+                            topToast('密码修改成功，请牢记新密码');
+                        } else {
+                            if (tokenBackup) Api.setToken(tokenBackup);
+                            showErr('密码修改失败：后端暂不支持该操作');
+                        }
+                    });
+                });
+            }).catch(function (err) {
+                showErr('密码修改失败：' + ((err && err.message) || '网络异常'));
+            });
         }
 
         function topOpenChangePwd() {
@@ -1088,7 +1093,7 @@
             }
         });
 
-        // 角色菜单权限过滤（消费 system_settings 保存的 snzg_permissions）
+        // 角色菜单权限过滤：严格空库模式下权限配置来自后端，本地无配置时不做过滤
         (function applyMenuPermission() {
             var user = null;
             try { user = JSON.parse(sessionStorage.getItem('snzg_user') || 'null'); } catch (e) {}
@@ -1184,7 +1189,7 @@
 
         // ========== 默认高亮首页 ==========
         highlightMenu('home.html');
-        setCrumb('首页');   // 默认面包屑只显示一级「首页」
+        setCrumb('系统首页');   // 默认面包屑只显示一级「系统首页」
     </script>
 
 </body>

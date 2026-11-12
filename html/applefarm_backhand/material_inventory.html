@@ -692,82 +692,35 @@ let inventoryRecords = [];
 const WAREHOUSE_NAMES = { warehouse1: '中心仓库', warehouse2: '东区仓库', warehouse3: '西区仓库' };
 
 function warehouseNameOf(code, fallbackName) {
-  if (WAREHOUSE_NAMES[code]) return WAREHOUSE_NAMES[code];
-  if (fallbackName === '东区仓库') return '东区仓库';
-  if (fallbackName === '西区仓库') return '西区仓库';
-  return '中心仓库';
+  return fallbackName || WAREHOUSE_NAMES[code] || '';
 }
 
 function warehouseCodeOf(m) {
-  if (m.warehouseCode) return m.warehouseCode;
-  if (m.warehouse === '东区仓库') return 'warehouse2';
-  if (m.warehouse === '西区仓库') return 'warehouse3';
-  return 'warehouse1';
+  return m.warehouseCode || '';
 }
 
 // 农资单价（元）：来源于农资档案，用于计算库存金额
-const MATERIAL_PRICE = {
-  'M-001': 180, 'M-002': 65, 'M-003': 120, 'M-004': 85, 'M-005': 88,
-  'M-006': 220, 'M-007': 45, 'M-008': 68, 'M-009': 35, 'M-010': 120,
-  'M-011': 320, 'M-012': 190, 'M-013': 55, 'M-014': 25, 'M-015': 95,
-  'M-016': 78, 'M-017': 150, 'M-018': 45, 'M-019': 85, 'M-020': 85,
-  'M-021': 110, 'M-022': 480, 'M-023': 165
-};
+/* 严格空库：单价取农资档案真实字段，不使用写死价目表 */
+const MATERIAL_PRICE = {};
 
 // 批次/效期/货位等仓储信息（前 12 条为显式数据，其余按规则自动补齐）
-const BATCH_META = {
-  'M-001': { batch: 'B20260815-01', prod: '2026-08-15', expire: '2027-08-14', location: 'A-01-03', lastIn: '2026-10-12 09:20' },
-  'M-002': { batch: 'B20260902-02', prod: '2026-09-02', expire: '2027-09-01', location: 'A-02-01', lastIn: '2026-10-18 14:05' },
-  'M-003': { batch: 'B20260720-01', prod: '2026-07-20', expire: '2027-07-19', location: 'B-01-02', lastIn: '2026-09-28 10:30' },
-  'M-004': { batch: 'B20260610-03', prod: '2026-06-10', expire: '2027-06-09', location: 'C-01-05', lastIn: '2026-09-15 08:45' },
-  'M-005': { batch: 'B20251205-01', prod: '2025-12-05', expire: '2026-12-05', location: 'A-02-04', lastIn: '2026-09-30 16:10' },
-  'M-006': { batch: 'B20260801-02', prod: '2026-08-01', expire: '2027-07-31', location: 'A-01-06', lastIn: '2026-10-08 11:00' },
-  'M-007': { batch: 'B20260820-01', prod: '2026-08-20', expire: '2027-08-19', location: 'B-02-02', lastIn: '2026-10-20 09:15' },
-  'M-008': { batch: 'B20260505-01', prod: '2026-05-05', expire: '2027-05-04', location: 'C-01-01', lastIn: '2026-08-18 15:40' },
-  'M-009': { batch: 'B20260910-01', prod: '2026-09-10', expire: '2027-09-09', location: 'B-01-04', lastIn: '2026-10-22 13:25' },
-  'M-010': { batch: 'B20260715-02', prod: '2026-07-15', expire: '2027-07-14', location: 'A-03-02', lastIn: '2026-09-25 10:10' },
-  'M-012': { batch: 'B20260625-01', prod: '2026-06-25', expire: '2027-06-24', location: 'A-01-02', lastIn: '2026-09-05 09:00' },
-  'M-013': { batch: 'B20251020-01', prod: '2025-10-20', expire: '2026-10-20', location: 'B-02-05', lastIn: '2026-08-30 14:20' }
-};
+/* 严格空库：批次/效期/货位取真实字段，不按规则凭空补造 */
+const BATCH_META = {};
 
-function batchMetaOf(code, idx) {
-  if (BATCH_META[code]) return BATCH_META[code];
-  const mm = String((idx % 9) + 1).padStart(2, '0');
+function batchMetaOf(m) {
+  /* 只采用真实字段，缺字段即为空，绝不按规则补造批次 / 效期 / 货位 */
   return {
-    batch: 'B2026' + mm + '01-0' + ((idx % 8) + 1),
-    prod: '2026-' + mm + '-01',
-    expire: '2027-' + mm + '-28',
-    location: 'D-0' + ((idx % 6) + 1) + '-0' + ((idx % 9) + 1),
-    lastIn: '2026-10-0' + ((idx % 8) + 1) + ' 10:00'
+    batch: m.batchNo || m.batch || '',
+    prod: m.prodDate || m.prod || '',
+    expire: m.expireDate || m.expire || '',
+    location: m.location || '',
+    lastIn: m.lastIn || ''
   };
 }
 
-// 供应商 / 入库单号 / 最近出库时间 / 锁定数量（被待审核领用、待出库占用）
-const INVENTORY_EXTRA = {
-  'M-001': { supplier: '甘肃化肥厂',   inboundNo: 'RK-20261012-001', lastOutDate: '2026-11-08 09:20', lockedQty: 0 },
-  'M-002': { supplier: '青岛农药公司', inboundNo: 'RK-20261018-002', lastOutDate: '2026-11-07 14:10', lockedQty: 5 },
-  'M-003': { supplier: '天水有机肥厂', inboundNo: 'RK-20260928-003', lastOutDate: '2026-11-06 10:30', lockedQty: 0 },
-  'M-004': { supplier: '临沂工具厂',   inboundNo: 'RK-20260915-004', lastOutDate: '2026-11-05 08:45', lockedQty: 0 },
-  'M-005': { supplier: '潍坊农药厂',   inboundNo: 'RK-20260930-005', lastOutDate: '2026-11-08 16:10', lockedQty: 3 },
-  'M-006': { supplier: '甘肃化肥厂',   inboundNo: 'RK-20261008-006', lastOutDate: '2026-11-09 07:50', lockedQty: 10 },
-  'M-007': { supplier: '青岛农药公司', inboundNo: 'RK-20261020-007', lastOutDate: '2026-11-07 09:15', lockedQty: 0 },
-  'M-008': { supplier: '临沂工具厂',   inboundNo: 'RK-20260818-008', lastOutDate: '2026-10-30 15:40', lockedQty: 0 },
-  'M-009': { supplier: '青海钾肥厂',   inboundNo: 'RK-20261022-009', lastOutDate: '2026-11-08 13:25', lockedQty: 12 },
-  'M-010': { supplier: '济南农化公司', inboundNo: 'RK-20260925-010', lastOutDate: '2026-11-04 10:10', lockedQty: 2 },
-  'M-011': { supplier: '台州喷雾器厂', inboundNo: 'RK-20261003-011', lastOutDate: '2026-11-02 11:00', lockedQty: 0 },
-  'M-012': { supplier: '甘肃化肥厂',   inboundNo: 'RK-20260905-012', lastOutDate: '2026-11-06 09:00', lockedQty: 8 },
-  'M-013': { supplier: '潍坊农药厂',   inboundNo: 'RK-20260830-013', lastOutDate: '2026-10-29 14:20', lockedQty: 5 },
-  'M-014': { supplier: '临沂工具厂',   inboundNo: 'RK-20261006-014', lastOutDate: '2026-11-03 10:00', lockedQty: 0 },
-  'M-015': { supplier: '甘肃化肥厂',   inboundNo: 'RK-20261007-015', lastOutDate: '2026-11-09 08:10', lockedQty: 20 },
-  'M-016': { supplier: '济南农化公司', inboundNo: 'RK-20261008-016', lastOutDate: '2026-11-05 09:30', lockedQty: 0 },
-  'M-017': { supplier: '台州喷雾器厂', inboundNo: 'RK-20261001-017', lastOutDate: '2026-11-01 15:00', lockedQty: 2 },
-  'M-018': { supplier: '天水有机肥厂', inboundNo: 'RK-20261002-018', lastOutDate: '2026-11-04 08:20', lockedQty: 0 },
-  'M-019': { supplier: '潍坊农药厂',   inboundNo: 'RK-20261003-019', lastOutDate: '2026-11-02 13:40', lockedQty: 0 },
-  'M-020': { supplier: '临沂工具厂',   inboundNo: 'RK-20261004-020', lastOutDate: '2026-10-28 10:00', lockedQty: 0 },
-  'M-021': { supplier: '青海钾肥厂',   inboundNo: 'RK-20261005-021', lastOutDate: '2026-11-06 14:50', lockedQty: 4 },
-  'M-022': { supplier: '台州喷雾器厂', inboundNo: 'RK-20261006-022', lastOutDate: '2026-10-25 09:10', lockedQty: 0 },
-  'M-023': { supplier: '甘肃土壤科技', inboundNo: 'RK-20261007-023', lastOutDate: '2026-11-03 16:30', lockedQty: 0 }
-};
+// 锁定数量（被待审核领用、待出库占用）
+/* 严格空库：供应商/入库单号等取真实字段，不内置演示台账 */
+const INVENTORY_EXTRA = {};
 
 // 距离有效期天数
 function daysUntil(dateStr) {
@@ -832,7 +785,7 @@ function syncInventoryAlerts() {
 }
 
 function loadInventoryData() {
-  inventoryData = MaterialStore.all().map(function (m, idx) {
+  inventoryData = MaterialStore.all().map(function (m) {
     const stock = Number(m.stock) || 0;
     const dailyUse = Number(m.dailyUse) || 0;
     const safety = Number(m.safety) || 0;
@@ -841,9 +794,9 @@ function loadInventoryData() {
     const coverDays = dailyUse > 0 ? Math.floor(stock / dailyUse) : 999;
     // 建议补货量 = 安全库存 × 2 - 当前库存（向上取整，最小 0）
     const suggestQty = Math.max(0, Math.ceil(safety * 2 - stock));
-    const meta = batchMetaOf(m.code, idx);
+    const meta = batchMetaOf(m);
     const extra = INVENTORY_EXTRA[m.code] || {};
-    const price = MATERIAL_PRICE[m.code] || 0;
+    const price = Number(m.price) || MATERIAL_PRICE[m.code] || 0;
     // 锁定数量（不超过当前库存），可用库存 = 库存数量 - 锁定数量
     const lockedQty = Math.min(Number(extra.lockedQty) || 0, stock);
     const availableQty = stock - lockedQty;
@@ -871,9 +824,9 @@ function loadInventoryData() {
       lastIn: meta.lastIn,
       availableQty: availableQty,
       lockedQty: lockedQty,
-      supplier: extra.supplier || '甘肃化肥厂',
-      inboundNo: extra.inboundNo || ('RK-20261001-' + String(idx + 1).padStart(3, '0')),
-      lastOutDate: extra.lastOutDate || '-'
+      supplier: m.supplier || extra.supplier || '',
+      inboundNo: m.inboundNo || extra.inboundNo || '',
+      lastOutDate: m.lastOutDate || extra.lastOutDate || '-'
     };
   });
   syncInventoryAlerts();

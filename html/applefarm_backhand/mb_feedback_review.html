@@ -283,7 +283,7 @@
           <tbody id="feedbackBody"></tbody>
         </table>
       </div>
-      <div id="emptyHint" class="empty-state" style="display:none;">暂无反馈记录</div>
+      <div id="emptyHint" class="empty-state" style="display:none;">暂无数据</div>
     </div>
   </main>
 </div>
@@ -344,16 +344,18 @@
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
 <script src="js/shared/mobile-ops-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
 /* ============================================================
  * 意见反馈审核
- * 数据源：MobileOpsStore / localStorage['smartorchard_feedbacks']
- *   写入方 = 移动端 mb_feedback.html（source=mobile）
- *            H5 端 h5_settings.html（source=h5）
- *   字段：{ id, title, content, type, status, createTime, source,
- *           operator, operatorId, contact, reply?, rejectReason?, handledBy?, reviewTime? }
+ * 【严格空库模式】列表数据一律来自后端 API（GET /api/mb_feedback），
+ *   不再使用任何本地演示种子 / 假数据兜底，也不再首次播种 localStorage。
+ *   审核处理仍沿用已桥接真实后端的 MobileOpsStore 写链路。
  *   status 枚举：pending 待审核 / processing 处理中 / passed 已通过 / rejected 已驳回
  * ============================================================ */
+
+var FEEDBACK_RESOURCE = 'mb_feedback';
+var feedbackRows = [];
 
 var STATUS_TEXT = {
   pending: '待审核',
@@ -370,23 +372,55 @@ var TYPE_TEXT = {
 
 var currentId = null;
 
-/* 移动端播种的种子数据：后台首次打开时保持一致，避免空列表 */
-var SEED_FEEDBACKS = [
-  { id: 1, title: '建议增加病虫害识别功能', content: '希望能增加拍照识别病虫害的功能，这样果农可以快速判断果树问题。', type: 'suggestion', status: 'processing', createTime: '2026-09-21 10:30', source: 'mobile', operator: '张建国', operatorId: 'zhangjianguo', reply: '感谢您的建议，我们正在开发中，预计下月上线。' },
-  { id: 2, title: '数据同步异常', content: '农事记录同步到云端时经常失败，网络正常的情况下也会出现。', type: 'problem', status: 'pending', createTime: '2026-09-20 15:20', source: 'mobile', operator: '张建国', operatorId: 'zhangjianguo' },
-  { id: 3, title: '优化地块绘制', content: '画地块时希望能支持更精确的坐标定位。', type: 'suggestion', status: 'passed', createTime: '2026-09-19 09:15', source: 'mobile', operator: '李四', operatorId: 'lisi', reply: '已优化，在最新版本中已上线。' },
-  { id: 4, title: '施肥建议不准确', content: '系统给出的施肥建议和实际需求有差异。', type: 'problem', status: 'rejected', createTime: '2026-09-18 14:00', source: 'mobile', operator: '王五', operatorId: 'wangwu', rejectReason: '请提供具体地块信息，我们重新分析。' }
-];
+// 数据库字段(snake_case) -> 页面视图字段映射
+function mapFeedbackRow(row) {
+  return {
+    id: row.id,
+    title: row.title || '',
+    content: row.content || '',
+    type: row.feedback_type || 'other',
+    status: row.status || 'pending',
+    createTime: row.submit_time || row.created_at || '',
+    source: row.source || 'mobile',
+    operator: row.submitter || row.operator || '',
+    operatorId: row.operator_id || '',
+    contact: row.contact || '',
+    conclusion: row.conclusion || '',
+    reply: row.reply || '',
+    rejectReason: row.reject_reason || '',
+    reviewTime: row.review_time || '',
+    handledBy: row.handled_by || ''
+  };
+}
+
+// 列表三态：加载中 / 暂无数据 / 失败
+function setFeedbackStatus(text, isError) {
+  var body = document.getElementById('feedbackBody');
+  var hint = document.getElementById('emptyHint');
+  if (hint) hint.style.display = 'none';
+  if (body) body.innerHTML = '<tr><td colspan="99" style="text-align:center;padding:32px;color:' +
+    (isError ? '#cf1322' : 'var(--text-tertiary)') + ';">' + esc(text) + '</td></tr>';
+}
+
+// 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示
+function loadFeedbacks() {
+  if (!window.Api) { setFeedbackStatus('数据加载失败：接口未就绪', true); return; }
+  setFeedbackStatus('正在加载数据...', false);
+  Api.get(FEEDBACK_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      setFeedbackStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true);
+      return;
+    }
+    var list = (r.data && r.data.list) || [];
+    feedbackRows = list.map(mapFeedbackRow);
+    renderTable();
+  }).catch(function (e) {
+    setFeedbackStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+  });
+}
 
 function readList() {
-  var list = MobileOpsStore.list('feedbacks');
-  if (!list.length) {
-    // 首次访问：沿用移动端种子数据，并回写以保持两端一致
-    list = SEED_FEEDBACKS.map(function (f) { return Object.assign({}, f); });
-    writeList(list);
-    return list;
-  }
-  return list;
+  return feedbackRows;
 }
 
 function writeList(list) {
@@ -575,7 +609,8 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });
-  renderTable();
+  // 严格空库模式：列表由后端 API 异步取数并渲染三态
+  loadFeedbacks();
 });
 </script>
 </body>

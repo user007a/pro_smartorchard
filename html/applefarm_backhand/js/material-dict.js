@@ -1,24 +1,16 @@
 /**
- * 物资管理共享字典
- * 仓库、农资分类、单据状态统一在此维护，供物资模块各页面引用。
+ * 物资管理共享字典 · 严格空库模式
+ * 仓库 / 农资分类一律来自真实接口 material_warehouse、material_category，
+ * 不内置任何演示默认值；空库时字典为空，后端不可用时明确报错且不降级。
+ * 单据状态 / 库存状态属于纯 UI 枚举，保留。
  */
 (function (global) {
   var KEY_WAREHOUSE = 'sz_material_warehouses_v1';
   var KEY_CATEGORY = 'sz_material_categories_v1';
 
-  var DEFAULT_WAREHOUSES = [
-    { id: 'wh1', name: '中心仓库', manager: '惠加宁', managerPhone: '13800001001', address: '园区北侧 1 号库', type: '常温库', capacity: '1200 ㎡', isDefault: true, status: 'enabled', remark: '成品与常用农资' },
-    { id: 'wh2', name: '东区仓库', manager: '黄忠坚', managerPhone: '13800001002', address: '东区 3 号库', type: '常温库', capacity: '800 ㎡', isDefault: false, status: 'enabled', remark: '' },
-    { id: 'wh3', name: '西区仓库', manager: '徐水应', managerPhone: '13800001003', address: '西区 1 号库', type: '危化品专库', capacity: '600 ㎡', isDefault: false, status: 'enabled', remark: '农药专库' }
-  ];
-
-  var DEFAULT_CATEGORIES = [
-    { id: 'fertilizer', name: '肥料', parentId: '', defaultUnit: '袋', defaultWarehouse: '中心仓库', defaultLocation: 'A-01-01', dangerous: false, safetyInterval: '', licenseRequired: false, status: 'enabled', remark: '' },
-    { id: 'pesticide', name: '农药', parentId: '', defaultUnit: '瓶', defaultWarehouse: '西区仓库', defaultLocation: 'C-01-01', dangerous: true, safetyInterval: '14', licenseRequired: true, status: 'enabled', remark: '需农药登记证号' },
-    { id: 'tool', name: '工具', parentId: '', defaultUnit: '件', defaultWarehouse: '中心仓库', defaultLocation: 'B-01-01', dangerous: false, safetyInterval: '', licenseRequired: false, status: 'enabled', remark: '' },
-    { id: 'seed', name: '种子', parentId: '', defaultUnit: '袋', defaultWarehouse: '中心仓库', defaultLocation: 'A-02-01', dangerous: false, safetyInterval: '', licenseRequired: false, status: 'enabled', remark: '' },
-    { id: 'other', name: '其他', parentId: '', defaultUnit: '件', defaultWarehouse: '中心仓库', defaultLocation: 'B-02-01', dangerous: false, safetyInterval: '', licenseRequired: false, status: 'enabled', remark: '' }
-  ];
+  /* 严格空库：不内置演示仓库 / 品类，全部由 API 返回 */
+  var DEFAULT_WAREHOUSES = [];
+  var DEFAULT_CATEGORIES = [];
 
   // 全模块统一单据状态机
   var BILL_STATUS = {
@@ -43,14 +35,15 @@
     return JSON.parse(JSON.stringify(list));
   }
 
-  function read(key, fallback) {
+  /* 严格空库：本地无数据就返回空数组，绝不用演示默认值兜底 */
+  function read(key) {
     try {
       var raw = global.localStorage.getItem(key);
-      if (!raw) return clone(fallback);
+      if (!raw) return [];
       var parsed = JSON.parse(raw);
-      return Array.isArray(parsed) && parsed.length ? parsed : clone(fallback);
+      return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
-      return clone(fallback);
+      return [];
     }
   }
 
@@ -63,7 +56,7 @@
   }
 
   function getWarehouses() {
-    return read(KEY_WAREHOUSE, DEFAULT_WAREHOUSES);
+    return read(KEY_WAREHOUSE);
   }
 
   function setWarehouses(list) {
@@ -71,7 +64,7 @@
   }
 
   function getCategories() {
-    return read(KEY_CATEGORY, DEFAULT_CATEGORIES);
+    return read(KEY_CATEGORY);
   }
 
   function setCategories(list) {
@@ -171,11 +164,74 @@
   }
 
   if (typeof document !== 'undefined') {
+    var bootDict = function () { initDictSelects(); preloadFromBackend(); };
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function () { initDictSelects(); });
+      document.addEventListener('DOMContentLoaded', bootDict);
     } else {
-      initDictSelects();
+      bootDict();
     }
+  }
+
+
+  /* ---------- 严格空库：从真实接口加载字典 ---------- */
+  function mapWarehouseRow(r) {
+    return {
+      id: r.warehouse_code || String(r.id),
+      name: r.warehouse_name || '',
+      manager: r.manager || '',
+      managerPhone: r.manager_phone || '',
+      address: r.address || '',
+      type: r.warehouse_type || '',
+      capacity: r.capacity == null ? '' : String(r.capacity),
+      isDefault: !!r.is_default,
+      status: r.status === 'disabled' ? 'disabled' : 'enabled',
+      remark: r.remark || ''
+    };
+  }
+  function mapCategoryRow(r) {
+    return {
+      id: r.category_code || String(r.id),
+      name: r.category_name || '',
+      parentId: r.parent_id == null ? '' : String(r.parent_id),
+      defaultUnit: r.default_unit || '',
+      defaultWarehouse: r.default_warehouse_id == null ? '' : String(r.default_warehouse_id),
+      defaultLocation: r.default_location || '',
+      dangerous: !!r.is_danger,
+      safetyInterval: r.safety_interval || '',
+      licenseRequired: !!r.qualification,
+      status: r.status === 'disabled' ? 'disabled' : 'enabled',
+      remark: ''
+    };
+  }
+  function ensureApi() {
+    if (global.Api && global.Api.get) return Promise.resolve(true);
+    if (typeof document === 'undefined') return Promise.resolve(false);
+    return new Promise(function (resolve) {
+      var sc = document.createElement('script');
+      sc.src = '../common/js/api.js';
+      sc.async = false;
+      sc.onload = function () { resolve(!!(global.Api && global.Api.get)); };
+      sc.onerror = function () { resolve(false); };
+      (document.head || document.documentElement).appendChild(sc);
+    });
+  }
+  function preloadFromBackend() {
+    return ensureApi().then(function (ready) {
+      if (!ready) return null;
+      var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
+      return Promise.all([
+        global.Api.get('material_warehouse', { page: 1, size: 500 }),
+        global.Api.get('material_category', { page: 1, size: 500 })
+      ]).then(function (res) {
+        if (typeof global.__STRICT_DB_WRITES__ === 'number' && global.__STRICT_DB_WRITES__ !== writeMark0) return;
+        var wh = res[0], cat = res[1];
+        if (wh && wh.ok && wh.data) write(KEY_WAREHOUSE, ((wh.data.list) || []).map(mapWarehouseRow));
+        if (cat && cat.ok && cat.data) write(KEY_CATEGORY, ((cat.data.list) || []).map(mapCategoryRow));
+        if (typeof initDictSelects === 'function') initDictSelects();
+      });
+    }).catch(function (err) {
+      console.error('[MaterialDict] 数据服务未连接，字典保持为空，禁止降级到演示数据', err);
+    });
   }
 
   global.MaterialDict = {
@@ -197,6 +253,7 @@
     fillSelect: fillSelect,
     syncSelect: syncSelect,
     initDictSelects: initDictSelects,
+    preloadFromBackend: preloadFromBackend,
     reset: reset
   };
 })(window);

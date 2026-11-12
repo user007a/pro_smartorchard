@@ -6,6 +6,7 @@
   <title>设置 - 移动商城</title>
   <script src="js/h5-auth.js"></script>
   <script>H5Auth.require();</script>
+  <script src="js/h5-data.js"></script>
   <script src="js/h5-back.js"></script>
   <link rel="stylesheet" href="../applefarm_mobile/css/mobile-design-system.css">
   <style>
@@ -289,19 +290,14 @@
       showToast('密码修改请联系企业管理员在后台「用户管理」中重置，重置后会通过短信通知新密码');
     }
 
-    /* 真实缓存清理：仅清理 H5 端非业务数据缓存（草稿、积分、本次会话等），
-       保留订单、地址、认养、收藏等业务数据，避免破坏正常数据 */
+    /* 真实缓存清理：严格空库模式下业务数据已全部存后端数据库，
+       本地仅保留登录态（token）与设备标识，其余会话级 UI 状态可安全清理 */
     var H5_CACHE_KEYS = {
-      // 业务数据：保留
-      keep: [
-        'h5_orders', 'h5_addresses', 'snzg_adoptions', 'h5_favorites',
-        'h5_cart_items', 'loginUser', 'loginUserProfile', 'isLoggedIn',
-        'h5_invoices', 'h5_message_read', 'h5_messages_read',
-        'smartorchard_feedbacks'
-      ],
-      // 缓存数据：清理
+      // 登录态与设备标识：保留
+      keep: ['smartorchard_token', 'h5_device_key'],
+      // 会话级 UI 状态：清理
       drop: [
-        'h5_cart', 'h5_checkout_draft', 'h5_points_used', 'h5_points',
+        'h5_checkout_draft', 'h5_points_used', 'h5_coupon_code', 'h5_points',
         'h5_search_history', 'h5_view_history', 'h5_browser_cache_v'
       ]
     };
@@ -347,22 +343,20 @@
         };
         removeFrom(localStorage);
         removeFrom(sessionStorage);
-        // 记录清理时间
-        try { localStorage.setItem('h5_browser_cache_v', String(Date.now())); } catch (e) {}
+        // 记录清理时间（会话级 UI 缓存版本，不落 localStorage 业务键）
+        try { sessionStorage.setItem('h5_browser_cache_v', String(Date.now())); } catch (e) {}
       } catch (e) {}
       refreshCacheSize();
       showToast('缓存已清理（业务数据已保留）');
     }
 
     /* ============================================================
-     * 意见反馈：与移动端作业端写入同一审核队列
-     *   localStorage['smartorchard_feedbacks']
-     *   字段：{ id, title, content, type, status, createTime, source:'h5',
-     *           operator, operatorId, contact }
+     * 意见反馈：写入后端 sf_mb_feedback（resource = mb_feedback），
+     * 与移动端作业端同一审核队列。
+     *   字段映射：{ title, content, type→feedback_type, source:'h5',
+     *             operator→submitter, operatorId→operator_id, contact }
      *   后台「移动端运营 › 用户服务 › 意见反馈审核」按「来源端 = H5消费者端」筛出
      * ============================================================ */
-    var FEEDBACK_KEY = 'smartorchard_feedbacks';
-
     function escHtml(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -407,14 +401,10 @@
       if (!title) { showToast('请填写反馈标题'); return; }
       if (content.length < 5) { showToast('详细描述至少 5 个字'); return; }
 
-      var list = [];
-      try {
-        var saved = JSON.parse(localStorage.getItem(FEEDBACK_KEY) || '[]');
-        list = Array.isArray(saved) ? saved : [];
-      } catch (e) { list = []; }
+      var ov = document.getElementById('h5FeedbackOverlay');
+      if (ov) ov.remove();
 
-      list.unshift({
-        id: Date.now(),
+      H5Data.create('feedback', {
         title: title,
         content: content,
         type: type,
@@ -424,18 +414,15 @@
         operator: operator || 'H5消费者',
         operatorId: operatorId || '',
         contact: contact
-      });
-
-      try {
-        localStorage.setItem(FEEDBACK_KEY, JSON.stringify(list));
-      } catch (e) {
+      }).then(function (res) {
+        if (res && res.ok) {
+          showToast('反馈已提交，我们会尽快处理');
+        } else {
+          showToast('提交失败，请稍后重试');
+        }
+      }).catch(function () {
         showToast('提交失败，请稍后重试');
-        return;
-      }
-
-      var ov = document.getElementById('h5FeedbackOverlay');
-      if (ov) ov.remove();
-      showToast('反馈已提交，我们会尽快处理');
+      });
     }
 
     function aboutUs() {

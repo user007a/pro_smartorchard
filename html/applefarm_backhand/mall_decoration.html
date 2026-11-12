@@ -44,7 +44,7 @@
       <p>配置 H5 首页轮播图与快捷入口，保存后消费者端立即生效。</p>
     </div>
     <div class="mall-actions">
-      <button class="mall-btn" onclick="resetHome()">恢复默认</button>
+      <button class="mall-btn" onclick="resetHome()">刷新数据</button>
       <button class="mall-btn primary" onclick="openBanner()">新增轮播图</button>
       <button class="mall-btn primary" onclick="openQuick()">新增快捷入口</button>
     </div>
@@ -94,7 +94,7 @@
         <p>· 轮播图支持跳转商城、认养、溯源等活动页。</p>
         <p>· 快捷入口建议保留 4 个，图标与配色随入口类型自动匹配。</p>
         <p>· 关闭状态的项目不展示但保留配置，便于活动结束后复用。</p>
-        <p>· 数据写入 <code>MallStore.settings().home</code>，与 H5 首页同源。</p>
+        <p>· 轮播图数据来自后端 <code>sf_mall_banner</code>，编辑后同步至 H5 首页。</p>
       </div>
     </div>
   </div>
@@ -152,7 +152,13 @@
 </div>
 
 <script src="js/shared/mall-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
+/* 严格空库模式：轮播图来自后端 API（sf_mall_banner）；快捷入口无对应聚合表，保持空态 */
+var BANNER_RESOURCE = 'mall_banner';
+var homeData = { banners: [], quickEntries: [] };
+var homeLoadState = 'loading';
+var homeLoadError = '';
 var editingBannerId = null;
 var editingQuickIndex = -1;
 
@@ -174,7 +180,7 @@ function esc(s) {
 function toast(msg) {
   var el = document.createElement('div');
   el.textContent = msg;
-  el.style.cssText = 'position:fixed;left:50%;top:24px;transform:translateX(-50%);background:#1f2329;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;z-index:9999;z-index:9999;';
+  el.style.cssText = 'position:fixed;left:50%;top:24px;transform:translateX(-50%);background:#1f2329;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;z-index:9999;';
   document.body.appendChild(el);
   setTimeout(function () { el.remove(); }, 1800);
 }
@@ -198,9 +204,39 @@ function normQuick(q, i) {
   };
 }
 
+/* 数据库行(snake_case) → 页面渲染字段 */
+function mapBannerRow(row) {
+  return {
+    id: row.id == null ? (row.name || '') : String(row.id),
+    title: row.name || '',
+    subtitle: row.subtitle || '',
+    img: '',
+    link: row.jump_link || '',
+    sort: Number(row.sort_order) || 0,
+    status: row.status === 'off' ? 'off' : 'on'
+  };
+}
+
+/* 异步取数：加载中 / 暂无数据 / 加载失败三态，不写 localStorage */
+function loadHome() {
+  if (!window.Api) { homeLoadState = 'error'; homeLoadError = '接口未就绪'; render(); return; }
+  homeLoadState = 'loading'; homeLoadError = ''; render();
+  Api.get(BANNER_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+    if (!r || !r.ok) {
+      homeLoadState = 'error'; homeLoadError = (r && r.message) || '请求异常';
+      homeData = { banners: [], quickEntries: [] }; render(); return;
+    }
+    homeData.banners = ((r.data && r.data.list) || []).map(mapBannerRow);
+    homeData.quickEntries = [];
+    homeLoadState = 'ok'; render();
+  }).catch(function (e) {
+    homeLoadState = 'error'; homeLoadError = (e && e.message) || '网络异常';
+    homeData = { banners: [], quickEntries: [] }; render();
+  });
+}
+
 function readHome() {
-  var h = MallStore.settings().home || {};
-  var banners = (h.banners || []).map(function (b, i) {
+  var banners = (homeData.banners || []).map(function (b, i) {
     return {
       id: b.id || ('BN-' + (i + 1)),
       title: b.title || '',
@@ -211,18 +247,28 @@ function readHome() {
       status: b.status === 'off' ? 'off' : 'on'
     };
   }).sort(function (a, b) { return a.sort - b.sort; });
-  var quick = (h.quickEntries || []).map(normQuick).sort(function (a, b) { return a.sort - b.sort; });
+  var quick = (homeData.quickEntries || []).map(normQuick).sort(function (a, b) { return a.sort - b.sort; });
   return { banners: banners, quickEntries: quick };
 }
 
 function writeHome(home) {
-  // 重新编号排序，避免上移 / 下移后出现并列
+  // 重新编号排序，避免上移 / 下移后出现并列；同步页面级数据供即时渲染
   home.banners.forEach(function (b, i) { b.sort = i + 1; });
   home.quickEntries.forEach(function (q, i) { q.sort = i + 1; });
+  homeData.banners = home.banners;
+  homeData.quickEntries = home.quickEntries;
   MallStore.saveSettings({ home: home });
 }
 
 function render() {
+  if (homeLoadState !== 'ok') {
+    var msg = homeLoadState === 'loading' ? '正在加载数据...' : ('数据加载失败：' + homeLoadError);
+    document.getElementById('bannerBody').innerHTML = '<tr><td colspan="7" class="mall-empty">' + esc(msg) + '</td></tr>';
+    document.getElementById('quickBody').innerHTML = '<tr><td colspan="8" class="mall-empty">' + esc(msg) + '</td></tr>';
+    ['kpiBanner', 'kpiBannerOn', 'kpiQuick', 'kpiQuickOn'].forEach(function (id) { document.getElementById(id).textContent = '0'; });
+    renderPreview({ banners: [], quickEntries: [] });
+    return;
+  }
   var h = readHome();
   document.getElementById('kpiBanner').textContent = h.banners.length;
   document.getElementById('kpiBannerOn').textContent = h.banners.filter(function (b) { return b.status !== 'off'; }).length;
@@ -244,7 +290,7 @@ function render() {
         '<button class="mall-link" onclick="toggleBanner(\'' + esc(b.id) + '\')">' + (b.status === 'off' ? '启用' : '停用') + '</button>' +
         '<button class="mall-link danger" onclick="removeBanner(\'' + esc(b.id) + '\')">删除</button>' +
       '</div></td></tr>';
-  }).join('') || '<tr><td colspan="7" class="mall-empty">暂无轮播图，点击右上角「新增轮播图」</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="mall-empty">暂无数据</td></tr>';
 
   document.getElementById('quickBody').innerHTML = h.quickEntries.map(function (q, i) {
     return '<tr>' +
@@ -262,7 +308,7 @@ function render() {
         '<button class="mall-link" onclick="toggleQuick(' + i + ')">' + (q.status === 'off' ? '启用' : '停用') + '</button>' +
         '<button class="mall-link danger" onclick="removeQuick(' + i + ')">删除</button>' +
       '</div></td></tr>';
-  }).join('') || '<tr><td colspan="8" class="mall-empty">暂无快捷入口</td></tr>';
+  }).join('') || '<tr><td colspan="8" class="mall-empty">暂无数据</td></tr>';
 
   renderPreview(h);
 }
@@ -423,25 +469,14 @@ function removeQuick(index) {
   toast('快捷入口已删除');
 }
 
+/* 严格空库模式：不再写死默认装修配置，改为从数据库重新加载 */
 function resetHome() {
-  if (!confirm('恢复默认首页装修配置？当前配置将被覆盖。')) return;
-  var defaults = {
-    banners: [
-      { id: 'BN-01', title: '新品上市', subtitle: '花牛苹果新鲜采摘 · 限量抢购', img: 'images/apple_orchard_banner.jpg', link: 'h5_store.html', sort: 1, status: 'on' }
-    ],
-    quickEntries: [
-      { name: '商城', link: 'h5_store.html', icon: 'store', badge: '', sort: 1, status: 'on' },
-      { name: '认养', link: 'h5_store.html#adopt', icon: 'adopt', badge: '新', sort: 2, status: 'on' },
-      { name: '溯源', link: 'trace_h5.html', icon: 'trace', badge: '', sort: 3, status: 'on' },
-      { name: '活动', link: 'h5_store.html#activity', icon: 'activity', badge: '', sort: 4, status: 'on' }
-    ]
-  };
-  MallStore.saveSettings({ home: defaults });
-  render();
-  toast('已恢复默认装修');
+  if (!confirm('重新从数据库加载轮播图？当前未保存的改动将被丢弃。')) return;
+  loadHome();
+  toast('已重新加载');
 }
 
-render();
+document.addEventListener('DOMContentLoaded', loadHome);
 </script>
 </body>
 </html>

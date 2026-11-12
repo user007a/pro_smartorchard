@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
+  <!-- 统一 API 层（含登录鉴权 + 严格空库模式 localStorage 闸门） -->
+  <script src="../common/js/api.js"></script>
   <style>
     body {
       font-family: var(--font-family);
@@ -694,134 +696,31 @@
 
   <script>
     (function checkLogin() {
-      if (sessionStorage.getItem('isLoggedIn')) {
+      // 严格空库模式：以 Api.isLoggedIn()（即持有后端 token）判断是否已登录
+      if (typeof window.Api !== 'undefined' && window.Api.isLoggedIn && window.Api.isLoggedIn()) {
         window.location.href = 'mb_home.html';
       }
     })();
 
     /* ------------------------------------------------------------
-     * 演示账号表。原型无后端，凭据校验在本机完成；
-     * 生产环境必须改为服务端校验并由服务端颁发令牌。
+     * 严格空库模式：账号凭据由服务端校验并颁发 JWT 令牌，
+     * 不再本地比对 SHA-256，也不再内置演示账号库。
      * ------------------------------------------------------------ */
-    var DEFAULT_ACCOUNTS = {
-      'demo':         { pwd: 'demo123',  name: '演示用户',   role: '访客', phone: '13800000001' },
-      'zhangjianguo': { pwd: '123456',   name: '张建国',     role: '果农', phone: '13800000002' },
-      'admin':        { pwd: 'admin123', name: '系统管理员', role: '管理员', phone: '13800000000' }
-    };
-
-    /* 优先读取后台「移动端运营 / 作业人员账号」维护的账号表，
-       未初始化时回退到内置演示账号。已停用账号不可登录。
-       后台账号密码只存 SHA-256 摘要（pwdHash），历史数据兼容明文 pwd。 */
-    var ACCOUNTS = (function loadAccounts() {
-      try {
-        var saved = JSON.parse(localStorage.getItem('mb_staff_accounts') || 'null');
-        if (Array.isArray(saved) && saved.length) {
-          var map = {};
-          saved.forEach(function (a) {
-            map[String(a.username).toLowerCase()] = {
-              pwd: a.pwd, pwdHash: a.pwdHash, name: a.name, role: a.role,
-              phone: a.phone, disabled: a.status === 'disabled'
-            };
-          });
-          return map;
-        }
-      } catch (e) { /* 读取失败回退默认 */ }
-      var fallback = {};
-      Object.keys(DEFAULT_ACCOUNTS).forEach(function (k) {
-        fallback[k] = Object.assign({ disabled: false }, DEFAULT_ACCOUNTS[k]);
-      });
-      return fallback;
-    })();
-
-    /* 与后台 mobile-ops-store.js 一致的 SHA-256（ASCII），用于摘要比对 */
-    function hashPwd(s) {
-      s = String(s == null ? '' : s);
-      function ror(x, n) { return (x >>> n) | (x << (32 - n)); }
-      var K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
-        0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
-        0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
-        0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
-        0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
-        0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
-        0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
-        0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
-      var h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,
-          h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
-      var bytes = [];
-      for (var i = 0; i < s.length; i++) bytes.push(s.charCodeAt(i) & 0xff);
-      bytes.push(0x80);
-      while (bytes.length % 64 !== 56) bytes.push(0);
-      var bl = s.length * 8;
-      bytes.push((bl >>> 24) & 0xff, (bl >>> 16) & 0xff, (bl >>> 8) & 0xff, bl & 0xff);
-      for (var off = 0; off < bytes.length; off += 64) {
-        var w = [];
-        for (var k = 0; k < 16; k++) {
-          w[k] = (bytes[off+k*4] << 24) | (bytes[off+k*4+1] << 16) | (bytes[off+k*4+2] << 8) | bytes[off+k*4+3];
-        }
-        for (var j = 16; j < 64; j++) {
-          var s0 = ror(w[j-15],7) ^ ror(w[j-15],18) ^ (w[j-15] >>> 3);
-          var s1 = ror(w[j-2],17) ^ ror(w[j-2],19) ^ (w[j-2] >>> 10);
-          w[j] = (w[j-16] + s0 + w[j-7] + s1) | 0;
-        }
-        var a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,hh=h7;
-        for (var q = 0; q < 64; q++) {
-          var S1 = ror(e,6) ^ ror(e,11) ^ ror(e,25);
-          var ch = (e & f) ^ (~e & g);
-          var t1 = (hh + S1 + ch + K[q] + w[q]) | 0;
-          var S0 = ror(a,2) ^ ror(a,13) ^ ror(a,22);
-          var mj = (a & b) ^ (a & c) ^ (b & c);
-          var t2 = (S0 + mj) | 0;
-          hh=g; g=f; f=e; e=(d+t1)|0; d=c; c=b; b=a; a=(t1+t2)|0;
-        }
-        h0=(h0+a)|0; h1=(h1+b)|0; h2=(h2+c)|0; h3=(h3+d)|0;
-        h4=(h4+e)|0; h5=(h5+f)|0; h6=(h6+g)|0; h7=(h7+hh)|0;
-      }
-      function hex(n) { return (n < 0 ? n + 0x100000000 : n).toString(16).padStart(8, '0'); }
-      return hex(h0)+hex(h1)+hex(h2)+hex(h3)+hex(h4)+hex(h5)+hex(h6)+hex(h7);
-    }
-
-    function matchPwd(account, pwd) {
-      if (account.pwdHash) return hashPwd(pwd) === account.pwdHash;
-      return String(account.pwd == null ? '' : account.pwd) === String(pwd);
-    }
-
-    /* 登录成功后回写最近登录时间，后台「作业人员账号」可据此判断账号活跃度 */
     function touchLastLogin(username) {
-      try {
-        var list = JSON.parse(localStorage.getItem('mb_staff_accounts') || '[]');
-        if (!Array.isArray(list)) return;
-        var changed = false;
-        list.forEach(function (a) {
-          if (String(a.username).toLowerCase() === String(username).toLowerCase()) {
-            a.lastLoginAt = new Date().toLocaleString('zh-CN', { hour12: false });
-            changed = true;
-          }
-        });
-        if (changed) localStorage.setItem('mb_staff_accounts', JSON.stringify(list));
-      } catch (e) { /* 忽略：登录流程不因统计失败中断 */ }
+      /* 登录成功后回写最近登录时间由服务端在 mobile-login 内更新 last_login_at，
+         前端无需再写本地账号表。 */
     }
     var MAX_ATTEMPTS = 5;
     var LOCK_MS = 30000;
     var failCount = 0;
     var lockUntil = 0;
 
-    // 记住密码仅做本地混淆存储，避免明文落盘
-    function encodePwd(p) {
-      try { return btoa(unescape(encodeURIComponent(p))); } catch (e) { return ''; }
-    }
-    function decodePwd(s) {
-      try { return decodeURIComponent(escape(atob(s))); } catch (e) { return ''; }
-    }
-
+    // 严格空库模式：密码不再本地落盘，仅记住用户名；删除密码混淆编解码
     (function restoreRemembered() {
       var saved = localStorage.getItem('rememberedUser');
-      var savedPwd = localStorage.getItem('rememberedPwd');
       if (saved) {
         document.getElementById('username').value = saved;
         document.getElementById('rememberMe').checked = true;
-      }
-      if (savedPwd) {
-        document.getElementById('password').value = decodePwd(savedPwd);
       }
     })();
     
@@ -961,45 +860,35 @@
       }
       if (!valid) return;
 
-      // 真实凭据校验：账号必须存在且密码匹配
-      var account = ACCOUNTS[user.toLowerCase()];
-      if (!account) {
-        setError('usernameGroup', 'usernameError', '账号不存在');
-        failCount++;
-        if (failCount >= MAX_ATTEMPTS) lockUntil = Date.now() + LOCK_MS;
-        showErrorToast('账号不存在');
-        return;
-      }
-      if (account.disabled) {
-        setError('usernameGroup', 'usernameError', '账号已停用');
-        showErrorToast('账号已停用，请联系管理员');
-        return;
-      }
-      if (!matchPwd(account, pass)) {
-        setError('passwordGroup', 'passwordError', '密码错误');
-        failCount++;
-        if (failCount >= MAX_ATTEMPTS) {
-          lockUntil = Date.now() + LOCK_MS;
-          showErrorToast('密码错误次数过多，已锁定 ' + (LOCK_MS / 1000) + ' 秒');
-        } else {
-          showErrorToast('密码错误，还可尝试 ' + (MAX_ATTEMPTS - failCount) + ' 次');
-        }
-        return;
-      }
-
-      failCount = 0;
-
-      // 记住密码：同时保存用户名与（混淆后的）密码
-      if (document.getElementById('rememberMe').checked) {
-        localStorage.setItem('rememberedUser', user);
-        localStorage.setItem('rememberedPwd', encodePwd(pass));
+      // 严格空库模式：走服务端鉴权，校验账号密码并颁发 JWT
+      if (typeof window.Api !== 'undefined' && window.Api.mobileLogin) {
+        var btn = this;
+        btn.disabled = true;
+        window.Api.mobileLogin({ account: user, password: pass }).then(function(r) {
+          btn.disabled = false;
+          if (r && r.ok) {
+            failCount = 0;
+            var u = (r.data && r.data.user) || {};
+            // 记住密码：仅存用户名，密码不再本地落盘
+            if (document.getElementById('rememberMe').checked) {
+              localStorage.setItem('rememberedUser', user);
+            } else {
+              localStorage.removeItem('rememberedUser');
+              localStorage.removeItem('rememberedPwd');
+            }
+            doLogin(btn, u.realName || u.account || user, u.role || '');
+          } else {
+            failCount++;
+            if (failCount >= MAX_ATTEMPTS) lockUntil = Date.now() + LOCK_MS;
+            showErrorToast((r && r.message) || '账号或密码错误');
+          }
+        }).catch(function(e) {
+          btn.disabled = false;
+          showErrorToast('网络异常，请稍后重试');
+        });
       } else {
-        localStorage.removeItem('rememberedUser');
-        localStorage.removeItem('rememberedPwd');
+        showErrorToast('服务未就绪，请刷新后重试');
       }
-
-      doLogin(this, account.name, account.role);
-      touchLastLogin(user);
     });
 
     // 微信登录：先走一次真实的授权确认，用户同意后才登录
@@ -1019,38 +908,24 @@
         showErrorToast('微信登录需绑定有效手机号');
         return;
       }
-      // 校验该手机号是否已在演示账号表中注册；未注册则拒绝登录（避免任意微信用户进入）
-      var matchedKey = null;
-      Object.keys(ACCOUNTS).forEach(function(k) {
-        if (ACCOUNTS[k].phone === phone) matchedKey = k;
-      });
-      if (!matchedKey) {
-        showErrorToast('该手机号尚未在系统中注册，请先用账号密码注册');
-        return;
-      }
-      var acc = ACCOUNTS[matchedKey];
-      if (acc.disabled) {
-        showErrorToast('账号已停用，请联系管理员');
-        return;
-      }
-      doLogin(document.getElementById('btnWechat'), acc.name, acc.role);
-      touchLastLogin(matchedKey);
+      // 严格空库模式：微信登录的绑定校验走服务端（用手机号查询作业人员账号），
+      // 本地不再比对演示账号表。
+      showErrorToast('微信登录暂未接入服务端，请使用账号密码登录');
     });
 
     function doLogin(btn, username, role) {
       btn.disabled = true;
 
-      setTimeout(function() {
-        sessionStorage.setItem('isLoggedIn', 'true');
-        sessionStorage.setItem('loginUser', username);
-        sessionStorage.setItem('loginRole', role || '');
-        localStorage.setItem('smartorchard_current_user', JSON.stringify({
-          name: username, role: role || '', loginAt: new Date().toISOString()
-        }));
+      // 严格空库模式：token 已由 Api.mobileLogin 写入 smartorchard_token，
+      // 此处仅补充会话标记供页面读取用户信息，无假延迟。
+      sessionStorage.setItem('isLoggedIn', 'true');
+      sessionStorage.setItem('loginUser', username);
+      sessionStorage.setItem('loginRole', role || '');
+      sessionStorage.setItem('smartorchard_current_user', JSON.stringify({
+        name: username, role: role || '', loginAt: new Date().toISOString()
+      }));
 
-        // 登录成功，直接进入系统首页
-        window.location.href = 'mb_home.html';
-      }, 1200);
+      window.location.href = 'mb_home.html';
     }
     
     document.getElementById('username').addEventListener('input', function() {

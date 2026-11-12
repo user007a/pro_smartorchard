@@ -285,12 +285,12 @@
     </div>
     <div class="kpi-item">
       <div class="kpi-label">平均准确率</div>
-      <div class="kpi-value">85<small>%</small></div>
-      <div class="kpi-sub up">较上月 +2.3%</div>
+      <div class="kpi-value">—</div>
+      <div class="kpi-sub up">—</div>
     </div>
     <div class="kpi-item">
       <div class="kpi-label">累计预测</div>
-      <div class="kpi-value">1,260<small>日次</small></div>
+      <div class="kpi-value">—</div>
       <div class="kpi-sub">本月数据</div>
     </div>
     <div class="kpi-item" id="cardTotalCalls">
@@ -305,7 +305,7 @@
     </div>
     <div class="kpi-item">
       <div class="kpi-label">最近训练</div>
-      <div class="kpi-value" style="font-size:15px;">2026-09-15</div>
+      <div class="kpi-value" style="font-size:15px;">—</div>
       <div class="kpi-sub">每月自动</div>
     </div>
   </div>
@@ -545,9 +545,63 @@
 <script src="js/components/modal.js"></script>
 <script src="js/components/chart.js"></script>
 <script src="js/shared/data-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
   const STORAGE_KEY = 'orchard_model_config';
-  const TRAIN_HISTORY_KEY = 'orchard_train_history';
+  // 严格空库模式：删除训练历史的本地存储键，训练历史只来自后端 model_config.last_train_time
+
+  /* ===== 严格空库模式：模型配置与训练历史一律来自后端 API ===== */
+  const MODEL_RESOURCE = 'model_config';
+  let modelConfigRows = [];
+
+  // 数据库字段(snake_case) -> 页面视图字段映射
+  function mapModelRow(row) {
+    return {
+      name: row.model_name || '',
+      modelCode: row.model_code || '',
+      calls: Number(row.call_count) || 0,
+      hitRate: Number(row.hit_rate) || 0,
+      response: row.response_time || '-',
+      version: row.version || '-',
+      status: row.enabled ? 'online' : 'disabled',
+      statusText: row.enabled ? '运行中' : '已停用',
+      lastTrainTime: row.last_train_time || '',
+      accuracy: row.accuracy
+    };
+  }
+
+  // 运行监控表状态：加载中 / 暂无数据 / 失败
+  function setModelStatus(text, isError) {
+    var body = document.getElementById('runMonitorBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:' +
+      (isError ? '#cf1322' : 'var(--text-tertiary)') + ';">' + text + '</td></tr>';
+  }
+
+  // 异步取数：成功后渲染，无数据显示暂无数据，失败显示错误提示；不写 localStorage
+  function loadModelConfig() {
+    if (!window.Api) { setModelStatus('数据加载失败：接口未就绪', true); return; }
+    setModelStatus('正在加载数据...', false);
+    Api.get(MODEL_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+      if (!r || !r.ok) {
+        setModelStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true);
+        return;
+      }
+      var list = (r.data && r.data.list) || [];
+      modelConfigRows = list.map(mapModelRow);
+      if (!modelConfigRows.length) {
+        setModelStatus('暂无数据', false);
+        renderTrainHistory();
+        return;
+      }
+      renderRunMonitor();
+      renderTrainHistory();
+      renderModelSummary();
+      if (document.getElementById('panel-data').classList.contains('active')) renderCallTrend();
+    }).catch(function (e) {
+      setModelStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+    });
+  }
 
   function fmtNow() {
     const d = new Date(), p = n => String(n).padStart(2,'0');
@@ -656,17 +710,15 @@
   }
 
   function renderTrainHistory() {
-    let list = JSON.parse(localStorage.getItem(TRAIN_HISTORY_KEY) || 'null');
     const c = document.getElementById('trainHistory');
-    if (!list || !list.length) {
-      // 没有历史记录时填充默认 4 条 mock 数据，便于页面首次打开即可看到效果
-      list = [
-        { task: '生长模型重训练', status: 'success', time: '2026-09-23 02:00:00' },
-        { task: '病虫害模型重训练', status: 'success', time: '2026-09-22 02:00:00' },
-        { task: '产量预估模型重训练', status: 'success', time: '2026-09-21 02:00:00' },
-        { task: '价格预测模型重训练', status: 'failed',  time: '2026-09-20 02:00:00' }
-      ];
-      try { localStorage.setItem(TRAIN_HISTORY_KEY, JSON.stringify(list)); } catch (e) {}
+    if (!c) return;
+    // 严格空库模式：训练历史只来自 sf_model_config.last_train_time，不读 / 不写 localStorage
+    var list = modelConfigRows.filter(function (m) { return m.lastTrainTime; }).map(function (m) {
+      return { task: m.name + '重训练', status: 'success', time: m.lastTrainTime };
+    });
+    if (!list.length) {
+      c.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary);font-size:13px;">暂无数据</div>';
+      return;
     }
     c.innerHTML = list.map(it => {
       const cls = it.status==='success'?'success':'failed';
@@ -676,10 +728,7 @@
   }
 
   function appendTrainHistory(task, status) {
-    const list = JSON.parse(localStorage.getItem(TRAIN_HISTORY_KEY) || '[]');
-    list.unshift({task, status, time: fmtNow()});
-    if (list.length > 20) list.length = 20;
-    localStorage.setItem(TRAIN_HISTORY_KEY, JSON.stringify(list));
+    // 严格空库模式：无对应后端训练历史表，不写 localStorage、不编造本地记录
     renderTrainHistory();
   }
 
@@ -761,8 +810,8 @@
   }
 
   loadConfig();
-  renderModelSummary();
-  renderRunMonitor();
+  // 严格空库模式：模型配置 / 训练历史由后端 API 异步取数并渲染三态
+  loadModelConfig();
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>

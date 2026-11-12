@@ -90,27 +90,27 @@
     <div class="patrol-stat-card green">
       <div class="stat-value" id="revAdopt">¥ 168,500</div>
       <div class="stat-label">认养收入</div>
-      <div class="stat-trend" style="font-size:12px; color:var(--success);">↑ 18.3% 较上月</div>
+      <div class="stat-trend" style="font-size:12px; color:var(--success);">—</div>
     </div>
     <div class="patrol-stat-card blue">
       <div class="stat-value" id="revWholesale">¥ 148,200</div>
       <div class="stat-label">批发收入</div>
-      <div class="stat-trend" style="font-size:12px; color:var(--success);">↑ 8.5% 较上月</div>
+      <div class="stat-trend" style="font-size:12px; color:var(--success);">—</div>
     </div>
     <div class="patrol-stat-card orange">
       <div class="stat-value" id="revRetail">¥ 62,000</div>
       <div class="stat-label">零售收入</div>
-      <div class="stat-trend" style="font-size:12px; color:var(--error);">↓ 2.1% 较上月</div>
+      <div class="stat-trend" style="font-size:12px; color:var(--error);">—</div>
     </div>
     <div class="patrol-stat-card purple">
       <div class="stat-value" id="revTotal">¥ 378,700</div>
       <div class="stat-label">本月总收入</div>
-      <div class="stat-trend" style="font-size:12px; color:var(--success);">↑ 12.5% 较上月</div>
+      <div class="stat-trend" style="font-size:12px; color:var(--success);">—</div>
     </div>
     <div class="patrol-stat-card cyan">
       <div class="stat-value" id="revenueHarvest">--<span style="font-size:13px; font-weight:500;">吨</span></div>
       <div class="stat-label">本月采收量</div>
-      <div class="stat-trend" id="revenueHarvestSub" style="font-size:12px; color:var(--text-tertiary);">仅统计已完成采收</div>
+      <div class="stat-trend" id="revenueHarvestSub" style="font-size:12px; color:var(--text-tertiary);">—</div>
     </div>
   </div>
 
@@ -176,19 +176,19 @@ document.addEventListener('DOMContentLoaded', function() {
     retail: mixAmount('零售'),
     pick: mixAmount('观光')
   };
-  function seriesOf(key, fallback) {
-    return SERIES[key] || fallback;
+  function seriesOf(key) {
+    return SERIES[key] || [0,0,0,0,0,0,0,0,0,0,0,0];
   }
-  function amountOf(key, fallback) {
-    return AMOUNT[key] == null ? fallback : AMOUNT[key];
+  function amountOf(key) {
+    return AMOUNT[key] == null ? 0 : AMOUNT[key];
   }
   function fmtMoney(n) {
     return Number(n || 0).toLocaleString('en-US');
   }
-  /* 6 月金额：取当月曲线值，无曲线时回落年度金额 */
-  function monthAmount(key, fallback) {
+  /* 严格空库模式：无真实曲线时一律为 0，不使用演示兜底值 */
+  function monthAmount(key) {
     const s = SERIES[key];
-    return s && s.length > 5 ? s[5] : fallback;
+    return s && s.length > 5 ? s[5] : 0;
   }
 
   /* 顶部统计卡：认养 / 批发 / 零售 / 本月总收入，金额来自 BizStore 收入构成 */
@@ -197,9 +197,9 @@ document.addEventListener('DOMContentLoaded', function() {
       const el = document.getElementById(id);
       if (el) el.textContent = '¥ ' + fmtMoney(val);
     };
-    const a = monthAmount('adopt', 168500);
-    const w = monthAmount('wholesale', 148200);
-    const r = monthAmount('retail', 62000);
+    const a = monthAmount('adopt');
+    const w = monthAmount('wholesale');
+    const r = monthAmount('retail');
     set('revAdopt', a);
     set('revWholesale', w);
     set('revRetail', r);
@@ -216,26 +216,20 @@ document.addEventListener('DOMContentLoaded', function() {
       trendData: {
         categories: months,
         series: [
-          { name: '认养收入', data: seriesOf('adopt', [118500, 122000, 132500, 142800, 156800, 168500, 158000, 152000, 165200, 142800, 115800, 98500]), color: '#1890ff', area: true },
-          { name: '批发收入', data: seriesOf('wholesale', [85000, 92000, 106000, 118000, 135000, 148200, 132500, 118000, 125000, 102500, 72000, 58000]), color: '#52c41a', area: true },
-          { name: '零售收入', data: seriesOf('retail', [32000, 38000, 42000, 51000, 58000, 62000, 56000, 48000, 52000, 45000, 32000, 28000]), color: '#ff6b35', area: true }
+          { name: '认养收入', data: seriesOf('adopt'), color: '#1890ff', area: true },
+          { name: '批发收入', data: seriesOf('wholesale'), color: '#52c41a', area: true },
+          { name: '零售收入', data: seriesOf('retail'), color: '#ff6b35', area: true }
         ]
       },
       pieData: {
         series: [
-          { name: '认养收入', value: amountOf('adopt', 168500) },
-          { name: '批发收入', value: amountOf('wholesale', 148200) },
-          { name: '零售收入', value: amountOf('retail', 62000) }
+          { name: '认养收入', value: amountOf('adopt') },
+          { name: '批发收入', value: amountOf('wholesale') },
+          { name: '零售收入', value: amountOf('retail') }
         ]
       },
       tableCols: ['排名', '客户名称', '收入(元)', '占比'],
-      tableRows: [
-        ['1', '北京华联超市', '356,800', '12.5%'],
-        ['2', '上海果蔬电商', '298,500', '10.5%'],
-        ['3', '广州优鲜水果店', '245,200', '8.6%'],
-        ['4', '深圳每日生鲜', '198,600', '7.0%'],
-        ['5', '杭州鲜达平台', '165,400', '5.8%']
-      ]
+      tableRows: []
     },
     struct: {
       title: '收入构成',
@@ -245,27 +239,22 @@ document.addEventListener('DOMContentLoaded', function() {
       trendData: {
         categories: months,
         series: [
-          { name: '认养收入', data: seriesOf('adopt', [118500, 122000, 132500, 142800, 156800, 168500, 158000, 152000, 165200, 142800, 115800, 98500]), color: '#1890ff', area: true },
-          { name: '批发收入', data: seriesOf('wholesale', [85000, 92000, 106000, 118000, 135000, 148200, 132500, 118000, 125000, 102500, 72000, 58000]), color: '#52c41a', area: true },
-          { name: '零售收入', data: seriesOf('retail', [32000, 38000, 42000, 51000, 58000, 62000, 56000, 48000, 52000, 45000, 32000, 28000]), color: '#ff6b35', area: true },
-          { name: '观光采摘', data: seriesOf('pick', [12000, 15000, 28000, 35000, 42000, 38000, 52000, 45000, 32000, 18000, 12000, 8000]), color: '#722ed1', area: true }
+          { name: '认养收入', data: seriesOf('adopt'), color: '#1890ff', area: true },
+          { name: '批发收入', data: seriesOf('wholesale'), color: '#52c41a', area: true },
+          { name: '零售收入', data: seriesOf('retail'), color: '#ff6b35', area: true },
+          { name: '观光采摘', data: seriesOf('pick'), color: '#722ed1', area: true }
         ]
       },
       pieData: {
         series: [
-          { name: '认养收入', value: amountOf('adopt', 168500) },
-          { name: '批发收入', value: amountOf('wholesale', 148200) },
-          { name: '零售收入', value: amountOf('retail', 62000) },
-          { name: '观光采摘', value: amountOf('pick', 38000) }
+          { name: '认养收入', value: amountOf('adopt') },
+          { name: '批发收入', value: amountOf('wholesale') },
+          { name: '零售收入', value: amountOf('retail') },
+          { name: '观光采摘', value: amountOf('pick') }
         ]
       },
       tableCols: ['序号', '收入类型', '本月金额(元)', '全年累计(元)', '同比'],
-      tableRows: [
-        ['1', '认养收入', fmtMoney(monthAmount('adopt', 168500)), fmtMoney(amountOf('adopt', 1673400)), '↑ 18.3%'],
-        ['2', '批发收入', fmtMoney(monthAmount('wholesale', 148200)), fmtMoney(amountOf('wholesale', 1292200)), '↑ 8.5%'],
-        ['3', '零售收入', fmtMoney(monthAmount('retail', 62000)), fmtMoney(amountOf('retail', 544000)), '↓ 2.1%'],
-        ['4', '观光采摘', fmtMoney(monthAmount('pick', 38000)), fmtMoney(amountOf('pick', 337000)), '↑ 25.6%']
-      ]
+      tableRows: []
     },
     customer: {
       title: '客户分析',
@@ -275,26 +264,20 @@ document.addEventListener('DOMContentLoaded', function() {
       trendData: {
         categories: ['批发商', '零售商', '电商平台', '个人客户', '企业团购'],
         series: [
-          { name: '客户数', data: [28, 65, 18, 245, 30], color: '#1890ff' }
+          { name: '客户数', data: [0, 0, 0, 0, 0], color: '#1890ff' }
         ]
       },
       pieData: {
         series: [
-          { name: '批发商', value: 28 },
-          { name: '零售商', value: 65 },
-          { name: '电商平台', value: 18 },
-          { name: '个人客户', value: 245 },
-          { name: '企业团购', value: 30 }
+          { name: '批发商', value: 0 },
+          { name: '零售商', value: 0 },
+          { name: '电商平台', value: 0 },
+          { name: '个人客户', value: 0 },
+          { name: '企业团购', value: 0 }
         ]
       },
       tableCols: ['排名', '客户名称', '类型', '交易次数', '累计金额(元)'],
-      tableRows: [
-        ['1', '北京华联超市', '连锁商超', '24', '856,300'],
-        ['2', '上海果蔬电商', '电商平台', '18', '532,400'],
-        ['3', '广州优鲜水果店', '连锁零售', '15', '385,200'],
-        ['4', '深圳每日生鲜', '电商平台', '12', '328,600'],
-        ['5', '杭州鲜达平台', '生鲜平台', '10', '265,400']
-      ]
+      tableRows: []
     },
     product: {
       title: '产品分析',
@@ -304,39 +287,28 @@ document.addEventListener('DOMContentLoaded', function() {
       trendData: {
         categories: ['花牛苹果', '红富士', '金帅', '秦冠', '嘎啦', '红星', '国光'],
         series: [
-          { name: '销量(吨)', data: [125.8, 98.5, 65.2, 42.8, 35.6, 28.2, 18.5], color: '#ff6b35' }
+          { name: '销量(吨)', data: [0, 0, 0, 0, 0, 0, 0], color: '#ff6b35' }
         ]
       },
       pieData: {
         series: [
-          { name: '花牛苹果', value: 628000 },
-          { name: '红富士', value: 492500 },
-          { name: '金帅', value: 326000 },
-          { name: '秦冠', value: 214000 },
-          { name: '其他品种', value: 411800 }
+          { name: '花牛苹果', value: 0 },
+          { name: '红富士', value: 0 },
+          { name: '金帅', value: 0 },
+          { name: '秦冠', value: 0 },
+          { name: '其他品种', value: 0 }
         ]
       },
       tableCols: ['排名', '品种', '销量(吨)', '收入(元)', '单价(元/吨)', '占比'],
-      tableRows: [
-        ['1', '花牛苹果', '125.8', '628,000', '4,992', '30.2%'],
-        ['2', '红富士', '98.5', '492,500', '5,000', '23.7%'],
-        ['3', '金帅', '65.2', '326,000', '5,000', '15.7%'],
-        ['4', '秦冠', '42.8', '214,000', '5,000', '10.3%'],
-        ['5', '嘎啦', '35.6', '178,000', '5,000', '8.6%']
-      ]
+      tableRows: []
     }
   };
 
   window.__exportRevenueData = function() {
-    var data = {
-      adopt: { items: [['幸福树-001', '麦积区基地 A区', 1888, 12, 22656]], total: 22656 },
-      wholesale: { items: [['批发订单-A', '华东区', 148200, 1, 148200]], total: 148200 },
-      retail: { items: [['H5商城订单', '天水', 62000, 8, 62000]], total: 62000 },
-      pick: { items: [['观光采摘', '国庆假期', 38000, 200, 38000]], total: 38000 },
-      other: { items: [['品牌授权', '山东', 18500, 1, 18500]], total: 18500 }
-    };
-    var d = data[window.__revCurrentTab || 'adopt'] || { items: [], total: 0 };
-    var csv = '项目,范围,单价,数量,金额\n' + d.items.map(function(r){ return r.join(','); }).join('\n') + '\n合计,,,,' + d.total;
+    var d = revenueDataSet[window.__revCurrentTab || 'trend'] || { tableCols: [], tableRows: [] };
+    var rows = [d.tableCols.join(',')].concat(d.tableRows.map(function (r) { return r.join(','); }));
+    if (!d.tableRows.length) rows.push('暂无数据');
+    var csv = rows.join('\n');
     var blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -368,9 +340,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 表格
     const thead = '<tr>' + d.tableCols.map(c => '<th>' + c + '</th>').join('') + '</tr>';
-    const tbody = d.tableRows.map(row =>
-      '<tr>' + row.map(c => '<td>' + c + '</td>').join('') + '</tr>'
-    ).join('');
+    const tbody = d.tableRows.length
+      ? d.tableRows.map(row => '<tr>' + row.map(c => '<td>' + c + '</td>').join('') + '</tr>').join('')
+      : '<tr><td colspan="' + d.tableCols.length + '" style="text-align:center;padding:24px;color:var(--text-secondary,#6b7b6b);">暂无数据</td></tr>';
     document.getElementById('revenue-table-container').innerHTML =
       '<table class="data-table" style="font-size:var(--font-size-sm);"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
   }

@@ -1,5 +1,5 @@
 -- ============================================================
--- 智慧果园平台 · 数据库建表脚本（全量 140 张表）
+-- 智慧果园平台 · 数据库建表脚本（全量 143 张表）
 -- 来源：由运行中的容器数据库 so-mysql / `smartorchard` 反向导出生成
 -- 说明：本文件与当前可用数据库结构完全一致；开发阶段以本文件为准。
 --       首次部署由 docker 自动加载（挂载为 01_schema.sql）；
@@ -7,31 +7,15 @@
 -- 数据库：MySQL 8.x
 -- ============================================================
 
---
 -- ------------------------------------------------------
-
-/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
-/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
-/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!50503 SET NAMES utf8mb4 */;
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
-/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
-/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
-/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
-/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-
---
---
-
 
 -- ============================================================
 -- 【全局公共表（字典 / 文件 / 日志）】
 -- ============================================================
 
+SET NAMES utf8mb4;
+
 DROP TABLE IF EXISTS `sf_dict`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_dict` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `dict_type` varchar(50) NOT NULL COMMENT '字典类型（如 产品等级/农事类型）',
@@ -46,14 +30,8 @@ CREATE TABLE `sf_dict` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_dict_code` (`dict_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据字典';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_file`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_file` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `file_name` varchar(255) NOT NULL COMMENT '原始文件名',
@@ -65,14 +43,8 @@ CREATE TABLE `sf_file` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='文件';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_operation_log`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_operation_log` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `user_id` bigint DEFAULT NULL COMMENT '操作人（→ sf_user.id）',
@@ -88,18 +60,12 @@ CREATE TABLE `sf_operation_log` (
   KEY `idx_log_user` (`user_id`),
   KEY `idx_log_module` (`module`)
 ) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='操作日志';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【企业管理（企业信息 / 基地 / 地块 / 土壤检测 / VR 全景）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_enterprise`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_enterprise` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `name` varchar(200) NOT NULL COMMENT '企业名称',
@@ -121,14 +87,8 @@ CREATE TABLE `sf_enterprise` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='企业基本信息';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_enterprise_biz`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_enterprise_biz` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `enterprise_id` bigint DEFAULT NULL COMMENT '企业（→ sf_enterprise.id）',
@@ -146,14 +106,8 @@ CREATE TABLE `sf_enterprise_biz` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='企业业务结构';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_enterprise_staff`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_enterprise_staff` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `enterprise_id` bigint DEFAULT NULL COMMENT '企业（→ sf_enterprise.id）',
@@ -165,14 +119,8 @@ CREATE TABLE `sf_enterprise_staff` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='企业人员规模';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_enterprise_expert`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_enterprise_expert` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `enterprise_id` bigint DEFAULT NULL COMMENT '企业（→ sf_enterprise.id）',
@@ -188,14 +136,8 @@ CREATE TABLE `sf_enterprise_expert` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='企业专家团队';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_enterprise_cert`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_enterprise_cert` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `enterprise_id` bigint DEFAULT NULL COMMENT '企业（→ sf_enterprise.id）',
@@ -214,14 +156,8 @@ CREATE TABLE `sf_enterprise_cert` (
   PRIMARY KEY (`id`),
   KEY `idx_cert_enterprise` (`enterprise_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='企业资质证书';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_enterprise_timeline`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_enterprise_timeline` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `enterprise_id` bigint DEFAULT NULL COMMENT '企业（→ sf_enterprise.id）',
@@ -234,14 +170,8 @@ CREATE TABLE `sf_enterprise_timeline` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='企业发展历程';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_enterprise_operation`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_enterprise_operation` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `enterprise_id` bigint DEFAULT NULL COMMENT '企业（→ sf_enterprise.id）',
@@ -254,14 +184,8 @@ CREATE TABLE `sf_enterprise_operation` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='企业经营数据';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_base`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_base` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `code` varchar(50) DEFAULT NULL COMMENT '基地编号',
@@ -270,23 +194,17 @@ CREATE TABLE `sf_base` (
   `address` varchar(255) DEFAULT NULL COMMENT '地址',
   `area` decimal(12,2) DEFAULT NULL COMMENT '面积（亩）',
   `manager_id` bigint DEFAULT NULL COMMENT '负责人（→ sf_user.id）',
-  `manager_name` varchar(100) DEFAULT NULL COMMENT 'è´Ÿè´£äººå§“å',
+  `manager_name` varchar(100) DEFAULT NULL COMMENT '负责人姓名',
   `phone` varchar(20) DEFAULT NULL COMMENT '联系电话',
-  `base_images` varchar(2000) DEFAULT NULL COMMENT 'åŸºåœ°å›¾ç‰‡JSON',
+  `base_images` varchar(2000) DEFAULT NULL COMMENT '基地图片JSON',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_base_name` (`name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='基地';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_plot`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_plot` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `code` varchar(50) DEFAULT NULL COMMENT '地块编号',
@@ -300,7 +218,12 @@ CREATE TABLE `sf_plot` (
   `lng` decimal(10,6) DEFAULT NULL COMMENT '经度',
   `lat` decimal(10,6) DEFAULT NULL COMMENT '纬度',
   `plot_status` varchar(20) NOT NULL DEFAULT 'normal' COMMENT '状态：normal/warning/danger/fallow/maintain',
-  `audit_status` varchar(20) DEFAULT NULL COMMENT '审核状态（→ sf_dict）',
+  `audit_status` varchar(20) DEFAULT NULL COMMENT '审核状态：pending/approved/rejected',
+  `source` varchar(20) NOT NULL DEFAULT 'backend' COMMENT '来源：backend/mobile',
+  `boundary` text COMMENT '边界多边形顶点JSON（移动端手绘）',
+  `reviewer` varchar(100) DEFAULT NULL COMMENT '审核人',
+  `review_remark` varchar(500) DEFAULT NULL COMMENT '审核意见',
+  `review_time` datetime DEFAULT NULL COMMENT '审核时间',
   `draw_time` datetime DEFAULT NULL COMMENT '绘制时间',
   `remark` varchar(500) DEFAULT NULL COMMENT '绘制说明',
   `file_id` bigint DEFAULT NULL COMMENT '实景图（→ sf_file.id）',
@@ -310,16 +233,11 @@ CREATE TABLE `sf_plot` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_plot_name` (`name`),
   KEY `idx_plot_base` (`base_id`),
-  KEY `idx_plot_manager` (`manager_id`)
+  KEY `idx_plot_manager` (`manager_id`),
+  KEY `idx_plot_audit` (`audit_status`)
 ) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='地块';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_soil_test`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_soil_test` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `test_code` varchar(50) DEFAULT NULL COMMENT '检测编号',
@@ -332,21 +250,15 @@ CREATE TABLE `sf_soil_test` (
   `available_k` decimal(6,2) DEFAULT NULL COMMENT '速效钾(mg/kg)',
   `ph` decimal(4,2) DEFAULT NULL COMMENT 'pH',
   `ec` decimal(8,2) DEFAULT NULL COMMENT 'EC(μS/cm)',
-  `source` varchar(20) DEFAULT NULL COMMENT 'æ¥æº',
+  `source` varchar(20) DEFAULT NULL COMMENT '来源',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   KEY `idx_soil_plot` (`plot_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='土壤检测记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_vr_scene`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_vr_scene` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `scene_code` varchar(50) DEFAULT NULL COMMENT '场景编码（如 scene_main）',
@@ -372,14 +284,8 @@ CREATE TABLE `sf_vr_scene` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='VR全景场景';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_vr_hotspot`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_vr_hotspot` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `scene_id` bigint NOT NULL COMMENT '所属场景（→ sf_vr_scene.id）',
@@ -397,14 +303,8 @@ CREATE TABLE `sf_vr_hotspot` (
   PRIMARY KEY (`id`),
   KEY `idx_hotspot_scene` (`scene_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='VR全景热点';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_highlight`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_highlight` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `highlight_code` varchar(50) DEFAULT NULL COMMENT '亮点编码',
@@ -418,344 +318,278 @@ CREATE TABLE `sf_highlight` (
   PRIMARY KEY (`id`),
   KEY `idx_highlight_code` (`highlight_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据运营亮点';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【生产管理（农事计划 / 任务 / 记录 / 巡园 / 无人机 / 标准）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_farming_plan`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_farming_plan` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'ä¸»é”®',
-  `plan_code` varchar(50) NOT NULL COMMENT 'è®¡åˆ’ç¼–å·ï¼ˆå”¯ä¸€ï¼‰',
-  `plan_name` varchar(100) NOT NULL COMMENT 'è®¡åˆ’åç§°',
-  `plan_type` varchar(20) DEFAULT NULL COMMENT 'ç±»åž‹ï¼ˆæžšä¸¾â†’å­—å…¸ï¼šå¹´åº¦/å­£åº¦/æœˆåº¦ç­‰ï¼‰',
-  `base_id` bigint DEFAULT NULL COMMENT 'æ‰€å±žåŸºåœ°ï¼ˆâ†’ sf_base.idï¼‰',
-  `plot_ids` varchar(500) DEFAULT NULL COMMENT 'åœ°å—èŒƒå›´ï¼ˆå¤šåœ°å—IDï¼Œé€—å·åˆ†éš”ï¼‰',
-  `manager_id` bigint DEFAULT NULL COMMENT 'è´Ÿè´£äººï¼ˆâ†’ sf_user.idï¼‰',
-  `standard_id` bigint DEFAULT NULL COMMENT 'å¼•ç”¨æ ‡å‡†ï¼ˆâ†’ sf_guide_standard.idï¼‰',
-  `start_date` date DEFAULT NULL COMMENT 'å¼€å§‹æ—¥æœŸ',
-  `end_date` date DEFAULT NULL COMMENT 'ç»“æŸæ—¥æœŸ',
-  `status` varchar(20) NOT NULL DEFAULT 'draft' COMMENT 'çŠ¶æ€ï¼šdraft/pending/approved/rejected/in_progress/done',
-  `progress` decimal(5,2) DEFAULT NULL COMMENT 'å®ŒæˆçŽ‡ï¼ˆ0-100ï¼‰',
-  `planned_qty` decimal(12,2) DEFAULT NULL COMMENT 'è®¡åˆ’é‡',
-  `actual_qty` decimal(12,2) DEFAULT NULL COMMENT 'å®žé™…é‡',
-  `unit` varchar(20) DEFAULT NULL COMMENT 'å•ä½ï¼ˆäº©/ä¸ªï¼‰',
-  `plot_range` varchar(500) DEFAULT NULL COMMENT 'åœ°å—èŒƒå›´ï¼ˆæè¿°ï¼‰',
-  `standard_name` varchar(100) DEFAULT NULL COMMENT 'å¼•ç”¨æ ‡å‡†åç§°',
-  `remark` varchar(500) DEFAULT NULL COMMENT 'å¤‡æ³¨',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'åˆ›å»ºæ—¶é—´',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'æ›´æ–°æ—¶é—´',
-  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT 'é€»è¾‘åˆ é™¤',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `plan_code` varchar(50) NOT NULL COMMENT '计划编号（唯一）',
+  `plan_name` varchar(100) NOT NULL COMMENT '计划名称',
+  `plan_type` varchar(20) DEFAULT NULL COMMENT '类型（枚举→字典：年度/季度/月度等）',
+  `base_id` bigint DEFAULT NULL COMMENT '所属基地（→ sf_base.id）',
+  `plot_ids` varchar(500) DEFAULT NULL COMMENT '地块范围（多地块ID，逗号分隔）',
+  `manager_id` bigint DEFAULT NULL COMMENT '负责人（→ sf_user.id）',
+  `standard_id` bigint DEFAULT NULL COMMENT '引用标准（→ sf_guide_standard.id）',
+  `start_date` date DEFAULT NULL COMMENT '开始日期',
+  `end_date` date DEFAULT NULL COMMENT '结束日期',
+  `status` varchar(20) NOT NULL DEFAULT 'draft' COMMENT '状态：draft/pending/approved/rejected/in_progress/done',
+  `progress` decimal(5,2) DEFAULT NULL COMMENT '完成率（0-100）',
+  `planned_qty` decimal(12,2) DEFAULT NULL COMMENT '计划量',
+  `actual_qty` decimal(12,2) DEFAULT NULL COMMENT '实际量',
+  `unit` varchar(20) DEFAULT NULL COMMENT '单位（亩/个）',
+  `plot_range` varchar(500) DEFAULT NULL COMMENT '地块范围（描述）',
+  `standard_name` varchar(100) DEFAULT NULL COMMENT '引用标准名称',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_farming_plan_code` (`plan_code`),
   KEY `idx_farming_plan_base` (`base_id`),
   KEY `idx_farming_plan_manager` (`manager_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='å†œäº‹è®¡åˆ’';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农事计划';
 
 DROP TABLE IF EXISTS `sf_farming_task`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_farming_task` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'ä¸»é”®',
-  `task_code` varchar(50) NOT NULL COMMENT 'ä»»åŠ¡ç¼–å·ï¼ˆå”¯ä¸€ï¼‰',
-  `task_name` varchar(100) NOT NULL COMMENT 'ä»»åŠ¡åç§°',
-  `plan_id` bigint DEFAULT NULL COMMENT 'æ¥æºè®¡åˆ’ï¼ˆâ†’ sf_farming_plan.idï¼‰',
-  `category` varchar(20) DEFAULT NULL COMMENT 'ç±»åˆ«ï¼ˆæžšä¸¾â†’å­—å…¸ï¼‰',
-  `task_category` varchar(20) DEFAULT NULL COMMENT 'ä»»åŠ¡å¤§ç±»ï¼šfarming/patrol',
-  `type_code` varchar(20) DEFAULT NULL COMMENT 'å†œäº‹ç±»åž‹ç¼–ç ',
-  `priority` varchar(20) DEFAULT NULL COMMENT 'ä¼˜å…ˆçº§ï¼ˆæžšä¸¾â†’å­—å…¸ï¼šé«˜/ä¸­/ä½Žï¼‰',
-  `base_id` bigint DEFAULT NULL COMMENT 'åŸºåœ°ï¼ˆâ†’ sf_base.idï¼‰',
-  `plot_ids` varchar(500) DEFAULT NULL COMMENT 'åœ°å—ï¼ˆå¤šåœ°å—IDï¼Œé€—å·åˆ†éš”ï¼‰',
-  `plot_name` varchar(100) DEFAULT NULL COMMENT 'åœ°å—åç§°ï¼ˆå±•ç¤ºï¼‰',
-  `manager_id` bigint DEFAULT NULL COMMENT 'è´Ÿè´£äººï¼ˆâ†’ sf_user.idï¼‰',
-  `team` varchar(100) DEFAULT NULL COMMENT 'ç­ç»„',
-  `executor` varchar(200) DEFAULT NULL COMMENT 'æ‰§è¡Œä¸»ä½“',
-  `plan_time` datetime DEFAULT NULL COMMENT 'è®¡åˆ’æ—¶é—´',
-  `deadline` datetime DEFAULT NULL COMMENT 'æˆªæ­¢æ—¶é—´',
-  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'çŠ¶æ€ï¼špending/in_progress/done/overdue',
-  `remark` varchar(500) DEFAULT NULL COMMENT 'å¤‡æ³¨',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'åˆ›å»ºæ—¶é—´',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'æ›´æ–°æ—¶é—´',
-  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT 'é€»è¾‘åˆ é™¤',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `task_code` varchar(50) NOT NULL COMMENT '任务编号（唯一）',
+  `task_name` varchar(100) NOT NULL COMMENT '任务名称',
+  `plan_id` bigint DEFAULT NULL COMMENT '来源计划（→ sf_farming_plan.id）',
+  `category` varchar(20) DEFAULT NULL COMMENT '类别（枚举→字典）',
+  `task_category` varchar(20) DEFAULT NULL COMMENT '任务大类：farming/patrol',
+  `type_code` varchar(20) DEFAULT NULL COMMENT '农事类型编码',
+  `priority` varchar(20) DEFAULT NULL COMMENT '优先级（枚举→字典：高/中/低）',
+  `base_id` bigint DEFAULT NULL COMMENT '基地（→ sf_base.id）',
+  `plot_ids` varchar(500) DEFAULT NULL COMMENT '地块（多地块ID，逗号分隔）',
+  `plot_name` varchar(100) DEFAULT NULL COMMENT '地块名称（展示）',
+  `manager_id` bigint DEFAULT NULL COMMENT '负责人（→ sf_user.id）',
+  `team` varchar(100) DEFAULT NULL COMMENT '班组',
+  `executor` varchar(200) DEFAULT NULL COMMENT '执行主体',
+  `plan_time` datetime DEFAULT NULL COMMENT '计划时间',
+  `deadline` datetime DEFAULT NULL COMMENT '截止时间',
+  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending/in_progress/done/overdue',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_farming_task_code` (`task_code`),
   KEY `idx_farming_task_plan` (`plan_id`),
   KEY `idx_farming_task_base` (`base_id`),
   KEY `idx_farming_task_manager` (`manager_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='å†œäº‹ä»»åŠ¡';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
+) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农事任务';
 
 DROP TABLE IF EXISTS `sf_farming_record`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_farming_record` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'ä¸»é”®',
-  `record_code` varchar(50) NOT NULL COMMENT 'è®°å½•ç¼–å·ï¼ˆå”¯ä¸€ï¼‰',
-  `plan_id` bigint DEFAULT NULL COMMENT 'å…³è”è®¡åˆ’ï¼ˆâ†’ sf_farming_plan.idï¼‰',
-  `task_id` bigint DEFAULT NULL COMMENT 'å…³è”ä»»åŠ¡ï¼ˆâ†’ sf_farming_task.idï¼‰',
-  `base_id` bigint DEFAULT NULL COMMENT 'æ‰€å±žåŸºåœ°ï¼ˆâ†’ sf_base.idï¼‰',
-  `plot_ids` varchar(500) DEFAULT NULL COMMENT 'åœ°å—èŒƒå›´',
-  `farm_type` varchar(20) DEFAULT NULL COMMENT 'å†œäº‹ç±»åž‹ï¼ˆæžšä¸¾â†’å­—å…¸ï¼šæ–½è‚¥/å–·è¯/ä¿®å‰ª/çŒæº‰/å…¶ä»–ï¼‰',
-  `type_code` varchar(20) DEFAULT NULL COMMENT 'å†œäº‹ç±»åž‹ç¼–ç ',
-  `type_name` varchar(50) DEFAULT NULL COMMENT 'å†œäº‹ç±»åž‹åç§°',
-  `material_type` varchar(20) DEFAULT NULL COMMENT 'å†œèµ„ç±»åž‹ï¼ˆæžšä¸¾â†’å­—å…¸ï¼šè‚¥æ–™/å†œè¯/å·¥å…·ï¼‰',
-  `plot_code` varchar(50) DEFAULT NULL COMMENT 'åœ°å—ç¼–å·ï¼ˆD-001ï¼‰',
-  `executor` varchar(100) DEFAULT NULL COMMENT 'æ‰§è¡Œäºº',
-  `execute_date` date DEFAULT NULL COMMENT 'æ‰§è¡Œæ—¥æœŸ',
-  `complete_amount` decimal(12,2) DEFAULT NULL COMMENT 'å®Œæˆé‡',
-  `unit` varchar(20) DEFAULT NULL COMMENT 'å•ä½ï¼ˆäº©/ä¸ªï¼‰',
-  `area` decimal(12,2) DEFAULT NULL COMMENT 'é¢ç§¯',
-  `content` varchar(1000) DEFAULT NULL COMMENT 'æ‰§è¡Œå†…å®¹',
-  `photo` varchar(500) DEFAULT NULL COMMENT 'ç…§ç‰‡',
-  `audit_remark` varchar(500) DEFAULT NULL COMMENT 'å®¡æ ¸å¤‡æ³¨',
-  `source` varchar(20) DEFAULT NULL COMMENT 'æ¥æºï¼špc/mobile',
-  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'çŠ¶æ€',
-  `remark` varchar(500) DEFAULT NULL COMMENT 'å¤‡æ³¨',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'åˆ›å»ºæ—¶é—´',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'æ›´æ–°æ—¶é—´',
-  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT 'é€»è¾‘åˆ é™¤',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `record_code` varchar(50) NOT NULL COMMENT '记录编号（唯一）',
+  `plan_id` bigint DEFAULT NULL COMMENT '关联计划（→ sf_farming_plan.id）',
+  `task_id` bigint DEFAULT NULL COMMENT '关联任务（→ sf_farming_task.id）',
+  `base_id` bigint DEFAULT NULL COMMENT '所属基地（→ sf_base.id）',
+  `plot_ids` varchar(500) DEFAULT NULL COMMENT '地块范围',
+  `farm_type` varchar(20) DEFAULT NULL COMMENT '农事类型（枚举→字典：施肥/喷药/修剪/灌溉/其他）',
+  `type_code` varchar(20) DEFAULT NULL COMMENT '农事类型编码',
+  `type_name` varchar(50) DEFAULT NULL COMMENT '农事类型名称',
+  `material_type` varchar(20) DEFAULT NULL COMMENT '农资类型（枚举→字典：肥料/农药/工具）',
+  `plot_code` varchar(50) DEFAULT NULL COMMENT '地块编号（D-001）',
+  `executor` varchar(100) DEFAULT NULL COMMENT '执行人',
+  `execute_date` date DEFAULT NULL COMMENT '执行日期',
+  `complete_amount` decimal(12,2) DEFAULT NULL COMMENT '完成量',
+  `unit` varchar(20) DEFAULT NULL COMMENT '单位（亩/个）',
+  `area` decimal(12,2) DEFAULT NULL COMMENT '面积',
+  `content` varchar(1000) DEFAULT NULL COMMENT '执行内容',
+  `photo` varchar(500) DEFAULT NULL COMMENT '照片',
+  `audit_remark` varchar(500) DEFAULT NULL COMMENT '审核备注',
+  `source` varchar(20) DEFAULT NULL COMMENT '来源：pc/mobile',
+  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_farming_record_code` (`record_code`),
   KEY `idx_farming_record_plan` (`plan_id`),
   KEY `idx_farming_record_task` (`task_id`),
   KEY `idx_farming_record_base` (`base_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='å†œäº‹è®°å½•';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农事记录';
 
 DROP TABLE IF EXISTS `sf_patrol_plan`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_patrol_plan` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'ä¸»é”®',
-  `plan_code` varchar(50) NOT NULL COMMENT 'å·¡æŸ¥ç¼–å·ï¼ˆå”¯ä¸€ï¼‰',
-  `base_id` bigint DEFAULT NULL COMMENT 'æ‰€å±žåŸºåœ°ï¼ˆâ†’ sf_base.idï¼‰',
-  `patrol_type` varchar(20) DEFAULT NULL COMMENT 'å·¡æŸ¥ç±»åž‹ï¼ˆæžšä¸¾â†’å­—å…¸ï¼šæ—¥å¸¸/ä¸“é¡¹/ç—…è™«å®³/æ°”è±¡/ç”Ÿé•¿ï¼‰',
-  `plot_ids` varchar(500) DEFAULT NULL COMMENT 'å·¡æŸ¥åœ°å—',
-  `route_id` bigint DEFAULT NULL COMMENT 'å·¡å›­è·¯çº¿ï¼ˆâ†’ sf_patrol_route.idï¼‰',
-  `route_name` varchar(100) DEFAULT NULL COMMENT 'å·¡å›­è·¯çº¿åç§°ï¼ˆå±•ç¤ºï¼‰',
-  `patrol_user` varchar(100) DEFAULT NULL COMMENT 'å·¡æŸ¥äººå‘˜',
-  `patrol_time` datetime DEFAULT NULL COMMENT 'å·¡æŸ¥æ—¶é—´',
-  `frequency` varchar(20) DEFAULT NULL COMMENT 'é¢‘æ¬¡',
-  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'çŠ¶æ€',
-  `problem` varchar(200) DEFAULT NULL COMMENT 'å‘çŽ°é—®é¢˜',
-  `remark` varchar(500) DEFAULT NULL COMMENT 'å¤‡æ³¨',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'åˆ›å»ºæ—¶é—´',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'æ›´æ–°æ—¶é—´',
-  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT 'é€»è¾‘åˆ é™¤',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `plan_code` varchar(50) NOT NULL COMMENT '巡查编号（唯一）',
+  `base_id` bigint DEFAULT NULL COMMENT '所属基地（→ sf_base.id）',
+  `patrol_type` varchar(20) DEFAULT NULL COMMENT '巡查类型（枚举→字典：日常/专项/病虫害/气象/生长）',
+  `plot_ids` varchar(500) DEFAULT NULL COMMENT '巡查地块',
+  `route_id` bigint DEFAULT NULL COMMENT '巡园路线（→ sf_patrol_route.id）',
+  `route_name` varchar(100) DEFAULT NULL COMMENT '巡园路线名称（展示）',
+  `patrol_user` varchar(100) DEFAULT NULL COMMENT '巡查人员',
+  `patrol_time` datetime DEFAULT NULL COMMENT '巡查时间',
+  `frequency` varchar(20) DEFAULT NULL COMMENT '频次',
+  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态',
+  `problem` varchar(200) DEFAULT NULL COMMENT '发现问题',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_patrol_plan_code` (`plan_code`),
   KEY `idx_patrol_plan_base` (`base_id`),
   KEY `idx_patrol_plan_route` (`route_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='å·¡å›­è®¡åˆ’';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='巡园计划';
 
 DROP TABLE IF EXISTS `sf_patrol_route`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_patrol_route` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'ä¸»é”®',
-  `route_code` varchar(50) NOT NULL COMMENT 'è·¯çº¿ç¼–å·ï¼ˆå”¯ä¸€ï¼‰',
-  `route_name` varchar(100) NOT NULL COMMENT 'è·¯çº¿åç§°',
-  `base_id` bigint DEFAULT NULL COMMENT 'è¦†ç›–åŸºåœ°ï¼ˆâ†’ sf_base.idï¼‰',
-  `coverage` varchar(500) DEFAULT NULL COMMENT 'è¦†ç›–åŒºåŸŸ',
-  `point_count` int DEFAULT NULL COMMENT 'ç‚¹ä½æ•°',
-  `required_count` int DEFAULT NULL COMMENT 'å¿…å·¡ç‚¹æ•°',
-  `points` text COMMENT 'å·¡å›­ç‚¹ä½ï¼ˆJSON æ•°ç»„ï¼‰',
-  `enabled` tinyint NOT NULL DEFAULT '1' COMMENT 'æ˜¯å¦å¯ç”¨ï¼š0=å¦ 1=æ˜¯',
-  `frequency` varchar(20) DEFAULT NULL COMMENT 'é¢‘æ¬¡',
-  `status` varchar(20) NOT NULL DEFAULT 'active' COMMENT 'çŠ¶æ€',
-  `remark` varchar(500) DEFAULT NULL COMMENT 'å¤‡æ³¨',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'åˆ›å»ºæ—¶é—´',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'æ›´æ–°æ—¶é—´',
-  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT 'é€»è¾‘åˆ é™¤',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `route_code` varchar(50) NOT NULL COMMENT '路线编号（唯一）',
+  `route_name` varchar(100) NOT NULL COMMENT '路线名称',
+  `base_id` bigint DEFAULT NULL COMMENT '覆盖基地（→ sf_base.id）',
+  `coverage` varchar(500) DEFAULT NULL COMMENT '覆盖区域',
+  `point_count` int DEFAULT NULL COMMENT '点位数',
+  `required_count` int DEFAULT NULL COMMENT '必巡点数',
+  `points` text COMMENT '巡园点位（JSON 数组）',
+  `enabled` tinyint NOT NULL DEFAULT '1' COMMENT '是否启用：0=否 1=是',
+  `frequency` varchar(20) DEFAULT NULL COMMENT '频次',
+  `status` varchar(20) NOT NULL DEFAULT 'active' COMMENT '状态',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_patrol_route_code` (`route_code`),
   KEY `idx_patrol_route_base` (`base_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='å·¡å›­è·¯çº¿';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='巡园路线';
 
 DROP TABLE IF EXISTS `sf_patrol_abnormal`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_patrol_abnormal` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'ä¸»é”®',
-  `abnormal_code` varchar(50) NOT NULL COMMENT 'å¼‚å¸¸ç¼–å·ï¼ˆå”¯ä¸€ï¼‰',
-  `source` varchar(20) DEFAULT NULL COMMENT 'æ¥æºï¼špatrol/drone',
-  `base_id` bigint DEFAULT NULL COMMENT 'æ‰€å±žåŸºåœ°ï¼ˆâ†’ sf_base.idï¼‰',
-  `plot_id` bigint DEFAULT NULL COMMENT 'å·¡æŸ¥åœ°å—ï¼ˆâ†’ sf_plot.idï¼‰',
-  `plot_code` varchar(50) DEFAULT NULL COMMENT 'åœ°å—ç¼–å·ï¼ˆD-006ï¼‰',
-  `route_id` bigint DEFAULT NULL COMMENT 'å…³è”å·¡å›­è·¯çº¿ï¼ˆâ†’ sf_patrol_route.idï¼‰',
-  `abnormal_type` varchar(20) DEFAULT NULL COMMENT 'å¼‚å¸¸ç±»åž‹ï¼ˆæžšä¸¾â†’å­—å…¸ï¼‰',
-  `abnormal_desc` varchar(500) DEFAULT NULL COMMENT 'å¼‚å¸¸è¯´æ˜Ž',
-  `reporter` varchar(100) DEFAULT NULL COMMENT 'ä¸ŠæŠ¥äºº',
-  `report_time` datetime DEFAULT NULL COMMENT 'ä¸ŠæŠ¥æ—¶é—´',
-  `severity` varchar(20) DEFAULT NULL COMMENT 'ä¸¥é‡ç¨‹åº¦ï¼šlow/medium/high',
-  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'çŠ¶æ€ï¼špending/processing/done',
-  `handle_result` varchar(200) DEFAULT NULL COMMENT 'å¤„ç½®ç»“æžœ',
-  `handle_remark` varchar(500) DEFAULT NULL COMMENT 'å¤„ç½®è¯´æ˜Ž',
-  `handle_time` datetime DEFAULT NULL COMMENT 'å¤„ç½®æ—¶é—´',
-  `remark` varchar(500) DEFAULT NULL COMMENT 'å¤‡æ³¨',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'åˆ›å»ºæ—¶é—´',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'æ›´æ–°æ—¶é—´',
-  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT 'é€»è¾‘åˆ é™¤',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `abnormal_code` varchar(50) NOT NULL COMMENT '异常编号（唯一）',
+  `source` varchar(20) DEFAULT NULL COMMENT '来源：patrol/drone',
+  `base_id` bigint DEFAULT NULL COMMENT '所属基地（→ sf_base.id）',
+  `plot_id` bigint DEFAULT NULL COMMENT '巡查地块（→ sf_plot.id）',
+  `plot_code` varchar(50) DEFAULT NULL COMMENT '地块编号（D-006）',
+  `route_id` bigint DEFAULT NULL COMMENT '关联巡园路线（→ sf_patrol_route.id）',
+  `abnormal_type` varchar(20) DEFAULT NULL COMMENT '异常类型（枚举→字典）',
+  `abnormal_desc` varchar(500) DEFAULT NULL COMMENT '异常说明',
+  `reporter` varchar(100) DEFAULT NULL COMMENT '上报人',
+  `report_time` datetime DEFAULT NULL COMMENT '上报时间',
+  `severity` varchar(20) DEFAULT NULL COMMENT '严重程度：low/medium/high',
+  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending/processing/done',
+  `handle_result` varchar(200) DEFAULT NULL COMMENT '处置结果',
+  `handle_remark` varchar(500) DEFAULT NULL COMMENT '处置说明',
+  `handle_time` datetime DEFAULT NULL COMMENT '处置时间',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_patrol_abnormal_code` (`abnormal_code`),
   KEY `idx_patrol_abnormal_base` (`base_id`),
   KEY `idx_patrol_abnormal_plot` (`plot_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='å·¡å›­å¼‚å¸¸ä¸ŠæŠ¥';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='巡园异常上报';
 
 DROP TABLE IF EXISTS `sf_drone_patrol`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_drone_patrol` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'ä¸»é”®',
-  `task_code` varchar(50) NOT NULL COMMENT 'ä»»åŠ¡ç¼–å·ï¼ˆå”¯ä¸€ï¼‰',
-  `sortie` varchar(50) DEFAULT NULL COMMENT 'æž¶æ¬¡',
-  `drone_task_name` varchar(100) DEFAULT NULL COMMENT 'ä»»åŠ¡åç§°ï¼ˆå±•ç¤ºï¼‰',
-  `base_id` bigint DEFAULT NULL COMMENT 'æ‰€å±žåŸºåœ°ï¼ˆâ†’ sf_base.idï¼‰',
-  `drone` varchar(100) DEFAULT NULL COMMENT 'æ— äººæœº',
-  `plot_ids` varchar(500) DEFAULT NULL COMMENT 'å·¡æŸ¥åœ°å—',
-  `route_id` bigint DEFAULT NULL COMMENT 'å…³è”è·¯çº¿ï¼ˆâ†’ sf_patrol_route.idï¼‰',
-  `flight_area` decimal(12,2) DEFAULT NULL COMMENT 'é£žè¡Œé¢ç§¯ï¼ˆäº©ï¼‰',
-  `progress` decimal(5,2) DEFAULT NULL COMMENT 'è¿›åº¦ï¼ˆ0-100ï¼‰',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `task_code` varchar(50) NOT NULL COMMENT '任务编号（唯一）',
+  `sortie` varchar(50) DEFAULT NULL COMMENT '架次',
+  `drone_task_name` varchar(100) DEFAULT NULL COMMENT '任务名称（展示）',
+  `base_id` bigint DEFAULT NULL COMMENT '所属基地（→ sf_base.id）',
+  `drone` varchar(100) DEFAULT NULL COMMENT '无人机',
+  `plot_ids` varchar(500) DEFAULT NULL COMMENT '巡查地块',
+  `route_id` bigint DEFAULT NULL COMMENT '关联路线（→ sf_patrol_route.id）',
+  `flight_area` decimal(12,2) DEFAULT NULL COMMENT '飞行面积（亩）',
+  `progress` decimal(5,2) DEFAULT NULL COMMENT '进度（0-100）',
   `rtk` varchar(50) DEFAULT NULL COMMENT 'RTK',
-  `flight_height` varchar(50) DEFAULT NULL COMMENT 'èˆªé«˜',
-  `speed` varchar(50) DEFAULT NULL COMMENT 'é€Ÿåº¦',
-  `route` varchar(500) DEFAULT NULL COMMENT 'èˆªçº¿',
-  `plan_time` datetime DEFAULT NULL COMMENT 'è®¡åˆ’æ—¶é—´',
-  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT 'çŠ¶æ€',
-  `created_by` varchar(100) DEFAULT NULL COMMENT 'åˆ›å»ºäºº',
-  `remark` varchar(500) DEFAULT NULL COMMENT 'å¤‡æ³¨',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'åˆ›å»ºæ—¶é—´',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'æ›´æ–°æ—¶é—´',
-  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT 'é€»è¾‘åˆ é™¤',
+  `flight_height` varchar(50) DEFAULT NULL COMMENT '航高',
+  `speed` varchar(50) DEFAULT NULL COMMENT '速度',
+  `route` varchar(500) DEFAULT NULL COMMENT '航线',
+  `plan_time` datetime DEFAULT NULL COMMENT '计划时间',
+  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态',
+  `created_by` varchar(100) DEFAULT NULL COMMENT '创建人',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_drone_patrol_code` (`task_code`),
   KEY `idx_drone_patrol_base` (`base_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='æ— äººæœºå·¡æ£€';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='无人机巡检';
 
 DROP TABLE IF EXISTS `sf_guide_standard`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_guide_standard` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'ä¸»é”®',
-  `standard_code` varchar(50) NOT NULL COMMENT 'æ ‡å‡†ç¼–å·ï¼ˆå”¯ä¸€ï¼‰',
-  `standard_name` varchar(100) NOT NULL COMMENT 'æ ‡å‡†åç§°',
-  `farm_type` varchar(20) DEFAULT NULL COMMENT 'å†œäº‹ç±»åž‹ï¼ˆæžšä¸¾â†’å­—å…¸ï¼‰',
-  `level` varchar(20) DEFAULT NULL COMMENT 'çº§åˆ«ï¼ˆæžšä¸¾â†’å­—å…¸ï¼‰',
-  `variety` varchar(100) DEFAULT NULL COMMENT 'é€‚ç”¨å“ç§',
-  `key_process` varchar(500) DEFAULT NULL COMMENT 'å…³é”®å·¥åº',
-  `dosage` varchar(200) DEFAULT NULL COMMENT 'ç”¨é‡',
-  `accept_index` varchar(200) DEFAULT NULL COMMENT 'éªŒæ”¶æŒ‡æ ‡',
-  `effective_date` date DEFAULT NULL COMMENT 'ç”Ÿæ•ˆæ—¥æœŸ',
-  `status` varchar(20) NOT NULL DEFAULT 'active' COMMENT 'çŠ¶æ€ï¼šactive/inactive',
-  `referenced` int DEFAULT '0' COMMENT 'è¢«å¼•ç”¨æ¬¡æ•°',
-  `remark` varchar(500) DEFAULT NULL COMMENT 'å¤‡æ³¨',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'åˆ›å»ºæ—¶é—´',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'æ›´æ–°æ—¶é—´',
-  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT 'é€»è¾‘åˆ é™¤',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `standard_code` varchar(50) NOT NULL COMMENT '标准编号（唯一）',
+  `standard_name` varchar(100) NOT NULL COMMENT '标准名称',
+  `farm_type` varchar(20) DEFAULT NULL COMMENT '农事类型（枚举→字典）',
+  `level` varchar(20) DEFAULT NULL COMMENT '级别（枚举→字典）',
+  `variety` varchar(100) DEFAULT NULL COMMENT '适用品种',
+  `key_process` varchar(500) DEFAULT NULL COMMENT '关键工序',
+  `dosage` varchar(200) DEFAULT NULL COMMENT '用量',
+  `accept_index` varchar(200) DEFAULT NULL COMMENT '验收指标',
+  `effective_date` date DEFAULT NULL COMMENT '生效日期',
+  `status` varchar(20) NOT NULL DEFAULT 'active' COMMENT '状态：active/inactive',
+  `referenced` int DEFAULT '0' COMMENT '被引用次数',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_guide_standard_code` (`standard_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='å†œäº‹æ ‡å‡†';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农事标准';
 
 DROP TABLE IF EXISTS `sf_drone_flight_log`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_drone_flight_log` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'ä¸»é”®',
-  `log_code` varchar(50) NOT NULL COMMENT 'æ—¥å¿—ç¼–å·ï¼ˆå”¯ä¸€ï¼‰',
-  `sortie_id` varchar(50) DEFAULT NULL COMMENT 'æž¶æ¬¡ç¼–å·ï¼ˆâ†’ sf_drone_patrol.task_codeï¼‰',
-  `task_code` varchar(50) DEFAULT NULL COMMENT 'å…³è”ä»»åŠ¡ï¼ˆâ†’ sf_drone_patrol.task_codeï¼‰',
-  `event` varchar(50) DEFAULT NULL COMMENT 'äº‹ä»¶ï¼ˆèµ·é£ž/æš‚åœ/æ¢å¤/è¿”èˆª/é™è½ï¼‰',
-  `altitude` varchar(50) DEFAULT NULL COMMENT 'èˆªé«˜',
-  `speed` varchar(50) DEFAULT NULL COMMENT 'é€Ÿåº¦',
-  `battery` int DEFAULT NULL COMMENT 'ç”µé‡ï¼ˆ%ï¼‰',
-  `event_time` datetime DEFAULT NULL COMMENT 'äº‹ä»¶æ—¶é—´',
-  `remark` varchar(500) DEFAULT NULL COMMENT 'å¤‡æ³¨',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'åˆ›å»ºæ—¶é—´',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'æ›´æ–°æ—¶é—´',
-  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT 'é€»è¾‘åˆ é™¤',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `log_code` varchar(50) NOT NULL COMMENT '日志编号（唯一）',
+  `sortie_id` varchar(50) DEFAULT NULL COMMENT '架次编号（→ sf_drone_patrol.task_code）',
+  `task_code` varchar(50) DEFAULT NULL COMMENT '关联任务（→ sf_drone_patrol.task_code）',
+  `event` varchar(50) DEFAULT NULL COMMENT '事件（起飞/暂停/恢复/返航/降落）',
+  `altitude` varchar(50) DEFAULT NULL COMMENT '航高',
+  `speed` varchar(50) DEFAULT NULL COMMENT '速度',
+  `battery` int DEFAULT NULL COMMENT '电量（%）',
+  `event_time` datetime DEFAULT NULL COMMENT '事件时间',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_drone_flight_log_code` (`log_code`),
   KEY `idx_flight_log_sortie` (`sortie_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=63 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='æ— äººæœºé£žè¡Œæ—¥å¿—';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
+) ENGINE=InnoDB AUTO_INCREMENT=63 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='无人机飞行日志';
 
 DROP TABLE IF EXISTS `sf_patrol_checkin`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_patrol_checkin` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'ä¸»é”®',
-  `checkin_code` varchar(50) NOT NULL COMMENT 'æ‰“å¡ç¼–å·ï¼ˆå”¯ä¸€ï¼‰',
-  `patrol_plan_id` bigint DEFAULT NULL COMMENT 'å…³è”å·¡å›­è®¡åˆ’ï¼ˆâ†’ sf_patrol_plan.idï¼‰',
-  `route_id` bigint DEFAULT NULL COMMENT 'å…³è”å·¡å›­è·¯çº¿ï¼ˆâ†’ sf_patrol_route.idï¼‰',
-  `base_id` bigint DEFAULT NULL COMMENT 'æ‰€å±žåŸºåœ°ï¼ˆâ†’ sf_base.idï¼‰',
-  `patrol_type` varchar(20) DEFAULT NULL COMMENT 'å·¡æŸ¥ç±»åž‹',
-  `plot_ids` varchar(500) DEFAULT NULL COMMENT 'å·¡æŸ¥åœ°å—ï¼ˆé€—å·åˆ†éš”ï¼‰',
-  `inspector` varchar(100) DEFAULT NULL COMMENT 'å·¡æŸ¥äºº',
-  `checkin_time` datetime DEFAULT NULL COMMENT 'æ‰“å¡æ—¶é—´',
-  `issue_code` varchar(20) DEFAULT NULL COMMENT 'é—®é¢˜ç ï¼ˆnormal/warning/dangerï¼‰',
-  `issue_name` varchar(200) DEFAULT NULL COMMENT 'é—®é¢˜åç§°',
-  `points_done` int DEFAULT '0' COMMENT 'å·²å®Œæˆç‚¹æ•°',
-  `points_total` int DEFAULT '0' COMMENT 'æ€»ç‚¹æ•°',
-  `status` varchar(20) NOT NULL DEFAULT 'completed' COMMENT 'çŠ¶æ€',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'åˆ›å»ºæ—¶é—´',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'æ›´æ–°æ—¶é—´',
-  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT 'é€»è¾‘åˆ é™¤',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `checkin_code` varchar(50) NOT NULL COMMENT '打卡编号（唯一）',
+  `patrol_plan_id` bigint DEFAULT NULL COMMENT '关联巡园计划（→ sf_patrol_plan.id）',
+  `route_id` bigint DEFAULT NULL COMMENT '关联巡园路线（→ sf_patrol_route.id）',
+  `base_id` bigint DEFAULT NULL COMMENT '所属基地（→ sf_base.id）',
+  `patrol_type` varchar(20) DEFAULT NULL COMMENT '巡查类型',
+  `plot_ids` varchar(500) DEFAULT NULL COMMENT '巡查地块（逗号分隔）',
+  `inspector` varchar(100) DEFAULT NULL COMMENT '巡查人',
+  `checkin_time` datetime DEFAULT NULL COMMENT '打卡时间',
+  `issue_code` varchar(20) DEFAULT NULL COMMENT '问题码（normal/warning/danger）',
+  `issue_name` varchar(200) DEFAULT NULL COMMENT '问题名称',
+  `points_done` int DEFAULT '0' COMMENT '已完成点数',
+  `points_total` int DEFAULT '0' COMMENT '总点数',
+  `status` varchar(20) NOT NULL DEFAULT 'completed' COMMENT '状态',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_patrol_checkin_code` (`checkin_code`),
   KEY `idx_checkin_plan` (`patrol_plan_id`),
   KEY `idx_checkin_route` (`route_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='å·¡å›­æ‰“å¡è®°å½•';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='巡园打卡记录';
 
 -- ============================================================
 -- 【采收管理（采收计划 / 记录 / 采后 / 发货 / 储藏）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_harvest_plan`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_harvest_plan` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `plan_code` varchar(50) NOT NULL COMMENT '计划编号（唯一）',
@@ -782,14 +616,8 @@ CREATE TABLE `sf_harvest_plan` (
   KEY `idx_harvest_plan_base` (`base_id`),
   KEY `idx_harvest_plan_batch` (`batch_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='采收计划';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_harvest_record`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_harvest_record` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `record_code` varchar(50) NOT NULL COMMENT '记录编号（唯一）',
@@ -820,14 +648,8 @@ CREATE TABLE `sf_harvest_record` (
   KEY `idx_harvest_record_batch` (`batch_no`),
   KEY `idx_harvest_record_base` (`base_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='采收记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_harvest_process`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_harvest_process` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `process_code` varchar(50) NOT NULL COMMENT '批次编号（唯一）',
@@ -854,14 +676,8 @@ CREATE TABLE `sf_harvest_process` (
   UNIQUE KEY `uk_harvest_process_code` (`process_code`),
   KEY `idx_harvest_process_batch` (`batch_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=23 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='采后处理';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_harvest_post`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_harvest_post` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `post_code` varchar(50) NOT NULL COMMENT '发货单号（唯一）',
@@ -890,14 +706,8 @@ CREATE TABLE `sf_harvest_post` (
   UNIQUE KEY `uk_harvest_post_code` (`post_code`),
   KEY `idx_harvest_post_batch` (`batch_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='采收发货';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_storage_location`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_storage_location` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `location_code` varchar(50) NOT NULL COMMENT '库位编号（唯一）',
@@ -915,14 +725,8 @@ CREATE TABLE `sf_storage_location` (
   UNIQUE KEY `uk_storage_location_code` (`location_code`),
   KEY `idx_storage_location_base` (`base_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='储藏库位';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_storage_env_record`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_storage_env_record` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `location_id` bigint NOT NULL COMMENT '库位（→ sf_storage_location.id）',
@@ -936,18 +740,12 @@ CREATE TABLE `sf_storage_env_record` (
   PRIMARY KEY (`id`),
   KEY `idx_storage_env_location` (`location_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='储藏温湿度记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【物资管理（供应商 / 档案 / 出入库 / 库存 / 领用 / 退库）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_material_supplier`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_material_supplier` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `supplier_code` varchar(50) NOT NULL COMMENT '供应商编号（唯一）',
@@ -967,14 +765,8 @@ CREATE TABLE `sf_material_supplier` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_material_supplier_code` (`supplier_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农资供应商';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_material_info`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_material_info` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `material_code` varchar(50) NOT NULL COMMENT '农资编号（唯一）',
@@ -1004,14 +796,8 @@ CREATE TABLE `sf_material_info` (
   UNIQUE KEY `uk_material_info_code` (`material_code`),
   KEY `idx_material_info_supplier` (`supplier_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农资档案';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_material_io`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_material_io` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `io_code` varchar(50) NOT NULL COMMENT '单号（唯一，IO-YYYYMMDD###）',
@@ -1040,14 +826,8 @@ CREATE TABLE `sf_material_io` (
   KEY `idx_material_io_material` (`material_id`),
   KEY `idx_material_io_warehouse` (`warehouse_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农资出入库';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_material_inventory`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_material_inventory` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `warehouse_id` bigint DEFAULT NULL COMMENT '仓库（→ sf_material_warehouse.id）',
@@ -1076,14 +856,8 @@ CREATE TABLE `sf_material_inventory` (
   KEY `idx_material_inventory_material` (`material_id`),
   KEY `idx_material_inventory_warehouse` (`warehouse_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农资库存';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_material_usage`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_material_usage` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `material_id` bigint DEFAULT NULL COMMENT '农资（→ sf_material_info.id）',
@@ -1108,14 +882,8 @@ CREATE TABLE `sf_material_usage` (
   KEY `idx_material_usage_material` (`material_id`),
   KEY `idx_material_usage_task` (`task_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农资领用与使用';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_material_return`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_material_return` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `return_code` varchar(50) NOT NULL COMMENT '退库单号（唯一）',
@@ -1141,14 +909,8 @@ CREATE TABLE `sf_material_return` (
   UNIQUE KEY `uk_material_return_code` (`return_code`),
   KEY `idx_material_return_material` (`material_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农资退库';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_material_warehouse`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_material_warehouse` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `warehouse_code` varchar(50) NOT NULL COMMENT '仓库编号（唯一）',
@@ -1169,14 +931,8 @@ CREATE TABLE `sf_material_warehouse` (
   UNIQUE KEY `uk_material_warehouse_code` (`warehouse_code`),
   UNIQUE KEY `uk_material_warehouse_name` (`warehouse_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农资仓库';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_material_category`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_material_category` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `category_code` varchar(50) NOT NULL COMMENT '分类编码（唯一）',
@@ -1196,18 +952,12 @@ CREATE TABLE `sf_material_category` (
   UNIQUE KEY `uk_material_category_code` (`category_code`),
   UNIQUE KEY `uk_material_category_name` (`category_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='农资分类';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【溯源管理（批次 / 编码 / 区块链 / 模板 / 标签）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_trace_batch`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_trace_batch` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `batch_no` varchar(50) NOT NULL COMMENT '批次号（唯一）',
@@ -1237,14 +987,8 @@ CREATE TABLE `sf_trace_batch` (
   KEY `idx_trace_batch_base` (`base_id`),
   KEY `idx_trace_batch_plot` (`plot_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='溯源批次';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_trace_code`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_trace_code` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `trace_code` varchar(100) NOT NULL COMMENT '追溯码（唯一）',
@@ -1273,14 +1017,8 @@ CREATE TABLE `sf_trace_code` (
   UNIQUE KEY `uk_trace_code` (`trace_code`),
   KEY `idx_trace_code_batch` (`batch_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='溯源编码';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_trace_blockchain`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_trace_blockchain` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `trace_code` varchar(100) DEFAULT NULL COMMENT '溯源码',
@@ -1304,14 +1042,8 @@ CREATE TABLE `sf_trace_blockchain` (
   PRIMARY KEY (`id`),
   KEY `idx_trace_blockchain_code` (`trace_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=65 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='区块链存证';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_trace_query_log`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_trace_query_log` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `trace_code` varchar(100) DEFAULT NULL COMMENT '溯源码',
@@ -1330,14 +1062,8 @@ CREATE TABLE `sf_trace_query_log` (
   PRIMARY KEY (`id`),
   KEY `idx_trace_query_code` (`trace_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='溯源查询记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_trace_template`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_trace_template` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `template_name` varchar(100) NOT NULL COMMENT '模板名称',
@@ -1354,14 +1080,8 @@ CREATE TABLE `sf_trace_template` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='溯源模板';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_trace_stage`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_trace_stage` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `stage_code` varchar(50) NOT NULL COMMENT '环节编码（唯一，planting/pruning/bagging/fertilizer/testing/harvest/coldchain）',
@@ -1376,14 +1096,8 @@ CREATE TABLE `sf_trace_stage` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_trace_stage_code` (`stage_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='溯源展示环节';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_label_type`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_label_type` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `label_code` varchar(50) NOT NULL COMMENT '标签编码（唯一）',
@@ -1400,14 +1114,8 @@ CREATE TABLE `sf_label_type` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_label_type_code` (`label_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='标签类型';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_label_stock`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_label_stock` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `label_type_id` bigint DEFAULT NULL COMMENT '标签类型（→ sf_label_type.id）',
@@ -1419,14 +1127,8 @@ CREATE TABLE `sf_label_stock` (
   PRIMARY KEY (`id`),
   KEY `idx_label_stock_type` (`label_type_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='标签库存';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_label_record`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_label_record` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `apply_code` varchar(50) DEFAULT NULL COMMENT '领用单号',
@@ -1446,14 +1148,8 @@ CREATE TABLE `sf_label_record` (
   PRIMARY KEY (`id`),
   KEY `idx_label_record_type` (`label_type_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='标签领用记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_trace_show_template`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_trace_show_template` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `template_code` varchar(50) DEFAULT NULL COMMENT '模板编码',
@@ -1470,14 +1166,8 @@ CREATE TABLE `sf_trace_show_template` (
   PRIMARY KEY (`id`),
   KEY `idx_show_tpl_code` (`template_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='溯源展示模板';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_trace_inspection`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_trace_inspection` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `report_no` varchar(100) NOT NULL COMMENT '报告编号',
@@ -1502,14 +1192,8 @@ CREATE TABLE `sf_trace_inspection` (
   KEY `idx_inspection_batch` (`batch_no`),
   KEY `idx_inspection_report` (`report_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='溯源检测报告';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_trace_recall`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_trace_recall` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `recall_code` varchar(50) DEFAULT NULL COMMENT '召回编号',
@@ -1525,14 +1209,8 @@ CREATE TABLE `sf_trace_recall` (
   PRIMARY KEY (`id`),
   KEY `idx_recall_batch` (`batch_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='溯源召回记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_trace_print_job`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_trace_print_job` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `job_code` varchar(50) DEFAULT NULL COMMENT '任务编码',
@@ -1552,14 +1230,8 @@ CREATE TABLE `sf_trace_print_job` (
   PRIMARY KEY (`id`),
   KEY `idx_print_batch` (`batch_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='溯源标签打印任务';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_trace_label_stock`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_trace_label_stock` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `label_name` varchar(100) NOT NULL COMMENT '标签名称',
@@ -1572,18 +1244,12 @@ CREATE TABLE `sf_trace_label_stock` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_label_name` (`label_name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='溯源标签库存';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【认养管理（认养果树 / 订单 / 农事 / 采收 / 相册 / 证书）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_adoption_tree`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_adoption_tree` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `tree_code` varchar(50) NOT NULL COMMENT '果树编号（唯一）',
@@ -1621,14 +1287,8 @@ CREATE TABLE `sf_adoption_tree` (
   UNIQUE KEY `uk_adoption_tree_code` (`tree_code`),
   KEY `idx_adoption_tree_base` (`base_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=32 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='认养果树';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_adoption_order`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_adoption_order` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `order_code` varchar(50) NOT NULL COMMENT '订单编号（唯一）',
@@ -1675,14 +1335,8 @@ CREATE TABLE `sf_adoption_order` (
   UNIQUE KEY `uk_adoption_order_code` (`order_code`),
   KEY `idx_adoption_order_tree` (`tree_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='认养订单';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_adoption_farming`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_adoption_farming` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `record_code` varchar(50) NOT NULL COMMENT '记录编号（唯一）',
@@ -1705,14 +1359,8 @@ CREATE TABLE `sf_adoption_farming` (
   UNIQUE KEY `uk_adoption_farming_code` (`record_code`),
   KEY `idx_adoption_farming_tree` (`tree_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='认养农事记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_adoption_harvest`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_adoption_harvest` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `record_code` varchar(50) NOT NULL COMMENT '记录编号（唯一）',
@@ -1737,14 +1385,8 @@ CREATE TABLE `sf_adoption_harvest` (
   UNIQUE KEY `uk_adoption_harvest_code` (`record_code`),
   KEY `idx_adoption_harvest_tree` (`tree_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='认养采收记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_adoption_photo`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_adoption_photo` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `tree_id` bigint DEFAULT NULL COMMENT '认养果树（→ sf_adoption_tree.id）',
@@ -1757,14 +1399,8 @@ CREATE TABLE `sf_adoption_photo` (
   PRIMARY KEY (`id`),
   KEY `idx_adoption_photo_tree` (`tree_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='成长相册';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_adoption_cert`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_adoption_cert` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `cert_code` varchar(50) NOT NULL COMMENT '证书编号（唯一）',
@@ -1778,7 +1414,7 @@ CREATE TABLE `sf_adoption_cert` (
   `variety` varchar(50) DEFAULT NULL COMMENT '品种',
   `estimate_yield` decimal(12,2) DEFAULT NULL COMMENT '预估产量',
   `template_id` bigint DEFAULT NULL COMMENT '模板（→ sf_adoption_cert_template.id）',
-  `template_code` varchar(50) DEFAULT NULL COMMENT 'æ¨¡æ¿ç¼–ç ',
+  `template_code` varchar(50) DEFAULT NULL COMMENT '模板编码',
   `issuer` varchar(100) DEFAULT NULL COMMENT '签发人',
   `issue_date` date DEFAULT NULL COMMENT '签发日期',
   `issue_time` datetime DEFAULT NULL COMMENT '签发时间',
@@ -1793,14 +1429,8 @@ CREATE TABLE `sf_adoption_cert` (
   UNIQUE KEY `uk_adoption_cert_code` (`cert_code`),
   KEY `idx_adoption_cert_tree` (`tree_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='认养证书';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_adoption_cert_template`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_adoption_cert_template` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `template_name` varchar(100) NOT NULL COMMENT '模板名称',
@@ -1812,18 +1442,12 @@ CREATE TABLE `sf_adoption_cert_template` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='认养证书模板';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【预警管理（预警记录 / 规则 / 内部报告）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_alert_record`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_alert_record` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `alert_title` varchar(200) NOT NULL COMMENT '预警标题',
@@ -1861,14 +1485,8 @@ CREATE TABLE `sf_alert_record` (
   KEY `idx_alert_record_level` (`level`),
   KEY `idx_alert_record_status` (`status`)
 ) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='预警记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_alert_rule`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_alert_rule` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `rule_code` varchar(50) NOT NULL COMMENT '规则编号（唯一）',
@@ -1891,14 +1509,8 @@ CREATE TABLE `sf_alert_rule` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_alert_rule_code` (`rule_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='预警规则';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_alert_report`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_alert_report` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `report_code` varchar(50) DEFAULT NULL COMMENT '报告编号',
@@ -1922,18 +1534,12 @@ CREATE TABLE `sf_alert_report` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='内部报告';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【设备管理（台账 / 类型 / 资产 / 接入 / 网关 / 视频 / 维护等）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_device`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_device` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `device_code` varchar(50) NOT NULL COMMENT '设备编号（唯一，业务编号）',
@@ -1980,14 +1586,8 @@ CREATE TABLE `sf_device` (
   KEY `idx_device_base` (`base_id`),
   KEY `idx_device_type` (`device_type`)
 ) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='设备台账';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_device_type`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_device_type` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `type_code` varchar(50) NOT NULL COMMENT '类型编码（唯一）',
@@ -2006,14 +1606,8 @@ CREATE TABLE `sf_device_type` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_device_type_code` (`type_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='设备类型与物模型';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_device_measure`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_device_measure` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `device_type_id` bigint NOT NULL COMMENT '设备类型（→ sf_device_type.id）',
@@ -2030,14 +1624,8 @@ CREATE TABLE `sf_device_measure` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_device_measure_key` (`device_type_id`,`measure_key`)
 ) ENGINE=InnoDB AUTO_INCREMENT=117 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='物模型测点';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_device_asset`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_device_asset` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `asset_code` varchar(50) NOT NULL COMMENT '盘点单号（唯一）',
@@ -2057,14 +1645,8 @@ CREATE TABLE `sf_device_asset` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_device_asset_code` (`asset_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='资产盘点';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_device_access`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_device_access` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `config_code` varchar(50) NOT NULL COMMENT '配置编号（唯一）',
@@ -2087,14 +1669,8 @@ CREATE TABLE `sf_device_access` (
   KEY `idx_device_access_device` (`device_id`),
   KEY `idx_device_access_gateway` (`gateway_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='设备接入配置';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_gateway`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_gateway` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `gateway_code` varchar(50) NOT NULL COMMENT '网关编号（唯一）',
@@ -2120,14 +1696,8 @@ CREATE TABLE `sf_gateway` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_gateway_code` (`gateway_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='网关与协议';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_video_channel`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_video_channel` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `channel_code` varchar(50) NOT NULL COMMENT '通道编号（唯一）',
@@ -2160,14 +1730,8 @@ CREATE TABLE `sf_video_channel` (
   UNIQUE KEY `uk_video_channel_code` (`channel_code`),
   KEY `idx_video_channel_base` (`base_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='视频监控通道';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_device_maintain`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_device_maintain` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `maintain_code` varchar(50) NOT NULL COMMENT '维护编号（唯一）',
@@ -2196,14 +1760,8 @@ CREATE TABLE `sf_device_maintain` (
   UNIQUE KEY `uk_device_maintain_code` (`maintain_code`),
   KEY `idx_device_maintain_device` (`device_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='设备维护工单';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_device_calibration`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_device_calibration` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `calibration_code` varchar(50) NOT NULL COMMENT '校准编号（唯一）',
@@ -2226,14 +1784,8 @@ CREATE TABLE `sf_device_calibration` (
   UNIQUE KEY `uk_device_calibration_code` (`calibration_code`),
   KEY `idx_device_calibration_device` (`device_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='校准检定';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_device_spare`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_device_spare` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `spare_code` varchar(50) NOT NULL COMMENT '备件编号（唯一）',
@@ -2256,14 +1808,8 @@ CREATE TABLE `sf_device_spare` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_device_spare_code` (`spare_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='备品备件';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_device_command`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_device_command` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `command_code` varchar(50) NOT NULL COMMENT '指令编号（唯一，CMD-YYYYMMDD-NNN）',
@@ -2281,14 +1827,8 @@ CREATE TABLE `sf_device_command` (
   UNIQUE KEY `uk_device_command_code` (`command_code`),
   KEY `idx_device_command_device` (`device_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='远程指令';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_device_log`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_device_log` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `log_time` datetime DEFAULT NULL COMMENT '日志时间',
@@ -2310,14 +1850,8 @@ CREATE TABLE `sf_device_log` (
   KEY `idx_device_log_device` (`device_id`),
   KEY `idx_device_log_time` (`log_time`)
 ) ENGINE=InnoDB AUTO_INCREMENT=61 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='设备日志';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_device_audit`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_device_audit` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `operate_time` datetime DEFAULT NULL COMMENT '操作时间',
@@ -2334,18 +1868,12 @@ CREATE TABLE `sf_device_audit` (
   PRIMARY KEY (`id`),
   KEY `idx_device_audit_time` (`operate_time`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='设备操作审计';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【证书管理（证书 / 电子签章）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_cert`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_cert` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `cert_no` varchar(100) NOT NULL COMMENT '证书编号（唯一）',
@@ -2372,15 +1900,15 @@ CREATE TABLE `sf_cert` (
   `revoke_reason` varchar(200) DEFAULT NULL COMMENT '作废/驳回原因',
   `issued_by` varchar(100) DEFAULT NULL COMMENT '签发人',
   `issued_at` datetime DEFAULT NULL COMMENT '签发时间',
-  `source_no` varchar(100) DEFAULT NULL COMMENT 'åŽŸè¯ä¹¦å·',
-  `report_no` varchar(100) DEFAULT NULL COMMENT 'æ£€æµ‹æŠ¥å‘Šå·',
-  `sort_order` int NOT NULL DEFAULT '0' COMMENT 'æŽ’åº',
-  `owner` varchar(100) DEFAULT NULL COMMENT 'è´Ÿè´£éƒ¨é—¨',
-  `variety` varchar(50) DEFAULT NULL COMMENT 'å“ç§',
-  `stamp` varchar(100) DEFAULT NULL COMMENT 'ç”µå­ç­¾ç« åç§°',
-  `operator` varchar(100) DEFAULT NULL COMMENT 'æœ€åŽæ“ä½œäºº',
-  `trace_code` varchar(100) DEFAULT NULL COMMENT 'æº¯æºç ',
-  `qr_url` varchar(500) DEFAULT NULL COMMENT 'äºŒç»´ç åœ°å€',
+  `source_no` varchar(100) DEFAULT NULL COMMENT '原证书号',
+  `report_no` varchar(100) DEFAULT NULL COMMENT '检测报告号',
+  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序',
+  `owner` varchar(100) DEFAULT NULL COMMENT '负责部门',
+  `variety` varchar(50) DEFAULT NULL COMMENT '品种',
+  `stamp` varchar(100) DEFAULT NULL COMMENT '电子签章名称',
+  `operator` varchar(100) DEFAULT NULL COMMENT '最后操作人',
+  `trace_code` varchar(100) DEFAULT NULL COMMENT '溯源码',
+  `qr_url` varchar(500) DEFAULT NULL COMMENT '二维码地址',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
@@ -2389,14 +1917,8 @@ CREATE TABLE `sf_cert` (
   KEY `idx_cert_batch` (`batch_no`),
   KEY `idx_cert_type` (`cert_type`)
 ) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='证书台账';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_cert_stamp`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_cert_stamp` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `user_id` bigint DEFAULT NULL COMMENT '签章人（→ sf_user.id）',
@@ -2408,18 +1930,12 @@ CREATE TABLE `sf_cert_stamp` (
   PRIMARY KEY (`id`),
   KEY `idx_cert_stamp_user` (`user_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='电子签章';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【经营分析（收入 / 应收 / 指标 / 成本 / 利润 / 绩效）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_biz_revenue_mix`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_biz_revenue_mix` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `revenue_type` varchar(100) NOT NULL COMMENT '收入类型（鲜果销售/认养收入/农资服务/冷链代储）',
@@ -2432,14 +1948,8 @@ CREATE TABLE `sf_biz_revenue_mix` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='经营收入构成';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_biz_receivable`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_biz_receivable` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `customer_name` varchar(100) NOT NULL COMMENT '客户名称',
@@ -2452,14 +1962,8 @@ CREATE TABLE `sf_biz_receivable` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='应收周转';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_biz_metric`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_biz_metric` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `metric_name` varchar(100) NOT NULL COMMENT '指标名称',
@@ -2474,14 +1978,8 @@ CREATE TABLE `sf_biz_metric` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='经营指标';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_cost_item`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_cost_item` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `cost_name` varchar(100) NOT NULL COMMENT '成本科目',
@@ -2495,14 +1993,8 @@ CREATE TABLE `sf_cost_item` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='成本科目';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_plot_profit`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_plot_profit` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `plot_id` bigint DEFAULT NULL COMMENT '地块（→ sf_plot.id）',
@@ -2522,14 +2014,8 @@ CREATE TABLE `sf_plot_profit` (
   PRIMARY KEY (`id`),
   KEY `idx_plot_profit_plot` (`plot_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='地块经营数据';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_performance_result`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_performance_result` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `user_id` bigint DEFAULT NULL COMMENT '人员（→ sf_user.id）',
@@ -2548,14 +2034,8 @@ CREATE TABLE `sf_performance_result` (
   KEY `idx_performance_user` (`user_id`),
   KEY `idx_performance_team` (`team`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='绩效结果';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_performance_task`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_performance_task` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `performance_id` bigint DEFAULT NULL COMMENT '绩效结果（→ sf_performance_result.id）',
@@ -2571,18 +2051,12 @@ CREATE TABLE `sf_performance_task` (
   PRIMARY KEY (`id`),
   KEY `idx_performance_task_perf` (`performance_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='绩效任务明细';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【销售管理（订单 / 发货 / 客户 / 售后 / 价格 / 目标 / 对账）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_sales_order`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_sales_order` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `order_code` varchar(50) NOT NULL COMMENT '订单编号（唯一）',
@@ -2630,14 +2104,8 @@ CREATE TABLE `sf_sales_order` (
   UNIQUE KEY `uk_sales_order_code` (`order_code`),
   KEY `idx_sales_order_customer` (`customer_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=72 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='销售订单';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_sales_shipment`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_sales_shipment` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `shipment_code` varchar(50) NOT NULL COMMENT '发货单号（唯一）',
@@ -2664,14 +2132,8 @@ CREATE TABLE `sf_sales_shipment` (
   UNIQUE KEY `uk_sales_shipment_code` (`shipment_code`),
   KEY `idx_sales_shipment_order` (`order_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='发货与物流';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_sales_customer`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_sales_customer` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `customer_code` varchar(50) NOT NULL COMMENT '客户编号（唯一）',
@@ -2705,14 +2167,8 @@ CREATE TABLE `sf_sales_customer` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_sales_customer_code` (`customer_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='客户';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_sales_aftersale`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_sales_aftersale` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `aftersale_code` varchar(50) NOT NULL COMMENT '售后单号（唯一）',
@@ -2737,14 +2193,8 @@ CREATE TABLE `sf_sales_aftersale` (
   UNIQUE KEY `uk_sales_aftersale_code` (`aftersale_code`),
   KEY `idx_sales_aftersale_order` (`order_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='售后与退款';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_sales_price_policy`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_sales_price_policy` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `policy_code` varchar(50) NOT NULL COMMENT '政策编号（唯一）',
@@ -2765,14 +2215,8 @@ CREATE TABLE `sf_sales_price_policy` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_sales_price_policy_code` (`policy_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='价格政策';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_sales_promotion`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_sales_promotion` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `promotion_code` varchar(50) NOT NULL COMMENT '活动编号（唯一）',
@@ -2791,14 +2235,8 @@ CREATE TABLE `sf_sales_promotion` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_sales_promotion_code` (`promotion_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='促销活动';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_sales_target`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_sales_target` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `target_code` varchar(50) DEFAULT NULL COMMENT '目标编码',
@@ -2817,14 +2255,8 @@ CREATE TABLE `sf_sales_target` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='销售目标';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_sales_statement`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_sales_statement` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `statement_code` varchar(50) NOT NULL COMMENT '对账单号（唯一）',
@@ -2848,14 +2280,8 @@ CREATE TABLE `sf_sales_statement` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_sales_statement_code` (`statement_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='客户对账单';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_sales_receipt`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_sales_receipt` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `receipt_code` varchar(50) NOT NULL COMMENT '收款单号（唯一）',
@@ -2876,18 +2302,12 @@ CREATE TABLE `sf_sales_receipt` (
   UNIQUE KEY `uk_sales_receipt_code` (`receipt_code`),
   KEY `idx_sales_receipt_order` (`order_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=67 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='收款流水';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【数据运营（数据源 / 归集 / 模型监控 / 成效 / 里程碑）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_data_source`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_data_source` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `source_code` varchar(50) DEFAULT NULL COMMENT '数据源编码',
@@ -2903,14 +2323,8 @@ CREATE TABLE `sf_data_source` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据源接入';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_data_collection`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_data_collection` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `source` varchar(100) NOT NULL COMMENT '数据来源（农事/设备/销售/溯源/环境）',
@@ -2924,14 +2338,8 @@ CREATE TABLE `sf_data_collection` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_data_collection_source` (`source`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据归集';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_model_monitor`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_model_monitor` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `model_name` varchar(100) NOT NULL COMMENT '模型名称',
@@ -2945,14 +2353,8 @@ CREATE TABLE `sf_model_monitor` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='模型监控';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_achievement`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_achievement` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `item_name` varchar(100) NOT NULL COMMENT '成效项（节水/节肥/减药/增产/减损）',
@@ -2966,14 +2368,8 @@ CREATE TABLE `sf_achievement` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='成效记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_milestone`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_milestone` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `name` varchar(200) NOT NULL COMMENT '亮点名称',
@@ -2986,23 +2382,17 @@ CREATE TABLE `sf_milestone` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数字化里程碑';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【模型管理（模型配置 / 物候 / 病虫害 / 产量预估）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_model_config`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_model_config` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `model_code` varchar(50) NOT NULL COMMENT '模型编码（growth/weather/pest/phenology/yield/price）',
   `model_name` varchar(100) NOT NULL COMMENT '模型名称',
-  `snapshot_json` longtext COMMENT 'æ¨¡åž‹å¿«ç…§JSON',
+  `snapshot_json` longtext COMMENT '模型快照JSON',
   `enabled` tinyint NOT NULL DEFAULT '1' COMMENT '启用状态（0/1）',
   `version` varchar(50) DEFAULT NULL COMMENT '版本',
   `accuracy` decimal(5,2) DEFAULT NULL COMMENT '平均准确率(%)',
@@ -3019,14 +2409,8 @@ CREATE TABLE `sf_model_config` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_model_config_code` (`model_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='模型配置';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_model_threshold`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_model_threshold` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `threshold_key` varchar(50) NOT NULL COMMENT '阈值键（pest_high/pest_mid/yield_confidence/temp_deviation/phenology_offset/price_fluctuation）',
@@ -3039,14 +2423,8 @@ CREATE TABLE `sf_model_threshold` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_model_threshold_key` (`threshold_key`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='模型阈值配置';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_phenology_stage`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_phenology_stage` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `stage_name` varchar(100) NOT NULL COMMENT '物候期名称',
@@ -3059,14 +2437,8 @@ CREATE TABLE `sf_phenology_stage` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='物候期配置';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_pest_risk`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_pest_risk` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `plot_id` bigint DEFAULT NULL COMMENT '地块（→ sf_plot.id）',
@@ -3082,14 +2454,8 @@ CREATE TABLE `sf_pest_risk` (
   PRIMARY KEY (`id`),
   KEY `idx_pest_risk_plot` (`plot_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='地块病虫害风险';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_yield_forecast`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_yield_forecast` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `plot_id` bigint DEFAULT NULL COMMENT '地块（→ sf_plot.id）',
@@ -3106,24 +2472,12 @@ CREATE TABLE `sf_yield_forecast` (
   PRIMARY KEY (`id`),
   KEY `idx_yield_forecast_plot` (`plot_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='产量预估';
-/*!40101 SET character_set_client = @saved_cs_client */;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
-
-/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
-/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
-/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
-/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
-/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
-/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- ============================================================
 -- 【商城管理（商品 / 促销 / 优惠券 / 订单 / 会员 / 社区等）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_mall_product`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_product` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `product_code` varchar(50) NOT NULL COMMENT '商品编码（唯一）',
@@ -3153,14 +2507,8 @@ CREATE TABLE `sf_mall_product` (
   UNIQUE KEY `uk_mall_product_code` (`product_code`),
   KEY `idx_mall_product_category` (`category_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城商品';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_category`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_category` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `category_code` varchar(50) NOT NULL COMMENT '分类编码（唯一）',
@@ -3174,14 +2522,8 @@ CREATE TABLE `sf_mall_category` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_mall_category_code` (`category_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城商品分类';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_variety`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_variety` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `variety_code` varchar(50) NOT NULL COMMENT '品种编码（唯一）',
@@ -3195,14 +2537,8 @@ CREATE TABLE `sf_mall_variety` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_mall_variety_code` (`variety_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城苹果品种';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_promotion`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_promotion` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `promotion_name` varchar(100) NOT NULL COMMENT '活动名称',
@@ -3230,14 +2566,8 @@ CREATE TABLE `sf_mall_promotion` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城促销活动';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_coupon`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_coupon` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `coupon_name` varchar(100) NOT NULL COMMENT '优惠券名称',
@@ -3262,14 +2592,8 @@ CREATE TABLE `sf_mall_coupon` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城优惠券';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_banner`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_banner` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `name` varchar(100) DEFAULT NULL COMMENT '名称',
@@ -3283,14 +2607,8 @@ CREATE TABLE `sf_mall_banner` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='首页轮播图';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_quick_entry`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_quick_entry` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `name` varchar(100) DEFAULT NULL COMMENT '名称',
@@ -3305,14 +2623,8 @@ CREATE TABLE `sf_mall_quick_entry` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='首页快捷入口';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_order`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_order` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `order_code` varchar(50) NOT NULL COMMENT '订单号（唯一）',
@@ -3344,14 +2656,8 @@ CREATE TABLE `sf_mall_order` (
   UNIQUE KEY `uk_mall_order_code` (`order_code`),
   KEY `idx_mall_order_member` (`member_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城C端订单';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_aftersale`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_aftersale` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `aftersale_code` varchar(50) NOT NULL COMMENT '售后单号（唯一）',
@@ -3374,14 +2680,8 @@ CREATE TABLE `sf_mall_aftersale` (
   UNIQUE KEY `uk_mall_aftersale_code` (`aftersale_code`),
   KEY `idx_mall_aftersale_order` (`order_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城售后';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_invoice`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_invoice` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `invoice_code` varchar(50) NOT NULL COMMENT '发票编号（唯一）',
@@ -3413,14 +2713,8 @@ CREATE TABLE `sf_mall_invoice` (
   UNIQUE KEY `uk_mall_invoice_code` (`invoice_code`),
   KEY `idx_mall_invoice_order` (`order_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城发票';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_freight`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_freight` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `template_name` varchar(100) NOT NULL COMMENT '模板名称',
@@ -3435,14 +2729,8 @@ CREATE TABLE `sf_mall_freight` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城运费模板';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_member`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_member` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `member_code` varchar(50) NOT NULL COMMENT '会员编号（唯一）',
@@ -3472,14 +2760,8 @@ CREATE TABLE `sf_mall_member` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_mall_member_code` (`member_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城会员';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_level_rule`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_level_rule` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `level` varchar(20) NOT NULL COMMENT '等级（vip/gold/normal）',
@@ -3493,14 +2775,8 @@ CREATE TABLE `sf_mall_level_rule` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_mall_level_rule_level` (`level`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='会员等级规则';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_post`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_post` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `author` varchar(100) DEFAULT NULL COMMENT '作者',
@@ -3521,14 +2797,8 @@ CREATE TABLE `sf_mall_post` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='社区内容';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_notice`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_notice` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `trigger_scene` varchar(50) DEFAULT NULL COMMENT '触发场景（支付成功/订单发货/订单退款/活动开始/系统通知）',
@@ -3540,14 +2810,8 @@ CREATE TABLE `sf_mall_notice` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='消息通知模板';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mall_coupon_claim`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mall_coupon_claim` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `claim_code` varchar(50) DEFAULT NULL COMMENT '领取记录ID',
@@ -3564,18 +2828,73 @@ CREATE TABLE `sf_mall_coupon_claim` (
   KEY `idx_claim_coupon` (`coupon_code`),
   KEY `idx_claim_member` (`member_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城领券核销记录';
-/*!40101 SET character_set_client = @saved_cs_client */;
 
---
---
+DROP TABLE IF EXISTS `sf_mall_cart`;
+CREATE TABLE `sf_mall_cart` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `cart_code` varchar(50) NOT NULL COMMENT '购物车项编号（唯一）',
+  `member_id` bigint DEFAULT NULL COMMENT '会员（→ sf_mall_member.id）',
+  `member_key` varchar(100) DEFAULT NULL COMMENT '会员标识（未登录游客用设备标识）',
+  `product_code` varchar(50) DEFAULT NULL COMMENT '商品编号（→ sf_mall_product）',
+  `product_name` varchar(200) DEFAULT NULL COMMENT '商品名',
+  `product_img` varchar(500) DEFAULT NULL COMMENT '商品图',
+  `spec` varchar(200) DEFAULT NULL COMMENT '规格',
+  `price` decimal(14,2) DEFAULT NULL COMMENT '单价',
+  `quantity` int NOT NULL DEFAULT '1' COMMENT '数量',
+  `checked` tinyint NOT NULL DEFAULT '1' COMMENT '是否勾选结算：0/1',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_mall_cart_code` (`cart_code`),
+  KEY `idx_mall_cart_member` (`member_id`),
+  KEY `idx_mall_cart_member_key` (`member_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城购物车';
+
+DROP TABLE IF EXISTS `sf_mall_address`;
+CREATE TABLE `sf_mall_address` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `address_code` varchar(50) NOT NULL COMMENT '地址编号（唯一）',
+  `member_id` bigint DEFAULT NULL COMMENT '会员（→ sf_mall_member.id）',
+  `member_key` varchar(100) DEFAULT NULL COMMENT '会员标识',
+  `name` varchar(50) DEFAULT NULL COMMENT '收货人姓名',
+  `phone` varchar(20) DEFAULT NULL COMMENT '收货人电话',
+  `region` varchar(100) DEFAULT NULL COMMENT '所在地区',
+  `detail` varchar(255) DEFAULT NULL COMMENT '详细地址',
+  `is_default` tinyint NOT NULL DEFAULT '0' COMMENT '是否默认地址：0/1',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_mall_address_code` (`address_code`),
+  KEY `idx_mall_address_member` (`member_id`),
+  KEY `idx_mall_address_member_key` (`member_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城收货地址';
+
+DROP TABLE IF EXISTS `sf_mall_favorite`;
+CREATE TABLE `sf_mall_favorite` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `favorite_code` varchar(50) NOT NULL COMMENT '收藏编号（唯一）',
+  `member_id` bigint DEFAULT NULL COMMENT '会员（→ sf_mall_member.id）',
+  `member_key` varchar(100) DEFAULT NULL COMMENT '会员标识',
+  `product_code` varchar(50) DEFAULT NULL COMMENT '商品编号（→ sf_mall_product）',
+  `product_name` varchar(200) DEFAULT NULL COMMENT '商品名',
+  `product_img` varchar(500) DEFAULT NULL COMMENT '商品图',
+  `price` decimal(14,2) DEFAULT NULL COMMENT '收藏时价格',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '收藏时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_mall_favorite_code` (`favorite_code`),
+  KEY `idx_mall_favorite_member` (`member_id`),
+  KEY `idx_mall_favorite_member_key` (`member_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商城收藏';
 
 -- ============================================================
 -- 【移动端运营（作业账号 / 反馈 / 咨询 / 消息 / 资讯 / AI / 知识库）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_mb_staff_account`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mb_staff_account` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `account` varchar(50) NOT NULL COMMENT '登录账号（唯一）',
@@ -3594,14 +2913,8 @@ CREATE TABLE `sf_mb_staff_account` (
   UNIQUE KEY `uk_mb_staff_account` (`account`),
   KEY `idx_mb_staff_base` (`base_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='作业人员账号';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mb_feedback`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mb_feedback` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `title` varchar(200) NOT NULL COMMENT '反馈标题',
@@ -3623,14 +2936,8 @@ CREATE TABLE `sf_mb_feedback` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='意见反馈';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mb_expert_consult`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mb_expert_consult` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `title` varchar(200) NOT NULL COMMENT '问题标题',
@@ -3649,14 +2956,8 @@ CREATE TABLE `sf_mb_expert_consult` (
   PRIMARY KEY (`id`),
   KEY `idx_mb_expert_consult_expert` (`expert_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='专家咨询';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mb_message`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mb_message` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `title` varchar(200) NOT NULL COMMENT '标题',
@@ -3672,14 +2973,8 @@ CREATE TABLE `sf_mb_message` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='消息推送';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mb_sync_queue`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mb_sync_queue` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `sync_type` varchar(50) DEFAULT NULL COMMENT '同步类型',
@@ -3694,14 +2989,8 @@ CREATE TABLE `sf_mb_sync_queue` (
   PRIMARY KEY (`id`),
   KEY `idx_mb_sync_queue_status` (`status`)
 ) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='同步队列';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mb_news`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mb_news` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `title` varchar(200) NOT NULL COMMENT '资讯标题',
@@ -3721,14 +3010,8 @@ CREATE TABLE `sf_mb_news` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='资讯';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mb_ai_category`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mb_ai_category` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `category_name` varchar(100) NOT NULL COMMENT '分类名称',
@@ -3739,14 +3022,8 @@ CREATE TABLE `sf_mb_ai_category` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI助手分类';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mb_ai_question`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mb_ai_question` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `category_id` bigint DEFAULT NULL COMMENT '所属分类（→ sf_mb_ai_category.id）',
@@ -3758,14 +3035,8 @@ CREATE TABLE `sf_mb_ai_question` (
   PRIMARY KEY (`id`),
   KEY `idx_mb_ai_question_category` (`category_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI助手热门问题';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mb_disease_rule`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mb_disease_rule` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `disease_name` varchar(100) NOT NULL COMMENT '病害名称',
@@ -3778,14 +3049,8 @@ CREATE TABLE `sf_mb_disease_rule` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='病害识别规则';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_mb_fault_kb`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_mb_fault_kb` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `fault_title` varchar(200) NOT NULL COMMENT '故障标题',
@@ -3800,18 +3065,12 @@ CREATE TABLE `sf_mb_fault_kb` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='设备故障知识库';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 -- ============================================================
 -- 【系统管理（部门 / 岗位 / 角色 / 用户 / 菜单 / 权限 / 配置 / 通知）】
 -- ============================================================
 
 DROP TABLE IF EXISTS `sf_dept`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_dept` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `parent_id` bigint NOT NULL DEFAULT '0' COMMENT '父部门（顶级为 0）',
@@ -3827,14 +3086,8 @@ CREATE TABLE `sf_dept` (
   PRIMARY KEY (`id`),
   KEY `idx_dept_parent` (`parent_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='部门';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_post`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_post` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `post_code` varchar(50) NOT NULL COMMENT '岗位编码',
@@ -3848,14 +3101,8 @@ CREATE TABLE `sf_post` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_post_code` (`post_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='岗位';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_role`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_role` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `role_name` varchar(50) NOT NULL COMMENT '角色名称',
@@ -3868,14 +3115,8 @@ CREATE TABLE `sf_role` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_role_code` (`role_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='角色';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_user`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_user` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `username` varchar(50) NOT NULL COMMENT '账号',
@@ -3899,14 +3140,8 @@ CREATE TABLE `sf_user` (
   KEY `idx_user_role` (`role_id`),
   KEY `idx_user_base` (`base_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_menu`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_menu` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `parent_id` bigint NOT NULL DEFAULT '0' COMMENT '父菜单（顶级为 0）',
@@ -3922,14 +3157,8 @@ CREATE TABLE `sf_menu` (
   PRIMARY KEY (`id`),
   KEY `idx_menu_parent` (`parent_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=104 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='菜单';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_role_menu`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_role_menu` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `role_id` bigint NOT NULL COMMENT '角色',
@@ -3941,14 +3170,8 @@ CREATE TABLE `sf_role_menu` (
   KEY `idx_rm_role` (`role_id`),
   KEY `idx_rm_menu` (`menu_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=104 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='角色-菜单关联';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_permission`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_permission` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `menu_id` bigint DEFAULT NULL COMMENT '所属菜单',
@@ -3960,14 +3183,8 @@ CREATE TABLE `sf_permission` (
   PRIMARY KEY (`id`),
   KEY `idx_perm_menu` (`menu_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='权限点';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_system_config`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_system_config` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `source_name` varchar(100) NOT NULL COMMENT '数据源名称',
@@ -3981,14 +3198,8 @@ CREATE TABLE `sf_system_config` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='系统配置（数据源）';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
 
 DROP TABLE IF EXISTS `sf_notification`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sf_notification` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `user_id` bigint NOT NULL COMMENT '用户（→ sf_user.id）',
@@ -4000,9 +3211,3 @@ CREATE TABLE `sf_notification` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_notice_user_code` (`user_id`,`notice_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='通知设置';
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
---
-
-SET FOREIGN_KEY_CHECKS = 1;
