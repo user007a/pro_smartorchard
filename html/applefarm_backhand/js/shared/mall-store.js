@@ -150,6 +150,10 @@
     try {
       localStorage.setItem(key, JSON.stringify(value));
       if (typeof schedulePersist === 'function') schedulePersist(key);
+      // 窗口事件：页面在未持有 Store 引用时也能感知数据变化并重绘
+      try {
+        window.dispatchEvent(new CustomEvent('mallStoreChange', { detail: { reason: key } }));
+      } catch (e) { /* ignore */ }
       return { ok: true, data: value };
     } catch (e) {
       try { console.error('[MallStore] 写入失败', key, e); } catch (ignore) {}

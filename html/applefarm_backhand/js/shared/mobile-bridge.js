@@ -7,7 +7,6 @@
  * 读取的移动端存储键：
  *   smartorchard_farming_records  农事记录（记农事）
  *   smartorchard_patrol_records   巡查打卡 / 异常上报
- *   smartorchard_plots            手绘地块
  *   smartorchard_adoption_tags    认养挂牌
  *   smartorchard_material_logs    农资领用
  *   smartorchard_label_records    标签领用
@@ -153,20 +152,6 @@
     return read(KEYS.patrol, []).filter(function (r) { return r.kind === 'abnormal'; });
   }
 
-  function plots() {
-    // 兼容旧键（mb_draw_plot 早期写入的 'plots'）
-    var legacy = read('plots', []);
-    var shared = read(KEYS.plots, []);
-    var seen = {};
-    var out = [];
-    shared.concat(legacy).forEach(function (p) {
-      if (!p || seen[p.id]) return;
-      seen[p.id] = true;
-      out.push(p);
-    });
-    return out;
-  }
-
   function adoptionTags() {
     // 排除农事记录绑定（非挂牌条目）
     return read(KEYS.adoptionTag, []).filter(function (t) { return t && t.kind !== 'farming_bind'; });
@@ -212,7 +197,6 @@
   function hasMobileData() {
     return farmingRecords().length > 0 ||
            abnormalReports().length > 0 ||
-           plots().length > 0 ||
            adoptionTags().length > 0;
   }
 
@@ -231,7 +215,6 @@
     farmingRecords: farmingRecords,
     patrolRecords: patrolRecords,
     abnormalReports: abnormalReports,
-    plots: plots,
     adoptionTags: adoptionTags,
     farmingBinds: farmingBinds,
     materialLogs: materialLogs,

@@ -15,7 +15,7 @@
  *     接入层的 deviceType 只能是字典中 access: true 的子集，杜绝三套枚举并存。
  *   - 设备台账为唯一权威实体，接入配置 / 视频通道通过 deviceId 关联台账编号，
  *     实现「配置了设备就能在台账看到、台账里的设备能接进来」。
- *   - 基地 / 地块外键统一取自地块主数据 smartorchard_plot_master，与企业管理、地块管理一致。
+ *   - 基地 / 地块外键统一取自地块主数据 PlotStore（后端 sf_plot），与企业管理、地块管理一致。
  *
  * 存储 key： applefarm_device_v1
  *
@@ -961,14 +961,15 @@
     subscribers.forEach(function (fn) {
       try { fn(reason); } catch (e) { console.warn('[DeviceStore] subscriber error', e); }
     });
+    // 窗口事件统一在 notify 里派发：后端预加载（backend-sync）与本地写入两条路径都会触发
+    try {
+      window.dispatchEvent(new CustomEvent('deviceStoreChange', { detail: { reason: reason } }));
+    } catch (e) { /* ignore */ }
   }
 
   function broadcast(reason) {
     save();
     notify(reason);
-    try {
-      window.dispatchEvent(new CustomEvent('deviceStoreChange', { detail: { reason: reason } }));
-    } catch (e) { /* ignore */ }
   }
 
   /* ============================================================

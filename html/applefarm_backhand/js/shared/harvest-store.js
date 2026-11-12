@@ -8,7 +8,7 @@
  * 设计约定（与 material-store.js / production-store.js 保持一致）：
  *   - 数量统一为「数字 + 单位」（qty / unit），展示层再格式化；
  *   - 状态流转只走 advance()，内置流程表 + 守卫，页面不再自行改状态；
- *   - 地块与基地以「地块管理」的 smartorchard_plot_master 为唯一来源，
+ *   - 地块与基地以统一地块数据层 PlotStore（后端 sf_plot）为唯一来源，
  *     采收记录不再自带一份地块主数据；
  *   - 追溯码沿用溯源编码页的 SNZG-YYYYMMDD-NNNN 规则，并回写该页存储键。
  *
@@ -661,6 +661,10 @@
     subscribers.forEach(function (fn) {
       try { fn(reason); } catch (e) { console.warn('[HarvestStore]', e); }
     });
+    // 窗口事件统一在 notify 里派发：后端预加载（backend-loaded）与本地写入两条路径都会触发
+    try {
+      window.dispatchEvent(new CustomEvent('harvestStoreChange', { detail: { reason: reason } }));
+    } catch (e) {}
   }
 
   function commit(reason) {
@@ -668,9 +672,6 @@
     notify(reason);
     // 后端持久化（防抖，未登录/依赖未就绪时静默跳过）
     schedulePersist(reason);
-    try {
-      window.dispatchEvent(new CustomEvent('harvestStoreChange', { detail: { reason: reason, saved: ok } }));
-    } catch (e) {}
     return ok;
   }
 

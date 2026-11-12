@@ -155,6 +155,10 @@
     subscribers.forEach(function (fn) {
       try { fn(reason); } catch (e) { /* 单个订阅者异常不影响其它 */ }
     });
+    // 窗口事件：地块台账是多页面基础数据源，页面需据此重绘下拉与名称
+    try {
+      global.dispatchEvent(new CustomEvent('plotStoreChange', { detail: { reason: reason } }));
+    } catch (e) { /* ignore */ }
   }
 
   /* ============================================================

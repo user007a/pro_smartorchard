@@ -133,6 +133,10 @@
     } catch (e) { /* 隐私模式 / file:// 场景下忽略持久化失败 */ }
     /* 预加载写入是「读取后端」的结果，不能再回写后端，避免读-写循环 */
     if (!fromBackend && typeof schedulePersist === 'function') schedulePersist();
+    /* 窗口事件：页面在未持有 Store 引用时也能感知数据变化并重绘 */
+    try {
+      global.dispatchEvent(new CustomEvent('materialStoreChange', { detail: { reason: fromBackend ? 'backend-loaded' : 'change' } }));
+    } catch (e) { /* ignore */ }
   }
 
   /** 取当前库存列表；无数据（空库）时返回空数组，绝不播种演示数据 */

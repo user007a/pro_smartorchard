@@ -178,12 +178,13 @@
 
   function notify(reason) {
     subscribers.forEach(function (fn) { try { fn(reason); } catch (e) {} });
+    // 窗口事件统一在 notify 里派发：后端预加载（backend-loaded）与本地写入两条路径都会触发
+    try { window.dispatchEvent(new CustomEvent('soilStoreChange', { detail: { reason: reason } })); } catch (e) {}
   }
 
   function commit(reason) {
     save();
     notify(reason);
-    try { window.dispatchEvent(new CustomEvent('soilStoreChange', { detail: { reason: reason } })); } catch (e) {}
     if (typeof schedulePersist === 'function' && reason !== 'backend-loaded') schedulePersist(reason);
   }
 

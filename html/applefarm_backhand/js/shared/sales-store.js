@@ -313,6 +313,10 @@
     listeners.slice().forEach(function (fn) {
       try { fn(reason); } catch (e) { console.error('[SalesStore] 订阅回调异常', e); }
     });
+    // 窗口事件：页面在未持有 Store 引用时也能感知数据变化并重绘
+    try {
+      global.dispatchEvent(new CustomEvent('salesStoreChange', { detail: { reason: reason } }));
+    } catch (e) { /* ignore */ }
   }
 
   function subscribe(fn) {

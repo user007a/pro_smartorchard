@@ -494,6 +494,10 @@
     subscribers.forEach(function (fn) {
       try { fn(reason); } catch (e) { console.warn('[CertStore]', e); }
     });
+    // 窗口事件统一在 notify 里派发：后端预加载（backend-loaded）与本地写入两条路径都会触发
+    try {
+      window.dispatchEvent(new CustomEvent('certStoreChange', { detail: { reason: reason } }));
+    } catch (e) {}
   }
 
   function commit(reason) {
@@ -501,9 +505,6 @@
     notify(reason);
     // 后端持久化（防抖，未登录/依赖未就绪时静默跳过）
     schedulePersist(reason);
-    try {
-      window.dispatchEvent(new CustomEvent('certStoreChange', { detail: { reason: reason, saved: ok } }));
-    } catch (e) {}
     return ok;
   }
 

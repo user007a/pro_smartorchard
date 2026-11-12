@@ -139,7 +139,7 @@
  * 土壤检测记录
  * 数据源：js/shared/soil-store.js → smartorchard_soil_tests_v1
  * 口径：EC 全端统一 µS/cm；生产指挥大屏按 1 mS/cm = 1000 µS/cm 换算展示
- * 地块下拉来自地块主数据 smartorchard_plot_master
+ * 地块下拉来自统一地块数据层 PlotStore（后端 sf_plot）
  * ============================================================ */
 
 var PAGE_SIZE = 10;
@@ -432,16 +432,24 @@ function exportSoil() {
 }
 
 /* ---------- 初始化 ---------- */
-document.addEventListener('DOMContentLoaded', function () {
-  loadPlots();
+/* 地块下拉：清空后按当前台账重建（后端地块异步到达后需重建一次） */
+function rebuildPlotOptions() {
   var plotSel = document.getElementById('plotSelect');
+  if (!plotSel) return;
+  var cur = plotSel.value;
+  plotSel.innerHTML = '';
   plotOptions().forEach(function (o) {
     var opt = document.createElement('option');
     opt.value = o.value;
     opt.textContent = o.label;
     plotSel.appendChild(opt);
   });
+  if (cur) plotSel.value = cur;
+
   var baseSel = document.getElementById('baseSelect');
+  if (!baseSel) return;
+  var curBase = baseSel.value;
+  baseSel.innerHTML = '';
   var bases = [];
   SoilStore.plotList().forEach(function (p) {
     if (p.base && bases.indexOf(p.base) < 0) bases.push(p.base);
@@ -452,7 +460,25 @@ document.addEventListener('DOMContentLoaded', function () {
     opt.textContent = b;
     baseSel.appendChild(opt);
   });
+  if (curBase) baseSel.value = curBase;
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  loadPlots();
+  rebuildPlotOptions();
   refresh();
+
+  /* 后端数据到达 / 本地写入后自动重绘（地块台账变化时同步重建下拉） */
+  window.addEventListener('soilStoreChange', function () {
+    loadPlots();
+    rebuildPlotOptions();
+    refresh();
+  });
+  window.addEventListener('plotStoreChange', function () {
+    loadPlots();
+    rebuildPlotOptions();
+    refresh();
+  });
 });
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>

@@ -218,15 +218,16 @@
     subscribers.forEach(function(fn){
       try { fn(reason); } catch(e){ console.warn('[DataStore] subscriber error', e); }
     });
+    // 窗口事件统一在 notify 里派发：后端预加载（backend-loaded）与本地写入两条路径都会触发
+    try {
+      window.dispatchEvent(new CustomEvent('dataStoreChange', { detail:{ reason: reason } }));
+    } catch(e){}
   }
 
   function broadcast(reason){
     if (inMemory) inMemory.updatedAt = new Date().toISOString();
     save();
     notify(reason);
-    try {
-      window.dispatchEvent(new CustomEvent('dataStoreChange', { detail:{ reason: reason } }));
-    } catch(e){}
     if (typeof schedulePersist === 'function') schedulePersist(reason);
   }
 

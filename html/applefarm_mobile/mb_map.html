@@ -10,6 +10,7 @@
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <!-- 共享数据层（toast 轻提示） -->
   <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/plot-store.js"></script>
   <script src="../applefarm_backhand/js/shared/enterprise-store.js"></script>
   <style>
     /* 移除重复的 :root 变量定义，使用设计系统变量 */
@@ -124,38 +125,7 @@
       <div class="list-title">地块列表</div>
       <div class="list-coord" id="listCoord">未选择地块，点击下方地块可定位</div>
       <div id="plotListItems">
-        <div class="plot-item" onclick="openPlotDetail(FALLBACK_PLOTS[0])">
-          <span class="plot-dot normal"></span>
-          <div class="plot-info">
-            <div class="plot-name">地块A1区</div>
-            <div class="plot-meta">花牛苹果 · 5年 · 15亩</div>
-          </div>
-          <span class="plot-status normal">正常</span>
-        </div>
-        <div class="plot-item" onclick="openPlotDetail(FALLBACK_PLOTS[1])">
-          <span class="plot-dot warning"></span>
-          <div class="plot-info">
-            <div class="plot-name">地块A2区</div>
-            <div class="plot-meta">花牛苹果 · 5年 · 18亩</div>
-          </div>
-          <span class="plot-status warning">预警</span>
-        </div>
-        <div class="plot-item" onclick="openPlotDetail(FALLBACK_PLOTS[2])">
-          <span class="plot-dot overdue"></span>
-          <div class="plot-info">
-            <div class="plot-name">地块B1区</div>
-            <div class="plot-meta">花牛苹果 · 8年 · 22亩</div>
-          </div>
-          <span class="plot-status overdue">危险</span>
-        </div>
-        <div class="plot-item" onclick="openPlotDetail(FALLBACK_PLOTS[3])">
-          <span class="plot-dot normal"></span>
-          <div class="plot-info">
-            <div class="plot-name">地块B2区</div>
-            <div class="plot-meta">秦冠 · 10年 · 25亩</div>
-          </div>
-          <span class="plot-status normal">正常</span>
-        </div>
+        <div class="plot-meta" style="padding:var(--space-3) 0;">正在加载地块数据…</div>
       </div>
     </div>
 
@@ -217,24 +187,14 @@
       window.location.href = page;
     }
     /* ============================================================
-     * 果园地图 · 读取后台地块主数据
-     * localStorage key: smartorchard_plot_master（由后台 enterprise_plot.html 落库）
+     * 果园地图 · 读取地块主数据
+     * 数据源：统一地块数据层 PlotStore（后端 sf_plot），与后台地块管理同源
      * 字段：id / code / name / enterprise / area / variety / year / status / statusText / manager / lng / lat
-     * 与移动端手绘地块键 smartorchard_plots 互不相干，本页只读主数据
      * ============================================================ */
-    var PLOT_MASTER_KEY = 'smartorchard_plot_master';
 
     // 状态 → 本页既有样式类（normal / warning / overdue）
     var STATUS_CLASS = { normal: 'normal', warning: 'warning', danger: 'overdue' };
     var STATUS_LABEL = { normal: '正常', warning: '预警', danger: '危险' };
-
-    // 读不到主数据时的兜底地块，保证列表不空白
-    var FALLBACK_PLOTS = [
-      { id: 'FB-A1', code: '—', name: '地块A1区', enterprise: '天水麦积区基地', area: 15, variety: '花牛苹果', year: 2021, status: 'normal', statusText: '正常', manager: '张三', lng: 106.18, lat: 34.35 },
-      { id: 'FB-A2', code: '—', name: '地块A2区', enterprise: '天水麦积区基地', area: 18, variety: '花牛苹果', year: 2021, status: 'warning', statusText: '预警', manager: '张三', lng: 106.19, lat: 34.36 },
-      { id: 'FB-B1', code: '—', name: '地块B1区', enterprise: '天水麦积区基地', area: 22, variety: '花牛苹果', year: 2018, status: 'danger', statusText: '危险', manager: '李四', lng: 106.17, lat: 34.34 },
-      { id: 'FB-B2', code: '—', name: '地块B2区', enterprise: '天水麦积区基地', area: 25, variety: '秦冠', year: 2016, status: 'normal', statusText: '正常', manager: '李四', lng: 106.20, lat: 34.33 }
-    ];
 
     var PLOT_LIST = [];        // 当前渲染的地块数组（列表 onclick 通过下标引用）
     var statusFilter = '';     // '' 全部 / normal / warning / danger
@@ -248,23 +208,23 @@
 
     function readPlotMaster() {
       try {
-        /* 纯在线：地块来自后端 sf_plot（经 EnterpriseStore 桥接） */
-        var rows = (window.EnterpriseStore && typeof EnterpriseStore.plots === 'function')
-          ? EnterpriseStore.plots() : [];
+        /* 纯在线：地块来自后端 sf_plot（统一地块数据层 PlotStore） */
+        var rows = (window.PlotStore && typeof PlotStore.plots === 'function')
+          ? PlotStore.plots() : [];
         if (!Array.isArray(rows)) return [];
         var STATUS_TEXT = { normal: '正常', warning: '预警', danger: '危险', fallow: '休耕', maintain: '维护中' };
         return rows.map(function (p) {
           return {
             id: p.id || p.code || '',
-            code: p.id || p.code || '',
+            code: p.code || p.id || '',
             name: p.name || '',
-            enterprise: p.baseName || '',
+            enterprise: p.base || '',
             area: p.area != null ? p.area : '',
-            variety: p.varietyCode || '',
-            year: p.plantYear || '',
-            status: p.plotStatus || 'normal',
-            statusText: STATUS_TEXT[p.plotStatus] || '正常',
-            manager: p.managerId != null ? String(p.managerId) : '',
+            variety: p.variety || '',
+            year: p.year || '',
+            status: p.status || 'normal',
+            statusText: p.statusText || STATUS_TEXT[p.status] || '正常',
+            manager: p.manager || '',
             lng: p.lng, lat: p.lat
           };
         });
@@ -423,8 +383,8 @@
     }
 
     // 后端预加载完成后重渲染（严格空库：数据来自数据库）
-    if (window.EnterpriseStore && EnterpriseStore.subscribe) {
-      EnterpriseStore.subscribe(function (reason) {
+    if (window.PlotStore && PlotStore.subscribe) {
+      PlotStore.subscribe(function (reason) {
         renderPlotList();
       });
     }

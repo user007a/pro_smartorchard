@@ -47,7 +47,8 @@
     var baseDir = selfEl.src.replace(/[^\/]*$/, ''); // 去掉文件名，保留目录
     var deps = [
       { name: 'Api', src: baseDir + '../../../common/js/api.js' },
-      { name: 'ProductionMapper', src: baseDir + 'production-mapper.js' }
+      { name: 'ProductionMapper', src: baseDir + 'production-mapper.js' },
+      { name: 'PlotStore', src: baseDir + 'plot-store.js' }
     ];
     var pending = deps.filter(function (d) { return !global[d.name]; });
     if (!pending.length) return Promise.resolve();
@@ -163,18 +164,26 @@
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   function num(v, def) { var n = parseFloat(v); return isNaN(n) ? (def || 0) : n; }
 
-  /* 地块主数据：统一 D-001 格式 */
-  var PLOTS = [];
-  var PLOT_NAMES = ['东区1号地', '东区2号地', '西区1号地', '北区1号地', '南区1号地', '中区1号地',
-    '南区2号地', '西区2号地', '北区2号地', '东区3号地', '南区3号地', '西区3号地',
-    '北区3号地', '中区2号地', '东区4号地', '南区4号地', '西区4号地', '北区4号地',
-    '中区3号地', '东区5号地', '南区5号地', '西区5号地', '北区5号地'];
-  for (var pi = 1; pi <= 23; pi++) PLOTS.push('D-' + pad3(pi));
-  function plotOf(n) { return PLOTS[(n - 1) % PLOTS.length]; }
-  function plotLabel(code) {
-    var idx = PLOTS.indexOf(code);
-    return idx >= 0 ? code + ' · ' + PLOT_NAMES[idx] : code;
+  /* 地块主数据：统一来自 PlotStore（后端 sf_plot），不再内置写死地块清单 */
+  function plotCodes() {
+    if (!global.PlotStore) return [];
+    return global.PlotStore.plots().map(function (p) { return p.code; }).filter(function (c) { return !!c; });
   }
+  function plotOf(n) {
+    var list = plotCodes();
+    if (!list.length) return '';
+    return list[(n - 1) % list.length];
+  }
+  function plotLabel(code) {
+    var c = String(code || '').split(' · ')[0].trim();
+    if (global.PlotStore) {
+      var hit = global.PlotStore.plotOf(c);
+      if (hit && hit.name) return c + ' · ' + hit.name;
+    }
+    return c;
+  }
+  /* 兼容旧调用方：PS.PLOTS 仍返回地块编号数组 */
+  function plots() { return plotCodes(); }
 
   var TYPES = {
     farming: '农事', patrol: '巡园', drone: '飞巡'
@@ -508,6 +517,8 @@
     subscribers.forEach(function (fn) {
       try { fn(reason); } catch (e) { console.warn('[ProductionStore]', e); }
     });
+    // 窗口事件统一在 notify 里派发：后端预加载（backend-loaded）与本地写入两条路径都会触发
+    try { window.dispatchEvent(new CustomEvent('productionStoreChange', { detail: { reason: reason } })); } catch (e) {}
   }
 
   function commit(reason) {
@@ -516,7 +527,6 @@
     notify(reason);
     // 后端持久化（防抖，未登录/依赖未就绪时静默跳过）
     schedulePersist(reason);
-    try { window.dispatchEvent(new CustomEvent('productionStoreChange', { detail: { reason: reason, saved: ok } })); } catch (e) {}
     return ok;
   }
 
@@ -980,7 +990,8 @@
     }
     var plots = String(plan.plotRange || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
     if (!plots.length) e.push('请至少选择一个地块');
-    var bad = plots.filter(function (p) { return PLOTS.indexOf(p) < 0; });
+    var codes = plotCodes();
+    var bad = plots.filter(function (p) { return codes.indexOf(p) < 0; });
     if (bad.length) e.push('地块编号无效：' + bad.join('、'));
     if (plan.standardId) {
       var std = get('standards', plan.standardId);
@@ -995,7 +1006,7 @@
     if (!task || typeof task !== 'object') return '任务数据为空';
     requireField(e, '任务名称', task.name);
     requireField(e, '所属基地', task.base);
-    if (PLOTS.indexOf(normalizePlot(task.plotId || task.plot)) < 0) e.push('地块编号无效');
+    if (plotCodes().indexOf(normalizePlot(task.plotId || task.plot)) < 0) e.push('地块编号无效');
     if (!task.person && task.executorType !== 'drone') e.push('请指定负责人');
     if (task.planId && !get('plans', task.planId)) e.push('来源计划不存在');
     var plan = task.planId ? get('plans', task.planId) : null;
@@ -1023,8 +1034,9 @@
     var plots = recordPlots(rec);
     if (!plots.length) e.push('请选择地块');
     else {
+      var codes = plotCodes();
       for (var i = 0; i < plots.length; i++) {
-        if (PLOTS.indexOf(plots[i]) < 0) { e.push('地块编号无效：' + plots[i]); break; }
+        if (codes.indexOf(plots[i]) < 0) { e.push('地块编号无效：' + plots[i]); break; }
       }
     }
     requireField(e, '农事类型', rec.type);
@@ -1080,7 +1092,7 @@
     if (!sortie || typeof sortie !== 'object') return '架次数据为空';
     if (!sortie.taskId || !get('tasks', sortie.taskId)) e.push('关联巡检任务不存在');
     requireField(e, '无人机', sortie.drone);
-    if (PLOTS.indexOf(normalizePlot(sortie.plot)) < 0) e.push('地块编号无效');
+    if (plotCodes().indexOf(normalizePlot(sortie.plot)) < 0) e.push('地块编号无效');
     if (!(parseFloat(sortie.area) > 0)) e.push('飞行面积必须大于 0');
     if (!isDateTime(sortie.time)) e.push('计划时间格式不正确');
     return e[0] || '';
@@ -1093,7 +1105,8 @@
     if (plan.status === 'completed') return '计划已完成，无需再生成任务';
     var plots = String(plan.plotRange || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
     if (!plots.length) return '请先为计划配置地块范围';
-    var bad = plots.filter(function (p) { return PLOTS.indexOf(p) < 0; });
+    var codes = plotCodes();
+    var bad = plots.filter(function (p) { return codes.indexOf(p) < 0; });
     if (bad.length) return '计划地块编号无效：' + bad.join('、');
     return '';
   }
@@ -1110,12 +1123,14 @@
 
   var ProductionStore = {
     STORAGE_KEY: STORAGE_KEY,
-    PLOTS: PLOTS,
+    /* PLOTS 为 getter：地块台账异步到达后自动反映最新编号清单 */
+    get PLOTS() { return plotCodes(); },
     TYPES: TYPES,
     EXECUTOR_TYPES: EXECUTOR_TYPES,
     STATUS_TEXT: STATUS_TEXT,
     STANDARDS_BY_TYPE: STANDARD_BY_TYPE,
     plotLabel: plotLabel,
+    plots: plots,
     recordPlots: recordPlots,
     typeCode: typeCode,
     typeTagClass: typeTagClass,

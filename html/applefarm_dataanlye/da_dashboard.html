@@ -700,7 +700,8 @@ function centroid(pts){
   return [x/pts.length,y/pts.length];
 }
 var STXT={h:'低风险',w:'中风险',r:'高风险'};
-/* 绘制地块图层（台账异步到达后可重绘） */
+/* 绘制地块图层（台账异步到达后可重绘）
+   plotEls 内保存地块对象引用，避免跳过无 pts 地块后下标与 PLOTS 错位 */
 function renderPlotLayer(){
   plotEls.forEach(function(pe){pe.g.remove();});
   plotEls=[];
@@ -714,16 +715,15 @@ function renderPlotLayer(){
     var t1=el('text',{x:c[0],y:c[1]-8,'text-anchor':'middle',class:'pid'});t1.textContent=p.plotCode+' '+p.name;
     var t2=el('text',{x:c[0],y:c[1]+14,'text-anchor':'middle',class:'parea'});t2.textContent=p.area+'亩 · '+p.variety;
     g.appendChild(shape);g.appendChild(t1);g.appendChild(t2);
-    g.addEventListener('click',function(){select(i);});
+    g.addEventListener('click',function(){selectPlot(p);});
     g.addEventListener('keydown',function(e){
-      if(e.key==='Enter'||e.key===' '||e.key==='Spacebar'){e.preventDefault();select(i);}
+      if(e.key==='Enter'||e.key===' '||e.key==='Spacebar'){e.preventDefault();selectPlot(p);}
     });
-    map.appendChild(g);plotEls.push({g:g,shape:shape});
+    map.appendChild(g);plotEls.push({g:g,shape:shape,plot:p});
   });
 }
 renderPlotLayer();
 
-/* 地图标题与图例：按模型分级实时统计（P0-09） */
 /* 地图标题与图例：按模型分级实时统计（P0-09），台账到达后可重绘 */
 function renderMapLegend(){
   var cnt={low:0,medium:0,high:0},areaSum=0;
@@ -746,8 +746,8 @@ function renderMapLegend(){
 renderMapLegend();
 
 function applyLayer(layer){
-  plotEls.forEach(function(pe,i){
-    var p=PLOTS[i];var c,b;
+  plotEls.forEach(function(pe){
+    var p=pe.plot;var c,b;
     if(layer==='status'){c=COL[p.status];b=COLB[p.status];}
     else if(layer==='yield'){c=YCOLF[p.yieldL];b=YCOL[p.yieldL];}
     else {c=COL[p.status];b=COLB[p.status];}
@@ -785,6 +785,26 @@ if(pauseBtn){
 }
 setLayer('status');restart();
 
+/* ---------- 地块台账异步到达后重绘图层与图例 ---------- */
+(function(){
+  if(!window.PlotStore) return;
+  var done=false;
+  function redraw(){
+    if(done) return;
+    done=true;
+    PLOT_MASTER=PlotStore.plots();
+    PLOTS=buildPlots();
+    renderPlotLayer();
+    renderMapLegend();
+    if(typeof applyLayer==='function'&&curLayer) applyLayer(curLayer);
+  }
+  try {
+    PlotStore.subscribe(function(reason){ if(reason==='loaded') redraw(); });
+  } catch(e){}
+  if(PlotStore.isLoaded&&PlotStore.isLoaded()) redraw();
+  else if(PlotStore.ready&&PlotStore.ready.then) PlotStore.ready.then(redraw);
+})();
+
 /* 地块下钻详情 */
 var detail=document.getElementById('detail');
 function tagHtml(s){var m={h:['h','低风险'],w:['w','中风险'],r:['r','高风险']};return '<span class="tag '+m[s][0]+'">'+m[s][1]+'</span>';}
@@ -796,17 +816,18 @@ function plotTaskText(code){
   var t=list[0];
   return t.name+(t.assignee?' · '+t.assignee:'');
 }
-function select(i){
-  var p=PLOTS[i];
+function selectPlot(p){
+  if(!p) return;
+  var idx=PLOTS.indexOf(p);
   /* 再次点击已选地块 = 收起弹层 */
-  if(curSel===i && !detail.classList.contains('hide')){
+  if(curSel===idx && !detail.classList.contains('hide')){
     detail.classList.add('hide');
     plotEls.forEach(function(pe){pe.g.classList.remove('sel');});
     curSel=-1;return;
   }
-  curSel=i;
+  curSel=idx;
   detail.classList.remove('hide');
-  plotEls.forEach(function(pe,j){pe.g.classList.toggle('sel',j===i);});
+  plotEls.forEach(function(pe){pe.g.classList.toggle('sel',pe.plot===p);});
   detail.innerHTML='<h4>'+p.plotCode+' '+p.name+' '+tagHtml(p.status)+'</h4>'+
     '<div class="row"><span>所属基地</span><b>'+(p.base||'未配置')+'</b></div>'+
     '<div class="row"><span>主栽品种</span><b>'+p.variety+'</b></div>'+
@@ -1001,6 +1022,8 @@ document.addEventListener('keydown',function(e){
   function setText(id,v){var e=$(id);if(e)e.textContent=(v==null?'':v);}
   function setHtml(id,v){var e=$(id);if(e)e.innerHTML=v;}
 
+  /* 指标渲染体：拆成可重入函数，便于后端数据到达后重新渲染 */
+  function renderDataBlocks(){
   /* ---------- 1. 综合健康指数 + 四维评分（P0-02 / P1-01） ---------- */
   var soilDev=DeviceStore.soilSummary();
   var hi=ModelStore.healthIndex();
@@ -1226,6 +1249,16 @@ document.addEventListener('keydown',function(e){
   [].slice.call(document.querySelectorAll('[data-stamp]')).forEach(function(e){
     if(/--/.test(e.textContent))e.textContent='更新 '+t2;
   });
+  }
+
+  renderDataBlocks();
+
+  /* 后端数据到达后重新渲染指标 */
+  if (typeof StoreLive !== 'undefined') {
+    StoreLive.on(['soilStoreChange','productionStoreChange','deviceStoreChange','harvestStoreChange','materialStoreChange','modelStoreChange','alertStoreChange'], function () {
+      renderDataBlocks();
+    });
+  }
 })();
 
 </script>

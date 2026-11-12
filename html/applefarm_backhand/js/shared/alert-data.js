@@ -8,7 +8,7 @@
  *   - localStorage key: applefarm_alert_state_v1
  *   - v3 结构：{ version: 3, alerts: [...], rules: [...], config: { silence, sla, targets } }
  *   - v2 / v1 结构：读取时自动迁移，迁移前带时间戳备份旧 key，迁移失败回退
- *   - 地块主数据：smartorchard_plot_master（与 enterprise_plot.html 共用，只读）
+ *   - 地块主数据：PlotStore（后端 sf_plot，与 enterprise_plot.html 同源，只读）
  *
  * 暴露 API：
  *   AlertStore.all()                          → 全部预警数组
@@ -326,7 +326,7 @@
   }
 
   // ================================================================
-  // 地块主数据解析（只读 smartorchard_plot_master）
+  // 地块主数据解析（只读 PlotStore 的 sf_plot 快照）
   // ================================================================
 
   function normalizeBase(name){

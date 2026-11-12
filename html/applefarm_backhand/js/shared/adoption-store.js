@@ -582,6 +582,10 @@
     subscribers.forEach(function (fn) {
       try { fn(reason); } catch (e) { console.warn('[AdoptionStore]', e); }
     });
+    // 窗口事件：页面在未持有 Store 引用时也能感知数据变化并重绘
+    try {
+      global.dispatchEvent(new CustomEvent('adoptionStoreChange', { detail: { reason: reason } }));
+    } catch (e) { /* ignore */ }
   }
 
   function onChange(fn) {
@@ -1802,7 +1806,6 @@
   var AdoptionStore = {
     STORAGE_KEY: STORAGE_KEY,
     VERSION: VERSION,
-    PLOT_MASTER_KEY: PLOT_MASTER_KEY,
     CROSS: CROSS,
     TREE_STATUS: TREE_STATUS,
     ORDER_STATUS: ORDER_STATUS,

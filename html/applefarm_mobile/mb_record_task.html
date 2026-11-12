@@ -9,6 +9,7 @@
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <script src="js/mobile-store.js"></script>
+  <script src="../applefarm_backhand/js/shared/plot-store.js"></script>
   <style>
     /* Step Bar */
     .step-bar {
@@ -499,30 +500,9 @@
           </svg>
           选择地块
         </div>
-        <div class="plot-grid">
-          <div class="plot-item" onclick="selectPlot('A1区')">
-            <div class="plot-name">A1区 - 花牛苹果</div>
-            <div class="plot-area">120亩，8年树龄</div>
-          </div>
-          <div class="plot-item" onclick="selectPlot('A2区')">
-            <div class="plot-name">A2区 - 花牛苹果</div>
-            <div class="plot-area">105亩，5年树龄</div>
-          </div>
-          <div class="plot-item" onclick="selectPlot('B1区')">
-            <div class="plot-name">B1区 - 花牛苹果</div>
-            <div class="plot-area">135亩，10年树龄</div>
-          </div>
-          <div class="plot-item" onclick="selectPlot('B2区')">
-            <div class="plot-name">B2区 - 花牛苹果</div>
-            <div class="plot-area">98亩，6年树龄</div>
-          </div>
-          <div class="plot-item" onclick="selectPlot('C1区')">
-            <div class="plot-name">C1区 - 乔纳金</div>
-            <div class="plot-area">86亩，7年树龄</div>
-          </div>
-          <div class="plot-item" onclick="selectPlot('C2区')">
-            <div class="plot-name">C2区 - 乔纳金</div>
-            <div class="plot-area">75亩，4年树龄</div>
+        <div class="plot-grid" id="plotGrid">
+          <div class="plot-item" style="grid-column:1/-1;">
+            <div class="plot-name">正在加载地块数据…</div>
           </div>
         </div>
       </div>
@@ -817,15 +797,51 @@
       img.src = dataUrl;
     }
 
-    function selectPlot(plot) {
-      selectedPlot = plot;
-      document.querySelectorAll('.plot-item').forEach(item => {
+    /* ---------- 地块列表：来自统一地块数据层 PlotStore（后端 sf_plot） ---------- */
+    var PLOT_OPTIONS = [];
+    function plotLabelOf(p) {
+      return (p.code ? p.code + ' · ' : '') + (p.name || '未命名地块');
+    }
+    function plotAgeText(p) {
+      var y = parseInt(p.year, 10);
+      if (!y) return '';
+      var age = new Date().getFullYear() - y;
+      return (age > 0 ? age : 1) + '年树龄';
+    }
+    function renderPlotOptions() {
+      var grid = document.getElementById('plotGrid');
+      if (!grid) return;
+      PLOT_OPTIONS = (window.PlotStore && PlotStore.plots) ? PlotStore.plots() : [];
+      if (!PLOT_OPTIONS.length) {
+        grid.innerHTML = '<div class="plot-item" style="grid-column:1/-1;"><div class="plot-name">暂无可用地块</div></div>';
+        return;
+      }
+      grid.innerHTML = PLOT_OPTIONS.map(function (p, i) {
+        var label = plotLabelOf(p);
+        var meta = [p.variety || '', p.area ? p.area + '亩' : '', plotAgeText(p)]
+          .filter(Boolean).join(' · ');
+        return '<div class="plot-item" onclick="selectPlot(\'' + PLOT_OPTIONS[i].id + '\')">' +
+          '<div class="plot-name">' + PLOT_OPTIONS[i].name + '</div>' +
+          '<div class="plot-area">' + meta + '</div>' +
+          '</div>';
+      }).join('');
+    }
+
+    function selectPlot(plotId) {
+      selectedPlot = plotId;
+      var hit = null;
+      for (var i = 0; i < PLOT_OPTIONS.length; i++) {
+        if (String(PLOT_OPTIONS[i].id) === String(plotId)) { hit = PLOT_OPTIONS[i]; break; }
+      }
+      document.querySelectorAll('.plot-item').forEach(function (item) {
         item.classList.remove('active');
-        if (item.querySelector('.plot-name').textContent === plot) {
-          item.classList.add('active');
-        }
       });
-      document.getElementById('confirmPlot').textContent = plot;
+      var items = document.querySelectorAll('#plotGrid .plot-item');
+      for (var k = 0; k < items.length; k++) {
+        var nameEl = items[k].querySelector('.plot-name');
+        if (hit && nameEl && nameEl.textContent === hit.name) items[k].classList.add('active');
+      }
+      document.getElementById('confirmPlot').textContent = hit ? plotLabelOf(hit) : plotId;
     }
 
     function selectTaskType(type) {
@@ -928,10 +944,11 @@
     }
 
     function selectQuickTask(task) {
-      if (task === '果实套袋') { selectPlot('A1区'); selectTaskType('套袋'); }
-      else if (task === '夏季修剪') { selectPlot('B2区'); selectTaskType('修剪'); }
-      else if (task === '病虫害防治') { selectPlot('C1区'); selectTaskType('喷药'); }
-      else if (task === '果园灌溉') { selectPlot('C1区'); selectTaskType('灌溉'); }
+      /* 快捷任务不预置地块，改由用户自行选择（地块来自 PlotStore 真实台账） */
+      if (task === '果实套袋') { selectTaskType('套袋'); }
+      else if (task === '夏季修剪') { selectTaskType('修剪'); }
+      else if (task === '病虫害防治') { selectTaskType('喷药'); }
+      else if (task === '果园灌溉') { selectTaskType('灌溉'); }
     }
 
     function nextStep() {
@@ -1024,11 +1041,20 @@
       MobileStore.renderSyncBar(document.getElementById('syncBar'));
       captureGps();
       renderTaskTypeGrid(); // 农事类型九宫格：优先用后台字典渲染
+      renderPlotOptions();  // 地块列表：来自 PlotStore 地块台账
     });
 
     // 后端字典就绪后自动刷新九宫格（严格空库：字典来自数据库）
     if (window.MobileStore && MobileStore.ready) {
       MobileStore.ready.then(function () { renderTaskTypeGrid(); });
+    }
+
+    // 地块台账就绪后刷新地块列表
+    if (window.PlotStore) {
+      PlotStore.subscribe(function (reason) { if (reason === 'loaded') renderPlotOptions(); });
+      if (PlotStore.ready && PlotStore.ready.then) {
+        PlotStore.ready.then(function () { renderPlotOptions(); });
+      }
     }
   </script>
 </body>

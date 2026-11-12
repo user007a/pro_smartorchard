@@ -25,7 +25,8 @@
     var baseDir = selfEl.src.replace(/[^\/]*$/, '');
     var deps = [
       { name: 'Api', src: baseDir + '../../../common/js/api.js' },
-      { name: 'TraceMapper', src: baseDir + 'trace-mapper.js' }
+      { name: 'TraceMapper', src: baseDir + 'trace-mapper.js' },
+      { name: 'PlotStore', src: baseDir + 'plot-store.js' }
     ];
     var pending = deps.filter(function (d) { return !global[d.name]; });
     if (!pending.length) return Promise.resolve();
@@ -145,31 +146,7 @@
     '秦冠': '秦冠苹果'
   };
 
-  // 与 trace_batch.html 保持一致的地块主数据
-  var PLOT_SOURCE = [
-    { code: 'D-001', name: '东区1号地', base: '天水麦积区基地', variety: '花牛苹果' },
-    { code: 'D-002', name: '东区2号地', base: '天水麦积区基地', variety: '花牛苹果' },
-    { code: 'D-003', name: '西区1号地', base: '天水麦积区基地', variety: '金帅' },
-    { code: 'D-004', name: '北区1号地', base: '天水秦州基地', variety: '花牛苹果' },
-    { code: 'D-005', name: '南区1号地', base: '天水秦州基地', variety: '花牛苹果' },
-    { code: 'D-006', name: '中区1号地', base: '甘肃吉县苹果园', variety: '花牛苹果' },
-    { code: 'D-007', name: '南区2号地', base: '甘肃麦积区苹果园', variety: '花牛苹果' },
-    { code: 'D-008', name: '西区2号地', base: '天水麦积区苹果基地', variety: '花牛苹果' },
-    { code: 'D-009', name: '北区2号地', base: '甘肃麦积区苹果基地', variety: '花牛苹果' },
-    { code: 'D-010', name: '东区3号地', base: '天水麦积区苹果基地', variety: '金帅' },
-    { code: 'D-011', name: '南区3号地', base: '甘肃麦积区苹果园', variety: '花牛苹果' },
-    { code: 'D-012', name: '西区3号地', base: '天水麦积区苹果基地', variety: '秦冠' },
-    { code: 'D-013', name: '北区3号地', base: '甘肃麦积区苹果基地', variety: '花牛苹果' },
-    { code: 'D-014', name: '中区2号地', base: '甘肃吉县苹果园', variety: '花牛苹果' },
-    { code: 'D-015', name: '东区4号地', base: '天水麦积区苹果基地', variety: '花牛苹果' },
-    { code: 'D-016', name: '南区4号地', base: '甘肃麦积区苹果园', variety: '金帅' },
-    { code: 'D-017', name: '西区4号地', base: '天水麦积区苹果基地', variety: '花牛苹果' },
-    { code: 'D-018', name: '北区4号地', base: '甘肃麦积区苹果基地', variety: '花牛苹果' },
-    { code: 'D-019', name: '中区3号地', base: '甘肃吉县苹果园', variety: '花牛苹果' },
-    { code: 'D-020', name: '东区5号地', base: '天水麦积区苹果基地', variety: '秦冠' },
-    { code: 'D-021', name: '东区6号地', base: '甘肃吉县苹果园', variety: '花牛苹果' },
-    { code: 'D-022', name: '西区5号地', base: '天水张家川县基地', variety: '金帅' }
-  ];
+  // 地块主数据：统一来自 PlotStore（后端 sf_plot），不再内置写死清单
 
   // 兜底批次（HarvestStore 不可用时）
   /* 严格空库模式：不内置演示批次，批次一律来自真实采收记录或后端 /api/trace/aggregate */
@@ -242,7 +219,12 @@
   }
   function plotOf(code) {
     var c = text(code);
-    for (var i = 0; i < PLOT_SOURCE.length; i++) if (PLOT_SOURCE[i].code === c) return PLOT_SOURCE[i];
+    if (global.PlotStore) {
+      var hit = global.PlotStore.plotOf(c);
+      if (hit) {
+        return { code: hit.code, name: hit.name || '', base: hit.base || '', variety: hit.variety || '' };
+      }
+    }
     return { code: c, name: '', base: '', variety: '' };
   }
   function productOf(variety) {

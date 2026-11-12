@@ -105,6 +105,49 @@
   var BASE_URL = global.SMARTORCHARD_API_BASE || '/api';
   var TOKEN_KEY = 'smartorchard_token';
 
+  /* ============================================================
+   * Store 变更订阅助手（StoreLive）
+   * ------------------------------------------------------------
+   * 各数据层（Store）在「后端数据异步到达」与「本地写入」两条路径上
+   * 都会派发 `<store>StoreChange` 窗口事件。页面若不监听，首次渲染
+   * 发生在数据到达之前，界面就会一直停在空列表，必须手动刷新。
+   *
+   * 用法：
+   *   StoreLive.on('salesStoreChange', refreshAll);
+   *   StoreLive.on(['soilStoreChange', 'plotStoreChange'], refresh);
+   *
+   * 约定：
+   *   - 回调异常不影响其它订阅者；
+   *   - 重复订阅同一「事件 + 回调」组合会被忽略，避免重复渲染。
+   *
+   * 本文件是所有端的公共请求层，各端 store 均依赖它，故助手挂在此处，
+   * 保证「用到 store 的页面」一定具备该能力。
+   * ============================================================ */
+  var StoreLive = (function () {
+    'use strict';
+    var bound = Object.create(null);
+
+    function on(events, handler) {
+      if (typeof handler !== 'function') return;
+      var list = Array.isArray(events) ? events : [events];
+      list.forEach(function (ev) {
+        if (!ev || bound[ev + '::' + handler]) return;
+        bound[ev + '::' + handler] = 1;
+        global.addEventListener(ev, function () {
+          try {
+            handler();
+          } catch (e) {
+            console.warn('[StoreLive] 订阅回调异常 @' + ev, e);
+          }
+        });
+      });
+    }
+
+    return { on: on };
+  })();
+  global.StoreLive = StoreLive;
+
+
   /* ---------- token 管理 ---------- */
   function getToken() {
     try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; }

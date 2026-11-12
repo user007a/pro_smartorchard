@@ -272,6 +272,10 @@ window.MobileOpsStore = (function () {
     listeners.forEach(function (fn) {
       try { fn(key); } catch (e) { /* 单个订阅者异常不影响其他订阅者 */ }
     });
+    // 窗口事件：页面在未持有 Store 引用时也能感知数据变化并重绘
+    try {
+      global.dispatchEvent(new CustomEvent('mobileOpsStoreChange', { detail: { reason: key } }));
+    } catch (e) { /* ignore */ }
   }
 
   function subscribe(fn) {
