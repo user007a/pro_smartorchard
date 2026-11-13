@@ -23,8 +23,10 @@
       var path = el.getAttribute('data-mf');
       var value = window.ModelStore.field(path);
       if (value === undefined || value === null || value === '') {
+        /* 严格空库模式：库中无该模型数据时清空占位文案，
+           禁止保留 HTML 里写死的演示值。未显式指定 fallback 时统一显示「--」。 */
         var fb = el.getAttribute('data-mf-fallback');
-        if (fb !== null) el.textContent = fb;
+        el.textContent = (fb === null || fb === undefined) ? '--' : fb;
         continue;
       }
       el.textContent = (el.getAttribute('data-mf-prefix') || '') + value + (el.getAttribute('data-mf-suffix') || '');

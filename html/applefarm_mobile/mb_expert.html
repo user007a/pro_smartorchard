@@ -10,7 +10,7 @@
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <!-- 移动端共享数据层 -->
   <script src="js/mobile-store.js"></script>
-  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
+  <script src="js/mobile-data.js"></script>
   <style>
     /* Content */
     .content { padding: var(--space-4); padding-bottom: 80px; }
@@ -261,25 +261,6 @@
       <div class="card">
         <div class="card-title">我的提问</div>
         <div id="myQuestionList"></div>
-        <div class="question-item">
-          <div class="question-header">
-            <div class="question-title">苹果树叶片发黄怎么办？</div>
-            <span class="question-status answered">已回复</span>
-          </div>
-          <div class="question-content">最近发现部分苹果树叶片开始发黄，主要是老叶，新叶还好，请问是什么原因？</div>
-          <div class="answer-box">
-            <div class="answer-title">王教授 回复</div>
-            <div class="answer-content">根据描述，老叶发黄可能是缺氮或镁元素。建议：1. 检查土壤肥力情况；2. 适量追施复合肥；3. 叶面喷施镁肥。同时注意排水，避免根系积水。</div>
-          </div>
-        </div>
-
-        <div class="question-item">
-          <div class="question-header">
-            <div class="question-title">今年什么时候套袋合适？</div>
-            <span class="question-status pending">待回复</span>
-          </div>
-          <div class="question-content">想咨询一下今年苹果套袋的最佳时间，谢谢！</div>
-        </div>
       </div>
     </div>
 
@@ -342,56 +323,8 @@
   </div>
 
   <script>
-    var QUESTION_KEY = 'smartorchard_expert_questions';
-    var STAFF_KEY = 'mb_staff_accounts';
-
-    /* 与后台「作业人员账号」isExpert 标记联动；后台未标记时用兜底名录 */
-    var FALLBACK_EXPERTS = [
-      { name: '王教授', title: '农业大学果树学教授', tags: ['苹果栽培', '病虫害防治', '施肥管理'] },
-      { name: '李农艺师', title: '资深苹果种植专家', tags: ['物候期管理', '水肥一体化', '采收技术'] }
-    ];
-
-    function currentOperator() {
-      try {
-        var u = JSON.parse(sessionStorage.getItem('smartorchard_current_user') || 'null');
-        return { name: (u && u.name) || '移动端用户', id: (u && u.username) || '' };
-      } catch (e) {
-        return { name: '移动端用户', id: '' };
-      }
-    }
-
-    function renderExperts() {
-      var box = document.getElementById('expertList');
-      var staff = (window.MobileOpsStore && typeof MobileOpsStore.list === 'function')
-        ? MobileOpsStore.list('staff') : [];
-      var list = staff.filter(function (s) {
-        return s && s.isExpert && s.status !== 'disabled';
-      }).map(function (s) {
-        return {
-          name: s.realName || s.name || s.account || '',
-          title: (s.role === '管理员' ? '平台技术专家' : (s.role || '专家')) + (s.baseId ? ' · ' + s.baseId : ''),
-          tags: String(s.expertise || s.expertTitle || '农技咨询').split(/[\/、,，]/).map(function (t) { return t.trim(); }).filter(Boolean)
-        };
-      });
-      if (!list.length) list = FALLBACK_EXPERTS;
-
-      box.innerHTML = list.map(function (e) {
-        return '<div class="expert-card">' +
-          '<div class="expert-avatar">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-              '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' +
-            '</svg>' +
-          '</div>' +
-          '<div class="expert-info">' +
-            '<div class="expert-name">' + esc(e.name) + '</div>' +
-            '<div class="expert-title">' + esc(e.title) + '</div>' +
-            '<div class="expert-tags">' + (e.tags || []).map(function (t) {
-              return '<span class="expert-tag">' + esc(t) + '</span>';
-            }).join('') + '</div>' +
-          '</div>' +
-        '</div>';
-      }).join('');
-    }
+    var MD = window.MobileData;
+    var EXPERT_ROWS = [];
 
     function navigateTo(page) {
       window.location.href = page;
@@ -407,39 +340,105 @@
       });
     }
 
-    function openAskModal() {
-      document.getElementById('questionTitle').value = '';
-      document.getElementById('questionDesc').value = '';
-      document.getElementById('askModal').classList.add('show');
+    function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+    function nowText() {
+      var d = new Date();
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+        ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
     }
 
-    function closeAskModal() {
-      document.getElementById('askModal').classList.remove('show');
+    function currentOperator() {
+      var u = MD && typeof MD.user === 'function' ? MD.user() : null;
+      return {
+        name: (u && (u.realName || u.account)) || '',
+        id: (u && u.id) || ''
+      };
+    }
+
+    function loadExperts() {
+      if (!MD || typeof MD.rows !== 'function') { renderExperts(); return; }
+      var run = function () {
+        MD.rows('enterprise_expert').then(function (rows) {
+          EXPERT_ROWS = rows || [];
+          renderExperts();
+        });
+      };
+      if (MD.ready && MD.ready.then) MD.ready.then(run); else run();
+    }
+
+    function renderExperts() {
+      var box = document.getElementById('expertList');
+      if (!box) return;
+      var rows = EXPERT_ROWS.length ? EXPERT_ROWS : (MD ? MD.list('enterprise_expert') : []);
+      if (!rows.length) {
+        box.innerHTML = MD ? MD.inlineEmpty('暂无专家信息') : '';
+        return;
+      }
+      var list = rows.slice().sort(function (a, b) {
+        return (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0);
+      });
+      box.innerHTML = list.map(function (e) {
+        var title = [e.role, e.org].filter(Boolean).join(' · ');
+        var tags = String(e.description || '').split(/[\/、,，;；]/).map(function (t) {
+          return t.trim();
+        }).filter(Boolean).slice(0, 4);
+        return '<div class="expert-card">' +
+          '<div class="expert-avatar">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>' +
+            '</svg>' +
+          '</div>' +
+          '<div class="expert-info">' +
+            '<div class="expert-name">' + esc(e.name) + '</div>' +
+            (title ? '<div class="expert-title">' + esc(title) + '</div>' : '') +
+            (tags.length ? '<div class="expert-tags">' + tags.map(function (t) {
+              return '<span class="expert-tag">' + esc(t) + '</span>';
+            }).join('') + '</div>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function expertNameById(id) {
+      if (!MD || id == null) return '';
+      var staff = MD.list('mb_staff_account');
+      for (var i = 0; i < staff.length; i++) {
+        if (String(staff[i].id) === String(id)) {
+          return staff[i].real_name || staff[i].account || '';
+        }
+      }
+      return '';
     }
 
     function renderQuestions() {
       var box = document.getElementById('myQuestionList');
-      var src = (window.MobileOpsStore && typeof MobileOpsStore.list === 'function')
-        ? MobileOpsStore.list('expertQuestions') : [];
-      var list = src.map(function (q) {
-        return {
-          title: q.title || '',
-          desc: q.content || '',
-          status: q.status || 'pending',
-          reply: q.expertReply || '',
-          expert: q.operator || '专家',
-          replyTime: q.replyTime || '',
-          time: q.questionTime || ''
-        };
+      if (!box) return;
+      var u = MD && typeof MD.user === 'function' ? MD.user() : null;
+      var meName = (u && u.realName) || '';
+      var meAccount = (u && u.account) || '';
+      if (!meName && !meAccount) {
+        box.innerHTML = MD ? MD.inlineEmpty('未获取到登录用户信息') : '';
+        return;
+      }
+      var rows = MD ? MD.list('mb_expert_consult') : [];
+      var mine = rows.filter(function (q) {
+        var who = String(q.questioner || '');
+        return who && (who === meName || who === meAccount);
+      }).sort(function (a, b) {
+        return String(b.question_time || '').localeCompare(String(a.question_time || ''));
       });
-      if (!list.length) { box.innerHTML = ''; return; }
-      box.innerHTML = list.map(function (q) {
-        var answered = q.status === 'replied' && q.reply;
+      if (!mine.length) {
+        box.innerHTML = MD ? MD.inlineEmpty('暂无提问记录') : '';
+        return;
+      }
+      box.innerHTML = mine.map(function (q) {
+        var answered = q.status === 'replied' && !!q.expert_reply;
         var answerHtml = answered
           ? '<div class="answer-box">' +
-              '<div class="answer-title">' + esc(q.expert || '专家') + ' 回复' +
-              (q.replyTime ? ' · ' + esc(q.replyTime) : '') + '</div>' +
-              '<div class="answer-content">' + esc(q.reply) + '</div>' +
+              '<div class="answer-title">' + esc(expertNameById(q.expert_id) || '专家') + ' 回复' +
+              (q.reply_time ? ' · ' + esc(MD.dateTimeText(q.reply_time)) : '') + '</div>' +
+              '<div class="answer-content">' + esc(q.expert_reply) + '</div>' +
             '</div>'
           : '';
         return '<div class="question-item">' +
@@ -448,11 +447,21 @@
           '<span class="question-status ' + (answered ? 'answered' : 'pending') + '">' +
             (answered ? '已回复' : '待回复') + '</span>' +
           '</div>' +
-          '<div class="question-content">' + esc(q.desc) + '</div>' +
+          '<div class="question-content">' + esc(q.content) + '</div>' +
           answerHtml +
-          '<div style="font-size:var(--font-xs);color:var(--text-light);">' + esc(q.time || '') + '</div>' +
+          '<div style="font-size:var(--font-xs);color:var(--text-light);">' + esc(MD.dateText(q.question_time)) + '</div>' +
           '</div>';
       }).join('');
+    }
+
+    function openAskModal() {
+      document.getElementById('questionTitle').value = '';
+      document.getElementById('questionDesc').value = '';
+      document.getElementById('askModal').classList.add('show');
+    }
+
+    function closeAskModal() {
+      document.getElementById('askModal').classList.remove('show');
     }
 
     function submitQuestion() {
@@ -465,32 +474,39 @@
       if (desc.length < 5) { MobileStore.toast('问题描述至少 5 个字', 'warning'); return; }
 
       var me = currentOperator();
-      if (window.MobileOpsStore && typeof MobileOpsStore.push === 'function') {
-        MobileOpsStore.push('expertQuestions', {
-          title: title,
-          content: desc,
-          questioner: me.name,
-          questionTime: MobileStore.fmtTime(Date.now()),
-          status: 'pending',
-          source: 'mobile',
-          operator: me.name,
-          operatorId: me.id
-        });
+      if (!me.name) { MobileStore.toast('未获取到登录用户信息', 'error'); return; }
+      if (!window.Api || typeof Api.create !== 'function') {
+        MobileStore.toast('数据服务未就绪，请稍后重试', 'error');
+        return;
       }
 
-      closeAskModal();
-      MobileStore.toast('提问已提交，专家将尽快回复', 'success');
-      renderQuestions();
+      Api.create('mb_expert_consult', {
+        title: title,
+        content: desc,
+        questioner: me.name,
+        question_time: nowText(),
+        status: 'pending',
+        source: 'mobile',
+        operator: me.name
+      }).then(function (res) {
+        if (!res || !res.ok) {
+          MobileStore.toast((res && res.message) || '提问提交失败', 'error');
+          return;
+        }
+        closeAskModal();
+        MobileStore.toast('提问已提交，专家将尽快回复', 'success');
+        if (MD) MD.reload('mb_expert_consult').then(renderQuestions);
+      });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
       renderExperts();
       renderQuestions();
-      /* 后端预加载完成后重渲染（严格空库：数据来自数据库） */
-      if (window.MobileOpsStore && MobileOpsStore.subscribe) {
-        MobileOpsStore.subscribe(function (key) {
-          if (!key || key === MobileOpsStore.KEYS.staff) renderExperts();
-          if (!key || key === MobileOpsStore.KEYS.expertQuestions) renderQuestions();
+      loadExperts();
+      if (MD && typeof MD.subscribe === 'function') {
+        MD.subscribe(function () {
+          renderExperts();
+          renderQuestions();
         });
       }
     });

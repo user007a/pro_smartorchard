@@ -608,7 +608,9 @@
 
   function save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory));
+      global.__STRICT_DB_INTERNAL_WRITE__ = true;
+
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } finally { global.__STRICT_DB_INTERNAL_WRITE__ = false; }
       lastError = '';
       return true;
     } catch (e) {
@@ -668,6 +670,10 @@
   }
 
   function commit(reason) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var ok = save();
     notify(reason);
     // 后端持久化（防抖，未登录/依赖未就绪时静默跳过）
@@ -1260,6 +1266,8 @@
 
   /** 签收：运输中 → 已签收，记录签收人与签收时间 */
   function signShipment(id, opts) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     opts = opts || {};
     var item = get('shipments', id);
     if (!item) return { ok: false, item: null, message: '发货单不存在或已被删除' };
@@ -1285,6 +1293,8 @@
 
   /** 删除：关闭闭环上的悬空引用，避免出现「关联计划不存在」 */
   function remove(entity, id) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var d = ensure();
     if (!Array.isArray(d[entity])) return { ok: false, message: '未知的数据集合：' + entity };
     var idx = findIndexById(d[entity], id);
@@ -1308,6 +1318,8 @@
 
   /** 唯一状态流转入口：校验流程合法性 + 业务守卫 */
   function advance(entity, id, to, patch) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var item = get(entity, id);
     if (!item) return { ok: false, item: null, message: '数据不存在或已被删除' };
     if (!canTransition(entity, item.status, to)) {

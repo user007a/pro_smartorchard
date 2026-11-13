@@ -10,6 +10,8 @@
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <!-- 共享数据层（toast 轻提示） -->
   <script src="js/mobile-store.js"></script>
+  <!-- 移动端统一数据层（严格空库 · 只读后端） -->
+  <script src="js/mobile-data.js"></script>
   <style>
     /* Stats */
     .stats-row {
@@ -164,6 +166,8 @@
     .order-status.shipping { background: var(--purple-bg); color: var(--purple); }
     .order-status.shipped { background: var(--info-bg); color: var(--info); }
     .order-status.completed { background: var(--success-bg); color: var(--success); }
+    .order-status.refunded { background: var(--gray-100); color: var(--text-secondary); }
+    .order-status.cancelled { background: var(--gray-100); color: var(--text-light); }
 
     .order-detail {
       background: var(--gray-50);
@@ -413,19 +417,19 @@
     </div>
     <div class="stats-row">
         <div class="stat-item">
-          <div class="stat-value">38</div>
+          <div class="stat-value" id="statTrees">--</div>
           <div class="stat-label">认养果树</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value" id="statPending">1</div>
+          <div class="stat-value" id="statPending">--</div>
           <div class="stat-label">待确认订单</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value" id="statShipping">1</div>
-          <div class="stat-label">待发货</div>
+          <div class="stat-value" id="statPaid">--</div>
+          <div class="stat-label">已支付订单</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value" id="statReady">1</div>
+          <div class="stat-value" id="statHarvest">--</div>
           <div class="stat-label">待采摘</div>
         </div>
       </div>
@@ -491,255 +495,26 @@
       <div class="filter-tabs">
         <div class="filter-tab active" data-filter="all" onclick="filterOrders('all')">全部</div>
         <div class="filter-tab" data-filter="pending" onclick="filterOrders('pending')">待确认</div>
-        <div class="filter-tab" data-filter="shipping" onclick="filterOrders('shipping')">待发货</div>
-        <div class="filter-tab" data-filter="shipped" onclick="filterOrders('shipped')">已发货</div>
-        <div class="filter-tab" data-filter="ready" onclick="filterOrders('ready')">待采摘</div>
-        <div class="filter-tab" data-filter="completed" onclick="filterOrders('completed')">已完成</div>
+        <div class="filter-tab" data-filter="paid" onclick="filterOrders('paid')">已支付</div>
+        <div class="filter-tab" data-filter="done" onclick="filterOrders('done')">已完成</div>
+        <div class="filter-tab" data-filter="refunded" onclick="filterOrders('refunded')">已退款</div>
+        <div class="filter-tab" data-filter="cancelled" onclick="filterOrders('cancelled')">已取消</div>
       </div>
-      <div class="order-result" id="orderResult">共 3 条订单</div>
-      <div class="empty-state" id="orderEmpty" style="display:none;">
-        <div class="empty-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/>
-            <path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/>
-            <path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>
-          </svg>
-        </div>
-        <div class="empty-title">暂无订单</div>
-        <div class="empty-desc">当前筛选条件下暂无订单记录</div>
-      </div>
+      <div class="order-result" id="orderResult">共 -- 条订单</div>
 
       <!-- 订单卡片 -->
       <div id="orderList">
-      <div class="order-card" data-status="pending" data-order="AD20260614001">
-        <div class="order-header">
-          <div class="order-info">
-            <div class="order-id">订单号：AD20260614001</div>
-            <div class="order-user">认养人：李明（138****5678）</div>
-            <div class="order-time">下单时间：2026-09-14 09:30</div>
-          </div>
-          <span class="order-status pending">待确认</span>
-        </div>
-        <div class="order-detail">
-          <div class="detail-row">
-            <span class="detail-label">认养果树</span>
-            <span class="detail-value">花牛苹果 #A025</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">认养周期</span>
-            <span class="detail-value">1年（2026.06-2027.06）</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">认养金额</span>
-            <span class="detail-value">¥2,980</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">配送地址</span>
-            <span class="detail-value">北京市朝阳区...</span>
-          </div>
-        </div>
-        <div class="order-actions">
-          <button class="order-btn secondary" onclick="viewOrderDetail('AD20260614001')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="16" x2="12" y2="12"/>
-              <line x1="12" y1="8" x2="12.01" y2="8"/>
-            </svg>
-            查看详情
-          </button>
-          <button class="order-btn primary" onclick="confirmOrder('AD20260614001')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            确认订单
-          </button>
-        </div>
-      </div>
 
-      <div class="order-card" data-status="shipping" data-order="AD20260613002">
-        <div class="order-header">
-          <div class="order-info">
-            <div class="order-id">订单号：AD20260613002</div>
-            <div class="order-user">认养人：王芳（139****1234）</div>
-            <div class="order-time">下单时间：2026-09-13 15:20</div>
-          </div>
-          <span class="order-status shipping">待发货</span>
-        </div>
-        <div class="order-detail">
-          <div class="detail-row">
-            <span class="detail-label">认养果树</span>
-            <span class="detail-value">花牛苹果 #G012</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">采摘预约</span>
-            <span class="detail-value">2026-09-15 上午</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">预估产量</span>
-            <span class="detail-value">约80斤</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">配送方式</span>
-            <span class="detail-value">顺丰冷链</span>
-          </div>
-        </div>
-        <div class="order-actions">
-          <button class="order-btn secondary" onclick="viewOrderDetail('AD20260613002')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="16" x2="12" y2="12"/>
-              <line x1="12" y1="8" x2="12.01" y2="8"/>
-            </svg>
-            查看详情
-          </button>
-          <button class="order-btn primary" onclick="shipOrder('AD20260613002')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="1" y="3" width="15" height="13"/>
-              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
-              <circle cx="5.5" cy="18.5" r="2.5"/>
-              <circle cx="18.5" cy="18.5" r="2.5"/>
-            </svg>
-            确认发货
-          </button>
-        </div>
-      </div>
 
-      <div class="order-card" data-status="ready" data-order="AD20260612003">
-        <div class="order-header">
-          <div class="order-info">
-            <div class="order-id">订单号：AD20260612003</div>
-            <div class="order-user">认养人：张伟（137****8901）</div>
-            <div class="order-time">下单时间：2026-09-12 10:45</div>
-          </div>
-          <span class="order-status ready">待采摘</span>
-        </div>
-        <div class="order-detail">
-          <div class="detail-row">
-            <span class="detail-label">认养果树</span>
-            <span class="detail-value">花牛苹果 #A038</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">采摘预约</span>
-            <span class="detail-value">2026-10-08 下午</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">预约人数</span>
-            <span class="detail-value">3人（含儿童1人）</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">采摘方式</span>
-            <span class="detail-value">自采摘体验</span>
-          </div>
-        </div>
-        <div class="order-actions">
-          <button class="order-btn secondary" onclick="viewOrderDetail('AD20260612003')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="16" x2="12" y2="12"/>
-              <line x1="12" y1="8" x2="12.01" y2="8"/>
-            </svg>
-            查看详情
-          </button>
-          <button class="order-btn primary" onclick="confirmHarvest('AD20260612003', 'A038')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            确认采摘
-          </button>
-        </div>
-      </div>
+
+
+
       </div>
 
       <!-- 已认养果树 -->
       <div class="section-title" style="margin-top: var(--space-4);">已认养果树</div>
 
-      <div class="tree-card">
-        <div class="tree-header">
-          <div class="tree-photo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:32px;height:32px;color:var(--primary);">
-              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-              <path d="M2 17l10 5 10-5"/>
-              <path d="M2 12l10 5 10-5"/>
-            </svg>
-          </div>
-          <div class="tree-info">
-            <div class="tree-name">花牛苹果 #A025</div>
-            <div class="tree-variety">品种：花牛苹果 · 树龄8年 · A1区</div>
-            <div class="tree-adopter">认养人：李明（2026.06-2027.06）</div>
-            <div class="tree-status-row">
-              <span class="status-badge active">已挂牌</span>
-              <span class="status-badge active">实景开放</span>
-            </div>
-          </div>
-        </div>
-        <div class="tree-actions">
-          <div class="tree-btn" onclick="editCert('A025')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            </svg>
-            编辑证书
-          </div>
-          <div class="tree-btn" onclick="bindFarming('A025')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="4" width="18" height="18" rx="2"/>
-              <line x1="16" y1="2" x2="16" y2="6"/>
-              <line x1="8" y1="2" x2="8" y2="6"/>
-            </svg>
-            绑定农事
-          </div>
-          <div class="tree-btn" onclick="toggleCamera('A025')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-              <circle cx="12" cy="13" r="4"/>
-            </svg>
-            实景设置
-          </div>
-        </div>
-      </div>
-
-      <div class="tree-card">
-        <div class="tree-header">
-          <div class="tree-photo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:32px;height:32px;color:var(--primary);">
-              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-              <path d="M2 17l10 5 10-5"/>
-              <path d="M2 12l10 5 10-5"/>
-            </svg>
-          </div>
-          <div class="tree-info">
-            <div class="tree-name">花牛苹果 #G012</div>
-            <div class="tree-variety">品种：花牛苹果 · 树龄6年 · B2区</div>
-            <div class="tree-adopter">认养人：王芳（2026.04-2027.04）</div>
-            <div class="tree-status-row">
-              <span class="status-badge active">已挂牌</span>
-              <span class="status-badge pending">实景待开放</span>
-            </div>
-          </div>
-        </div>
-        <div class="tree-actions">
-          <div class="tree-btn" onclick="editCert('G012')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            </svg>
-            编辑证书
-          </div>
-          <div class="tree-btn" onclick="bindFarming('G012')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="4" width="18" height="18" rx="2"/>
-              <line x1="16" y1="2" x2="16" y2="6"/>
-              <line x1="8" y1="2" x2="8" y2="6"/>
-            </svg>
-            绑定农事
-          </div>
-          <div class="tree-btn" onclick="toggleCamera('G012')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-              <circle cx="12" cy="13" r="4"/>
-            </svg>
-            开放实景
-          </div>
-        </div>
-      </div>
+      <div id="treeList"></div>
     </div>
 
     <div class="cam-overlay" id="camOverlay" onclick="closeCameraSetting()">
@@ -807,7 +582,8 @@
 
     function refreshData() {
       renderStats();
-      filterOrders(document.querySelector('.filter-tab.active') ? document.querySelector('.filter-tab.active').dataset.filter : 'all');
+      renderOrders();
+      renderTrees();
     }
 
     // 认养设置功能
@@ -870,98 +646,267 @@
       document.getElementById('camOverlay').classList.remove('show');
     }
 
-    // 订单管理功能：按订单状态真实过滤列表
-    function countByStatus(status) {
-      return document.querySelectorAll('#orderList .order-card[data-status="' + status + '"]').length;
+    /* ============================================================
+     * 认养业务数据（严格空库：全部来自 sf_adoption_tree / sf_adoption_order /
+     * sf_adoption_harvest，库中无数据时显示空态与 --）
+     * ============================================================ */
+    var MD = window.MobileData;
+
+    var ORDER_STATUS = {
+      pending:   { text: '待确认', cls: 'pending' },
+      paid:      { text: '已支付', cls: 'confirmed' },
+      done:      { text: '已完成', cls: 'completed' },
+      refunded:  { text: '已退款', cls: 'refunded' },
+      cancelled: { text: '已取消', cls: 'cancelled' }
+    };
+
+    var ICON_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+      '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/>' +
+      '<line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+    var ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+      '<polyline points="20 6 9 17 4 12"/></svg>';
+
+    function treeById(id) {
+      var trees = MD.list('adoption_tree');
+      for (var i = 0; i < trees.length; i++) {
+        if (String(trees[i].id) === String(id)) return trees[i];
+      }
+      return null;
+    }
+
+    function money(v) {
+      var n = MD.num(v);
+      return n == null ? '--' : '¥' + n.toFixed(2).replace(/\.00$/, '');
+    }
+
+    function periodText(o) {
+      var s = MD.dateText(o.start_date);
+      var e = MD.dateText(o.end_date);
+      var term = o.term || (o.duration != null && o.duration !== '' ? o.duration + '年' : '');
+      if (s && e) return (term ? term + '（' : '') + s + ' 至 ' + e + (term ? '）' : '');
+      return term || '--';
+    }
+
+    function detailRow(label, value) {
+      return '<div class="detail-row">' +
+        '<span class="detail-label">' + label + '</span>' +
+        '<span class="detail-value">' + MD.esc(value == null || value === '' ? '--' : value) + '</span>' +
+      '</div>';
+    }
+
+    function buildOrderCard(o) {
+      var st = ORDER_STATUS[o.order_status] || { text: o.order_status || '--', cls: '' };
+      var tree = o.tree_id ? treeById(o.tree_id) : null;
+      var treeLabel = o.tree_code || (tree ? tree.tree_code : '') || '--';
+      if (tree) {
+        var vn = tree.variety_name || tree.variety;
+        if (vn) treeLabel += ' · ' + vn;
+      }
+      var contact = o.adopter || '--';
+      if (o.adopter_phone) contact += '（' + o.adopter_phone + '）';
+
+      var baseName = '';
+      if (o.base_id) {
+        var bases = MD.list('base');
+        for (var i = 0; i < bases.length; i++) {
+          if (String(bases[i].id) === String(o.base_id)) { baseName = bases[i].name || ''; break; }
+        }
+      }
+      if (!baseName) baseName = o.plot_name || '--';
+
+      var actions = '<button class="order-btn secondary" onclick="viewOrderDetail(\'' +
+        MD.esc(o.order_code || o.id) + '\')">' + ICON_INFO + '查看详情</button>';
+      if (o.order_status === 'pending') {
+        actions += '<button class="order-btn primary" onclick="confirmOrder(' + o.id + ')">' +
+          ICON_CHECK + '确认订单</button>';
+      } else if (o.order_status === 'paid') {
+        actions += '<button class="order-btn primary" onclick="completeOrder(' + o.id + ')">' +
+          ICON_CHECK + '完成订单</button>';
+      }
+
+      return '<div class="order-card" data-status="' + MD.esc(o.order_status || '') +
+          '" data-order="' + MD.esc(o.order_code || '') + '">' +
+        '<div class="order-header">' +
+          '<div class="order-info">' +
+            '<div class="order-id">订单号：' + MD.esc(o.order_code || '--') + '</div>' +
+            '<div class="order-user">认养人：' + MD.esc(contact) + '</div>' +
+            '<div class="order-time">下单时间：' + MD.esc(MD.dateTimeText(o.order_time) || '--') + '</div>' +
+          '</div>' +
+          '<span class="order-status ' + st.cls + '">' + MD.esc(st.text) + '</span>' +
+        '</div>' +
+        '<div class="order-detail">' +
+          detailRow('认养果树', treeLabel) +
+          detailRow('认养周期', periodText(o)) +
+          detailRow('认养金额', money(o.amount)) +
+          detailRow('认养基地', baseName) +
+        '</div>' +
+        '<div class="order-actions">' + actions + '</div>' +
+      '</div>';
+    }
+
+    function buildTreeCard(t) {
+      var code = t.tree_code || '';
+      var name = t.tree_name || ((t.variety_name || t.variety || '苹果树') + ' #' + code);
+      var meta = '品种：' + (t.variety_name || t.variety || '--') +
+        (t.tree_age != null ? ' · 树龄' + t.tree_age + '年' : '') +
+        (t.plot_name ? ' · ' + t.plot_name : '');
+      var s = MD.dateText(t.start_date);
+      var e = MD.dateText(t.expire_time);
+      var adopter = '认养人：' + (t.adopter || '--') +
+        ((s || e) ? '（' + (s || '--') + ' 至 ' + (e || '--') + '）' : '');
+      var tagBadge = t.tag_code
+        ? '<span class="status-badge active">已挂牌</span>'
+        : '<span class="status-badge pending">未挂牌</span>';
+      var sceneBadge = (t.open_scene === 1 || t.open_scene === '1')
+        ? '<span class="status-badge active">实景开放</span>'
+        : '<span class="status-badge pending">实景未开放</span>';
+
+      return '<div class="tree-card">' +
+        '<div class="tree-header">' +
+          '<div class="tree-photo">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:32px;height:32px;color:var(--primary);">' +
+              '<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>' +
+            '</svg>' +
+          '</div>' +
+          '<div class="tree-info">' +
+            '<div class="tree-name">' + MD.esc(name) + '</div>' +
+            '<div class="tree-variety">' + MD.esc(meta) + '</div>' +
+            '<div class="tree-adopter">' + MD.esc(adopter) + '</div>' +
+            '<div class="tree-status-row">' + tagBadge + sceneBadge + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="tree-actions">' +
+          '<div class="tree-btn" onclick="editCert(' + t.id + ')">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+              '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>' +
+            '</svg>编辑证书</div>' +
+          '<div class="tree-btn" onclick="bindFarming(' + t.id + ')">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+              '<rect x="3" y="4" width="18" height="18" rx="2"/>' +
+              '<line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>' +
+            '</svg>绑定农事</div>' +
+          '<div class="tree-btn" onclick="toggleCamera(' + t.id + ')">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+              '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>' +
+              '<circle cx="12" cy="13" r="4"/>' +
+            '</svg>实景设置</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function setStat(id, value) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = value;
     }
 
     function renderStats() {
-      var map = { statPending: 'pending', statShipping: 'shipping', statReady: 'ready' };
-      Object.keys(map).forEach(function(id) {
-        var el = document.getElementById(id);
-        if (el) el.textContent = countByStatus(map[id]);
+      if (!MD.isLoaded()) {
+        setStat('statTrees', '--');
+        setStat('statPending', '--');
+        setStat('statPaid', '--');
+        setStat('statHarvest', '--');
+        return;
+      }
+      var trees = MD.list('adoption_tree');
+      var orders = MD.list('adoption_order');
+      var harvests = MD.list('adoption_harvest');
+      var adopted = 0, pending = 0, paid = 0, harvesting = 0;
+      trees.forEach(function (t) { if (t.status === 'adopted') adopted++; });
+      orders.forEach(function (o) {
+        if (o.order_status === 'pending') pending++;
+        if (o.order_status === 'paid') paid++;
       });
+      harvests.forEach(function (h) { if (h.status === 'pending') harvesting++; });
+      setStat('statTrees', trees.length ? adopted : '--');
+      setStat('statPending', orders.length ? pending : '--');
+      setStat('statPaid', orders.length ? paid : '--');
+      setStat('statHarvest', harvests.length ? harvesting : '--');
+    }
+
+    function currentFilter() {
+      var tab = document.querySelector('.filter-tab.active');
+      return tab ? tab.dataset.filter : 'all';
+    }
+
+    function renderOrders() {
+      var listEl = document.getElementById('orderList');
+      if (!listEl) return;
+      var filter = currentFilter();
+      var all = MD.list('adoption_order').slice();
+      all.sort(function (a, b) {
+        return String(b.order_time || '').localeCompare(String(a.order_time || ''));
+      });
+      var shown = all.filter(function (o) {
+        return filter === 'all' || o.order_status === filter;
+      });
+      listEl.innerHTML = shown.length
+        ? shown.map(buildOrderCard).join('')
+        : MD.inlineEmpty('暂无认养订单');
+      var result = document.getElementById('orderResult');
+      if (result) result.textContent = '共 ' + shown.length + ' 条订单';
+    }
+
+    function renderTrees() {
+      var box = document.getElementById('treeList');
+      if (!box) return;
+      var trees = MD.list('adoption_tree').filter(function (t) {
+        return t.status === 'adopted' || !!t.adopter;
+      });
+      box.innerHTML = trees.length
+        ? trees.map(buildTreeCard).join('')
+        : MD.inlineEmpty('暂无已认养果树');
     }
 
     function filterOrders(type) {
       document.querySelectorAll('.filter-tab').forEach(function (tab) {
         tab.classList.toggle('active', tab.dataset.filter === type);
       });
-      var shown = 0;
-      document.querySelectorAll('#orderList .order-card').forEach(function (card) {
-        var match = (type === 'all') || card.dataset.status === type;
-        card.style.display = match ? '' : 'none';
-        if (match) shown++;
-      });
-      document.getElementById('orderEmpty').style.display = shown ? 'none' : 'block';
-      document.getElementById('orderResult').textContent = '共 ' + shown + ' 条订单';
+      renderOrders();
     }
 
     document.addEventListener('DOMContentLoaded', function () {
       refreshData();
+      if (MD && typeof MD.subscribe === 'function') MD.subscribe(refreshData);
+      MD.ready.then(refreshData);
     });
 
-    function viewOrderDetail(orderId) {
-      window.location.href = 'mb_adoption_detail.html?orderId=' + orderId;
+    function viewOrderDetail(orderCode) {
+      window.location.href = 'mb_adoption_detail.html?orderId=' + encodeURIComponent(orderCode);
     }
 
-    function confirmOrder(orderId) {
-      window.location.href = 'mb_adoption_detail.html?orderId=' + orderId + '&action=confirm';
+    /* 订单状态流转：真实写库（PUT /api/adoption_order/:id） */
+    function updateOrderStatus(id, status, okMsg) {
+      if (!(window.Api && typeof window.Api.update === 'function')) {
+        MobileStore.toast('数据接口不可用，请稍后重试', 'error');
+        return;
+      }
+      Api.update('adoption_order', id, { order_status: status }).then(function (res) {
+        if (res && res.ok) {
+          MobileStore.toast(okMsg, 'success');
+          MD.reload('adoption_order').then(refreshData);
+        } else {
+          MobileStore.toast((res && res.message) || '操作失败', 'error');
+        }
+      }).catch(function () {
+        MobileStore.toast('操作失败，请检查网络', 'error');
+      });
     }
 
-    function confirmHarvest(orderId, treeId) {
-      window.location.href = 'mb_adoption_harvest.html?orderId=' + encodeURIComponent(orderId) +
-        (treeId ? '&treeId=' + encodeURIComponent(treeId) : '');
-    }
+    function confirmOrder(id) { updateOrderStatus(id, 'paid', '订单已确认'); }
+
+    function completeOrder(id) { updateOrderStatus(id, 'done', '订单已完成'); }
 
     // 已认养果树功能
     function editCert(treeId) {
-      window.location.href = 'mb_adoption_cert.html?treeId=' + treeId;
+      window.location.href = 'mb_adoption_cert.html?treeId=' + encodeURIComponent(treeId);
     }
 
     function bindFarming(treeId) {
-      window.location.href = 'mb_adoption_farming.html?treeId=' + treeId;
+      window.location.href = 'mb_adoption_farming.html?treeId=' + encodeURIComponent(treeId);
     }
 
     function toggleCamera(treeId) {
-      window.location.href = 'mb_adoption_browse.html?treeId=' + treeId;
-    }
-
-    function shipOrder(orderId) {
-      var input = window.prompt('请输入物流单号（确认发货 ' + orderId + '）：');
-      if (input === null) return;
-      var tracking = String(input).trim();
-      if (!tracking) { MobileStore.toast('物流单号不能为空', 'warning'); return; }
-
-      // 发货落库：sf_sales_shipment（发货与物流），不再写本地业务键
-      if (window.Api && typeof window.Api.create === 'function') {
-        var d = new Date();
-        var pad = function (n) { return n < 10 ? '0' + n : String(n); };
-        var shipCode = 'SHIP-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
-          pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
-        window.Api.create('sales_shipment', {
-          shipment_code: shipCode,
-          order_code: orderId,
-          express_company: '顺丰速运',
-          tracking_no: tracking,
-          ship_time: d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
-            ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()),
-          source: 'mobile_adoption',
-          status: '在途'
-        }).catch(function (e) { console.warn('[shipOrder] 发货落库失败', e); });
-      }
-      var card = document.querySelector('#orderList .order-card[data-order="' + orderId + '"]');
-      if (card) {
-        /* 发货后进入 shipped（已发货），与 shipping（待发货）区分，
-           否则文本显示「已发货」但仍被「待发货」筛选与统计命中 */
-        card.dataset.status = 'shipped';
-        var tag = card.querySelector('.order-status');
-        if (tag) { tag.textContent = '已发货'; tag.className = 'order-status shipped'; }
-        var btn = card.querySelector('[onclick*="shipOrder"]');
-        if (btn) btn.remove();
-      }
-      MobileStore.toast('已发货，物流单号：' + tracking, 'success');
-      refreshData();
+      window.location.href = 'mb_adoption_browse.html?treeId=' + encodeURIComponent(treeId);
     }
   </script>
 </body>

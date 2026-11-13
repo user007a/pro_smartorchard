@@ -29,7 +29,21 @@ router.get('/aggregate', async (req, res, next) => {
   try {
     const where = (await hasSoftDelete(TABLE)) ? ' WHERE `is_deleted` = 0' : '';
     const tests = await query('SELECT * FROM `' + TABLE + '`' + where + ' ORDER BY `id` ASC');
-    res.json({ ok: true, data: { tests } });
+
+    // refs：供前端把 plot_id（外键）解析回地块编号 plot_code。
+    // 缺少这一步，前端拿到的记录只有 plot_id，无法与地块台账关联，
+    // 会导致「数据已到库但列表查不出来」。
+    const plots = await query('SELECT `id`, `code`, `name` FROM `sf_plot` ORDER BY `id` ASC');
+
+    res.json({
+      ok: true,
+      data: {
+        tests,
+        refs: {
+          plots: plots.map((p) => ({ id: p.id, code: p.code, name: p.name })),
+        },
+      },
+    });
   } catch (e) { next(e); }
 });
 

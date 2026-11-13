@@ -10,7 +10,7 @@
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <!-- 共享数据层 -->
   <script src="js/mobile-store.js"></script>
-  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
+  <script src="js/mobile-data.js"></script>
   <style>
     /* ========== 页面专属样式（仅保留设计系统未覆盖的部分） ========== */
     
@@ -195,15 +195,15 @@
                 </svg>
               </div>
               <div class="result-info">
-                <div class="result-name" id="resultName">苹果轮纹病</div>
-                <div class="result-confidence" id="resultConfidence">置信度：92%</div>
-                <div class="result-note" id="resultNote">演示识别 · 依据文件名启发式判断</div>
+                <div class="result-name" id="resultName">--</div>
+                <div class="result-confidence" id="resultConfidence">置信度：--</div>
+                <div class="result-note" id="resultNote"></div>
               </div>
-              <span class="mb-tag error mb-tag-lg" id="resultTag">高风险</span>
+              <span class="mb-tag error mb-tag-lg" id="resultTag" style="display:none;">--</span>
             </div>
             <div class="tips-box">
               <div class="tips-title">防治建议</div>
-              <div class="tips-content" id="resultTips">1. 及时清除病枝病果<br>2. 春季发芽前喷布波尔多液<br>3. 谢花后喷施甲基托布津<br>4. 加强果园排水通风</div>
+              <div class="tips-content" id="resultTips"></div>
             </div>
           </div>
         </div>
@@ -211,32 +211,7 @@
         <!-- 识别历史 -->
         <div class="mb-card" style="margin-top: var(--space-4);">
           <div class="mb-section-title"><span class="mb-section-dot"></span>识别历史</div>
-          <div class="mb-list-item" style="padding: 12px 0; border-bottom: 1px solid var(--border-light);">
-            <div class="history-thumb">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                <circle cx="12" cy="13" r="4"/>
-              </svg>
-            </div>
-            <div class="mb-list-content">
-              <div class="mb-list-title">苹果斑点落叶病</div>
-              <div class="mb-list-desc">2026-09-20 14:30</div>
-            </div>
-            <span class="mb-tag warning">中风险</span>
-          </div>
-          <div class="mb-list-item" style="padding: 12px 0; border-bottom: none;">
-            <div class="history-thumb">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                <circle cx="12" cy="13" r="4"/>
-              </svg>
-            </div>
-            <div class="mb-list-content">
-              <div class="mb-list-title">红蜘蛛虫害</div>
-              <div class="mb-list-desc">2026-09-18 09:15</div>
-            </div>
-            <span class="mb-tag error">高风险</span>
-          </div>
+          <div id="historyList"></div>
         </div>
       </div>
     </div><!-- /real-content -->
@@ -291,16 +266,11 @@
     var uploadedFile = { name: '', dataUrl: '' };
 
     /* ====================================================================
-     * 病害识别规则（T13 接入）
+     * 病害识别规则
      *
-     * 数据源：localStorage['mb_disease_rules']
-     *   单条结构（由后台 mb_disease_config.html 维护）：
-     *     { id, keyword: [str], disease, risk: 'high'|'medium'|'low',
-     *       confidence: Number, prevent: [str], enabled: Boolean }
-     *
-     * 移动端原先硬编码的 DEMO_RULES 作为本地内置默认值；
-     * 一旦后台写入 mb_disease_rules，将以存储内容为准。
-     * 为保持移动端独立运行：未读到存储或存储损坏时回退到 DEMO_RULES。
+     * 数据源：数据库 sf_mb_disease_rule（经 MobileData 读取）
+     *   行字段：disease_name / match_keywords / confidence / risk_level / status
+     * 库中无规则时页面如实显示空态，不使用任何内置规则。
      * ==================================================================== */
     var RISK_META = {
       high:   { risk: '高风险', riskClass: 'error',   icon: 'danger'  },
@@ -308,147 +278,52 @@
       low:    { risk: '低风险', riskClass: 'success', icon: 'success' }
     };
 
-    var BUILTIN_RULES = [
-      { keys: ['rot', 'fub', '腐烂'],
-        disease: '苹果腐烂病', risk: 'high',
-        prevent: [
-          '及时刮除病斑并涂抹杀菌剂（如戊唑醇）',
-          '剪除病枝集中烧毁，减少侵染源',
-          '增施有机肥、控制负载，增强树势',
-          '冬季清园，树干涂白防冻防病'
-        ],
-        confidence: 91, enabled: true },
-      { keys: ['ring', 'lunwen', '轮纹'],
-        disease: '苹果轮纹病', risk: 'high',
-        prevent: [
-          '及时清除病枝病果',
-          '春季发芽前喷布波尔多液',
-          '谢花后喷施甲基托布津',
-          '加强果园排水通风'
-        ],
-        confidence: 92, enabled: true },
-      { keys: ['spot', 'leaf', '斑点', '落叶'],
-        disease: '苹果斑点落叶病', risk: 'medium',
-        prevent: [
-          '清除落叶与病枝，减少病原',
-          '谢花后喷多抗霉素或代森锰锌',
-          '生长期视病情间隔 10~15 天连喷 2~3 次',
-          '平衡施肥，避免偏施氮肥'
-        ],
-        confidence: 88, enabled: true },
-      { keys: ['red', 'spider', 'mite', 'hongzhizhu', '红蜘蛛'],
-        disease: '红蜘蛛虫害', risk: 'high',
-        prevent: [
-          '冬季刮除粗老树皮、清除越冬螨卵',
-          '萌芽前喷石硫合剂或矿物油',
-          '发生期喷阿维菌素、螺螨酯，注意轮换',
-          '保护捕食螨、草蛉等天敌'
-        ],
-        confidence: 90, enabled: true },
-      { keys: ['aphid', 'ya', '蚜虫'],
-        disease: '蚜虫虫害', risk: 'medium',
-        prevent: [
-          '剪除虫梢，减少虫源',
-          '发生期喷吡虫啉、噻虫嗪',
-          '保护瓢虫、草蛉等天敌',
-          '避免偏施氮肥，防止徒长诱蚜'
-        ],
-        confidence: 86, enabled: true },
-      { keys: ['anthracnose', '炭疽'],
-        disease: '苹果炭疽病', risk: 'medium',
-        prevent: [
-          '清除病果、病枝，集中处理',
-          '套袋前喷保护性杀菌剂',
-          '生长期喷多菌灵、咪鲜胺等',
-          '加强通风透光，降低果园湿度'
-        ],
-        confidence: 85, enabled: true },
-      { keys: ['healthy', 'normal', 'ok', '健康', '正常'],
-        disease: '未发现明显病害', risk: 'low',
-        prevent: [
-          '叶片、果面未见典型病斑',
-          '建议保持现有水肥与通风管理',
-          '定期巡园，早发现早防治',
-          '关注后续天气变化，做好预防'
-        ],
-        confidence: 94, enabled: true }
-    ];
-
-    /**
-     * 把后台规则统一转换为移动端内部的 matches 格式（keys/name/risk/riskClass/icon/conf/tips）。
-     * 兼容 BUILTIN_RULES 的简写：仅做映射补全。
-     */
+    /** 把数据库规则统一转换为页面内部格式（keys/name/risk/riskClass/icon/conf/tips） */
     function adaptRule(r) {
       var meta = RISK_META[r.risk] || RISK_META.medium;
       return {
-        keys: Array.isArray(r.keyword) ? r.keyword : (r.keys || []),
-        name: r.disease || r.name || '未知病害',
+        keys: r.keyword || [],
+        name: r.disease || '未知病害',
         risk: meta.risk,
         riskClass: meta.riskClass,
         icon: meta.icon,
-        conf: Number(r.confidence || r.conf || 85),
-        // 后台传字符串数组 → 渲染为 <ul><li>；原 HTML 富文本（兼容历史）也照常支持
-        tips: r.prevent && r.prevent.length
-          ? '<ul>' + r.prevent.map(function (p) { return '<li>' + String(p) + '</li>'; }).join('') + '</ul>'
-          : (r.tips || '')
+        conf: (r.confidence == null || isNaN(Number(r.confidence))) ? null : Number(r.confidence),
+        tips: r.tips || ''
       };
     }
 
-    /**
-     * 读取后端识别规则（sf_mb_disease_rule，经 MobileOpsStore 桥接）；
-     * 无数据时回退到内置 BUILTIN_RULES。禁用规则（status=inactive）会被剔除。
-     */
+    /** 读取数据库中的启用规则；无数据返回空数组 */
     function loadActiveRules() {
-      var rows = [];
-      try {
-        if (window.MobileOpsStore && typeof MobileOpsStore.list === 'function') {
-          rows = MobileOpsStore.list('diseaseRules') || [];
-        }
-      } catch (e) { rows = []; }
-      if (!Array.isArray(rows) || !rows.length) {
-        return BUILTIN_RULES.slice().filter(function (r) { return r.enabled !== false; }).map(adaptRule);
-      }
+      var rows = window.MobileData ? window.MobileData.list('mb_disease_rule') : [];
       var riskMap = { '高': 'high', '中': 'medium', '低': 'low' };
       var cleaned = [];
       rows.forEach(function (r) {
         if (!r || typeof r !== 'object') return;
         if (r.status === 'inactive') return;
         var kw = [];
-        try { kw = JSON.parse(r.match_keywords); } catch (e) { kw = String(r.match_keywords || '').split(/[,，]/); }
+        try { kw = JSON.parse(r.match_keywords); } catch (e) { kw = String(r.match_keywords || '').split(/[,，、|]/); }
         if (!Array.isArray(kw)) kw = [];
         cleaned.push(adaptRule({
           disease: r.disease_name,
-          name: r.disease_name,
           keyword: kw,
-          keys: kw,
           risk: riskMap[r.risk_level] || r.risk_level || 'medium',
           confidence: r.confidence,
-          conf: r.confidence,
-          prevent: [],
           tips: ''
         }));
       });
       return cleaned;
     }
 
-    /** 兼容旧引用：保持变量名 DEMO_RULES 可被任何依赖它的代码继续使用 */
-    var DEMO_RULES = loadActiveRules();
+    var RULES = loadActiveRules();
 
-    /** 后台修改后，重新刷新内部规则表（若后台停用了某规则，立即生效） */
-    function refreshDemoRules() {
-      DEMO_RULES = loadActiveRules();
-    }
-    /* 后端预加载完成后重载规则表 */
-    if (window.MobileOpsStore && MobileOpsStore.subscribe) {
-      MobileOpsStore.subscribe(function (key) {
-        if (!key || key === MobileOpsStore.KEYS.diseaseRules) refreshDemoRules();
-      });
+    /* 后端预加载/变更后重载规则表 */
+    if (window.MobileData && typeof MobileData.subscribe === 'function') {
+      MobileData.subscribe(function () { RULES = loadActiveRules(); });
     }
 
     /* ====================================================================
      * 图像特征分析（L-8）
-     * 原实现按「上传文件名」做关键词 / 哈希启发式，属演示占位。现改为直接读取
-     * 图片真实像素：把图片缩到 96×96 后统计暗褐斑、深黑、白粉、锈橙、失绿黄化、
+     * 直接读取图片真实像素：把图片缩到 96×96 后统计暗褐斑、深黑、白粉、锈橙、失绿黄化、
      * 健康绿等区域的占比，据此判定症状类别，再匹配后台「识别规则配置」中的病害条目。
      * 规则库仍由后台维护，本页只负责从像素得到特征与症状类别。
      * ==================================================================== */
@@ -523,48 +398,39 @@
       return { cat: 'healthy', score: Math.max(f.green, 0.3) };
     }
 
-    /** 症状类别 → 后台规则条目：优先按病害名称关键词命中，未命中则就近回退 */
+    /** 症状类别 → 数据库规则条目：按病害名称关键词命中；未命中返回 null */
     function ruleByCategory(cat) {
       var kws = (CATEGORY_DEFS[cat] || {}).kw || [];
       var i, j;
-      for (i = 0; i < DEMO_RULES.length; i++) {
-        var name = DEMO_RULES[i].name || '';
+      for (i = 0; i < RULES.length; i++) {
+        var name = RULES[i].name || '';
         for (j = 0; j < kws.length; j++) {
-          if (name.indexOf(kws[j]) >= 0) return DEMO_RULES[i];
+          if (name.indexOf(kws[j]) >= 0) return RULES[i];
         }
       }
       if (cat === 'healthy') {
-        for (i = 0; i < DEMO_RULES.length; i++) {
-          if (DEMO_RULES[i].riskClass === 'success') return DEMO_RULES[i];
+        for (i = 0; i < RULES.length; i++) {
+          if (RULES[i].riskClass === 'success') return RULES[i];
         }
       }
-      // 无对应条目时回退到通用叶斑类，再回退到首个非健康规则
-      for (i = 0; i < DEMO_RULES.length; i++) {
-        if ((DEMO_RULES[i].name || '').indexOf('斑点') >= 0) return DEMO_RULES[i];
-      }
-      var pool = DEMO_RULES.filter(function (r) { return r.riskClass !== 'success'; });
-      if (!pool.length) pool = DEMO_RULES;
-      return pool[0];
+      return null;
     }
 
-    /** 识别入口：图像特征分析 → 症状类别 → 规则匹配，异步回调 { rule, conf, note } */
+    /** 识别入口：图像特征分析 → 症状类别 → 规则匹配，异步回调 { rule, note } */
     function identifyByImage(dataUrl, done) {
       analyzePixels(dataUrl, function (f) {
         if (!f) {
-          var guard = DEMO_RULES.filter(function (r) { return r.riskClass === 'success'; })[0] || DEMO_RULES[0];
-          done({ rule: guard, conf: 60, note: '图像分析 · 当前环境无法读取图片像素，请更换图片后重试' });
+          done({ rule: null, note: '图像分析 · 当前环境无法读取图片像素，请更换图片后重试' });
           return;
         }
         var res = classifyImage(f);
         var def = CATEGORY_DEFS[res.cat] || { label: '' };
         var rule = ruleByCategory(res.cat);
-        // 置信度由特征强度换算（非硬编码），并限制在 60~96 之间
-        var conf = Math.round(Math.max(60, Math.min(96, 52 + res.score * 120)));
         var pct = function (x) { return (x * 100).toFixed(1) + '%'; };
         var note = '图像分析 · 症状特征「' + def.label + '」（暗褐斑 ' + pct(f.brown) +
           ' · 深黑 ' + pct(f.dark) + ' · 白粉 ' + pct(f.white) + ' · 锈橙 ' + pct(f.orange) +
           ' · 黄化 ' + pct(f.yellow) + ' · 健康绿 ' + pct(f.green) + '）';
-        done({ rule: rule, conf: conf, note: note });
+        done({ rule: rule, note: note });
       });
     }
 
@@ -593,9 +459,29 @@
       reader.readAsDataURL(file);
     }
 
+    /** 展示空结果（无规则 / 未匹配 / 无防治建议），不伪造识别结论 */
+    function showEmptyResult(note) {
+      var resultArea = document.getElementById('resultArea');
+      document.getElementById('resultIcon').className = 'result-icon warning';
+      document.getElementById('resultName').textContent = '暂无匹配的识别结果';
+      document.getElementById('resultConfidence').textContent = '置信度：--';
+      document.getElementById('resultNote').textContent = note || '';
+      var tag = document.getElementById('resultTag');
+      tag.style.display = 'none';
+      document.getElementById('resultTips').innerHTML = window.MobileData
+        ? MobileData.inlineEmpty('暂无防治建议') : '';
+      resultArea.style.display = 'block';
+      resultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
     function startIdentify() {
       if (!uploadedFile.dataUrl) {
         MobileStore.toast('请先上传图片', 'warning');
+        return;
+      }
+      if (!RULES.length) {
+        showEmptyResult('数据库暂无病虫害识别规则，请先在后台配置');
+        MobileStore.toast('暂无识别规则，请先在后台配置', 'warning');
         return;
       }
       var modal = document.getElementById('loadingModal');
@@ -608,14 +494,21 @@
         if (!outcome || !timerDone) return;
         modal.classList.remove('show');
         var r = outcome.rule;
+        if (!r) {
+          showEmptyResult(outcome.note);
+          return;
+        }
         document.getElementById('resultIcon').className = 'result-icon ' + r.icon;
         document.getElementById('resultName').textContent = r.name;
-        document.getElementById('resultConfidence').textContent = '置信度：' + outcome.conf + '%';
+        document.getElementById('resultConfidence').textContent =
+          '置信度：' + (r.conf == null ? '--' : r.conf + '%');
         document.getElementById('resultNote').textContent = outcome.note;
         var tag = document.getElementById('resultTag');
+        tag.style.display = '';
         tag.className = 'mb-tag mb-tag-lg ' + r.riskClass;
         tag.textContent = r.risk;
-        document.getElementById('resultTips').innerHTML = r.tips;
+        document.getElementById('resultTips').innerHTML = r.tips ||
+          (window.MobileData ? MobileData.inlineEmpty('暂无防治建议') : '');
         var resultArea = document.getElementById('resultArea');
         resultArea.style.display = 'block';
         resultArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -627,6 +520,17 @@
         render();
       });
     }
+
+    /* 识别历史：无对应历史表，如实显示空态 */
+    function renderHistory() {
+      var box = document.getElementById('historyList');
+      if (!box) return;
+      box.innerHTML = window.MobileData
+        ? MobileData.inlineEmpty('暂无识别记录')
+        : '';
+    }
+
+    renderHistory();
 
     // 骨架屏加载模拟
     (function() {

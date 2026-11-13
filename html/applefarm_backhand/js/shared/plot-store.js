@@ -283,6 +283,10 @@
   }
 
   function remove(id) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var api = backendApi();
     if (!api || !backendEnabled()) {
       return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
@@ -311,6 +315,8 @@
     remove: remove,
     subscribe: function (fn) {
       subscribers.push(fn);
+      // 台账已加载完成时立即回调一次，避免页面监听注册晚于加载而漏刷新
+      if (loaded) { try { fn('loaded'); } catch (e) { /* ignore */ } }
       return function () { subscribers = subscribers.filter(function (x) { return x !== fn; }); };
     }
   };

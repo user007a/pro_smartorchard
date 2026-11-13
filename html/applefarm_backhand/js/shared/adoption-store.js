@@ -504,7 +504,9 @@
 
   function save() {
     try {
-      global.localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory));
+      global.__STRICT_DB_INTERNAL_WRITE__ = true;
+
+      try { global.localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } finally { global.__STRICT_DB_INTERNAL_WRITE__ = false; }
       lastError = '';
       return true;
     } catch (e) {
@@ -572,6 +574,10 @@
   }
 
   function commit(reason) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var ok = save();
     if (ok) notify(reason || 'commit');
     if (typeof schedulePersist === 'function' && reason !== 'backend-loaded') schedulePersist(reason);
@@ -671,6 +677,10 @@
    * ============================================================ */
 
   function saveTree(payload) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var d = payload || {};
     var code = normalizeCode(d.treeCode || d.treeNo);
     if (!code) fail('果树编号格式不正确，请使用 A1-001 形式');
@@ -745,6 +755,10 @@
   }
 
   function removeTree(idOrCode) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var t = getTree(idOrCode);
     if (!t) fail('果树不存在或已被删除');
     var active = orders().filter(function (o) {
@@ -806,6 +820,10 @@
    * ============================================================ */
 
   function saveOrder(payload) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var d = payload || {};
     var tree = findTree(d.treeCode || d.treeNo);
     if (!tree) fail('所选果树不存在，请先在认养果树中登记编号');
@@ -1213,6 +1231,10 @@
    * ============================================================ */
 
   function saveHarvest(payload) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var d = payload || {};
     var tree = findTree(d.treeCode);
     if (!tree) fail('所选果树不在认养台账中');
@@ -1307,6 +1329,8 @@
 
   /** 确认单条采收：只更新当前记录及其对应预约，不再批量误改其他预约 */
   function confirmHarvest(idOrCode, extra) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var key = String(idOrCode || '');
     var h = harvests().filter(function (x) { return x.id === key || x.treeCode === normalizeCode(key); })[0];
     if (!h) fail('采收记录不存在');
@@ -1398,6 +1422,8 @@
 
   /** 新增后台认养农事记录 */
   function saveFarming(payload) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var d = payload || {};
     var tree = findTree(d.treeCode);
     if (!tree) fail('所选果树不在认养台账中');
@@ -1628,6 +1654,8 @@
 
   /** 证书保存：按果树编号归一 upsert，果树必须在认养台账中 */
   function saveCert(payload) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var d = payload || {};
     var code = normalizeCode(d.treeNo || d.treeCode);
     if (!code) fail('证书关联的果树编号格式不正确');

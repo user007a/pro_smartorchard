@@ -941,6 +941,8 @@
 
   /* ---------------- 客户写操作 ---------------- */
   function saveCustomer(input) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     input = input || {};
     var name = String(input.name || '').trim();
@@ -1033,6 +1035,10 @@
   }
 
   function saveOrder(input) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     input = input || {};
     var customer = findCustomer(input.customerId);
@@ -1174,6 +1180,10 @@
   }
 
   function createShipment(orderId, payload) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     payload = payload || {};
     var o = findOrder(orderId);
@@ -1221,6 +1231,10 @@
   }
 
   function signShipment(shipId) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     var ship = null;
     e.shipments.forEach(function (s) { if (s.id === shipId) ship = s; });
@@ -1279,6 +1293,10 @@
   }
 
   function saveAfterSale(input) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     input = input || {};
     var o = findOrder(input.orderId);
@@ -1323,6 +1341,10 @@
   }
 
   function handleAfterSale(id, action, payload) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     payload = payload || {};
     var a = null;
@@ -1430,6 +1452,10 @@
   }
 
   function savePricePolicy(input) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     input = input || {};
     var name = String(input.name || '').trim();
@@ -1462,6 +1488,10 @@
   }
 
   function removePricePolicy(id) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     var before = e.pricePolicies.length;
     e.pricePolicies = e.pricePolicies.filter(function (p) { return p.id !== id; });
@@ -1486,6 +1516,10 @@
   }
 
   function savePromotion(input) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     input = input || {};
     var name = String(input.name || '').trim();
@@ -1514,6 +1548,10 @@
   }
 
   function removePromotion(id) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     var before = e.promotions.length;
     e.promotions = e.promotions.filter(function (p) { return p.id !== id; });
@@ -1528,6 +1566,10 @@
   }
 
   function saveTarget(input) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     input = input || {};
     var period = String(input.period || '').trim();
@@ -1562,6 +1604,10 @@
   }
 
   function removeTarget(id) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     var before = e.targets.length;
     e.targets = e.targets.filter(function (t) { return t.id !== id; });
@@ -1609,6 +1655,10 @@
   }
 
   function generateStatement(customerId, period) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     var c = findCustomer(customerId);
     if (!c) return fail('请选择有效客户');
@@ -1688,6 +1738,10 @@
   }
 
   function removeStatement(id) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var e = ensure();
     var s = null;
     e.statements.forEach(function (x) { if (x.id === id) s = x; });

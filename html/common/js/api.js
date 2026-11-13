@@ -35,7 +35,7 @@
    * ============================================================ */
   (function enableStrictDbGuard() {
     if (typeof global.Storage === 'undefined' || !global.localStorage || !global.location) return;
-    if (!/\/(applefarm_backhand|applefarm_mobile|applefarm_h5)\//.test(global.location.pathname)) return;
+    if (!/\/(applefarm_backhand|applefarm_mobile|applefarm_h5|applefarm_dataanlye)\//.test(global.location.pathname)) return;
     if (global.__STRICT_DB_GUARD__) return;
     global.__STRICT_DB_GUARD__ = true;
 
@@ -87,7 +87,15 @@
         memory[key] = String(value);
         // 记录「本地业务写入」次数：供各 store 的预加载做竞态判断，
         // 避免页面加载时的陈旧后端快照覆盖用户刚保存的数据。
-        global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+        //
+        // 注意：store 自身的内部落盘（save() 把内存快照写回本地）也会经过
+        // 这里，若一并计数，预加载回来时会误判「用户在途写过数据」而放弃
+        // 后端快照 —— 表现为「库里明明有数据，页面却是空的」。
+        // 因此 store 落盘时会置 __STRICT_DB_INTERNAL_WRITE__ 标记，
+        // 标记期间的写入不计入竞态计数。
+        if (!global.__STRICT_DB_INTERNAL_WRITE__) {
+          global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+        }
         return;
       }
       return rawSet.call(this, key, value);
@@ -236,6 +244,29 @@
     },
     logout: function () {
       clearToken();
+    },
+
+    /**
+     * 标记一段「内部落盘」：store 把内存快照写回 localStorage 时调用。
+     *
+     * 严格模式下业务数据不落磁盘，store 的内部保存只走内存镜像。
+     * 但这类写入不应被当成「用户主动改数据」，否则 store 预加载的
+     * 竞态守卫会误判并放弃后端快照（表现为「库里明明有数据，页面却是空的」）。
+     *
+     * store 与本文件均为动态注入，存在加载时序差，故这里直接操作全局标记位，
+     * 不要求 store 依赖 Api 已就绪。
+     *
+     * 用法：Api.internalWrite(function () { localStorage.setItem(k, v); });
+     */
+    internalWrite: function (fn) {
+      if (typeof fn !== 'function') return;
+      var prev = global.__STRICT_DB_INTERNAL_WRITE__;
+      global.__STRICT_DB_INTERNAL_WRITE__ = true;
+      try {
+        fn();
+      } finally {
+        global.__STRICT_DB_INTERNAL_WRITE__ = prev;
+      }
     },
 
     /* ---------- 元数据 ---------- */

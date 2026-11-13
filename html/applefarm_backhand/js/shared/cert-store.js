@@ -447,7 +447,9 @@
 
   function save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory));
+      global.__STRICT_DB_INTERNAL_WRITE__ = true;
+
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } finally { global.__STRICT_DB_INTERNAL_WRITE__ = false; }
       lastError = '';
       return true;
     } catch (e) {
@@ -501,6 +503,10 @@
   }
 
   function commit(reason) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var ok = save();
     notify(reason);
     // 后端持久化（防抖，未登录/依赖未就绪时静默跳过）
@@ -730,6 +736,8 @@
    * 已生效 / 已撤销证书的关键字段锁定，需先「撤销」后另建新证。
    */
   function saveCert(cert) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var invalid = validate(cert);
     if (invalid) return { ok: false, item: null, message: invalid };
 
@@ -822,6 +830,8 @@
 
   /** 唯一状态流转入口 */
   function advance(id, to, patch) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var item = get(id);
     if (!item) return { ok: false, item: null, message: '数据不存在或已被删除' };
     var from = item.status;
@@ -851,16 +861,22 @@
 
   /** 草稿 → 待审核 */
   function submit(id, operator) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     return advance(id, 'pending', { operator: operator });
   }
 
   /** 待审核 → 已生效 */
   function approve(id, operator) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     return advance(id, 'active', { operator: operator });
   }
 
   /** 待审核 → 草稿（驳回），必须填原因 */
   function reject(id, reason, operator) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     if (!text(reason)) return { ok: false, item: null, message: '请填写驳回原因' };
     var r = advance(id, 'draft', { operator: operator, renewNote: text(reason) });
     if (r.ok) {
@@ -877,6 +893,8 @@
 
   /** 作废：必须填原因并记录操作人 */
   function revoke(id, reason, operator) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     if (!text(reason)) return { ok: false, item: null, message: '请填写作废原因' };
     var r = advance(id, 'revoked', { operator: operator, revokeReason: text(reason) });
     if (r.ok) {
@@ -894,6 +912,8 @@
 
   /** 续期：更新有效期并回到已生效 */
   function renew(id, validEnd, operator, note) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var item = get(id);
     if (!item) return { ok: false, item: null, message: '数据不存在或已被删除' };
     if (!isDate(validEnd)) return { ok: false, item: null, message: '请填写正确的续期截止日期' };
@@ -915,6 +935,8 @@
 
   /** 删除：已生效 / 已撤销证书禁止删除，仅草稿可删 */
   function remove(id) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var list = ensure().certs;
     var idx = findIndexById(list, id);
     if (idx < 0) return { ok: false, message: '数据不存在或已被删除' };

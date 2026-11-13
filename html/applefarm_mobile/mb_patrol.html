@@ -9,7 +9,7 @@
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <script src="js/mobile-store.js"></script>
-  <script src="../applefarm_backhand/js/shared/alert-data.js"></script>
+  <script src="js/mobile-data.js"></script>
   <style>
     /* ========== 页面专属样式（仅保留设计系统未覆盖的部分） ========== */
     
@@ -418,7 +418,7 @@
         </div>
       </div>
       <div class="header-content">
-        <div class="header-sub" id="routeSubtitle">今日路线：A区 → B区 → C区</div>
+        <div class="header-sub" id="routeSubtitle">暂无巡园路线，请在后台配置</div>
       </div>
     </div>
 
@@ -431,15 +431,15 @@
     <!-- 状态统计 -->
     <div class="patrol-stats">
       <div class="patrol-stats-item">
-        <div class="patrol-stats-value" id="statTotal">3</div>
+        <div class="patrol-stats-value" id="statTotal">0</div>
         <div class="patrol-stats-label">总打卡点</div>
       </div>
       <div class="patrol-stats-item">
-        <div class="patrol-stats-value" id="statDone">1</div>
+        <div class="patrol-stats-value" id="statDone">0</div>
         <div class="patrol-stats-label">已完成</div>
       </div>
       <div class="patrol-stats-item">
-        <div class="patrol-stats-value" id="statPending">2</div>
+        <div class="patrol-stats-value" id="statPending">0</div>
         <div class="patrol-stats-label">待打卡</div>
       </div>
     </div>
@@ -483,7 +483,7 @@
     <div class="mb-section">
       <div class="mb-section-title"><span class="mb-section-dot"></span>巡园路线</div>
       <div class="mb-list" id="checkpointList"></div>
-      <div id="checkpointEmpty" class="footer-tip" style="display:none;">当前基地暂无启用的巡园路线</div>
+      <div id="checkpointEmpty" class="footer-tip" style="display:none;">暂无巡园路线，请在后台配置</div>
     </div>
 
     <!-- 异常上报 -->
@@ -608,20 +608,14 @@
     var reportType = '';
     var reportPhoto = null;
 
-    /* ---------- 打卡点数据源：mb_patrol_routes（后台「巡园路线配置」写入） ---------- */
-    var ROUTE_KEY = 'mb_patrol_routes';
+    /* ---------- 打卡点数据源：数据库 sf_patrol_route ---------- */
+    var MD = window.MobileData;
     var BASE_KEY = 'mb_patrol_base';   // 当前选中基地（会话记忆，L-12）
     var NEAR_THRESHOLD = 100;   // 米，点位未配置 nearRadius 时的默认就近范围
 
-    /* 读不到路线数据时的硬编码兜底（保证页面功能不退化） */
-    var FALLBACK_POINTS = [
-      { id: 'A1', name: 'A1区 - 主入口',   lat: 34.34900, lng: 106.18000, nearRadius: 100, required: true, status: 'done',    time: '09:15' },
-      { id: 'B1', name: 'B1区 - 果园中部', lat: 34.35200, lng: 106.18365, nearRadius: 100, required: true, status: 'pending', time: '' },
-      { id: 'C1', name: 'C1区 - 仓库附近', lat: 34.35500, lng: 106.18600, nearRadius: 100, required: true, status: 'pending', time: '' }
-    ];
-
     var CHECKPOINTS = [];       // 当前生效的打卡点（由路线数据生成）
     var currentRouteName = '';  // 当前路线名称
+    var currentRoute = null;    // 当前路线（含 id / base_id）
     var routeBases = [];        // 后台路线中出现的全部基地（去重）
     var currentBase = '';       // 当前选中基地（L-12）
 
@@ -637,36 +631,52 @@
       });
     }
 
-    /* 路线缓存：由 fetchRoutes 从后端 sf_patrol_route 拉取后填充 */
-    var routeCache = null;
+    function pad2(n) { return n < 10 ? '0' + n : String(n); }
 
-    /* 从后端拉取启用的巡园路线，映射为页面既有结构 */
-    function fetchRoutes(cb) {
-      if (!window.Api || typeof Api.get !== 'function') { cb(routeCache); return; }
-      Api.get('patrol_route', { size: 500 }).then(function (res) {
-        var list = null;
-        if (res && res.ok && res.data && Array.isArray(res.data.list)) {
-          var mapped = res.data.list.map(function (r) {
-            var points = [];
-            try { points = r.points ? JSON.parse(r.points) : []; } catch (e) { points = []; }
-            return {
-              routeId: r.route_code,
-              routeName: r.route_name || '',
-              base: r.coverage || '',
-              enabled: r.enabled === 1 || r.enabled === true,
-              points: Array.isArray(points) ? points : []
-            };
-          }).filter(function (r) { return r && r.points && r.points.length; });
-          list = mapped.length ? mapped : null;
-        }
-        routeCache = list;
-        cb(list);
-      }).catch(function () { cb(routeCache); });
+    function nowText() {
+      var d = new Date();
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+        ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
     }
 
-    /* 读取路线列表；未拉取到返回 null */
+    function genCode(prefix) {
+      var d = new Date();
+      var rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+      return prefix + '-' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) +
+        '-' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) + '-' + rand;
+    }
+
+    function baseNameOf(id) {
+      if (!MD || id == null) return '';
+      var bases = MD.list('base');
+      for (var i = 0; i < bases.length; i++) {
+        if (String(bases[i].id) === String(id)) return bases[i].name || bases[i].base_name || '';
+      }
+      return '';
+    }
+
+    /* 从数据库读取启用的巡园路线，映射为页面既有结构 */
+    var ROUTES = [];
+
+    function loadRoutesFromDB() {
+      var rows = MD ? MD.list('patrol_route') : [];
+      ROUTES = rows.map(function (r) {
+        var points = [];
+        try { points = r.points ? JSON.parse(r.points) : []; } catch (e) { points = []; }
+        return {
+          id: r.id,
+          routeId: r.route_code,
+          routeName: r.route_name || '',
+          baseId: r.base_id,
+          base: baseNameOf(r.base_id) || r.coverage || '',
+          enabled: r.enabled === 1 || r.enabled === true,
+          points: Array.isArray(points) ? points : []
+        };
+      }).filter(function (r) { return r && r.points && r.points.length; });
+    }
+
     function readRoutesRaw() {
-      return routeCache;
+      return ROUTES;
     }
 
     /* 取第一条启用且有有效点位的路线（仅在路线未配置基地字段时兼容使用） */
@@ -710,11 +720,12 @@
     function mapRoutePoints(points) {
       return points.slice().sort(function (a, b) {
         return (Number(a.order) || 0) - (Number(b.order) || 0);
-      }).map(function (p) {
+      }).map(function (p, i) {
         var radius = Number(p.nearRadius);
+        var pid = p.id != null && p.id !== '' ? String(p.id) : ('P' + (i + 1));
         return {
-          id: String(p.id),
-          name: p.name || p.id,
+          id: pid,
+          name: p.name || pid,
           lat: Number(p.lat),
           lng: Number(p.lng),
           nearRadius: (radius > 0) ? radius : NEAR_THRESHOLD,
@@ -730,7 +741,7 @@
       var sel = document.getElementById('baseSelect');
       if (!sel) return;
       if (!routeBases.length) {
-        sel.innerHTML = '<option value="">暂无基地数据</option>';
+        sel.innerHTML = '<option value="">暂无巡园路线</option>';
         sel.disabled = true;
         return;
       }
@@ -760,41 +771,37 @@
       CHECKPOINTS.forEach(function (cp) { prev[prevBase + '|' + cp.id] = { status: cp.status, time: cp.time }; });
 
       var list = readRoutesRaw();
+      routeBases = collectBases(list);
 
-      if (list === null) {
-        // 读不到数据：沿用硬编码 3 点兜底
-        routeBases = [];
+      if (!routeBases.length) {
+        // 后台路线未配置基地：回退到「取首条启用路线」，保证兼容
         currentBase = '';
-        CHECKPOINTS = FALLBACK_POINTS.map(function (p) { return JSON.parse(JSON.stringify(p)); });
-        if (!currentRouteName) currentRouteName = 'A区 → B区 → C区';
-      } else {
-        routeBases = collectBases(list);
-        if (!routeBases.length) {
-          // 后台路线未配置基地：回退到「取首条启用路线」，保证兼容
-          currentBase = '';
-          var legacy = pickEnabledRoute(list);
-          if (legacy) {
-            currentRouteName = legacy.routeName || legacy.routeId || '';
-            CHECKPOINTS = mapRoutePoints(legacy.points);
-          } else {
-            CHECKPOINTS = [];
-            currentRouteName = '';
-          }
+        var legacy = pickEnabledRoute(list);
+        if (legacy) {
+          currentRoute = legacy;
+          currentRouteName = legacy.routeName || legacy.routeId || '';
+          CHECKPOINTS = mapRoutePoints(legacy.points);
         } else {
-          // 优先恢复上次选择的基地，失效时取第一个
-          var saved = readSavedBase();
-          currentBase = (saved && routeBases.indexOf(saved) !== -1) ? saved : routeBases[0];
-          saveBase(currentBase);
+          currentRoute = null;
+          CHECKPOINTS = [];
+          currentRouteName = '';
+        }
+      } else {
+        // 优先恢复上次选择的基地，失效时取第一个
+        var saved = readSavedBase();
+        currentBase = (saved && routeBases.indexOf(saved) !== -1) ? saved : routeBases[0];
+        saveBase(currentBase);
 
-          var route = pickRouteForBase(list, currentBase);
-          if (route) {
-            currentRouteName = route.routeName || route.routeId || '';
-            CHECKPOINTS = mapRoutePoints(route.points);
-          } else {
-            // 该基地无启用路线：尊重后台配置，展示空态
-            CHECKPOINTS = [];
-            currentRouteName = '';
-          }
+        var route = pickRouteForBase(list, currentBase);
+        if (route) {
+          currentRoute = route;
+          currentRouteName = route.routeName || route.routeId || '';
+          CHECKPOINTS = mapRoutePoints(route.points);
+        } else {
+          // 该基地无启用路线：尊重后台配置，展示空态
+          currentRoute = null;
+          CHECKPOINTS = [];
+          currentRouteName = '';
         }
       }
 
@@ -906,35 +913,52 @@
     }
 
     /* ---------- 打卡 ---------- */
+    function currentInspector() {
+      var u = MD && typeof MD.user === 'function' ? MD.user() : null;
+      return (u && (u.realName || u.account)) || '';
+    }
+
     function checkin() {
       var cp = popupCp;
       document.getElementById('checkinPopup').classList.remove('show');
       if (!cp) return;
-      var now = MobileStore.fmtTime(Date.now());
-      cp.status = 'done';
-      cp.time = now.slice(11);   // HH:mm
+      var inspector = currentInspector();
+      if (!inspector) {
+        MobileStore.toast('未获取到登录用户信息', 'error');
+        return;
+      }
+      if (!window.Api || typeof Api.create !== 'function') {
+        MobileStore.toast('数据服务未就绪，请稍后重试', 'error');
+        return;
+      }
 
-      // 写入共享巡查记录，PC 端与大屏均可读到
-      var rec = {
-        id: 'patrol_' + cp.id + '_' + Date.now(),
-        checkpointId: cp.id,
-        checkpointName: cp.name,
-        lat: currentPos ? currentPos.lat : null,
-        lng: currentPos ? currentPos.lng : null,
-        accuracy: currentPos ? currentPos.accuracy : null,
-        checkinTime: new Date().toISOString(),
-        operator: '张建国',
-        source: 'mobile',
-        distance: cp._dist || 0,
-        track: trackPoints.slice()
-      };
-      MobileStore.push(MobileStore.KEYS.patrol, rec);
+      var doneCount = 0;
+      CHECKPOINTS.forEach(function (c) { if (c.status === 'done') doneCount++; });
+      var timeText = nowText();
 
-      // 入离线同步队列
-      MobileStore.enqueue({ id: 'q_' + rec.id, type: 'patrol_checkin', refId: rec.id, payload: rec });
-
-      renderCheckpoints();
-      MobileStore.toast('打卡成功，已记录当前位置', 'success');
+      Api.create('patrol_checkin', {
+        checkin_code: genCode('CK'),
+        route_id: currentRoute ? currentRoute.id : null,
+        base_id: currentRoute && currentRoute.baseId != null ? currentRoute.baseId : null,
+        patrol_type: currentRoute ? currentRoute.routeName : '',
+        plot_ids: cp.id,
+        inspector: inspector,
+        checkin_time: timeText,
+        issue_code: 'normal',
+        points_done: doneCount + 1,
+        points_total: CHECKPOINTS.length,
+        status: 'completed'
+      }).then(function (res) {
+        if (!res || !res.ok) {
+          MobileStore.toast((res && res.message) || '打卡失败，请重试', 'error');
+          return;
+        }
+        cp.status = 'done';
+        cp.time = timeText.slice(11, 16);   // HH:mm
+        renderCheckpoints();
+        MobileStore.toast('打卡成功，已记录当前位置', 'success');
+        if (MD) MD.reload('patrol_checkin');
+      });
     }
 
     /* ---------- 渲染打卡点（列表 + 地图标记） ---------- */
@@ -1033,7 +1057,7 @@
       var pointsText = CHECKPOINTS.map(function (cp) { return cp.id; }).join(' → ');
       el.textContent = currentRouteName
         ? ('今日路线：' + currentRouteName + (pointsText ? '（' + pointsText + '）' : ''))
-        : '当前基地暂无启用的巡园路线';
+        : '暂无巡园路线，请在后台配置';
     }
 
     function nextPendingId() {
@@ -1081,17 +1105,16 @@
       var sel = document.getElementById('reportPlot');
       if (!sel) return;
       sel.innerHTML = '<option value="">未指定地块</option>';
-      if (!window.AlertStore || typeof AlertStore.plotMaster !== 'function') return;
-      var list = AlertStore.plotMaster() || [];
-      var baseName = readSavedBase();
+      var list = MD ? MD.list('plot') : [];
+      var baseId = currentRoute && currentRoute.baseId != null ? String(currentRoute.baseId) : '';
       var same = list.filter(function (p) {
-        return !baseName || AlertStore.normalizeBase(p.enterprise) === AlertStore.normalizeBase(baseName);
+        return !baseId || String(p.base_id) === baseId;
       });
       var use = same.length ? same : list;
       use.forEach(function (p) {
         var opt = document.createElement('option');
-        opt.value = p.code;
-        opt.textContent = p.code + ' ' + p.name + (p.variety ? '（' + p.variety + '）' : '');
+        opt.value = p.code || '';
+        opt.textContent = (p.code || '') + ' ' + (p.name || '') + (p.variety ? '（' + p.variety + '）' : '');
         sel.appendChild(opt);
       });
     }
@@ -1140,52 +1163,49 @@
         MobileStore.toast('请选择异常类型', 'warning');
         return;
       }
-      var rec = {
-        id: 'patrolrep_' + Date.now(),
-        type: reportType,
-        remark: document.getElementById('reportRemark').value || '',
-        photo: reportPhoto,
-        lat: currentPos ? currentPos.lat : null,
-        lng: currentPos ? currentPos.lng : null,
-        reportTime: new Date().toISOString(),
-        operator: '张建国',
-        status: '待处理',
-        source: 'mobile'
-      };
-      MobileStore.push(MobileStore.KEYS.patrol, Object.assign({ kind: 'abnormal' }, rec));
-      MobileStore.enqueue({ id: 'q_' + rec.id, type: 'patrol_abnormal', refId: rec.id, payload: rec });
-
-      // 同步进入预警中心（source=manual）
-      if (window.AlertStore && typeof AlertStore.create === 'function') {
-        var catMap = { '病虫害': 'pest', '设备故障': 'device' };
-        var lvMap  = { '病虫害': 'important', '设备故障': 'important' };
-        var baseName = readSavedBase();
-        var picked = document.getElementById('reportPlot') ? document.getElementById('reportPlot').value : '';
-        var pickedPlot = null;
-        if (picked && typeof AlertStore.plotMaster === 'function') {
-          pickedPlot = (AlertStore.plotMaster() || []).filter(function (p) { return p.code === picked; })[0] || null;
-        }
-        AlertStore.create({
-          source: 'manual',
-          category: catMap[reportType] || 'quality',
-          level: lvMap[reportType] || 'notice',
-          title: '人工上报：' + reportType,
-          desc: rec.remark || ('巡查发现' + reportType + '异常，已上传现场照片。'),
-          base: baseName,
-          plot: pickedPlot ? ('地块' + pickedPlot.code) : '',
-          plotCode: pickedPlot ? pickedPlot.code : '',
-          location: baseName
-            ? baseName + ' - ' + (pickedPlot ? ('地块' + pickedPlot.code) : '巡园发现')
-            : (pickedPlot ? ('地块' + pickedPlot.code) : '巡园发现'),
-          dedupeKey: 'manual:' + rec.id,
-          value: null,
-          threshold: '人工巡查判断'
-        });
+      var inspector = currentInspector();
+      if (!inspector) {
+        MobileStore.toast('未获取到登录用户信息', 'error');
+        return;
+      }
+      if (!window.Api || typeof Api.create !== 'function') {
+        MobileStore.toast('数据服务未就绪，请稍后重试', 'error');
+        return;
       }
 
-      closeReportModal();
-      document.getElementById('successModal').classList.add('show');
-      MobileStore.toast('异常已上报', 'success');
+      var remark = document.getElementById('reportRemark').value || '';
+      var picked = document.getElementById('reportPlot') ? document.getElementById('reportPlot').value : '';
+      var plot = null;
+      var plots = MD ? MD.list('plot') : [];
+      for (var i = 0; i < plots.length; i++) {
+        if (String(plots[i].code) === String(picked)) { plot = plots[i]; break; }
+      }
+
+      Api.create('patrol_abnormal', {
+        abnormal_code: genCode('ABN'),
+        source: 'patrol',
+        base_id: currentRoute && currentRoute.baseId != null
+          ? currentRoute.baseId
+          : (plot && plot.base_id != null ? plot.base_id : null),
+        plot_id: plot ? plot.id : null,
+        plot_code: picked || null,
+        route_id: currentRoute ? currentRoute.id : null,
+        abnormal_type: reportType,
+        abnormal_desc: remark || ('巡查发现' + reportType + '异常'),
+        reporter: inspector,
+        report_time: nowText(),
+        severity: 'medium',
+        status: 'pending'
+      }).then(function (res) {
+        if (!res || !res.ok) {
+          MobileStore.toast((res && res.message) || '异常上报失败', 'error');
+          return;
+        }
+        closeReportModal();
+        document.getElementById('successModal').classList.add('show');
+        MobileStore.toast('异常已上报', 'success');
+        if (MD) MD.reload('patrol_abnormal');
+      });
     }
 
     function closeSuccessModal() {
@@ -1193,18 +1213,24 @@
     }
 
     /* ---------- 初始化 ---------- */
+    function refreshPage() {
+      loadRoutesFromDB();
+      loadCheckpoints();
+      renderBaseSelect();
+      updateRouteSubtitle();
+      renderCheckpoints();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
       MobileStore.renderSyncBar(document.getElementById('syncBar'));
       document.getElementById('reportPhotoInput').addEventListener('change', function () { onReportPhotoPicked(this); });
 
-      // 先从后端拉取巡园路线，再渲染（严格空库：路线来自数据库）
-      fetchRoutes(function () {
-        loadCheckpoints();
-        renderBaseSelect();
-        updateRouteSubtitle();
-        renderCheckpoints();
-      });
+      // 路线来自数据库 sf_patrol_route（严格空库：无数据时展示空态）
+      refreshPage();
       startTracking();
+      if (MD && typeof MD.subscribe === 'function') {
+        MD.subscribe(function () { refreshPage(); });
+      }
     });
 
     // 页面关闭时提示未完成打卡（按真实剩余数量）

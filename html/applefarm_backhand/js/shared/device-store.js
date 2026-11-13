@@ -789,7 +789,9 @@
   function save() {
     try {
       if (inMemory) inMemory.updatedAt = new Date().toISOString();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory));
+      global.__STRICT_DB_INTERNAL_WRITE__ = true;
+
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } finally { global.__STRICT_DB_INTERNAL_WRITE__ = false; }
       // 后端持久化（异步、不阻塞 UI；失败静默，下次 load 时以库为准）
       persistToBackend(inMemory);
       return true;
@@ -1645,6 +1647,10 @@
   }
 
   function upsert(listName, item) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var d = ensure();
     var list = d[listName];
     if (!list) return false;
@@ -1656,6 +1662,10 @@
   }
 
   function remove(listName, id) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var d = ensure();
     var existed = d[listName].some(function (x) { return x.id === id; });
     if (!existed) return false;

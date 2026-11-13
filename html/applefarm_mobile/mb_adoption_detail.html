@@ -9,8 +9,8 @@
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <script src="js/mobile-store.js"></script>
-  <script src="../applefarm_backhand/js/shared/adoption-store.js"></script>
-  <script src="../applefarm_backhand/js/shared/device-store.js"></script>
+  <!-- 移动端统一数据层（严格空库 · 只读后端） -->
+  <script src="js/mobile-data.js"></script>
   <style>
     /* 页面特定样式 - 使用设计系统变量 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: var(--space-10); }
@@ -101,12 +101,12 @@
     .inline-panel-close { font-size: var(--font-sm); color: var(--text-light); display: flex; align-items: center; gap: 4px; cursor: pointer; }
     .inline-panel-close svg { width: 14px; height: 14px; }
 
-    /* 演示画面 */
-    .demo-frame { position: relative; height: 180px; border-radius: var(--radius-lg); background: linear-gradient(160deg, #1a2e1a, #3d5c3d); display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    .demo-frame::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 3px); pointer-events: none; }
-    .demo-frame-icon { font-size: 56px; opacity: 0.9; }
-    .demo-badge { position: absolute; top: var(--space-2); left: var(--space-2); background: var(--warning); color: var(--bg-white); padding: 3px var(--space-2); border-radius: var(--radius-md); font-size: var(--font-xs); font-weight: var(--font-semibold); z-index: 1; }
-    .demo-note { font-size: var(--font-xs); color: var(--text-light); margin-top: var(--space-2); text-align: center; }
+    /* 监控画面 */
+    .scene-frame { position: relative; height: 180px; border-radius: var(--radius-lg); background: linear-gradient(160deg, #1a2e1a, #3d5c3d); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .scene-frame::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 3px); pointer-events: none; }
+    .scene-frame-icon { font-size: 56px; opacity: 0.9; }
+    .scene-badge { position: absolute; top: var(--space-2); left: var(--space-2); background: var(--warning); color: var(--bg-white); padding: 3px var(--space-2); border-radius: var(--radius-md); font-size: var(--font-xs); font-weight: var(--font-semibold); z-index: 1; }
+    .scene-note { font-size: var(--font-xs); color: var(--text-light); margin-top: var(--space-2); text-align: center; }
 
     /* 记录 / 时间轴列表 */
     .record-list { display: flex; flex-direction: column; }
@@ -148,47 +148,41 @@
       <div class="photo-slide">
         <span class="photo-placeholder">🍎</span>
       </div>
-      <div class="photo-count">1/5</div>
-      <div class="photo-indicators">
-        <div class="indicator active"></div>
-        <div class="indicator"></div>
-        <div class="indicator"></div>
-        <div class="indicator"></div>
-        <div class="indicator"></div>
-      </div>
+      <div class="photo-count" id="photoCount">--</div>
+      <div class="photo-indicators" id="photoIndicators"></div>
     </div>
     
     <div class="content">
       <div class="tree-header">
-        <div class="tree-name">花牛苹果 #A025</div>
+        <div class="tree-name" id="treeName">--</div>
         <div class="tree-status-row">
-          <span class="status-badge harvest">可采收</span>
-          <span class="growth-stage">当前物候期：果实着色成熟期</span>
+          <span class="status-badge harvest" id="treeStatus">--</span>
+          <span class="growth-stage" id="treeStage">--</span>
         </div>
         <div class="tree-info-grid">
           <div class="info-item">
             <div class="info-label">品种</div>
-            <div class="info-value">花牛苹果</div>
+            <div class="info-value" id="treeVariety">--</div>
           </div>
           <div class="info-item">
             <div class="info-label">树龄</div>
-            <div class="info-value">8年</div>
+            <div class="info-value" id="treeAge">--</div>
           </div>
           <div class="info-item">
             <div class="info-label">位置</div>
-            <div class="info-value">麦积区基地 A区 3号地块</div>
+            <div class="info-value" id="treeLocation">--</div>
           </div>
           <div class="info-item">
             <div class="info-label">预估产量</div>
-            <div class="info-value">约80斤</div>
+            <div class="info-value" id="treeYield">--</div>
           </div>
           <div class="info-item">
             <div class="info-label">认养开始</div>
-            <div class="info-value">2026.09.15</div>
+            <div class="info-value" id="treeStart">--</div>
           </div>
           <div class="info-item">
             <div class="info-label">认养到期</div>
-            <div class="info-value">2027.03.14</div>
+            <div class="info-value" id="treeEnd">--</div>
           </div>
         </div>
       </div>
@@ -247,87 +241,13 @@
           </svg>
         </div>
       </div>
-      <div class="updates-card">
-        <div class="update-item">
-          <div class="update-icon fertilize">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-              <path d="M2 17l10 5 10-5"/>
-              <path d="M2 12l10 5 10-5"/>
-            </svg>
-          </div>
-          <div class="update-content">
-            <div class="update-title">秋采前叶面追肥完成</div>
-            <div class="update-desc">叶面喷施钙肥与微量元素，提升果实耐储性</div>
-            <div class="update-time">今天 09:30 · 李师傅</div>
-          </div>
-          <div class="update-photo">
-            <span class="update-photo-icon">📷</span>
-          </div>
-        </div>
-        <div class="update-item">
-          <div class="update-icon water">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
-            </svg>
-          </div>
-          <div class="update-content">
-            <div class="update-title">采前控水完成</div>
-            <div class="update-desc">采收前10天停止灌溉，便于果实上糖与采摘</div>
-            <div class="update-time">昨天 18:00 · 自动灌溉</div>
-          </div>
-        </div>
-        <div class="update-item">
-          <div class="update-icon harvest">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 6v6l4 2"/>
-            </svg>
-          </div>
-          <div class="update-content">
-            <div class="update-title">物候期更新</div>
-            <div class="update-desc">果树已进入果实着色成熟期，预计本周分批采收</div>
-            <div class="update-time">10-20 10:00 · 系统</div>
-          </div>
-        </div>
-      </div>
+      <div class="updates-card" id="updatesCard"></div>
       
       <div class="section-title" style="margin-top: 16px;">
         生长历程
       </div>
       <div class="growth-card">
-        <div class="growth-timeline">
-          <div class="timeline-item">
-            <div class="timeline-dot"></div>
-            <div class="timeline-date">2025-11 至 2026-02</div>
-            <div class="timeline-title">冬季休眠期</div>
-            <div class="timeline-desc">果树进入休眠期，进行冬季修剪</div>
-          </div>
-          <div class="timeline-item">
-            <div class="timeline-dot"></div>
-            <div class="timeline-date">2026-03 至 2026-04</div>
-            <div class="timeline-title">开花结果期</div>
-            <div class="timeline-desc">苹果花盛开，完成授粉</div>
-          </div>
-          <div class="timeline-item">
-            <div class="timeline-dot"></div>
-            <div class="timeline-date">2026-05</div>
-            <div class="timeline-title">幼果期</div>
-            <div class="timeline-desc">果实坐果成功，开始缓慢膨大</div>
-          </div>
-          <div class="timeline-item active">
-            <div class="timeline-dot"></div>
-            <div class="timeline-date">当前 · 2026-10</div>
-            <div class="timeline-title">果实着色成熟期</div>
-            <div class="timeline-desc">果实已完成上色，达采收标准，按计划安排分批采摘</div>
-          </div>
-          <div class="timeline-item future">
-            <div class="timeline-dot"></div>
-            <div class="timeline-date">预计 2026-11 至 2027-02</div>
-            <div class="timeline-title">采后休养与冬季休眠</div>
-            <div class="timeline-desc">采后施基肥、树干涂白，进入冬季休眠</div>
-          </div>
-        </div>
+        <div class="growth-timeline" id="growthTimeline"></div>
       </div>
     </div>
     
@@ -352,38 +272,210 @@
   </div>
 
   <script>
+    var MD = window.MobileData;
     var currentPanel = '';
     var currentTreeCode = '';
+    var currentTree = null;
+    var currentOrder = null;
+    var photos = [];
 
-    /* 从认养果树列表带入的果树编号 */
-    (function () {
-      var m = location.search.match(/[?&]tree=([^&]+)/);
-      if (!m) return;
-      var code = decodeURIComponent(m[1]);
-      currentTreeCode = String(code || '').replace(/^AD-/i, '');
-      var sub = document.querySelector('.header-sub');
-      if (sub) sub.textContent = '果树编号 #' + code + ' · 查看认养果树信息';
-    })();
+    var TREE_STATUS_TEXT = { available: '可认养', adopted: '已认养', unavailable: '不可认养' };
+    var CAMERA_STATUS_TEXT = { online: '在线', maintain: '维护中', offline: '离线' };
 
-    // 设备管理 ↔ 移动端：果树 cameraId → DeviceStore 摄像头档案
-    var CAMERA_STATUS_TEXT = { online: '在线', warning: '告警', offline: '离线' };
+    function queryParam(name) {
+      var m = (location.search || '').match(new RegExp('[?&]' + name + '=([^&]+)'));
+      if (!m) return '';
+      try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+    }
 
-    function resolveCamera() {
-      var S = window.AdoptionStore;
-      var D = window.DeviceStore;
-      if (!currentTreeCode || !S || typeof S.findTree !== 'function') return null;
-      var tree = null;
-      try { tree = S.findTree(currentTreeCode); } catch (e) { tree = null; }
-      if (!tree || !tree.cameraId || tree.openMonitor === false) return null;
-      var camera = null;
-      if (D && typeof D.cameras === 'function') {
-        try {
-          camera = D.cameras().filter(function (c) {
-            return c.id === tree.cameraId || c.code === tree.cameraId;
-          })[0] || null;
-        } catch (e) { camera = null; }
+    /* 果树：优先 ?tree= / ?treeId=，其次 ?orderId= 反查订单上的 tree_id */
+    function resolveTree() {
+      var trees = MD.list('adoption_tree');
+      var orders = MD.list('adoption_order');
+      var wanted = queryParam('tree') || queryParam('treeId');
+      var orderId = queryParam('orderId');
+      var i;
+
+      if (!wanted && orderId) {
+        for (i = 0; i < orders.length; i++) {
+          if (String(orders[i].order_code) === orderId || String(orders[i].id) === orderId) {
+            currentOrder = orders[i];
+            wanted = orders[i].tree_id != null ? String(orders[i].tree_id) : (orders[i].tree_code || '');
+            break;
+          }
+        }
       }
-      return { cameraId: tree.cameraId, camera: camera };
+      if (!wanted) return null;
+      var wantedNorm = String(wanted).replace(/^AD-/i, '');
+      for (i = 0; i < trees.length; i++) {
+        if (String(trees[i].id) === String(wanted) ||
+            String(trees[i].tree_code) === String(wanted) ||
+            String(trees[i].tree_code) === wantedNorm) {
+          return trees[i];
+        }
+      }
+      return null;
+    }
+
+    function currentTreeId() { return currentTree ? String(currentTree.id) : ''; }
+
+    function farmingOfTree() {
+      var id = currentTreeId();
+      if (!id) return [];
+      return MD.list('adoption_farming').filter(function (r) {
+        return String(r.tree_id) === id;
+      });
+    }
+
+    function sortedFarming() {
+      var records = farmingOfTree().slice();
+      records.sort(function (a, b) {
+        return String(b.execute_date || b.bind_time || '').localeCompare(String(a.execute_date || a.bind_time || ''));
+      });
+      return records;
+    }
+
+    function certOfTree() {
+      var id = currentTreeId();
+      if (!id) return null;
+      var all = MD.list('adoption_cert');
+      for (var i = 0; i < all.length; i++) {
+        if (String(all[i].tree_id) === id) return all[i];
+      }
+      return null;
+    }
+
+    function setText(id, val) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = val == null || val === '' ? '--' : val;
+    }
+
+    /* ---------- 果树概要 ---------- */
+    function renderHeader() {
+      currentTree = resolveTree();
+      if (!currentTree) {
+        setText('treeName', '未找到认养果树');
+        setText('treeStatus', '--');
+        setText('treeStage', '--');
+        setText('treeVariety', '--');
+        setText('treeAge', '--');
+        setText('treeLocation', '--');
+        setText('treeYield', '--');
+        setText('treeStart', '--');
+        setText('treeEnd', '--');
+        return;
+      }
+      currentTreeCode = currentTree.tree_code || '';
+      var variety = currentTree.variety_name || currentTree.variety || '';
+      var name = currentTree.tree_name ||
+        ((variety || '苹果树') + (currentTreeCode ? ' #' + currentTreeCode : ''));
+      setText('treeName', name);
+      setText('treeStatus', TREE_STATUS_TEXT[currentTree.status] || currentTree.status);
+      setText('treeStage', currentTree.growth_stage ? '当前物候期：' + currentTree.growth_stage : '');
+      setText('treeVariety', variety);
+      setText('treeAge', currentTree.tree_age != null ? currentTree.tree_age + '年' : '');
+      setText('treeLocation', [currentTree.base_name, currentTree.plot_name].filter(Boolean).join(' '));
+
+      var cert = certOfTree();
+      setText('treeYield', cert && cert.estimate_yield != null ? cert.estimate_yield + '斤' : '');
+
+      var start = MD.dateText(currentTree.start_date);
+      var end = MD.dateText(currentTree.expire_time);
+      if (!start && currentOrder) start = MD.dateText(currentOrder.start_date);
+      if (!end && currentOrder) end = MD.dateText(currentOrder.end_date);
+      setText('treeStart', start);
+      setText('treeEnd', end);
+
+      var sub = document.querySelector('.header-sub');
+      if (sub) {
+        sub.textContent = currentTreeCode
+          ? '果树编号 #' + currentTreeCode + ' · 查看认养果树信息'
+          : '查看认养果树信息';
+      }
+    }
+
+    /* ---------- 成长相册（sf_adoption_photo） ---------- */
+    function renderPhotos() {
+      var countEl = document.getElementById('photoCount');
+      var indEl = document.getElementById('photoIndicators');
+      var treeId = currentTreeId();
+      photos = treeId ? MD.list('adoption_photo').filter(function (p) {
+        return String(p.tree_id) === treeId;
+      }) : [];
+      if (countEl) countEl.textContent = photos.length ? '1/' + photos.length : '--';
+      if (indEl) {
+        indEl.innerHTML = photos.map(function (p, i) {
+          return '<div class="indicator' + (i === 0 ? ' active' : '') + '"></div>';
+        }).join('');
+      }
+    }
+
+    /* ---------- 最近动态（sf_adoption_farming） ---------- */
+    function renderUpdates() {
+      var box = document.getElementById('updatesCard');
+      if (!box) return;
+      var records = sortedFarming();
+      if (!records.length) {
+        box.innerHTML = MD.inlineEmpty('暂无农事动态');
+        return;
+      }
+      box.innerHTML = records.slice(0, 5).map(function (r) {
+        var type = r.farm_type || '农事';
+        var time = MD.dateText(r.execute_date) || MD.dateTimeText(r.bind_time) || '--';
+        return '<div class="update-item">' +
+          '<div class="update-icon fertilize">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>' +
+            '</svg>' +
+          '</div>' +
+          '<div class="update-content">' +
+            '<div class="update-title">' + MD.esc(r.title || (type + '作业')) + '</div>' +
+            (r.remark ? '<div class="update-desc">' + MD.esc(r.remark) + '</div>' : '') +
+            '<div class="update-time">' + MD.esc(time) + ' · ' + MD.esc(type) + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    /* ---------- 生长历程（sf_phenology_stage 物候期配置） ---------- */
+    function renderTimeline() {
+      var box = document.getElementById('growthTimeline');
+      if (!box) return;
+      var stages = MD.list('phenology_stage').slice();
+      if (!stages.length) {
+        box.innerHTML = MD.inlineEmpty('暂无生长阶段数据');
+        return;
+      }
+      stages.sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
+      var currentStage = currentTree ? (currentTree.growth_stage || '') : '';
+      box.innerHTML = stages.map(function (s) {
+        var isActive = currentStage && s.stage_name === currentStage;
+        var range = [s.start_date, s.end_date].filter(Boolean).join(' 至 ');
+        return '<div class="timeline-item' + (isActive ? ' active' : '') + '">' +
+          '<div class="timeline-dot"></div>' +
+          '<div class="timeline-date">' + MD.esc(range) + '</div>' +
+          '<div class="timeline-title">' + MD.esc(s.stage_name) + '</div>' +
+          (s.variety ? '<div class="timeline-desc">适用品种：' + MD.esc(s.variety) + '</div>' : '') +
+        '</div>';
+      }).join('');
+    }
+
+    /* 果树绑定的摄像头：sf_adoption_tree.camera_id → sf_device */
+    function resolveCamera() {
+      if (!currentTree || currentTree.camera_id == null) return null;
+      var id = String(currentTree.camera_id);
+      var devices = MD.list('device');
+      for (var i = 0; i < devices.length; i++) {
+        if (String(devices[i].id) === id || String(devices[i].device_code) === id) return devices[i];
+      }
+      return { device_code: id, device_name: '摄像头 #' + id };
+    }
+
+    function refreshAll() {
+      renderHeader();
+      renderPhotos();
+      renderUpdates();
+      renderTimeline();
     }
 
     function goBack() {
@@ -427,28 +519,34 @@
       return '';
     }
 
-    function renderDemoFrame(label, icon) {
-      return '<div class="demo-frame">' +
-        '<div class="demo-badge">演示画面 · 未接真实图传</div>' +
-        '<div class="demo-frame-icon">' + icon + '</div>' +
+    function renderSceneFrame(label, icon, badge) {
+      return '<div class="scene-frame">' +
+        '<div class="scene-badge">' + MD.esc(badge || '暂无实时画面') + '</div>' +
+        '<div class="scene-frame-icon">' + icon + '</div>' +
       '</div>' +
-      '<div class="demo-note">' + label + '（原型演示画面，未接入真实摄像头/图传）</div>';
+      '<div class="scene-note">' + MD.esc(label) + '</div>';
     }
 
-    // 有绑定摄像头时展示设备档案，缺失时保留演示画面提示
+    // 有绑定摄像头时展示设备档案，未绑定则明确提示无视频通道
     function renderCameraFrame(label, icon) {
-      var mon = resolveCamera();
-      if (!mon) {
-        return renderDemoFrame(label + ' · 暂未绑定视频通道', icon);
+      var cam = resolveCamera();
+      if (!cam) {
+        return renderSceneFrame(label + ' · 暂未绑定视频通道', icon, '未绑定摄像头');
       }
-      var cam = mon.camera || {};
+      var baseName = '--';
+      if (cam.base_id != null) {
+        var bases = MD.list('base');
+        for (var i = 0; i < bases.length; i++) {
+          if (String(bases[i].id) === String(cam.base_id)) { baseName = bases[i].name || '--'; break; }
+        }
+      }
       var rows = [
-        ['摄像头', cam.name || mon.cameraId],
-        ['设备编码', cam.code || mon.cameraId],
-        ['所在基地', cam.base || '—'],
-        ['安装位置', cam.location || '—'],
-        ['设备状态', CAMERA_STATUS_TEXT[cam.status] || cam.status || '—'],
-        ['分辨率', cam.resolution || '—']
+        ['摄像头', cam.device_name || cam.device_code || '--'],
+        ['设备编码', cam.device_code || '--'],
+        ['所在基地', baseName],
+        ['安装位置', cam.location || '--'],
+        ['设备状态', CAMERA_STATUS_TEXT[cam.run_status] || cam.run_status || '--'],
+        ['设备型号', cam.model || '--']
       ];
       var info = rows.map(function (r) {
         return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border-light);font-size:var(--font-sm);">' +
@@ -456,26 +554,23 @@
           '<span style="color:var(--text);font-weight:var(--font-medium);text-align:right;">' + escapeHtml(r[1]) + '</span></div>';
       }).join('');
       return '<div style="background:var(--bg-white);border-radius:var(--radius-lg);padding:var(--space-3) var(--space-4);border:1px solid var(--border);margin-bottom:var(--space-3);">' + info + '</div>' +
-        renderDemoFrame(label + ' · ' + (cam.name || mon.cameraId), icon);
+        renderSceneFrame(label + ' · ' + (cam.device_name || cam.device_code || ''), icon, '未接入实时图传');
     }
 
     function renderFarmingBody() {
-      var records = MobileStore.list(MobileStore.KEYS.farming);
+      var records = sortedFarming();
       if (!records.length) {
-        return '<div class="empty-state">' +
-          '<div class="empty-state-icon">🌱</div>' +
-          '<div class="empty-state-text">暂无农事记录<br>去记录一次浇水、施肥或修剪吧</div>' +
-          '<button class="mb-btn mb-btn-primary" onclick="location.href=\'mb_record_task.html\'">去记录农事</button>' +
-        '</div>';
+        return MD.empty('暂无农事记录', '该果树尚未绑定农事记录');
       }
       var html = '<div class="record-list">';
       records.forEach(function (r) {
+        var time = MD.dateText(r.execute_date) || MD.dateTimeText(r.bind_time) || '--';
         html += '<div class="record-item">' +
           '<div class="record-icon">🌾</div>' +
           '<div class="record-main">' +
-            '<div class="record-title">' + escapeHtml(r.taskType || '农事作业') + ' · ' + escapeHtml(r.plot || '') + '</div>' +
-            (r.remark ? '<div class="record-desc">' + escapeHtml(r.remark) + '</div>' : '') +
-            '<div class="record-time">' + MobileStore.fmtTime(r.createTime) + (r.operator ? ' · ' + escapeHtml(r.operator) : '') + '</div>' +
+            '<div class="record-title">' + MD.esc(r.title || ((r.farm_type || '农事') + '作业')) + '</div>' +
+            (r.remark ? '<div class="record-desc">' + MD.esc(r.remark) + '</div>' : '') +
+            '<div class="record-time">' + MD.esc(time) + (r.adopter ? ' · ' + MD.esc(r.adopter) : '') + '</div>' +
           '</div>' +
         '</div>';
       });
@@ -491,31 +586,29 @@
     }
 
     function renderGrowthBody() {
+      if (!currentTree) return MD.inlineEmpty('暂无生长报告数据');
+      var stage = currentTree.growth_stage;
+      var progress = currentTree.progress;
+      if (!stage && progress == null) return MD.inlineEmpty('暂无生长报告数据');
       return '<div class="report-grid">' +
-        reportCard('56', 'mm', '当前果径') +
-        reportCard('13.2', '%', '可溶性固形物') +
-        reportCard('4', 'cm', '新梢长度') +
-        reportCard('18', '片', '单株叶片数') +
-      '</div>' +
-      '<div class="demo-note" style="margin-top:12px;">演示数据 · 作物模型估算，仅用于展示报告样式</div>';
+        reportCard(stage || '--', '', '当前物候期') +
+        reportCard(progress != null ? progress : '--', progress != null ? '%' : '', '生长进度') +
+      '</div>';
     }
 
     function renderUpdatesBody() {
-      var list = [
-        { icon: '🍎', title: '第一轮采收完成', desc: '已完成阳面果采收共38斤，分级合格率97%', time: '今天 09:30 · 李师傅' },
-        { icon: '💧', title: '采前控水完成', desc: '采收前10天停止灌溉，糖度提升至14.5%', time: '昨天 18:00 · 自动灌溉' },
-        { icon: '📈', title: '物候期更新', desc: '果树已进入果实着色成熟期，正按计划分批采收', time: '10-20 10:00 · 系统' },
-        { icon: '🔍', title: '无人机巡园完成', desc: '未发现明显异常，落叶已清扫', time: '10-15 09:32 · 巡检系统' },
-        { icon: '🧪', title: '果品品质检测完成', desc: '果实硬度、可溶性固形物、农药残留均达标', time: '10-12 15:00 · 检测中心' }
-      ];
+      var records = sortedFarming();
+      if (!records.length) return MD.inlineEmpty('暂无动态');
       var html = '<div class="record-list">';
-      list.forEach(function (u) {
+      records.forEach(function (r) {
+        var type = r.farm_type || '农事';
+        var time = MD.dateText(r.execute_date) || MD.dateTimeText(r.bind_time) || '--';
         html += '<div class="record-item">' +
-          '<div class="record-icon">' + u.icon + '</div>' +
+          '<div class="record-icon">🌾</div>' +
           '<div class="record-main">' +
-            '<div class="record-title">' + escapeHtml(u.title) + '</div>' +
-            '<div class="record-desc">' + escapeHtml(u.desc) + '</div>' +
-            '<div class="record-time">' + escapeHtml(u.time) + '</div>' +
+            '<div class="record-title">' + MD.esc(r.title || (type + '作业')) + '</div>' +
+            (r.remark ? '<div class="record-desc">' + MD.esc(r.remark) + '</div>' : '') +
+            '<div class="record-time">' + MD.esc(time) + ' · ' + MD.esc(type) + '</div>' +
           '</div>' +
         '</div>';
       });
@@ -537,11 +630,32 @@
     function showAllUpdates() { togglePanel('updates', null); }
 
     function showCertificate() {
-      window.location.href = 'mb_adoption_cert.html';
+      var q = currentTree ? '?treeId=' + encodeURIComponent(currentTree.id) : '';
+      window.location.href = 'mb_adoption_cert.html' + q;
     }
 
     function reserveHarvest() {
-      window.location.href = 'mb_adoption_harvest.html';
+      var q = [];
+      if (currentOrder) q.push('orderId=' + encodeURIComponent(currentOrder.order_code || currentOrder.id));
+      if (currentTree) q.push('treeId=' + encodeURIComponent(currentTree.id));
+      window.location.href = 'mb_adoption_harvest.html' + (q.length ? '?' + q.join('&') : '');
+    }
+
+    /* 初始化：先按库中数据渲染，再补拉成长相册 */
+    function initDetail() {
+      refreshAll();
+      if (MD && typeof MD.subscribe === 'function') MD.subscribe(refreshAll);
+      MD.ready.then(function () {
+        refreshAll();
+        /* 成长相册不在预加载清单内，预加载完成后再补拉 */
+        return MD.rows('adoption_photo').then(renderPhotos);
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initDetail);
+    } else {
+      initDetail();
     }
   </script>
 </body>

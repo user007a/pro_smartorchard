@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <script src="js/mobile-store.js"></script>
+  <!-- 移动端统一数据层（严格空库 · 只读后端） -->
+  <script src="js/mobile-data.js"></script>
   <style>
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: 80px; }
     
@@ -71,75 +73,15 @@
             </svg>
           </div>
           <div class="tree-detail">
-            <div class="tree-name">花牛苹果 #A025</div>
-            <div class="tree-variety">品种：花牛苹果 · 树龄8年 · A1区</div>
+            <div class="tree-name" id="treeName">--</div>
+            <div class="tree-variety" id="treeVariety">--</div>
           </div>
         </div>
       </div>
       
       <div class="section-title">选择农事记录</div>
       
-      <div class="farming-list">
-        <div class="farming-item" onclick="toggleSelect(this)">
-          <div class="farming-checkbox" id="chk1">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-          <div class="farming-content">
-            <div class="farming-title">春季修剪作业 <span class="farming-type">修剪</span></div>
-            <div class="farming-time">2026-09-15 09:00</div>
-          </div>
-        </div>
-        
-        <div class="farming-item" onclick="toggleSelect(this)">
-          <div class="farming-checkbox" id="chk2">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-          <div class="farming-content">
-            <div class="farming-title">施肥作业 - 有机肥 <span class="farming-type">施肥</span></div>
-            <div class="farming-time">2026-09-20 14:30</div>
-          </div>
-        </div>
-        
-        <div class="farming-item" onclick="toggleSelect(this)">
-          <div class="farming-checkbox" id="chk3">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-          <div class="farming-content">
-            <div class="farming-title">病虫害防治 - 喷洒农药 <span class="farming-type">植保</span></div>
-            <div class="farming-time">2026-09-10 10:00</div>
-          </div>
-        </div>
-        
-        <div class="farming-item" onclick="toggleSelect(this)">
-          <div class="farming-checkbox" id="chk4">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-          <div class="farming-content">
-            <div class="farming-title">果实套袋作业 <span class="farming-type">套袋</span></div>
-            <div class="farming-time">2026-09-05 07:00</div>
-          </div>
-        </div>
-        
-        <div class="farming-item" onclick="toggleSelect(this)">
-          <div class="farming-checkbox" id="chk5">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-          <div class="farming-content">
-            <div class="farming-title">夏季修剪作业 <span class="farming-type">修剪</span></div>
-            <div class="farming-time">2026-09-12 08:30</div>
-          </div>
-        </div>
-      </div>
+      <div class="farming-list" id="farmingList"></div>
     </div>
     
     <div class="bottom-bar">
@@ -163,141 +105,188 @@
   </div>
   
   <script>
+    var MD = window.MobileData;
+    var currentTree = null;
+    var currentTreeName = '--';
+
     function goBack() {
       window.history.back();
     }
 
-    /* 当前果树信息：全部取自页面已有的果树卡片，不写死新的假值。
-       treeId 由 mb_adoption.html「绑定农事」入口以 ?treeId= 传入（缺省回落到卡片上的 A025），
-       品种取卡片「品种：xxx」，认养人从共享挂牌记录 / C 端认养记录反查，查不到显示「—」。 */
-    var currentTreeNo = '';
-    var currentTreeName = '';
-    var currentBase = '';
-
-    function pickTreeNo(text) {
-      var s = String(text == null ? '' : text).trim();
-      var m = s.match(/#([A-Za-z0-9-]+)/);
-      return m ? m[1] : s;
+    function queryParam(name) {
+      var m = (location.search || '').match(new RegExp('[?&]' + name + '=([^&]+)'));
+      if (!m) return '';
+      try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
     }
 
-    function initTreeInfo() {
-      var card = document.querySelector('.tree-card');
-      var nameEl = card ? card.querySelector('.tree-name') : null;
-      var varietyEl = card ? card.querySelector('.tree-variety') : null;
-      var name = nameEl ? nameEl.textContent.trim() : '';
-      var varietyText = varietyEl ? varietyEl.textContent.trim() : '';
-      var varietyMatch = varietyText.match(/品种[：:]\s*([^·]+)/);
-      var variety = varietyMatch ? varietyMatch[1].trim() : '';
-
-      var treeNo = pickTreeNo(name);
-      var m = (location.search || '').match(/[?&]treeId=([^&]+)/);
-      if (m) {
-        try { treeNo = decodeURIComponent(m[1]).trim() || treeNo; } catch (e) { treeNo = m[1].trim() || treeNo; }
-      }
-      currentTreeNo = treeNo;
-      currentTreeName = (variety ? variety + ' ' : '') + '#' + treeNo;
-      // 卡片「品种：花牛苹果 · 树龄8年 · A1区」末段即地块区域
-      var parts = varietyText.split('·');
-      currentBase = (parts.length > 1 ? parts[parts.length - 1] : '').trim();
-      if (nameEl) nameEl.textContent = currentTreeName;
-    }
-
-    // 认养订单缓存（纯在线：sf_adoption_order，供认养人反查）
-    var orderCache = [];
-
-    function loadAdoptionOrders() {
-      if (!window.Api || typeof window.Api.get !== 'function') return Promise.resolve();
-      return window.Api.get('adoption_order', { size: 500 }).then(function (res) {
-        if (res && res.ok && res.data && Array.isArray(res.data.list)) {
-          orderCache = res.data.list.map(function (row) {
-            return { orderNo: row.order_code || '', treeNo: row.tree_code || '', adopter: row.adopter || '' };
-          });
+    /* 当前果树：来自 sf_adoption_tree，?treeId= 支持传主键或 tree_code */
+    function findTree() {
+      var trees = MD.list('adoption_tree');
+      var wanted = queryParam('treeId');
+      if (!wanted) return null;
+      for (var i = 0; i < trees.length; i++) {
+        if (String(trees[i].id) === String(wanted) || String(trees[i].tree_code) === String(wanted)) {
+          return trees[i];
         }
-      }).catch(function () { /* 忽略，保持空 → 显示「—」 */ });
+      }
+      return null;
     }
 
-    // 认养人：同棵树的最近一条挂牌记录优先，其次 C 端认养订单（sf_adoption_order）
-    function resolveAdopter(treeNo) {
-      var tags = window.MobileStore ? MobileStore.list(MobileStore.KEYS.adoptionTag) : [];
-      for (var i = 0; i < tags.length; i++) {
-        var t = tags[i];
-        if (t && t.kind !== 'farming_bind' && t.adopter && pickTreeNo(t.treeNo) === treeNo) return t.adopter;
+    function renderTree() {
+      currentTree = findTree();
+      var nameEl = document.getElementById('treeName');
+      var varietyEl = document.getElementById('treeVariety');
+      if (!currentTree) {
+        currentTreeName = '未找到认养果树';
+        if (nameEl) nameEl.textContent = currentTreeName;
+        if (varietyEl) varietyEl.textContent = '--';
+        return;
       }
-      for (var j = 0; j < orderCache.length; j++) {
-        var a = orderCache[j];
-        if (a && a.treeNo === treeNo && a.adopter) return a.adopter;
+      var variety = currentTree.variety_name || currentTree.variety || '--';
+      currentTreeName = currentTree.tree_name || (variety + ' #' + (currentTree.tree_code || currentTree.id));
+      if (nameEl) nameEl.textContent = currentTreeName;
+      if (varietyEl) {
+        varietyEl.textContent = '品种：' + variety +
+          (currentTree.tree_age != null ? ' · 树龄' + currentTree.tree_age + '年' : '') +
+          (currentTree.plot_name ? ' · ' + currentTree.plot_name : '');
       }
-      return '';
     }
-    
+
+    /* 农事记录：来自 sf_farming_record，库中无数据时显示空态 */
+    function renderFarmingList() {
+      var box = document.getElementById('farmingList');
+      if (!box) return;
+      var list = MD.list('farming_record');
+      if (!list.length) {
+        box.innerHTML = MD.inlineEmpty('暂无农事记录');
+        return;
+      }
+      var html = '';
+      list.forEach(function (r) {
+        var type = r.type_name || r.farm_type || '农事';
+        var title = r.content || (type + '作业');
+        var time = MD.dateTimeText(r.execute_date) || MD.dateTimeText(r.created_at) || '--';
+        html += '<div class="farming-item" data-id="' + MD.esc(r.id) + '" onclick="toggleSelect(this)">' +
+          '<div class="farming-checkbox">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<polyline points="20 6 9 17 4 12"/>' +
+            '</svg>' +
+          '</div>' +
+          '<div class="farming-content">' +
+            '<div class="farming-title">' + MD.esc(title) +
+              ' <span class="farming-type">' + MD.esc(type) + '</span></div>' +
+            '<div class="farming-time">' + MD.esc(time) +
+              (r.executor ? ' · ' + MD.esc(r.executor) : '') + '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      box.innerHTML = html;
+    }
+
     function toggleSelect(item) {
       var checkbox = item.querySelector('.farming-checkbox');
       checkbox.classList.toggle('checked');
       item.classList.toggle('selected');
     }
-    
+
+    function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+    function nowStamp() {
+      var d = new Date();
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+        ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+    }
+
+    function farmingById(id) {
+      var list = MD.list('farming_record');
+      for (var i = 0; i < list.length; i++) {
+        if (String(list[i].id) === String(id)) return list[i];
+      }
+      return null;
+    }
+
+    /* 绑定：真实写入 sf_adoption_farming（POST /api/adoption_farming） */
     function submitBind() {
       var selected = document.querySelectorAll('.farming-item.selected');
-      if (selected.length === 0) {
+      if (!selected.length) {
         MobileStore.toast('请至少选择一项农事记录', 'warning');
         return;
       }
+      if (!currentTree) {
+        MobileStore.toast('未找到认养果树，无法绑定', 'error');
+        return;
+      }
+      if (!(window.Api && typeof window.Api.create === 'function')) {
+        MobileStore.toast('数据接口不可用，请稍后重试', 'error');
+        return;
+      }
 
-      // 读取被勾选的真实条目并落库
-      var records = [];
-      selected.forEach(function(item) {
-        var titleEl = item.querySelector('.farming-title');
-        var typeEl = item.querySelector('.farming-type');
-        var timeEl = item.querySelector('.farming-time');
-        var type = typeEl ? typeEl.textContent.trim() : '';
-        var title = titleEl ? titleEl.textContent.trim() : '';
-        // 类型标签文字混在 title 里，只剔除末尾那一段，
-        // 否则「春季修剪作业」会被削成「春季作业」
-        if (type) {
-          var idx = title.lastIndexOf(type);
-          if (idx > -1 && title.slice(idx + type.length).trim() === '') {
-            title = title.slice(0, idx).trim();
-          }
+      var ts = nowStamp();
+      var stamp = ts.replace(/[-: ]/g, '');
+      var jobs = [];
+      selected.forEach(function (item, idx) {
+        var rec = farmingById(item.getAttribute('data-id'));
+        if (!rec) return;
+        var type = rec.type_name || rec.farm_type || '农事';
+        jobs.push(Api.create('adoption_farming', {
+          record_code: 'AF' + stamp + idx + Math.random().toString(36).slice(2, 5).toUpperCase(),
+          source: 'mobile',
+          tree_id: Number(currentTree.id),
+          adopter: currentTree.adopter || (MD.user() || {}).realName || '',
+          base_name: currentTree.base_name || currentTree.plot_name || '',
+          farm_type: type,
+          title: rec.content || (type + '作业'),
+          batch_no: rec.record_code || '',
+          bind_time: ts,
+          execute_date: rec.execute_date || null,
+          status: 'bound',
+          remark: '绑定农事记录 ' + (rec.record_code || rec.id)
+        }));
+      });
+
+      if (!jobs.length) {
+        MobileStore.toast('所选的农事记录已不存在，请刷新后重试', 'error');
+        return;
+      }
+
+      Promise.all(jobs).then(function (results) {
+        var failed = results.filter(function (r) { return !(r && r.ok); }).length;
+        MD.reload('adoption_farming');
+        if (failed) {
+          MobileStore.toast('有 ' + failed + ' 条绑定失败，请重试', 'error');
+          return;
         }
-        records.push({
-          title: title,
-          type: type,
-          time: timeEl ? timeEl.textContent.trim() : ''
-        });
+        document.getElementById('successModal').classList.add('show');
+        MobileStore.toast('已绑定 ' + jobs.length + ' 条农事记录', 'success');
+      }).catch(function () {
+        MobileStore.toast('绑定失败，请检查网络', 'error');
       });
-
-      var adopter = resolveAdopter(currentTreeNo);
-
-      MobileStore.push(MobileStore.KEYS.adoptionTag, {
-        kind: 'farming_bind',
-        treeNo: currentTreeNo,
-        treeName: currentTreeName,
-        adopter: adopter || '—',
-        base: currentBase,
-        records: records,
-        count: records.length,
-        // 推送状态初值，后台推送处置后可回写同一字段
-        status: 'pending',
-        bindTime: new Date().toISOString()
-      });
-
-      document.getElementById('successModal').classList.add('show');
-      MobileStore.toast('已绑定 ' + records.length + ' 条农事记录', 'success');
     }
-    
+
     function closeModal() {
       document.getElementById('successModal').classList.remove('show');
       window.history.back();
     }
 
-    initTreeInfo();
-
-    // 预加载认养订单（供认养人反查），并订阅挂牌数据变化后重解析
-    loadAdoptionOrders();
-    if (window.MobileStore && typeof MobileStore.subscribe === 'function') {
-      MobileStore.subscribe(function (reason) {
-        if (reason === MobileStore.KEYS.adoptionTag) initTreeInfo();
+    function init() {
+      renderTree();
+      renderFarmingList();
+      if (MD && typeof MD.subscribe === 'function') {
+        MD.subscribe(function () {
+          renderTree();
+          renderFarmingList();
+        });
+      }
+      MD.ready.then(function () {
+        renderTree();
+        renderFarmingList();
       });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
     }
   </script>
 </body>

@@ -52,7 +52,8 @@
   function load() {
     try { var raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
   }
-  function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); return true; } catch (e) { return false; } }
+  function save() { global.__STRICT_DB_INTERNAL_WRITE__ = true;
+ try { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } finally { global.__STRICT_DB_INTERNAL_WRITE__ = false; } return true; } catch (e) { return false; } }
 
   /* 种子（从后端加载为空时的兜底） */
   function seed() { return []; }
@@ -106,6 +107,8 @@
     try { global.dispatchEvent(new CustomEvent('vrStoreChange', { detail: { reason: reason } })); } catch (e) {}
   }
   function commit(reason) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     save();
     notify(reason || 'change');
     if (typeof schedulePersist === 'function' && reason !== 'backend-loaded') schedulePersist(reason);

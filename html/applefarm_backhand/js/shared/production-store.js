@@ -471,7 +471,9 @@
 
   function save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory));
+      global.__STRICT_DB_INTERNAL_WRITE__ = true;
+
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } finally { global.__STRICT_DB_INTERNAL_WRITE__ = false; }
       lastError = '';
       return true;
     } catch (e) {
@@ -522,6 +524,10 @@
   }
 
   function commit(reason) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     try { recompute(); } catch (e) { console.warn('[ProductionStore] recompute 失败', e); }
     var ok = save();
     notify(reason);
@@ -730,6 +736,10 @@
   }
 
   function upsert(entity, item) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     if (!item || typeof item !== 'object') { lastError = '写入数据为空'; return null; }
     var d = ensure();
     var list = d[entity];
@@ -746,6 +756,10 @@
   }
 
   function remove(entity, id) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var d = ensure();
     if (!Array.isArray(d[entity])) { lastError = '未知的数据集合：' + entity; return false; }
     var exists = d[entity].some(function (x) { return String(x.id) === String(id); });

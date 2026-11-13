@@ -143,7 +143,7 @@
   var DEFAULT_HIGHLIGHTS = [];
 
   // 数字化覆盖地块：planned 为规划口径（可维护），ledgerFallback 为台账未落库时的兜底值
-  var DEFAULT_COVERAGE = { planned: 126, ledgerFallback: 23 };
+  var DEFAULT_COVERAGE = { planned: 0, ledgerFallback: 0 };
 
   // 系统运行信息：按上线/最近故障日期计算稳定运行天数，manualUptimeDays 可人工覆盖
   var DEFAULT_OPS = { onlineSince: '', lastDowntime: '', manualUptimeDays: null };
@@ -193,7 +193,9 @@
   }
 
   function save(){
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } catch(e){}
+    global.__STRICT_DB_INTERNAL_WRITE__ = true;
+
+    try { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } finally { global.__STRICT_DB_INTERNAL_WRITE__ = false; } } catch(e){}
   }
 
   function ensure(){
@@ -240,7 +242,7 @@
     } catch(e){ return fallback; }
   }
 
-  /** 地块台账实际条数：优先取 PlotStore 的 sf_plot 快照，无数据时使用兜底值 */
+  /** 地块台账实际条数：优先取 PlotStore 的 sf_plot 快照，其次企业地块台账，无数据时使用兜底值 */
   function plotLedgerCount(fallback){
     if (global.PlotStore) {
       var list = global.PlotStore.plots();
@@ -248,6 +250,10 @@
         var valid = list.filter(function(x){ return x && x.code; }).length;
         return valid || list.length;
       }
+    }
+    if (global.EnterpriseStore && typeof global.EnterpriseStore.data === 'function') {
+      var ep = global.EnterpriseStore.data().plots || [];
+      if (ep.length) return ep.length;
     }
     return Number(fallback) || 0;
   }

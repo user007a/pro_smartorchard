@@ -102,6 +102,18 @@
     return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
   }
 
+  /* datetime 归一化：MySQL datetime 不接受 ISO 8601 的 'T' 分隔与 'Z' 后缀 */
+  function datetimeOf(v) {
+    if (!v) return stampNow();
+    var s = String(v);
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(s)) return s.length === 16 ? s + ':00' : s;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s + ' 00:00:00';
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return stampNow();
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+      ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+  }
+
   function num(v) { var n = parseFloat(v); return isNaN(n) ? null : n; }
 
   function genCode(prefix) {
@@ -157,7 +169,7 @@
           patrol_type: item.checkpointName || '',
           plot_ids: item.checkpointId || '',
           inspector: item.operator || '',
-          checkin_time: item.checkinTime || stampNow(),
+          checkin_time: datetimeOf(item.checkinTime),
           points_done: 1,
           points_total: 1,
           status: 'completed'
@@ -186,7 +198,7 @@
           abnormal_type: item.type || '',
           abnormal_desc: item.remark || '',
           reporter: item.operator || '',
-          report_time: item.reportTime || stampNow(),
+          report_time: datetimeOf(item.reportTime),
           severity: 'high',
           status: statusMap[item.status] || 'pending'
         };
@@ -215,12 +227,12 @@
           name: item.name || '未命名地块',
           plot_type: item.type || '',
           area: num(item.area),
-          draw_time: item.createTime || stampNow(),
           plot_status: 'normal',
           audit_status: 'pending',
           source: 'mobile',
           boundary: Array.isArray(item.points) && item.points.length
             ? JSON.stringify(item.points) : null,
+          draw_time: datetimeOf(item.createTime),
           remark: item.remark || ''
         };
       },
@@ -248,12 +260,13 @@
       resource: 'material_io',
       codeField: 'io_code',
       toSnake: function (item) {
-        // material_io 无 name 列：农资名称并入备注，保证审批/追溯可见
+        // material_io 无 name 列：农资名称并入备注，同时按后台档案编号回填 material_id
         var nameTag = (item.name || item.backName) ? '农资:' + (item.backName || item.name) : '';
         var remark = [item.remark, nameTag].filter(Boolean).join(' ');
         return {
           io_code: item.id || genCode('IO'),
           io_type: '出库',
+          material_id: item.materialId || null,
           source_code: item.code || null,
           quantity: num(item.qty),
           related_target: item.plot || '',
@@ -268,6 +281,7 @@
           id: row.io_code,
           _dbId: row.id,
           code: row.source_code || '',
+          materialId: row.material_id != null ? String(row.material_id) : '',
           name: '',
           qty: row.quantity != null ? row.quantity : 0,
           plot: row.related_target || '',
@@ -296,10 +310,11 @@
       toSnake: function (item) {
         return {
           apply_code: item.id || genCode('LB'),
+          label_type_id: item.labelTypeId || item.labelTypeDbId || null,
           quantity: num(item.qty),
           plot_ids: item.plot || '',
           apply_user: item.operator || '移动端',
-          apply_time: item.time || stampNow(),
+          apply_time: datetimeOf(item.time),
           status: item.status || 'pending',
           remark: item.remark || ''
         };
@@ -309,6 +324,7 @@
           id: row.apply_code,
           _dbId: row.id,
           name: '',
+          labelTypeId: row.label_type_id != null ? String(row.label_type_id) : '',
           qty: row.quantity != null ? row.quantity : 0,
           plot: row.plot_ids || '',
           time: row.apply_time || row.created_at || '',

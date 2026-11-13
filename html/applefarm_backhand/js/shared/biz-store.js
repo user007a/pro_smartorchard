@@ -156,7 +156,8 @@
     } catch(e){ return null; }
   }
 
-  function save(){ try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } catch(e){} }
+  function save(){ global.__STRICT_DB_INTERNAL_WRITE__ = true;
+ try { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } finally { global.__STRICT_DB_INTERNAL_WRITE__ = false; } } catch(e){} }
 
   function ensure(){
     if (inMemory) return inMemory;

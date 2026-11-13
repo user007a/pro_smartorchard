@@ -49,7 +49,7 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
-    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
+    var writeMark0 = window.__STRICT_DB_WRITES__ || 0;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -58,7 +58,7 @@
     }).then(function (res) {
       if (res && res.ok && res.data) {
         // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
-        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
+        if (typeof window.__STRICT_DB_WRITES__ === "number" && window.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = window.MallMapper.toAggregate(res.data);
         safeWrite(KEYS.products, agg.products || []);
         safeWrite(KEYS.promotions, agg.promotions || []);
@@ -225,6 +225,10 @@
   }
 
   function replaceProducts(list) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    window.__STRICT_DB_WRITES__ = (window.__STRICT_DB_WRITES__ || 0) + 1;
     return safeWrite(KEYS.products, asArray(list).map(normalizeProduct));
   }
 
@@ -264,6 +268,10 @@
   }
 
   function savePromotion(item) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    window.__STRICT_DB_WRITES__ = (window.__STRICT_DB_WRITES__ || 0) + 1;
     var list = promotions();
     var p = normalizePromotion(item, list.length);
     if (!p.title) return fail('请填写活动名称');
@@ -277,6 +285,10 @@
   }
 
   function removePromotion(id) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    window.__STRICT_DB_WRITES__ = (window.__STRICT_DB_WRITES__ || 0) + 1;
     return safeWrite(KEYS.promotions, promotions().filter(function (p) { return p.id !== id; }));
   }
 
@@ -329,6 +341,10 @@
   }
 
   function saveCoupon(item) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    window.__STRICT_DB_WRITES__ = (window.__STRICT_DB_WRITES__ || 0) + 1;
     var list = coupons();
     var c = normalizeCoupon(item, list.length);
     if (!c.name) return fail('请填写优惠券名称');
@@ -345,6 +361,10 @@
   }
 
   function removeCoupon(code) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    window.__STRICT_DB_WRITES__ = (window.__STRICT_DB_WRITES__ || 0) + 1;
     return safeWrite(KEYS.coupons, coupons().filter(function (c) { return c.code !== code; }));
   }
 
@@ -442,6 +462,10 @@
   }
 
   function saveMember(item) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    window.__STRICT_DB_WRITES__ = (window.__STRICT_DB_WRITES__ || 0) + 1;
     var list = members();
     var m = normalizeMember(item, list.length);
     if (!m.nickname) return fail('请填写会员昵称');
@@ -540,6 +564,10 @@
   }
 
   function saveOrder(order) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    window.__STRICT_DB_WRITES__ = (window.__STRICT_DB_WRITES__ || 0) + 1;
     var list = orders();
     var o = normalizeOrder(order);
     if (!o.no) return fail('订单号不能为空');
@@ -603,6 +631,8 @@
   }
   function afterSales() { return asArray(safeRead(KEYS.afterSales, [])).map(normalizeAfterSale); }
   function saveAfterSale(item) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    window.__STRICT_DB_WRITES__ = (window.__STRICT_DB_WRITES__ || 0) + 1;
     var list = afterSales();
     var a = normalizeAfterSale(item);
     if (!a.orderNo) return fail('请选择关联订单');
@@ -614,6 +644,8 @@
     return done(a);
   }
   function updateAfterSale(id, patch) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    window.__STRICT_DB_WRITES__ = (window.__STRICT_DB_WRITES__ || 0) + 1;
     var list = afterSales();
     var a = null;
     for (var i = 0; i < list.length; i++) { if (list[i].id === id) { a = list[i]; break; } }
@@ -788,6 +820,8 @@
     return merged;
   }
   function saveSettings(patch) {
+    /* 用户主动写入：计入预加载竞态计数 */
+    window.__STRICT_DB_WRITES__ = (window.__STRICT_DB_WRITES__ || 0) + 1;
     var s = settings();
     Object.keys(patch || {}).forEach(function (k) { s[k] = patch[k]; });
     return safeWrite(KEYS.settings, s);

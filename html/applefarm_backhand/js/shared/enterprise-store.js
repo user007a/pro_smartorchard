@@ -7,7 +7,7 @@
   'use strict';
 
   var STORAGE_KEY = 'applefarm_enterprise_v1';
-  var VERSION = 2;
+  var VERSION = 3;
 
   /* ============================================================
    * 后端桥接依赖自动加载（策略 A：出入口映射）
@@ -136,13 +136,17 @@
       });
     }
     if (agg.operations && agg.operations.length) {
-      // operation 表是 label/value/unit 结构，映射回 operation 关键指标
+      // operation 表是 label/value/unit 结构；按关键词匹配关键指标，
+      // 兼容「年总产量 / 验证年产量 / 年度总产值」等各种后台自定义命名。
       var op = {};
       agg.operations.forEach(function (o) {
-        if (o.label === '年度总产值') op.totalOutputValue = o.value;
-        else if (o.label === '年总产量') op.totalOutput = o.value;
-        else if (o.label === '核心区面积') op.coreArea = o.value;
-        else if (o.label === '服务农户') op.serviceHouseholds = o.value;
+        var label = String(o.label || '');
+        var val = Number(o.value);
+        if (!isFinite(val)) return;
+        if (!op.totalOutputValue && /产值|营收|销售收入/.test(label)) op.totalOutputValue = val;
+        else if (!op.totalOutput && /产量|产出/.test(label)) op.totalOutput = val;
+        else if (!op.coreArea && /核心/.test(label) && /面积|亩/.test(label + (o.unit || ''))) op.coreArea = val;
+        else if (!op.serviceHouseholds && /农户|合作社/.test(label)) op.serviceHouseholds = val;
       });
       if (Object.keys(op).length) out.operation = mergeDefaults(out.operation, op);
     }
@@ -355,10 +359,10 @@
       var parsed = JSON.parse(raw);
       if (!isObject(parsed)) throw new Error('invalid data');
       var merged = mergeDefaults(emptyByShape(DEFAULT_DATA), parsed);
-      /* 口径迁移：旧版认养营收/订单数（918 万 / 3260 单）与经营分析口径不一致，升级时重置 */
+      /* 版本迁移：旧版本曾把演示企业画像 / 基地 / 人员等写进本地缓存，
+         严格空库模式下这些值必须丢弃，只保留字段结构，数据一律来自数据库。 */
       if (parsed.version !== VERSION) {
-        merged.outcomes = emptyByShape(DEFAULT_DATA.outcomes);
-        merged.version = VERSION;
+        merged = mergeDefaults(emptyByShape(DEFAULT_DATA), { version: VERSION });
       }
       return merged;
     } catch (e) {
@@ -486,8 +490,24 @@
     return { ok: !!r.ok, message: r.ok ? '已删除' : r.error };
   }
 
+  /* 地块健康分布：优先取 store 内已存的三档统计；为空时按地块台账
+     plotStatus（normal/warning/danger）实时派生，保证大屏永远反映数据库现状。 */
   function plotHealth() {
-    return clone(ensure().plotHealth);
+    var saved = ensure().plotHealth;
+    if (Array.isArray(saved) && saved.length) return clone(saved);
+    var plots = ensure().plots || [];
+    var normal = 0, warning = 0, danger = 0;
+    plots.forEach(function (p) {
+      var s = String(p.plotStatus || '').toLowerCase();
+      if (s === 'warning' || s === 'maintain') warning++;
+      else if (s === 'danger' || s === 'fallow') danger++;
+      else normal++;
+    });
+    return [
+      { k: '健康', v: normal, c: '#2bd46e' },
+      { k: '预警', v: warning, c: '#F2B33D' },
+      { k: '风险', v: danger, c: '#E5564B' }
+    ];
   }
 
   function staff() {
@@ -513,16 +533,47 @@
     return clone(ensure().experts);
   }
 
+  /* 主栽品种构成：数据库无「品种产量」明细，按地块台账的品种编码聚合
+     种植面积（亩），面积占比即品种结构；无品种字段时返回空数组。 */
   function varieties() {
-    return clone(ensure().varieties);
+    var saved = ensure().varieties;
+    if (Array.isArray(saved) && saved.length) return clone(saved);
+    var plots = ensure().plots || [];
+    var map = {}, order = [], total = 0;
+    plots.forEach(function (p) {
+      var k = String(p.varietyCode || '').trim();
+      if (!k) return;
+      if (!map[k]) { map[k] = 0; order.push(k); }
+      map[k] += Number(p.area) || 0;
+      total += Number(p.area) || 0;
+    });
+    if (!order.length || !total) return [];
+    var COL = ['#38D6FF', '#2E8FE8', '#31C9E8', '#4E7FD6', '#6E8ED0', '#8AA0BE'];
+    return order.map(function (k, i) {
+      return { k: k, v: Math.round(map[k] * 10) / 10, c: COL[i % COL.length], p: Math.round(map[k] / total * 1000) / 10 };
+    });
   }
 
+  /* 近 5 年产值 / 产量：数据库未建年度历史表，只有当年经营指标时
+     返回单点序列（当前年度），由页面按单柱/单点渲染；无数据返回空数组。 */
   function value5() {
-    return clone(ensure().value5);
+    var saved = ensure().value5;
+    if (Array.isArray(saved) && saved.length) return clone(saved);
+    var v = Number(ensure().operation.totalOutputValue) || 0;
+    if (!v) return [];
+    return [[String(currentYear()), v]];
   }
 
   function yield5() {
-    return clone(ensure().yield5);
+    var saved = ensure().yield5;
+    if (Array.isArray(saved) && saved.length) return clone(saved);
+    var v = Number(ensure().operation.totalOutput) || 0;
+    if (!v) return [];
+    return [[String(currentYear()), v]];
+  }
+
+  function currentYear() {
+    return new Date().getFullYear();
   }
 
   function business() {
@@ -533,8 +584,17 @@
     return clone(ensure().timeline);
   }
 
+  /* 企业大事记：数据库无独立「大事记」表，按发展历程（sf_enterprise_timeline）
+     倒序取最近若干条作为大事记；无历程数据时返回空数组。 */
   function events() {
-    return clone(ensure().events);
+    var saved = ensure().events;
+    if (Array.isArray(saved) && saved.length) return clone(saved);
+    var tl = ensure().timeline || [];
+    return tl.slice().sort(function (a, b) {
+      return String(b.year || '').localeCompare(String(a.year || ''));
+    }).slice(0, 5).map(function (t) {
+      return { date: String(t.year || ''), text: (t.title || '') + (t.short ? '，' + t.short : ''), hot: false };
+    });
   }
 
   function certCount() {
@@ -610,23 +670,25 @@
       area += Number(b.area) || 0;
       plots += Number(b.plots) || 0;
     });
-    d.plotHealth.forEach(function (h) {
+    var ph = plotHealth();
+    ph.forEach(function (h) {
       if (h.k === '健康') health += Number(h.v) || 0;
     });
     var outputValue = Number(d.operation.totalOutputValue) || 0;
     var output = Number(d.operation.totalOutput) || 0;
-    var v5 = d.value5 || [];
-    var y5 = d.yield5 || [];
+    var v5 = value5();
+    var y5 = yield5();
     var valuePrev = v5.length > 1 ? Number(v5[v5.length - 2][1]) : 0;
     var yieldFirst = y5.length ? Number(y5[0][1]) : 0;
     var yieldLast = y5.length ? Number(y5[y5.length - 1][1]) : 0;
+    var vars = varieties();
     return {
       baseCount: d.bases.length,
       totalArea: area,
       plotCount: plots,
       healthCount: health,
       healthRate: plots ? round1(health / plots * 100) : 0,
-      varietyCount: d.varieties.length,
+      varietyCount: vars.length,
       avgPlotArea: plots ? round1(area / plots) : 0,
       outputValue: outputValue,
       output: output,
@@ -642,7 +704,7 @@
       staffTotal: staffTotal(),
       technicalRatio: technicalRatio(),
       foundedYears: foundedYears(),
-      varietyNames: d.varieties.map(function (v) { return v.k; }).join(' · ')
+      varietyNames: vars.map(function (v) { return v.k; }).join(' · ')
     };
   }
 
@@ -661,11 +723,23 @@
     o.outputYoy = m.outputYoy;
     o.output = m.output;
     o.netRate = d.outcomes.netRate;
+    /* 财务口径（净利润 / 净利率 / 环比）：统一取经营分析 BizStore，与 da_business 同源 */
+    try {
+      if (global.BizStore && typeof global.BizStore.summary === 'function') {
+        var s = global.BizStore.summary();
+        if (s) {
+          if (Number(s.netProfit)) o.netProfit = Number(s.netProfit);
+          if (Number(s.netRate)) o.netRate = Number(s.netRate);
+          if (Number(s.netProfitYoy)) o.netProfitYoy = Number(s.netProfitYoy);
+          if (Number(s.totalRevenue)) o.totalRevenue = Number(s.totalRevenue);
+        }
+      }
+    } catch (ignore) {}
     o.certCount = m.certCount;
     o.adoptionRevenue = ad.amount;
     o.adoptionOrders = ad.orders;
     o.renewRate = ad.renewRate;
-    o.fiscalYear = d.fiscalYear;
+    o.fiscalYear = d.fiscalYear || String(new Date().getFullYear());
     return o;
   }
 

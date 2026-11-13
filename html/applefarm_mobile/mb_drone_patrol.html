@@ -9,6 +9,7 @@
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <script src="js/mobile-store.js"></script>
+  <script src="js/mobile-data.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html { font-size: 16px; }
@@ -104,8 +105,7 @@
     .control-btn.resume { background: linear-gradient(135deg, var(--success), var(--primary-600)); color: var(--bg-white); }
     .control-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-    /* 视频演示标识 */
-    .demo-badge { position: absolute; top: var(--space-2); left: var(--space-2); background: var(--warning); color: var(--bg-white); padding: 3px var(--space-2); border-radius: var(--radius-md); font-size: var(--font-xs); font-weight: var(--font-semibold); }
+    /* 视频区域扫描线装饰 */
     .video-frame::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 3px); pointer-events: none; }
 
     /* 异常已处理状态 */
@@ -134,13 +134,13 @@
     <!-- 当前任务状态 -->
     <div class="task-status-card">
       <div class="task-status-header">
-        <div class="task-name">TASK-001 · 航线-A001</div>
-        <span class="status-tag running" id="taskStatus">进行中</span>
+        <div class="task-name" id="taskName">加载中…</div>
+        <span class="status-tag idle" id="taskStatus">加载中</span>
       </div>
       <div class="task-progress-bar">
-        <div class="task-progress-fill" id="taskProgressFill" style="width: 65%"></div>
+        <div class="task-progress-fill" id="taskProgressFill" style="width: 0%"></div>
       </div>
-      <div class="task-progress-text" id="taskProgressText">已完成 65% · 预计剩余 4分32秒</div>
+      <div class="task-progress-text" id="taskProgressText">--</div>
     </div>
     
     <!-- 实时监控 -->
@@ -151,36 +151,15 @@
       </div>
       
       <!-- 地图展示 -->
-      <div class="map-container">
+      <div class="map-container" id="mapContainer">
         <div class="map-grid"></div>
-        <div class="flight-path">
+        <div class="flight-path" id="flightPath">
           <svg width="100%" height="100%">
             <path class="path-line" d="M 50,100 Q 120,60 200,100 T 360,100" />
           </svg>
         </div>
-        <div class="waypoint-marker" style="top:100px;left:50px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-          </svg>
-          <div class="waypoint-label">起点</div>
-        </div>
-        <div class="waypoint-marker" style="top:60px;left:120px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-          </svg>
-        </div>
-        <div class="waypoint-marker" style="top:100px;left:200px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-          </svg>
-        </div>
-        <div class="waypoint-marker" style="top:100px;left:360px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-          </svg>
-          <div class="waypoint-label">终点</div>
-        </div>
-        <div class="drone-marker">
+        <div id="routeMarkers"></div>
+        <div class="drone-marker" id="droneMarker" style="display:none;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
           </svg>
@@ -191,37 +170,36 @@
       <div class="flight-info-grid">
         <div class="info-card">
           <div class="info-label">飞行高度</div>
-          <div class="info-value">80<span class="info-unit">m</span></div>
+          <div class="info-value" id="flightHeight">--<span class="info-unit">m</span></div>
         </div>
         <div class="info-card">
           <div class="info-label">飞行速度</div>
-          <div class="info-value">10<span class="info-unit">m/s</span></div>
+          <div class="info-value" id="flightSpeed">--<span class="info-unit">m/s</span></div>
         </div>
         <div class="info-card">
           <div class="info-label">电池电量</div>
-          <div class="info-value green">78<span class="info-unit">%</span></div>
+          <div class="info-value green" id="flightBattery">--<span class="info-unit">%</span></div>
         </div>
         <div class="info-card">
           <div class="info-label">信号强度</div>
-          <div class="info-value green">强</div>
+          <div class="info-value" id="flightSignal">--</div>
         </div>
       </div>
       
       <!-- 视频画面 -->
       <div class="video-container">
         <div class="video-frame">
-          <div class="demo-badge">模拟画面 · 演示</div>
           <div class="video-placeholder">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="5 3 19 12 5 21 5 3"/>
             </svg>
-            <div>实时视频流</div>
+            <div>暂无实时视频流</div>
           </div>
           <div class="video-status">
             <svg viewBox="0 0 24 24" fill="currentColor">
               <circle cx="12" cy="12" r="10"/>
             </svg>
-            <span>演示中</span>
+            <span>未接入</span>
           </div>
         </div>
       </div>
@@ -239,50 +217,9 @@
     <div class="abnormal-section">
       <div class="section-title">
         <span class="section-dot"></span>
-        识别异常 <span id="abnormalPending" style="font-size:12px;font-weight:400;color:#999;">(2条待确认)</span>
+        识别异常 <span id="abnormalPending" style="font-size:12px;font-weight:400;color:#999;"></span>
       </div>
-      
-      <div class="abnormal-card" data-id="A-003" data-plot="地块A-003" data-type="病虫害异常">
-        <div class="abnormal-header">
-          <div class="abnormal-title">
-            <span class="abnormal-dot pest"></span>
-            病虫害异常
-          </div>
-          <span class="abnormal-status">待确认</span>
-        </div>
-        <div class="abnormal-meta">
-          <span>地块A-003</span>
-          <span class="abnormal-confidence">置信度：92%</span>
-        </div>
-        <div class="abnormal-footer">
-          <span style="font-size:12px;color:#666;">2026-09-15 09:32</span>
-          <div style="display:flex;gap:8px;">
-            <button class="btn-ignore" onclick="ignoreAbnormal(this)">标记误报</button>
-            <button class="btn-confirm" onclick="confirmAbnormal(this)">确认异常</button>
-          </div>
-        </div>
-      </div>
-      
-      <div class="abnormal-card" data-id="A-005" data-plot="地块A-005" data-type="病虫害异常">
-        <div class="abnormal-header">
-          <div class="abnormal-title">
-            <span class="abnormal-dot pest"></span>
-            病虫害异常
-          </div>
-          <span class="abnormal-status">待确认</span>
-        </div>
-        <div class="abnormal-meta">
-          <span>地块A-005</span>
-          <span class="abnormal-confidence">置信度：87%</span>
-        </div>
-        <div class="abnormal-footer">
-          <span style="font-size:12px;color:#666;">2026-09-15 09:45</span>
-          <div style="display:flex;gap:8px;">
-            <button class="btn-ignore" onclick="ignoreAbnormal(this)">标记误报</button>
-            <button class="btn-confirm" onclick="confirmAbnormal(this)">确认异常</button>
-          </div>
-        </div>
-      </div>
+      <div id="abnormalList"></div>
     </div>
     
     <!-- 历史任务 -->
@@ -291,32 +228,7 @@
         <span class="section-dot"></span>
         历史任务
       </div>
-      
-      <div class="history-card">
-        <div class="history-header">
-          <div class="history-task-id">TASK-004</div>
-          <span class="history-status completed">已完成</span>
-        </div>
-        <div class="history-date">2026-09-14 10:00</div>
-        <div class="history-stats">
-          <span>航线：<span class="history-stat-value">航线-A001</span></span>
-          <span>覆盖：<span class="history-stat-value">240亩</span></span>
-          <span>异常：<span class="history-stat-value">3条</span></span>
-        </div>
-      </div>
-      
-      <div class="history-card">
-        <div class="history-header">
-          <div class="history-task-id">TASK-003</div>
-          <span class="history-status completed">已完成</span>
-        </div>
-        <div class="history-date">2026-09-13 14:00</div>
-        <div class="history-stats">
-          <span>航线：<span class="history-stat-value">航线-B001</span></span>
-          <span>覆盖：<span class="history-stat-value">300亩</span></span>
-          <span>异常：<span class="history-stat-value">1条</span></span>
-        </div>
-      </div>
+      <div id="historyList"></div>
     </div>
     
     <!-- 底部导航 -->
@@ -363,12 +275,8 @@
   </div>
   
   <script>
-    var EVENTS_KEY = 'smartorchard_drone_events';
-    var ABNORMAL_KEY = 'smartorchard_drone_abnormal';
-
-    // 巡检任务运行态：进度、暂停、返航
-    var patrol = { progress: 65, paused: false, returned: false, timer: null };
-    var TOTAL_REMAIN_SEC = 778; // 100% 对应约 13 分钟
+    var MD = window.MobileData;
+    var state = { task: null, paused: false, returned: false, busy: false };
 
     function goBack() {
       window.history.back();
@@ -378,147 +286,419 @@
       window.location.href = page;
     }
 
-    function fmtRemain(progress) {
-      var sec = Math.max(0, Math.round(TOTAL_REMAIN_SEC * (100 - progress) / 100));
-      var m = Math.floor(sec / 60);
-      var s = sec % 60;
-      return m + '分' + (s < 10 ? '0' + s : s) + '秒';
+    function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+    function nowText() {
+      var d = new Date();
+      return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+        ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+    }
+
+    function genCode(prefix) {
+      var d = new Date();
+      var rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+      return prefix + '-' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) +
+        '-' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) + '-' + rand;
+    }
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function numText(v) {
+      var n = parseFloat(v);
+      return isNaN(n) ? '--' : String(n);
+    }
+
+    function isDone(status) {
+      return ['done', 'completed', 'finished'].indexOf(String(status || '').toLowerCase()) >= 0;
+    }
+
+    function isRunning(status) {
+      return ['in_progress', 'running', 'patrolling', 'executing', 'processing']
+        .indexOf(String(status || '').toLowerCase()) >= 0;
+    }
+
+    function statusText(status) {
+      var s = String(status || '').toLowerCase();
+      if (isDone(s)) return '已完成';
+      if (isRunning(s)) return '进行中';
+      if (s === 'paused') return '已暂停';
+      return '待执行';
+    }
+
+    function pickTask() {
+      var rows = MD ? MD.list('drone_patrol') : [];
+      var i;
+      for (i = 0; i < rows.length; i++) {
+        if (isRunning(rows[i].status)) return rows[i];
+      }
+      for (i = 0; i < rows.length; i++) {
+        if (!isDone(rows[i].status)) return rows[i];
+      }
+      return rows.length ? rows[0] : null;
+    }
+
+    function latestBattery(taskCode) {
+      var logs = MD ? MD.list('drone_flight_log') : [];
+      var best = null;
+      for (var i = 0; i < logs.length; i++) {
+        var l = logs[i];
+        if (String(l.task_code || '') !== String(taskCode || '')) continue;
+        if (l.battery == null || l.battery === '') continue;
+        if (!best || Number(l.id) > Number(best.id)) best = l;
+      }
+      return best ? best.battery : null;
+    }
+
+    function setInfo(id, value, unit) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML = '';
+      el.appendChild(document.createTextNode(value == null || value === '' ? '--' : String(value)));
+      if (unit) {
+        var span = document.createElement('span');
+        span.className = 'info-unit';
+        span.textContent = unit;
+        el.appendChild(span);
+      }
     }
 
     function renderTask() {
-      document.getElementById('taskProgressFill').style.width = patrol.progress + '%';
+      var task = state.task;
+      var nameEl = document.getElementById('taskName');
       var tag = document.getElementById('taskStatus');
-      tag.className = 'status-tag ' + (patrol.returned ? 'returned' : (patrol.paused ? 'paused' : 'running'));
-      tag.textContent = patrol.returned ? '已返航' : (patrol.paused ? '已暂停' : '进行中');
-
+      var fill = document.getElementById('taskProgressFill');
       var text = document.getElementById('taskProgressText');
-      if (patrol.returned) {
+      var pauseBtn = document.getElementById('pauseBtn');
+      var returnBtn = document.querySelector('.control-btn.return');
+
+      if (!task) {
+        nameEl.textContent = '暂无巡园任务';
+        tag.className = 'status-tag idle';
+        tag.textContent = '暂无任务';
+        fill.style.width = '0%';
+        text.textContent = '数据库暂无无人机巡园任务，请先在后台创建';
+        if (pauseBtn) pauseBtn.disabled = true;
+        if (returnBtn) returnBtn.disabled = true;
+        setInfo('flightHeight', '--', 'm');
+        setInfo('flightSpeed', '--', 'm/s');
+        setInfo('flightBattery', '--', '%');
+        setInfo('flightSignal', '--', '');
+        return;
+      }
+
+      var done = isDone(task.status);
+      nameEl.textContent = task.task_code + (task.drone_task_name ? ' · ' + task.drone_task_name : (task.route ? ' · ' + task.route : ''));
+      var cls = state.returned ? 'returned' : (state.paused ? 'paused' : (done ? 'idle' : (isRunning(task.status) ? 'running' : 'idle')));
+      tag.className = 'status-tag ' + cls;
+      tag.textContent = state.returned ? '已返航' : (state.paused ? '已暂停' : statusText(task.status));
+
+      var progress = parseFloat(task.progress);
+      if (isNaN(progress)) progress = 0;
+      progress = Math.max(0, Math.min(100, Math.round(progress)));
+      fill.style.width = progress + '%';
+
+      if (state.returned) {
         text.textContent = '已返回起点 · 本次巡检结束';
-      } else if (patrol.progress >= 100) {
-        text.textContent = '已完成 100% · 巡检任务完成';
-      } else if (patrol.paused) {
-        text.textContent = '已完成 ' + patrol.progress + '% · 已暂停';
+      } else if (done) {
+        text.textContent = '已完成 ' + progress + '% · 巡检任务完成';
+      } else if (state.paused) {
+        text.textContent = '已完成 ' + progress + '% · 已暂停';
       } else {
-        text.textContent = '已完成 ' + patrol.progress + '% · 预计剩余 ' + fmtRemain(patrol.progress);
+        text.textContent = '已完成 ' + progress + '%' +
+          (task.plan_time ? ' · 计划 ' + MD.dateTimeText(task.plan_time) : '');
       }
+
+      setInfo('flightHeight', numText(task.flight_height), 'm');
+      setInfo('flightSpeed', numText(task.speed), 'm/s');
+      setInfo('flightBattery', numText(latestBattery(task.task_code)), '%');
+      setInfo('flightSignal', '--', '');
+
+      if (pauseBtn) {
+        pauseBtn.disabled = !!(done || state.returned);
+        pauseBtn.textContent = state.paused ? '▶️ 继续' : '⏸️ 暂停';
+        pauseBtn.className = 'control-btn ' + (state.paused ? 'resume' : 'pause');
+      }
+      if (returnBtn) returnBtn.disabled = !!(done || state.returned);
     }
 
-    function startPatrolTimer() {
-      if (patrol.timer) return;
-      patrol.timer = setInterval(function () {
-        if (patrol.paused || patrol.returned) return;
-        if (patrol.progress >= 100) {
-          stopPatrolTimer();
-          MobileStore.toast('本次巡检任务已完成', 'success');
-          renderTask();
-          return;
+    function taskRoutePoints() {
+      if (!state.task || state.task.route_id == null || !MD) return [];
+      var routes = MD.list('patrol_route');
+      for (var i = 0; i < routes.length; i++) {
+        if (String(routes[i].id) !== String(state.task.route_id)) continue;
+        try {
+          var pts = JSON.parse(routes[i].points || '[]');
+          return Array.isArray(pts) ? pts : [];
+        } catch (e) {
+          return [];
         }
-        patrol.progress += 1;
-        renderTask();
-      }, 1200);
+      }
+      return [];
     }
 
-    function stopPatrolTimer() {
-      if (patrol.timer) {
-        clearInterval(patrol.timer);
-        patrol.timer = null;
+    function renderMap() {
+      var box = document.getElementById('routeMarkers');
+      var path = document.getElementById('flightPath');
+      var drone = document.getElementById('droneMarker');
+      if (!box) return;
+      var pts = taskRoutePoints();
+
+      if (!pts.length) {
+        box.innerHTML = '<div style="position:absolute;left:0;right:0;top:48%;text-align:center;color:rgba(255,255,255,0.7);font-size:12px;">暂无航线点位</div>';
+        if (path) path.style.display = 'none';
+      } else {
+        if (path) path.style.display = '';
+        var lats = [], lngs = [];
+        pts.forEach(function (p) {
+          var lat = Number(p.lat), lng = Number(p.lng);
+          if (!isNaN(lat) && !isNaN(lng)) { lats.push(lat); lngs.push(lng); }
+        });
+        var hasGeo = lats.length === pts.length && pts.length > 0;
+        var minLat = Math.min.apply(null, lats), maxLat = Math.max.apply(null, lats);
+        var minLng = Math.min.apply(null, lngs), maxLng = Math.max.apply(null, lngs);
+        box.innerHTML = pts.map(function (p, i) {
+          var left, top;
+          if (hasGeo) {
+            var dLat = maxLat - minLat, dLng = maxLng - minLng;
+            left = dLng ? 10 + 80 * (Number(p.lng) - minLng) / dLng : 50;
+            top = dLat ? 90 - 80 * (Number(p.lat) - minLat) / dLat : 50;
+          } else if (pts.length > 1) {
+            left = 15 + i * 70 / (pts.length - 1);
+            top = 35 + i * 30 / (pts.length - 1);
+          } else {
+            left = 50; top = 50;
+          }
+          return '<div class="waypoint-marker" style="top:' + top.toFixed(2) + '%;left:' + left.toFixed(2) + '%;">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>' +
+            '<div class="waypoint-label">' + esc(p.name || p.id || ('P' + (i + 1))) + '</div>' +
+          '</div>';
+        }).join('');
       }
+      if (drone) drone.style.display = state.task ? 'flex' : 'none';
+    }
+
+    function renderAbnormal() {
+      var box = document.getElementById('abnormalList');
+      var pendingEl = document.getElementById('abnormalPending');
+      if (!box) return;
+      var rows = MD ? MD.list('patrol_abnormal') : [];
+      var list = rows.filter(function (r) {
+        var src = String(r.source || '').toLowerCase();
+        var st = String(r.status || 'pending').toLowerCase();
+        return src === 'drone' && st !== 'done' && st !== 'completed';
+      });
+      if (pendingEl) pendingEl.textContent = '(' + list.length + '条待确认)';
+      if (!list.length) {
+        box.innerHTML = MD ? MD.inlineEmpty('暂无待确认异常') : '';
+        return;
+      }
+      box.innerHTML = list.map(function (r) {
+        var type = r.abnormal_type || '异常';
+        var dot = String(type).indexOf('虫') >= 0 || String(type).indexOf('病') >= 0 ? 'pest' : 'growth';
+        var stText = String(r.status || 'pending').toLowerCase() === 'processing' ? '处理中' : '待确认';
+        var sevMap = { high: '高', medium: '中', low: '低' };
+        var sevText = sevMap[String(r.severity || '').toLowerCase()] || r.severity;
+        return '<div class="abnormal-card" data-db-id="' + esc(r.id) + '">' +
+          '<div class="abnormal-header">' +
+            '<div class="abnormal-title"><span class="abnormal-dot ' + dot + '"></span>' + esc(type) + '</div>' +
+            '<span class="abnormal-status">' + stText + '</span>' +
+          '</div>' +
+          '<div class="abnormal-meta">' +
+            (r.plot_code ? '<span>地块' + esc(r.plot_code) + '</span>' : '') +
+            (sevText ? '<span>等级：' + esc(sevText) + '</span>' : '') +
+          '</div>' +
+          (r.abnormal_desc ? '<div style="font-size:12px;color:#666;margin-top:6px;">' + esc(r.abnormal_desc) + '</div>' : '') +
+          '<div class="abnormal-footer">' +
+            '<span style="font-size:12px;color:#666;">' + esc(MD ? MD.dateTimeText(r.report_time) : '') + '</span>' +
+            '<div style="display:flex;gap:8px;">' +
+              '<button class="btn-ignore" onclick="ignoreAbnormal(this, ' + esc(r.id) + ')">标记误报</button>' +
+              '<button class="btn-confirm" onclick="confirmAbnormal(this, ' + esc(r.id) + ')">确认异常</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function renderHistory() {
+      var box = document.getElementById('historyList');
+      if (!box) return;
+      var rows = MD ? MD.list('drone_patrol') : [];
+      var list = rows.filter(function (r) {
+        return !state.task || String(r.id) !== String(state.task.id);
+      }).slice(0, 6);
+      if (!list.length) {
+        box.innerHTML = MD ? MD.inlineEmpty('暂无历史任务') : '';
+        return;
+      }
+      box.innerHTML = list.map(function (r) {
+        var done = isDone(r.status);
+        var area = parseFloat(r.flight_area);
+        return '<div class="history-card">' +
+          '<div class="history-header">' +
+            '<div class="history-task-id">' + esc(r.task_code) + '</div>' +
+            '<span class="history-status' + (done ? ' completed' : '') + '">' + statusText(r.status) + '</span>' +
+          '</div>' +
+          '<div class="history-date">' + esc(MD.dateTimeText(r.plan_time || r.created_at)) + '</div>' +
+          '<div class="history-stats">' +
+            '<span>航线：<span class="history-stat-value">' + esc(r.route || r.drone_task_name || '--') + '</span></span>' +
+            '<span>覆盖：<span class="history-stat-value">' + (isNaN(area) ? '--' : area + '亩') + '</span></span>' +
+            '<span>异常：<span class="history-stat-value">--</span></span>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function renderAll() {
+      var prevId = state.task ? state.task.id : null;
+      var next = pickTask();
+      var nextId = next ? next.id : null;
+      if (prevId !== null && String(prevId) !== String(nextId)) {
+        state.paused = false;
+        state.returned = false;
+      }
+      if (prevId === null && !next) {
+        state.paused = false;
+        state.returned = false;
+      }
+      state.task = next;
+      renderTask();
+      renderMap();
+      renderAbnormal();
+      renderHistory();
+    }
+
+    function writeFlightLog(eventName) {
+      if (!window.Api || typeof Api.create !== 'function' || !state.task) {
+        return Promise.resolve(false);
+      }
+      var t = state.task;
+      return Api.create('drone_flight_log', {
+        log_code: genCode('FL'),
+        sortie_id: t.sortie || null,
+        task_code: t.task_code || null,
+        event: eventName,
+        altitude: t.flight_height || null,
+        speed: t.speed || null,
+        battery: latestBattery(t.task_code),
+        event_time: nowText(),
+        remark: '移动端' + eventName
+      }).then(function (res) {
+        if (!res || !res.ok) {
+          MobileStore.toast((res && res.message) || ('飞行日志写入失败：' + eventName), 'error');
+          return false;
+        }
+        return true;
+      }).catch(function () {
+        MobileStore.toast('飞行日志写入失败：' + eventName, 'error');
+        return false;
+      });
     }
 
     function pauseFlight() {
-      if (patrol.returned) {
-        MobileStore.toast('无人机已返航，无法继续巡检', 'warning');
+      if (!state.task) {
+        MobileStore.toast('当前没有可操作的巡园任务', 'warning');
         return;
       }
-      patrol.paused = !patrol.paused;
-      var btn = document.getElementById('pauseBtn');
-      if (patrol.paused) {
-        btn.textContent = '▶️ 继续';
-        btn.className = 'control-btn resume';
-        MobileStore.toast('巡检已暂停', 'warning');
-        MobileStore.push(EVENTS_KEY, { type: 'pause', taskId: 'TASK-001', progress: patrol.progress, text: '暂停巡检' });
-      } else {
-        btn.textContent = '⏸️ 暂停';
-        btn.className = 'control-btn pause';
-        MobileStore.toast('巡检已恢复', 'success');
-        MobileStore.push(EVENTS_KEY, { type: 'resume', taskId: 'TASK-001', progress: patrol.progress, text: '恢复巡检' });
-      }
-      renderTask();
+      if (state.busy || isDone(state.task.status) || state.returned) return;
+      state.busy = true;
+      var next = !state.paused;
+      writeFlightLog(next ? '暂停' : '恢复').then(function (ok) {
+        state.busy = false;
+        if (!ok) return;
+        state.paused = next;
+        renderTask();
+        MobileStore.toast(next ? '巡检已暂停' : '巡检已恢复', next ? 'warning' : 'success');
+        MD.reload('drone_flight_log');
+      });
     }
 
     function returnFlight() {
-      if (patrol.returned) {
+      if (!state.task) {
+        MobileStore.toast('当前没有可操作的巡园任务', 'warning');
+        return;
+      }
+      if (state.returned || isDone(state.task.status)) {
         MobileStore.toast('无人机当前已在起点，无需返航', 'info');
         return;
       }
       if (!MobileStore.confirm('确定要让无人机返航吗？返航后本次巡检将结束。')) return;
-      patrol.returned = true;
-      patrol.paused = false;
-      stopPatrolTimer();
-
-      // 无人机标记回到起点航点位置
-      var drone = document.querySelector('.drone-marker');
-      if (drone) {
-        drone.style.top = '100px';
-        drone.style.left = '50px';
-      }
-      var btn = document.getElementById('pauseBtn');
-      btn.textContent = '⏸️ 暂停';
-      btn.className = 'control-btn pause';
-      btn.disabled = true;
-
-      renderTask();
-      MobileStore.push(EVENTS_KEY, { type: 'return', taskId: 'TASK-001', progress: patrol.progress, text: '一键返航' });
-      MobileStore.toast('返航指令已发送，无人机正在返回起点', 'info');
-    }
-
-    function markAbnormal(btn, tipText, statusText, statusClass, decision) {
-      var card = btn.closest('.abnormal-card');
-      if (!card || card.classList.contains('done')) return;
-      card.classList.add('done');
-
-      var status = card.querySelector('.abnormal-status');
-      status.className = 'abnormal-status ' + statusClass;
-      status.textContent = statusText;
-
-      var footer = card.querySelector('.abnormal-footer');
-      var tip = document.createElement('span');
-      tip.className = 'abnormal-done-tip';
-      tip.textContent = tipText;
-      footer.replaceChild(tip, footer.lastElementChild);
-
-      MobileStore.push(ABNORMAL_KEY, {
-        id: card.getAttribute('data-id'),
-        plot: card.getAttribute('data-plot'),
-        type: card.getAttribute('data-type'),
-        decision: decision,
-        decisionText: statusText
+      state.busy = true;
+      writeFlightLog('返航').then(function (ok) {
+        if (!ok) { state.busy = false; return; }
+        state.returned = true;
+        state.paused = false;
+        Api.update('drone_patrol', state.task.id, { status: 'done' }).then(function (res) {
+          state.busy = false;
+          if (!res || !res.ok) {
+            MobileStore.toast('返航已记录，任务状态同步失败', 'warning');
+            renderAll();
+            return;
+          }
+          renderAll();
+          MobileStore.toast('返航指令已发送，无人机正在返回起点', 'info');
+          MD.reload('drone_patrol').then(renderAll);
+        }).catch(function () {
+          state.busy = false;
+          renderAll();
+          MobileStore.toast('返航已记录，任务状态同步失败', 'warning');
+        });
       });
-      updateAbnormalPending();
+    }
 
-      if (decision === 'ignore') {
-        MobileStore.toast('已标记为误报，该异常已忽略', 'info');
-      } else {
-        MobileStore.toast('已确认异常，已进入处理中', 'success');
+    function markAbnormal(btn, id, decision) {
+      if (!id || !window.Api || typeof Api.update !== 'function') return;
+      if (btn && btn.disabled) return;
+      if (btn) btn.disabled = true;
+      var payload = decision === 'ignore'
+        ? { status: 'done', handle_result: '标记误报', handle_remark: '移动端标记误报', handle_time: nowText() }
+        : { status: 'processing', handle_result: '确认异常', handle_remark: '移动端确认异常', handle_time: nowText() };
+      Api.update('patrol_abnormal', id, payload).then(function (res) {
+        if (!res || !res.ok) {
+          if (btn) btn.disabled = false;
+          MobileStore.toast((res && res.message) || '异常状态更新失败', 'error');
+          return;
+        }
+        MobileStore.toast(decision === 'ignore' ? '已标记为误报，该异常已忽略' : '已确认异常，已进入处理中', decision === 'ignore' ? 'info' : 'success');
+        MD.reload('patrol_abnormal').then(renderAbnormal);
+      }).catch(function () {
+        if (btn) btn.disabled = false;
+        MobileStore.toast('异常状态更新失败', 'error');
+      });
+    }
+
+    function ignoreAbnormal(btn, id) {
+      markAbnormal(btn, id, 'ignore');
+    }
+
+    function confirmAbnormal(btn, id) {
+      markAbnormal(btn, id, 'confirm');
+    }
+
+    function initPage() {
+      if (!MD || typeof MD.rows !== 'function') { renderAll(); return; }
+      var run = function () {
+        Promise.all([
+          MD.rows('drone_patrol'),
+          MD.rows('drone_flight_log'),
+          MD.rows('patrol_abnormal'),
+          MD.rows('patrol_route')
+        ]).then(renderAll).catch(renderAll);
+      };
+      if (MD.ready && MD.ready.then) MD.ready.then(run); else run();
+      if (typeof MD.subscribe === 'function') {
+        MD.subscribe(function () { renderAll(); });
       }
     }
 
-    function ignoreAbnormal(btn) {
-      markAbnormal(btn, '已忽略 · 不计入巡检结果', '已忽略', 'ignored', 'ignore');
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initPage);
+    } else {
+      initPage();
     }
-
-    function confirmAbnormal(btn) {
-      markAbnormal(btn, '已确认 · 处理中', '已确认 · 处理中', 'confirmed', 'confirm');
-    }
-
-    function updateAbnormalPending() {
-      var pending = document.querySelectorAll('.abnormal-card:not(.done)').length;
-      document.getElementById('abnormalPending').textContent = '(' + pending + '条待确认)';
-    }
-
-    renderTask();
-    updateAbnormalPending();
-    startPatrolTimer();
   </script>
 </body>
 </html>

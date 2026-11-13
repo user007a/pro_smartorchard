@@ -13,7 +13,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css" media="print" onload="this.media='all'">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" media="print" onload="this.media='all'">
-    <script src="../common/js/vr-hotspots.js"></script>
+    <script src="js/mobile-data.js"></script>
     <style>
         * {
             margin: 0;
@@ -412,7 +412,9 @@
         }
         
         function initViewer(sceneId) {
-            var sceneData = vrHotspotsData.getSceneById(sceneId);
+            var scenes = getAvailableScenes();
+            var sceneData = null;
+            scenes.forEach(function (s) { if (String(s.id) === String(sceneId)) sceneData = s; });
             if (!sceneData) return;
 
             if (viewer) {
@@ -434,7 +436,7 @@
                 panorama: sceneData.image,
                 title: sceneData.name,
                 author: '智慧果园',
-                sceneFov: sceneData.hfov || 100,
+                sceneFov: Number(sceneData.hfov) || 100,
                 autoLoad: true,
                 showControls: false,
                 mouseZoom: true,
@@ -444,7 +446,7 @@
                 hotSpots: []
             };
 
-            (sceneData.hotspots || []).forEach(function(hotspot) {
+            hotspotsOf(sceneData.id).forEach(function(hotspot) {
                 var hotspotConfig = {
                     pitch: hotspot.pitch,
                     yaw: hotspot.yaw,
@@ -456,10 +458,10 @@
                 };
                 config.hotSpots.push(hotspotConfig);
             });
-            
+
             viewer = pannellum.viewer('panorama', config);
-            currentSceneId = sceneId;
-            updateSceneTabs(sceneId);
+            currentSceneId = sceneData.id;
+            updateSceneTabs(sceneData.id);
         }
         
         function getHotspotIcon(type, status) {
@@ -639,10 +641,33 @@
             return d;
         }
         
-        /** 场景切换标签：由 vr-hotspots.js 的场景配置生成，只展示非下架场景 */
+        /** 场景切换标签：由后端 sf_vr_scene / sf_vr_hotspot 渲染，只展示非下架场景 */
         function getAvailableScenes() {
-            return (vrHotspotsData.scenes || []).filter(function (scene) {
-                return scene.status !== 'offline';
+            return (window.MobileData ? MobileData.list('vr_scene') : []).filter(function (scene) {
+                return scene.scene_status !== 'offline' && scene.scene_status !== 'draft';
+            });
+        }
+
+        /** 场景热点：sf_vr_hotspot（按 scene_id 关联 sf_vr_scene.id） */
+        function hotspotsOf(sceneId) {
+            var scenes = getAvailableScenes();
+            var scene = null;
+            scenes.forEach(function (s) { if (String(s.id) === String(sceneId)) scene = s; });
+            if (!scene) return [];
+            var rows = window.MobileData ? MobileData.list('vr_hotspot') : [];
+            return rows.filter(function (h) {
+                return String(h.scene_id) === String(scene.id);
+            }).map(function (h) {
+                return {
+                    id: h.hotspot_code || String(h.id),
+                    type: h.hotspot_type || 'plot',
+                    pitch: Number(h.pitch) || 0,
+                    yaw: Number(h.yaw) || 0,
+                    title: h.title || '',
+                    content: h.content || '',
+                    targetId: h.target_id || '',
+                    status: h.hotspot_status || 'normal'
+                };
             });
         }
 
@@ -650,8 +675,12 @@
             var wrap = document.getElementById('sceneTabs');
             if (!wrap) return;
             var scenes = getAvailableScenes();
+            if (!scenes.length) {
+                wrap.innerHTML = '<div class="scene-tab" style="opacity:.7;">暂无全景场景</div>';
+                return;
+            }
             wrap.innerHTML = scenes.map(function (scene) {
-                return '<div class="scene-tab" data-scene="' + scene.id + '">' + scene.name + '</div>';
+                return '<div class="scene-tab" data-scene="' + scene.id + '">' + (scene.name || '--') + '</div>';
             }).join('');
         }
 
@@ -663,8 +692,20 @@
         window.addEventListener('load', function () {
             renderSceneTabs();
             var scenes = getAvailableScenes();
-            initViewer(scenes.length ? scenes[0].id : null);
+            if (!scenes.length) {
+                document.getElementById('panorama').innerHTML =
+                    '<div style="display:flex;align-items:center;justify-content:center;height:100%;' +
+                    'color:#fff;background:#1a1a1a;text-align:center;padding:24px;line-height:1.8;">' +
+                    '暂无全景场景<br><span style="font-size:13px;opacity:.75;">请在后台「企业管理 › VR全景」中维护场景</span></div>';
+                return;
+            }
+            initViewer(scenes[0].id);
         });
+
+        /* 后端数据到达后重绘场景标签 */
+        if (window.MobileData && MobileData.subscribe) {
+            MobileData.subscribe(function () { renderSceneTabs(); });
+        }
     </script>
 </body>
 </html>

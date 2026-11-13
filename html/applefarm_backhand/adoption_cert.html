@@ -1209,8 +1209,15 @@ document.addEventListener('DOMContentLoaded', function () {
  * 到达之前，界面会一直停在空列表。此处统一订阅后自动重绘。
  * ============================================================ */
 (function () {
-  if (typeof StoreLive === 'undefined') return;
-  StoreLive.on(["adoptionStoreChange"], function () {
+  // StoreLive 由 common/js/api.js 提供；部分页面未静态引入该文件，
+  // 此时回退到原生窗口事件订阅，避免订阅被静默跳过导致页面不重绘。
+  function bind(events, handler) {
+    if (typeof StoreLive !== 'undefined') return StoreLive.on(events, handler);
+    (Array.isArray(events) ? events : [events]).forEach(function (ev) {
+      if (ev) window.addEventListener(ev, function () { try { handler(); } catch (e) { console.warn('[store-live]', e); } });
+    });
+  }
+  bind(["adoptionStoreChange"], function () {
       loadCerts();
       loadTemplates();
   });

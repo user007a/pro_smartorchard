@@ -467,28 +467,28 @@
         </div>
         <div class="profile-info">
           <div class="profile-name-row">
-            <span class="profile-name">张顺发</span>
-            <span class="role-tag">地块负责人</span>
+            <span class="profile-name" id="mineName">--</span>
+            <span class="role-tag" id="mineRole">--</span>
           </div>
-          <div class="profile-area">负责区域：A区 · 8块地块</div>
+          <div class="profile-area" id="mineArea">--</div>
         </div>
       </div>
 
       <div class="profile-stats">
         <div class="stat-item">
-          <div class="stat-num">128</div>
+          <div class="stat-num" id="mineStatRecords">--</div>
           <div class="stat-label">农事记录</div>
         </div>
         <div class="stat-item">
-          <div class="stat-num">8</div>
+          <div class="stat-num" id="mineStatPlots">--</div>
           <div class="stat-label">管理地块</div>
         </div>
         <div class="stat-item">
-          <div class="stat-num">156</div>
+          <div class="stat-num" id="mineStatCheckins">--</div>
           <div class="stat-label">巡园次数</div>
         </div>
         <div class="stat-item">
-          <div class="stat-num">3</div>
+          <div class="stat-num" id="mineStatTodo">--</div>
           <div class="stat-label">待处理</div>
         </div>
       </div>
@@ -508,7 +508,7 @@
           <div class="mb-list-content">
             <div class="mb-list-title">我的消息</div>
           </div>
-          <span class="menu-badge" id="msgBadge">3</span>
+          <span class="menu-badge" id="msgBadge" style="display:none;">0</span>
           <div class="mb-list-arrow">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 18l6-6-6-6"/>
@@ -600,7 +600,7 @@
           <div class="mb-list-content">
             <div class="mb-list-title">我的提问</div>
           </div>
-          <span class="menu-badge menu-badge-warning">2</span>
+          <span class="menu-badge menu-badge-warning" id="questionBadge" style="display:none;">0</span>
           <div class="mb-list-arrow">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 18l6-6-6-6"/>
@@ -707,7 +707,7 @@
           <circle cx="12" cy="7" r="4"/>
         </svg>
         <span>我的</span>
-        <span class="mb-tab-badge">3</span>
+        <span class="mb-tab-badge" id="mineTabBadge" style="display:none;">0</span>
       </div>
     </nav>
   </div>
@@ -742,7 +742,19 @@
   </div>
 
   <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
+  <script src="js/mobile-data.js"></script>
   <script>
+    /* ============================================================
+     * 「我的」页数据绑定（严格空库 · 全部取自数据库）
+     * ------------------------------------------------------------
+     * 头部统计  → sf_farming_record / sf_plot / sf_patrol_checkin / 待处理任务
+     * 我的地块  → sf_plot + sf_farming_task
+     * 我的农资  → sf_material_io（出库/领用）
+     * 我的标签  → sf_label_record
+     * 我的计划  → sf_farming_plan + sf_farming_task
+     * 我的提问  → sf_mb_expert_consult
+     * 个人信息  → sf_mb_staff_account（登录账号）
+     * ============================================================ */
     function navigateTo(page) { window.location.href = page; }
 
     function openModal(title, content) {
@@ -758,6 +770,7 @@
     function doLogout() {
       sessionStorage.removeItem('isLoggedIn');
       sessionStorage.removeItem('loginUser');
+      sessionStorage.removeItem('smartorchard_user_info');
       if (window.Api && typeof Api.logout === 'function') Api.logout();
       window.location.href = 'mb_login.html';
     }
@@ -770,29 +783,97 @@
 
     function closeDetail() { document.getElementById('detailModal').classList.remove('show'); }
 
-    /* 消息读取：来自后端 sf_mb_message，经 MobileOpsStore 桥接（严格空库） */
-    var OPS_MSG_CAT = {
-      ai: { cls: 'system', tag: 'AI 分析' },
-      alert: { cls: 'warning', tag: '预警通知' },
-      farming: { cls: 'feedback', tag: '农事通知' },
-      device: { cls: 'feedback', tag: '设备通知' },
-      notice: { cls: 'system', tag: '系统通知' }
-    };
-    function readOpsMessages() {
-      var list = [];
-      if (window.MobileOpsStore && typeof MobileOpsStore.list === 'function') {
-        try { list = MobileOpsStore.list('messages') || []; } catch (e) { list = []; }
+    var MD = window.MobileData;
+
+    function esc(s) { return MD ? MD.esc(s) : String(s == null ? '' : s); }
+
+    /* ---------- 当前用户可见范围内的地块 ---------- */
+    function myPlots() {
+      if (!MD) return [];
+      var plots = MD.list('plot');
+      var u = MD.user();
+      // 作业人员绑定基地时只看本基地地块；未绑定基地则看全部
+      if (u && u.baseId) {
+        var scoped = plots.filter(function (p) { return String(p.base_id) === String(u.baseId); });
+        if (scoped.length) return scoped;
       }
-      return list.filter(function (m) {
-        if (!m || m.enabled === false) return false;
+      return plots;
+    }
+
+    function plotNameOf(code) {
+      var plots = MD.list('plot');
+      for (var i = 0; i < plots.length; i++) {
+        if (String(plots[i].code) === String(code)) return plots[i].name || plots[i].code;
+      }
+      return code || '';
+    }
+
+    function baseNameOf(id) {
+      var bases = MD.list('base');
+      for (var i = 0; i < bases.length; i++) {
+        if (String(bases[i].id) === String(id)) return bases[i].name || '';
+      }
+      return '';
+    }
+
+    /* ---------- 头部 ---------- */
+    function renderHeader() {
+      var u = MD ? MD.user() : null;
+      var name = (u && (u.realName || u.account)) || '未登录';
+      var role = (u && u.role) || '--';
+      document.getElementById('mineName').textContent = name;
+      document.getElementById('mineRole').textContent = role;
+
+      var plots = myPlots();
+      var area = plots.reduce(function (s, p) { return s + (parseFloat(p.area) || 0); }, 0);
+      var base = (u && u.baseId) ? baseNameOf(u.baseId) : (MD ? MD.baseName() : '');
+      document.getElementById('mineArea').textContent = base
+        ? (base + ' · ' + plots.length + ' 块地块 · ' + (Math.round(area * 10) / 10) + ' 亩')
+        : (plots.length + ' 块地块 · ' + (Math.round(area * 10) / 10) + ' 亩');
+
+      var records = MD ? MD.list('farming_record').length : 0;
+      var checkins = MD ? MD.list('patrol_checkin').length : 0;
+      var todo = pendingTasks().length;
+
+      document.getElementById('mineStatRecords').textContent = records;
+      document.getElementById('mineStatPlots').textContent = plots.length;
+      document.getElementById('mineStatCheckins').textContent = checkins;
+      document.getElementById('mineStatTodo').textContent = todo;
+
+      var badge = document.getElementById('mineTabBadge');
+      if (badge) {
+        badge.textContent = todo;
+        badge.style.display = todo ? '' : 'none';
+      }
+    }
+
+    /* ---------- 待处理任务（未完成任务 + 未关闭异常） ---------- */
+    function pendingTasks() {
+      if (!MD) return [];
+      var today = MD.today();
+      var tasks = MD.list('farming_task').filter(function (t) {
+        return ['completed', 'cancelled', 'rejected'].indexOf(t.status) < 0;
+      });
+      var abnormals = MD.list('patrol_abnormal').filter(function (a) {
+        return a.status !== 'done' && a.status !== 'closed';
+      });
+      return tasks.concat(abnormals).map(function (x) {
+        x.__kind = x.abnormal_code ? 'abnormal' : 'task';
+        return x;
+      });
+    }
+
+    /* ---------- 消息（sf_mb_message） ---------- */
+    function readOpsMessages() {
+      if (!MD) return [];
+      return MD.list('mb_message').filter(function (m) {
+        if (!m || m.status === 'inactive') return false;
         var target = m.target || 'mobile';
         return target === 'mobile' || target === 'all';
       }).map(function (m) {
-        var meta = OPS_MSG_CAT[m.category] || OPS_MSG_CAT.notice;
-        var t = String(m.time || '');
+        var t = String(m.publish_time || m.created_at || '');
         return {
-          cls: meta.cls,
-          tag: meta.tag,
+          tag: categoryTag(m.category),
           title: String(m.title || ''),
           content: String(m.content || ''),
           time: t ? t.replace('T', ' ').slice(0, 16) : ''
@@ -801,169 +882,238 @@
         .sort(function (a, b) { return b.time.localeCompare(a.time); });
     }
 
-    /* 未读徽标数量与后台消息条数保持一致 */
-    (function syncMsgBadge() {
+    function categoryTag(cat) {
+      var map = { ai: 'AI 分析', alert: '预警通知', farming: '农事通知', device: '设备通知', notice: '系统通知' };
+      return map[cat] || '系统通知';
+    }
+
+    function syncMsgBadge() {
       var badge = document.getElementById('msgBadge');
       if (!badge) return;
       var n = readOpsMessages().length;
       badge.textContent = n;
       badge.style.display = n ? '' : 'none';
-    })();
+    }
 
     function openMessages() {
-      /* P1-07：消息来自后台「消息推送与公告」（mb_messages），仅展示 enabled !== false 的条目 */
-      var content = '<div class="msg-list">' + (readOpsMessages().map(function (m) {
+      var list = readOpsMessages();
+      var content = '<div class="msg-list">' + (list.map(function (m) {
         return '<div class="msg-item">' +
           '<div class="msg-header">' +
-            '<span class="msg-type ' + m.cls + '">' + m.tag + '</span>' +
-            '<span class="msg-time">' + m.time + '</span>' +
+            '<span class="msg-type system">' + esc(m.tag) + '</span>' +
+            '<span class="msg-time">' + esc(m.time) + '</span>' +
           '</div>' +
-          '<div class="msg-content">' + m.title + '</div>' +
-          (m.content ? '<div class="msg-content" style="margin-top:6px;font-size:13px;color:var(--text-tertiary);">' + m.content + '</div>' : '') +
+          '<div class="msg-content">' + esc(m.title) + '</div>' +
+          (m.content ? '<div class="msg-content" style="margin-top:6px;font-size:13px;color:var(--text-tertiary);">' + esc(m.content) + '</div>' : '') +
         '</div>';
-      }).join('') || '<div style="color:var(--text-tertiary);padding:24px 0;text-align:center;">暂无消息</div>') + '</div>';
+      }).join('') || MD.inlineEmpty('暂无消息')) + '</div>';
       openDetail('我的消息', content);
     }
 
+    /* ---------- 我的地块 ---------- */
     function openMyPlots() {
-      var content = '<div class="mb-list" style="margin: 0;">' +
-        '<div class="mb-list-item" onclick="navigateTo(\'mb_plot.html\')">' +
-          '<div class="mb-list-icon menu-icon green">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' +
-          '</div>' +
-          '<div class="mb-list-content"><div class="mb-list-title">地块A1区</div></div>' +
-          '<span class="plot-status-warning">2项待执行</span>' +
-        '</div>' +
-        '<div class="mb-list-item" onclick="navigateTo(\'mb_plot.html\')">' +
-          '<div class="mb-list-icon menu-icon green">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' +
-          '</div>' +
-          '<div class="mb-list-content"><div class="mb-list-title">地块A2区</div></div>' +
-          '<span class="plot-status-error">1项已逾期</span>' +
-        '</div>' +
-        '<div class="mb-list-item" onclick="navigateTo(\'mb_plot.html\')">' +
-          '<div class="mb-list-icon menu-icon green">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' +
-          '</div>' +
-          '<div class="mb-list-content"><div class="mb-list-title">地块B1区</div></div>' +
-          '<span class="plot-status-success">暂无任务</span>' +
-        '</div>' +
-      '</div>' +
-      '<button class="mb-btn mb-btn-primary mb-btn-block" style="margin-top: var(--space-4);" onclick="navigateTo(\'mb_plot.html\')">查看全部地块</button>';
+      var plots = myPlots();
+      var tasks = MD.list('farming_task');
+      var content = '<div class="mb-list" style="margin: 0;">';
+      if (!plots.length) {
+        content += MD.inlineEmpty('暂无地块数据');
+      } else {
+        content += plots.map(function (p) {
+          var pTasks = tasks.filter(function (t) {
+            return String(t.plot_ids || '').indexOf(p.code) >= 0 || String(t.plot_name || '') === p.name;
+          });
+          var pending = pTasks.filter(function (t) { return t.status === 'pending'; }).length;
+          var overdue = pTasks.filter(function (t) {
+            return t.status === 'overdue' || (t.deadline && t.deadline < MD.today() && ['completed', 'cancelled', 'rejected'].indexOf(t.status) < 0);
+          }).length;
+          var cls = overdue ? 'plot-status-error' : (pending ? 'plot-status-warning' : 'plot-status-success');
+          var txt = overdue ? overdue + '项已逾期' : (pending ? pending + '项待执行' : '暂无待办');
+          return '<div class="mb-list-item" onclick="navigateTo(\'mb_plot.html\')">' +
+            '<div class="mb-list-icon menu-icon green">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' +
+            '</div>' +
+            '<div class="mb-list-content"><div class="mb-list-title">' + esc(p.name) + '</div></div>' +
+            '<span class="' + cls + '">' + txt + '</span>' +
+          '</div>';
+        }).join('');
+      }
+      content += '</div>' +
+        '<button class="mb-btn mb-btn-primary mb-btn-block" style="margin-top: var(--space-4);" onclick="navigateTo(\'mb_plot.html\')">查看全部地块</button>';
       openDetail('我的地块', content);
     }
 
+    /* ---------- 我的农资（sf_material_io） ---------- */
     function openMyMaterials() {
+      var ios = MD.list('material_io');
+      var infoById = MD.mapBy(MD.list('material_info'), 'id');
+      var rows = ios.slice().sort(function (a, b) {
+        return String(b.io_date || '').localeCompare(String(a.io_date || ''));
+      });
       var content = '<div class="material-list">' +
-        '<div class="material-list-title">近30天农资领用记录</div>' +
-        '<div class="material-item">' +
-          '<div class="material-icon">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
-          '</div>' +
-          '<div class="material-info">' +
-            '<div class="material-name">波尔多液（80%可湿性粉剂）</div>' +
-            '<div class="material-meta">2026-09-21 · 审核中 · C1区防治</div>' +
-          '</div>' +
-          '<div class="material-value">-20kg</div>' +
-        '</div>' +
-        '<div class="material-item">' +
-          '<div class="material-icon">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>' +
-          '</div>' +
-          '<div class="material-info">' +
-            '<div class="material-name">氮磷钾复合肥（15-15-15）</div>' +
-            '<div class="material-meta">2026-09-20 · 已审核 · A1区追肥</div>' +
-          '</div>' +
-          '<div class="material-value">-80kg</div>' +
-        '</div>' +
-      '</div>';
+        '<div class="material-list-title">近30天农资领用记录</div>';
+      if (!rows.length) {
+        content += MD.inlineEmpty('暂无农资领用记录');
+      } else {
+        content += rows.map(function (r) {
+          var info = infoById[r.material_id] || {};
+          var matName = info.material_name || (r.remark || r.source_code || r.io_code);
+          var qty = parseFloat(r.quantity);
+          var unit = info.unit || '';
+          var status = r.audit_status || 'pending';
+          var statusText = { pending: '审核中', approved: '已审核', rejected: '已驳回', rejected2: '已驳回' }[status] || status;
+          return '<div class="material-item">' +
+            '<div class="material-icon">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
+            '</div>' +
+            '<div class="material-info">' +
+              '<div class="material-name">' + esc(matName) + '</div>' +
+              '<div class="material-meta">' + esc(MD.dateText(r.io_date)) + ' · ' + esc(statusText) + ' · ' + esc(r.related_target || '未指定地块') + '</div>' +
+            '</div>' +
+            '<div class="material-value">' + (isNaN(qty) ? '--' : '-' + qty + esc(unit)) + '</div>' +
+          '</div>';
+        }).join('');
+      }
+      content += '</div>';
       openDetail('我的农资', content);
     }
 
+    /* ---------- 我的标签（sf_label_record） ---------- */
     function openMyLabels() {
+      var records = MD.list('label_record');
+      var typeById = MD.mapBy(MD.list('label_type'), 'id');
+      var rows = records.slice().sort(function (a, b) {
+        return String(b.apply_time || '').localeCompare(String(a.apply_time || ''));
+      });
       var content = '<div class="material-list">' +
-        '<div class="material-list-title">标签领用记录</div>' +
-        '<div class="material-item">' +
-          '<div class="material-icon label-icon-warning">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><path d="M7 7h.01"/></svg>' +
-          '</div>' +
-          '<div class="material-info">' +
-            '<div class="material-name">花牛苹果专用双层纸袋</div>' +
-            '<div class="material-meta">2026-09-21 · 审核中 · A1区套袋</div>' +
-          '</div>' +
-          '<div class="material-value">-2000张</div>' +
-        '</div>' +
-      '</div>';
+        '<div class="material-list-title">标签领用记录</div>';
+      if (!rows.length) {
+        content += MD.inlineEmpty('暂无标签领用记录');
+      } else {
+        content += rows.map(function (r) {
+          var type = typeById[r.label_type_id] || {};
+          var labelName = type.label_name || r.apply_code;
+          var qty = parseFloat(r.quantity);
+          var status = r.status || 'pending';
+          var statusText = { pending: '审核中', printed: '已打印', rejected: '已驳回' }[status] || status;
+          return '<div class="material-item">' +
+            '<div class="material-icon label-icon-warning">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><path d="M7 7h.01"/></svg>' +
+            '</div>' +
+            '<div class="material-info">' +
+              '<div class="material-name">' + esc(labelName) + '</div>' +
+              '<div class="material-meta">' + esc(MD.dateText(r.apply_time)) + ' · ' + esc(statusText) + ' · ' + esc(r.plot_ids || '未指定地块') + '</div>' +
+            '</div>' +
+            '<div class="material-value">' + (isNaN(qty) ? '--' : '-' + qty + '张') + '</div>' +
+          '</div>';
+        }).join('');
+      }
+      content += '</div>';
       openDetail('我的标签', content);
     }
 
+    /* ---------- 我的计划（sf_farming_plan + sf_farming_task） ---------- */
     function openMyPlan() {
+      var plans = MD.list('farming_plan');
+      var tasks = MD.list('farming_task');
+      var planStatus = { completed: '已完成', executing: '进行中', pending: '待执行', cancelled: '已取消', delayed: '已延期' };
+      var completed = plans.filter(function (p) { return p.status === 'completed'; }).length;
+      var doing = plans.filter(function (p) { return p.status === 'executing'; }).length;
+      var pending = plans.filter(function (p) { return ['pending', 'delayed'].indexOf(p.status) >= 0; }).length;
+
       var content = '<div class="mb-card">' +
         '<div class="plan-stats">' +
-          '<div class="plan-stat"><div class="plan-stat-num completed">2</div><div class="plan-stat-label">已完成</div></div>' +
-          '<div class="plan-stat"><div class="plan-stat-num doing">1</div><div class="plan-stat-label">进行中</div></div>' +
-          '<div class="plan-stat"><div class="plan-stat-num pending">3</div><div class="plan-stat-label">待执行</div></div>' +
-        '</div>' +
-        '<div class="plan-section">' +
-          '<div class="plan-section-title"><span class="section-dot info"></span>进行中</div>' +
-          '<div class="plan-task-item">' +
-            '<div class="plan-task-icon doing"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>' +
-            '<div class="plan-task-content"><div class="plan-task-name">花牛苹果采收作业 - A1区</div><div class="plan-task-meta">2026-10-21 · A1区</div></div>' +
-            '<div class="plan-task-badge doing">进行中</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="plan-section">' +
-          '<div class="plan-section-title"><span class="section-dot warning"></span>待执行</div>' +
-          '<div class="plan-task-item">' +
-            '<div class="plan-task-icon pending"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg></div>' +
-            '<div class="plan-task-content"><div class="plan-task-name">果实分级与入库预冷 - A1/A2区</div><div class="plan-task-meta">明天 · A1/A2区</div></div>' +
-            '<div class="plan-task-badge pending">待执行</div>' +
-          '</div>' +
-        '</div>' +
-        '<button class="mb-btn mb-btn-primary mb-btn-block" style="margin-top: var(--space-4);" onclick="navigateTo(\'mb_plan.html\')">查看全部计划</button>' +
-      '</div>';
+          '<div class="plan-stat"><div class="plan-stat-num completed">' + completed + '</div><div class="plan-stat-label">已完成</div></div>' +
+          '<div class="plan-stat"><div class="plan-stat-num doing">' + doing + '</div><div class="plan-stat-label">进行中</div></div>' +
+          '<div class="plan-stat"><div class="plan-stat-num pending">' + pending + '</div><div class="plan-stat-label">待执行</div></div>' +
+        '</div>';
+
+      var running = tasks.filter(function (t) { return t.status === 'executing' || t.status === 'processing'; });
+      var todo = tasks.filter(function (t) { return t.status === 'pending' || t.status === 'overdue'; });
+
+      function taskItem(t, cls, label) {
+        return '<div class="plan-task-item">' +
+          '<div class="plan-task-icon ' + cls + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>' +
+          '<div class="plan-task-content"><div class="plan-task-name">' + esc(t.task_name || t.name) + '</div>' +
+          '<div class="plan-task-meta">' + esc(MD.dateText(t.plan_time)) + ' · ' + esc(t.plot_name || '未指定地块') + '</div></div>' +
+          '<div class="plan-task-badge ' + cls + '">' + esc(label) + '</div>' +
+        '</div>';
+      }
+
+      content += '<div class="plan-section">' +
+        '<div class="plan-section-title"><span class="section-dot info"></span>进行中</div>' +
+        (running.length ? running.map(function (t) { return taskItem(t, 'doing', '进行中'); }).join('') : MD.inlineEmpty('暂无进行中的任务')) +
+        '</div>';
+      content += '<div class="plan-section">' +
+        '<div class="plan-section-title"><span class="section-dot warning"></span>待执行</div>' +
+        (todo.length ? todo.map(function (t) { return taskItem(t, 'pending', '待执行'); }).join('') : MD.inlineEmpty('暂无待执行任务')) +
+        '</div>';
+      content += '<button class="mb-btn mb-btn-primary mb-btn-block" style="margin-top: var(--space-4);" onclick="navigateTo(\'mb_plan.html\')">查看全部计划</button>' +
+        '</div>';
       openDetail('我的计划', content);
     }
 
+    /* ---------- 我的提问（sf_mb_expert_consult） ---------- */
     function openMyQuestions() {
-      var content = '<div class="question-item">' +
-        '<div class="question-header"><div class="question-title">花牛苹果套袋前用药方案</div><span class="question-status replied">已回复</span></div>' +
-        '<div class="question-content">请问花牛苹果套袋前需要打哪些药？具体用药浓度和注意事项是什么？</div>' +
-        '<div class="question-time">提问时间：2026-09-20 16:45</div>' +
-        '<div class="expert-reply"><div class="expert-reply-title">专家回复</div><div class="expert-reply-content">套袋前建议打三遍药：1. 谢花后7-10天：多抗霉素+糖醇钙；2. 谢花后20-25天：代森锰锌+噻虫嗪+氨基酸钙；3. 套袋前1-2天：苯醚甲环唑+溴氰菊酯+钙肥。</div></div>' +
-      '</div>' +
-      '<div class="question-item">' +
-        '<div class="question-header"><div class="question-title">土壤湿度不足怎么办</div><span class="question-status pending">待回复</span></div>' +
-        '<div class="question-content">最近半个月没怎么下雨，C区土壤湿度只有55%左右，请问需要灌溉吗？</div>' +
-        '<div class="question-time">提问时间：2026-09-21 08:30</div>' +
-      '</div>';
+      var qs = MD.list('mb_expert_consult');
+      var u = MD.user();
+      var rows = qs.slice();
+      if (u && (u.realName || u.account)) {
+        var mine = rows.filter(function (q) {
+          return q.questioner === u.realName || q.questioner === u.account;
+        });
+        if (mine.length) rows = mine;
+      }
+      var pendingCount = rows.filter(function (q) { return q.status !== 'replied'; }).length;
+      var badge = document.getElementById('questionBadge');
+      if (badge) {
+        badge.textContent = pendingCount;
+        badge.style.display = pendingCount ? '' : 'none';
+      }
+
+      var content = rows.length ? rows.map(function (q) {
+        var replied = q.status === 'replied';
+        return '<div class="question-item">' +
+          '<div class="question-header"><div class="question-title">' + esc(q.title) + '</div>' +
+          '<span class="question-status ' + (replied ? 'replied' : 'pending') + '">' + (replied ? '已回复' : '待回复') + '</span></div>' +
+          '<div class="question-content">' + esc(q.content) + '</div>' +
+          '<div class="question-time">提问时间：' + esc(MD.dateTimeText(q.question_time)) + '</div>' +
+          (replied && q.expert_reply
+            ? '<div class="expert-reply"><div class="expert-reply-title">专家回复</div><div class="expert-reply-content">' + esc(q.expert_reply) + '</div></div>'
+            : '') +
+        '</div>';
+      }).join('') : MD.inlineEmpty('暂无提问记录');
+
       openDetail('我的提问', content);
     }
 
+    /* ---------- 个人信息（sf_mb_staff_account） ---------- */
     function openProfile() {
+      var u = MD.user();
       var content = '<div class="profile-form-card">' +
         '<div class="profile-avatar-area">' +
           '<div class="profile-avatar-large"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>' +
-          '<div class="profile-form-name">张顺发</div>' +
+          '<div class="profile-form-name">' + esc((u && (u.realName || u.account)) || '--') + '</div>' +
         '</div>' +
-        '<div class="form-group"><div class="form-label">昵称</div><input class="form-input" type="text" value="果园能手"></div>' +
-        '<div class="form-group"><div class="form-label">手机号</div><input class="form-input" type="text" value="138****8888" readonly></div>' +
-        '<div class="form-group"><div class="form-label">角色</div><input class="form-input" type="text" value="地块负责人" readonly></div>' +
-      '</div>';
+        '<div class="form-group"><div class="form-label">账号</div><input class="form-input" type="text" value="' + esc((u && u.account) || '--') + '" readonly></div>' +
+        '<div class="form-group"><div class="form-label">手机号</div><input class="form-input" type="text" value="' + esc((u && u.phone) || '--') + '" readonly></div>' +
+        '<div class="form-group"><div class="form-label">角色</div><input class="form-input" type="text" value="' + esc((u && u.role) || '--') + '" readonly></div>' +
+        '<div class="form-group"><div class="form-label">所属基地</div><input class="form-input" type="text" value="' + esc(MD.baseName() || '未配置') + '" readonly></div>' +
+        '</div>';
       openDetail('个人信息', content);
     }
 
+    /* ---------- 设置 ---------- */
     function openSettings() {
       var content = '<div class="settings-card">' +
         '<div style="margin-bottom: var(--space-4);">' +
           '<div class="settings-section-title">通知设置</div>' +
           '<div class="settings-row">' +
             '<div><div class="settings-label">预警通知</div><div class="settings-desc">接收病虫害、气象等预警信息</div></div>' +
-            '<div class="toggle-switch"><input type="checkbox" checked><div class="toggle-track"><div class="toggle-thumb"></div></div></div>' +
+            '<div class="toggle-switch"><input type="checkbox" checked disabled><div class="toggle-track"><div class="toggle-thumb"></div></div></div>' +
           '</div>' +
           '<div class="settings-row">' +
             '<div><div class="settings-label">审核通知</div><div class="settings-desc">接收农资领用、农事记录审核结果</div></div>' +
-            '<div class="toggle-switch"><input type="checkbox" checked><div class="toggle-track"><div class="toggle-thumb"></div></div></div>' +
+            '<div class="toggle-switch"><input type="checkbox" checked disabled><div class="toggle-track"><div class="toggle-thumb"></div></div></div>' +
           '</div>' +
         '</div>' +
         '<div style="padding-top: var(--space-4);">' +
@@ -980,6 +1130,34 @@
       '</div>';
       openDetail('设置', content);
     }
+
+    /* ---------- 渲染入口 ---------- */
+    function renderMine() {
+      if (!MD) return;
+      renderHeader();
+      syncMsgBadge();
+      openMyQuestionsBadgeOnly();
+    }
+
+    function openMyQuestionsBadgeOnly() {
+      var u = MD.user();
+      var qs = MD.list('mb_expert_consult');
+      var rows = qs;
+      if (u && (u.realName || u.account)) {
+        var mine = qs.filter(function (q) { return q.questioner === u.realName || q.questioner === u.account; });
+        if (mine.length) rows = mine;
+      }
+      var pendingCount = rows.filter(function (q) { return q.status !== 'replied'; }).length;
+      var badge = document.getElementById('questionBadge');
+      if (badge) {
+        badge.textContent = pendingCount;
+        badge.style.display = pendingCount ? '' : 'none';
+      }
+    }
+
+    renderMine();
+    if (MD) MD.subscribe(renderMine);
   </script>
+
 </body>
 </html>

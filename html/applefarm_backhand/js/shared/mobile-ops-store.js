@@ -233,6 +233,10 @@ window.MobileOpsStore = (function () {
   }
 
   function remove(key, id) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     key = resolve(key);
     var list = readList(key);
     var next = list.filter(function (it) { return String(it.id) !== String(id); });

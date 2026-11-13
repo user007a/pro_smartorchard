@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="css/mobile-design-system.css">
   <!-- 图标库 -->
   <script src="../applefarm_backhand/icons/icons.js"></script>
-  <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
+  <script src="js/mobile-data.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html { font-size: 16px; }
@@ -106,12 +106,10 @@
 
   <script>
     /* ============================================================
-     * 设备故障查询（移动端）—— 数据源：localStorage['mb_fault_kb']
-     * 由后台「设备故障知识库」(applefarm_backhand/mb_fault_knowledge.html) 维护
+     * 设备故障查询（移动端）—— 数据源：数据库 sf_mb_fault_kb
+     * 经 MobileData 读取，库中无数据时显示空态，不使用本地兜底数据
      * ES5 风格，无框架
      * ============================================================ */
-
-    var KB_KEY = 'mb_fault_kb';
 
     /* 分类中文标签（与后台 CATEGORY_TEXT 保持一致） */
     var CATEGORY_TEXT = {
@@ -129,55 +127,6 @@
       low:    { cls: 'low',    text: '低危' }
     };
 
-    /* 兜底数据：读不到 mb_fault_kb 时使用（等同原页面 4 条硬编码） */
-    var FALLBACK_KB = [
-      {
-        id: 'F001', title: '灌溉系统水泵不工作', category: 'irrigation',
-        deviceType: '灌溉水泵', severity: 'high',
-        symptom: '设备通电但水泵不启动，可能是电机或控制器故障',
-        guide: [
-          '检查电源连接是否牢固，电压是否正常',
-          '查看控制器指示灯状态，确认是否有报错',
-          '检查水泵叶轮是否卡死，手动尝试转动',
-          '如以上均正常，请联系技术人员检修'
-        ],
-        order: 10
-      },
-      {
-        id: 'F002', title: '土壤传感器数据异常', category: 'sensor',
-        deviceType: '土壤湿度传感器', severity: 'medium',
-        symptom: '传感器读数波动大或长期不变化',
-        guide: [
-          '检查传感器探头是否清洁，清除泥土附着',
-          '确认传感器安装位置是否符合要求',
-          '检查线缆连接是否松动或破损'
-        ],
-        order: 20
-      },
-      {
-        id: 'F003', title: '气象站无数据上传', category: 'weather',
-        deviceType: '气象站', severity: 'medium',
-        symptom: '设备在线但平台收不到气象数据',
-        guide: [
-          '检查网络信号强度，确认4G/5G连接正常',
-          '重启数据采集器，观察指示灯状态',
-          '检查SIM卡是否欠费或松动'
-        ],
-        order: 30
-      },
-      {
-        id: 'F004', title: '摄像头离线', category: 'camera',
-        deviceType: '网络摄像头', severity: 'low',
-        symptom: '监控画面无法加载，显示设备离线',
-        guide: [
-          '检查摄像头电源是否正常',
-          '确认WiFi或有线网络连接',
-          '尝试重启摄像头和路由器'
-        ],
-        order: 40
-      }
-    ];
-
     function navigateTo(page) {
       window.location.href = page;
     }
@@ -193,38 +142,46 @@
       });
     }
 
-    /* 从后端读取知识库（sf_mb_fault_kb，经 MobileOpsStore 桥接）；无有效数据返回 null */
-    function readKB() {
+    /* 解析排查步骤：优先 JSON 数组，其次按换行/分号切分 */
+    function parseSteps(raw) {
+      if (!raw) return [];
       try {
-        if (window.MobileOpsStore && typeof MobileOpsStore.list === 'function') {
-          var rows = MobileOpsStore.list('faultKb') || [];
-          var mapped = rows.map(function (r) {
-            var guide = [];
-            try { guide = r.steps ? JSON.parse(r.steps) : []; } catch (e) { guide = []; }
-            return {
-              id: r.id,
-              title: r.fault_title || '',
-              deviceType: r.device_type || '',
-              category: r.category || '',
-              severity: r.urgency || 'low',
-              symptom: '',
-              guide: Array.isArray(guide) ? guide : [],
-              order: r.step_count != null ? Number(r.step_count) : 0,
-              enabled: r.status !== 'inactive'
-            };
-          });
-          return mapped.length ? mapped : null;
+        var arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          return arr.map(function (x) { return String(x); }).filter(Boolean);
         }
-        return null;
-      } catch (e) {
-        return null;
-      }
+      } catch (e) { /* 非 JSON，按文本切分 */ }
+      return String(raw).split(/\r?\n|；|;/).map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+
+    /* 紧急程度归一化：兼容 high/medium/low 与高/中/低 */
+    function severityOf(v) {
+      var s = String(v == null ? '' : v).toLowerCase();
+      if (s === 'high' || s === '高' || s === '3') return 'high';
+      if (s === 'low' || s === '低' || s === '1') return 'low';
+      return 'medium';
+    }
+
+    /* 从数据库读取知识库（sf_mb_fault_kb，经 MobileData）；无数据返回空数组 */
+    function readKB() {
+      var rows = window.MobileData ? MobileData.list('mb_fault_kb') : [];
+      return rows.map(function (r) {
+        return {
+          id: r.id,
+          title: r.fault_title || '',
+          deviceType: r.device_type || '',
+          category: r.category || '',
+          severity: severityOf(r.urgency),
+          guide: parseSteps(r.steps),
+          order: r.step_count != null ? Number(r.step_count) : 0,
+          enabled: r.status !== 'inactive'
+        };
+      });
     }
 
     /* 取启用中的条目：enabled !== false，按 order 升序（order 缺失则维持原数组顺序） */
     function getEnabledList() {
       var list = readKB();
-      if (!list) list = FALLBACK_KB;
       var tmp = [];
       for (var i = 0; i < list.length; i++) {
         var k = list[i];
@@ -250,7 +207,9 @@
       if (!box) return;
       var list = getEnabledList();
       if (!list.length) {
-        box.innerHTML = '<div style="padding:32px 0;text-align:center;color:var(--text-light);font-size:14px;">暂无故障数据</div>';
+        box.innerHTML = window.MobileData
+          ? MobileData.inlineEmpty('暂无故障知识库数据')
+          : '';
         return;
       }
       var html = '';
@@ -264,7 +223,7 @@
           steps += '<div class="guide-step"><div class="step-num">' + (j + 1) + '</div>'
                  + '<div class="step-text">' + esc(guide[j]) + '</div></div>';
         }
-        var searchStr = [k.title || '', k.deviceType || '', catText, k.symptom || '', guide.join(' ')]
+        var searchStr = [k.title || '', k.deviceType || '', catText, guide.join(' ')]
           .join(' ').toLowerCase();
         html += '<div class="fault-item" data-search="' + esc(searchStr) + '"'
               + ' onclick="showDetail(' + (i + 1) + ')">'
@@ -274,10 +233,8 @@
               +   '</div>'
               +   (k.deviceType ? '<div class="fault-desc">' + esc(k.deviceType) + '</div>' : '')
               +   '<div class="guide-box" style="display:none;">'
-              +     '<div class="guide-title">故障现象</div>'
-              +     '<div class="step-text" style="margin-bottom:var(--space-3);">' + esc(k.symptom || '暂无描述') + '</div>'
               +     '<div class="guide-title">排查指南</div>'
-              +     (steps || '<div class="step-text">暂无排查步骤</div>')
+              +     (steps || (window.MobileData ? MobileData.inlineEmpty('暂无排查步骤') : ''))
               +   '</div>'
               + '</div>';
       }
@@ -340,10 +297,8 @@
     }
 
     /* 后端预加载完成后重渲染（严格空库：数据来自数据库） */
-    if (window.MobileOpsStore && MobileOpsStore.subscribe) {
-      MobileOpsStore.subscribe(function (key) {
-        if (!key || key === MobileOpsStore.KEYS.faultKb) initPage();
-      });
+    if (window.MobileData && typeof MobileData.subscribe === 'function') {
+      MobileData.subscribe(function () { initPage(); });
     }
 
     if (document.readyState === 'loading') {

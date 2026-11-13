@@ -740,6 +740,35 @@
 
     var audits = (data.audits || []).map(rowToAudit);
 
+    /* 设备最近一次上报值：来自 sf_device_log 的「数据采集」日志（measure_key + value）。
+       日志表是设备测点读数的唯一落库位置，按设备取每个测点的最新一条。 */
+    var latestReadingByDevice = {};
+    (data.logs || []).forEach(function (r) {
+      var key = r.measure_key;
+      if (!key || r.value == null || r.value === '') return;
+      var code = deviceCodeById[r.device_id];
+      if (!code) return;
+      var bucket = latestReadingByDevice[code] || (latestReadingByDevice[code] = {});
+      var prev = bucket[key];
+      var at = r.log_time || r.created_at || '';
+      if (!prev || String(at) > String(prev.at)) {
+        bucket[key] = { value: r.value, at: at };
+      }
+    });
+    devices.forEach(function (d) {
+      var bucket = latestReadingByDevice[d.id];
+      if (!bucket) return;
+      var readings = {};
+      var any = false;
+      Object.keys(bucket).forEach(function (k) {
+        var n = parseFloat(bucket[k].value);
+        if (isNaN(n)) return;
+        readings[k] = n;
+        any = true;
+      });
+      d.readings = any ? readings : null;
+    });
+
     return {
       version: 4,
       access: accesses,

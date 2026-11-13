@@ -10,6 +10,8 @@
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <!-- 共享数据层（持久化 / toast） -->
   <script src="js/mobile-store.js"></script>
+  <!-- 移动端统一数据层（严格空库 · 只读后端） -->
+  <script src="js/mobile-data.js"></script>
   <style>
     /* 基础样式继承自设计系统 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: 66px; }
@@ -117,9 +119,9 @@
           <span class="tree-photo-icon">🍎</span>
         </div>
         <div class="tree-info">
-          <div class="tree-name">花牛苹果 #G012</div>
-          <div class="tree-variety">品种：花牛苹果 · 树龄6年</div>
-          <div class="tree-yield">预估可采摘：约60斤</div>
+          <div class="tree-name" id="treeName">--</div>
+          <div class="tree-variety" id="treeVariety">--</div>
+          <div class="tree-yield" id="treeYield">--</div>
         </div>
       </div>
       
@@ -128,43 +130,7 @@
           <span class="form-title-icon">📅</span>
           选择日期
         </div>
-        <div class="date-scroll" id="dateScroll">
-          <div class="date-item" data-date="2026-09-25" onclick="selectDate(this)">
-            <div class="date-week">周五</div>
-            <div class="date-day">25</div>
-            <div class="date-month">9月</div>
-          </div>
-          <div class="date-item" data-date="2026-09-26" onclick="selectDate(this)">
-            <div class="date-week">周六</div>
-            <div class="date-day">26</div>
-            <div class="date-month">9月</div>
-          </div>
-          <div class="date-item selected" data-date="2026-09-27" onclick="selectDate(this)">
-            <div class="date-week">周日</div>
-            <div class="date-day">27</div>
-            <div class="date-month">9月</div>
-          </div>
-          <div class="date-item" data-date="2026-09-28" onclick="selectDate(this)">
-            <div class="date-week">周一</div>
-            <div class="date-day">28</div>
-            <div class="date-month">9月</div>
-          </div>
-          <div class="date-item" data-date="2026-09-29" onclick="selectDate(this)">
-            <div class="date-week">周二</div>
-            <div class="date-day">29</div>
-            <div class="date-month">9月</div>
-          </div>
-          <div class="date-item" data-date="2026-09-30" onclick="selectDate(this)">
-            <div class="date-week">周三</div>
-            <div class="date-day">30</div>
-            <div class="date-month">9月</div>
-          </div>
-          <div class="date-item" data-date="2026-10-01" onclick="selectDate(this)">
-            <div class="date-week">周四</div>
-            <div class="date-day">1</div>
-            <div class="date-month">10月</div>
-          </div>
-        </div>
+        <div class="date-scroll" id="dateScroll"></div>
       </div>
       
       <div class="form-section">
@@ -252,15 +218,15 @@
         <div class="summary-title">预约信息</div>
         <div class="summary-row">
           <div class="summary-label">认养果树</div>
-          <div class="summary-value" id="summaryTree">花牛苹果 #G012</div>
+          <div class="summary-value" id="summaryTree">--</div>
         </div>
         <div class="summary-row">
           <div class="summary-label">预约日期</div>
-          <div class="summary-value" id="summaryDate">2026-09-27 周日</div>
+          <div class="summary-value" id="summaryDate">--</div>
         </div>
         <div class="summary-row">
           <div class="summary-label">预约时段</div>
-          <div class="summary-value" id="summaryTime">14:00 - 16:00</div>
+          <div class="summary-value" id="summaryTime">--</div>
         </div>
         <div class="summary-row">
           <div class="summary-label">采摘方式</div>
@@ -287,7 +253,7 @@
             </svg>
           </div>
           <div class="success-title">预约成功</div>
-          <div class="success-desc" id="successDesc">您已成功预约2026年09月27日 14:00的采摘体验，请准时到达基地。</div>
+          <div class="success-desc" id="successDesc">--</div>
           <button class="success-btn" onclick="closeSuccess()">完成</button>
         </div>
       </div>
@@ -295,43 +261,90 @@
   </div>
 
   <script>
-    let selectedDate = '2026-09-27';
-    let selectedTime = '14:00 - 16:00';
-    let peopleCount = 2;
-    let harvestMethod = 'pickup';
+    var MD = window.MobileData;
+    var selectedDate = '';
+    var selectedTime = '14:00 - 16:00';
+    var peopleCount = 2;
+    var harvestMethod = 'pickup';
 
-    /* 接收来自认养订单页的 ?orderId= / ?treeId=，缺省回落到 G012 */
-    let currentOrderId = '';
-    let currentTreeId = 'G012';
-    let currentTreeName = '花牛苹果 #G012';
-    (function initTreeFromQuery() {
-      var q = location.search || '';
-      var oid = q.match(/[?&]orderId=([^&]+)/);
-      var tid = q.match(/[?&]treeId=([^&]+)/);
-      if (oid) { try { currentOrderId = decodeURIComponent(oid[1]); } catch (e) { currentOrderId = oid[1]; } }
-      if (tid) { try { currentTreeId = decodeURIComponent(tid[1]); } catch (e) { currentTreeId = tid[1]; } }
-      if (currentTreeId !== 'G012') currentTreeName = '花牛苹果 #' + currentTreeId;
-      // 同步页面上的果树展示
-      document.querySelectorAll('.tree-name, #summaryTree').forEach(function(el) { el.textContent = currentTreeName; });
-      var sum = document.getElementById('summaryTree');
-      if (sum) sum.textContent = currentTreeName;
-    })();
+    var currentOrderId = '';
+    var currentTreeId = '';
+    var currentTreeName = '--';
 
-    updateSummary();
-    
+    function esc(s) { return MD.esc(s); }
+
+    function queryParam(name) {
+      var m = (location.search || '').match(new RegExp('[?&]' + name + '=([^&]+)'));
+      if (!m) return '';
+      try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+    }
+
+    /* 果树信息读 sf_adoption_tree（严格空库：查不到就显示 --） */
+    function renderTree() {
+      var trees = MD.list('adoption_tree');
+      var tree = null;
+      for (var i = 0; i < trees.length; i++) {
+        if ((currentTreeId && (String(trees[i].tree_code) === String(currentTreeId) ||
+            String(trees[i].id) === String(currentTreeId))) ||
+            (!currentTreeId && String(trees[i].id) === '1')) {
+          tree = trees[i]; break;
+        }
+      }
+      if (!tree && trees.length) tree = trees[0];
+
+      if (!tree) {
+        document.getElementById('treeName').textContent = '未找到认养果树';
+        document.getElementById('treeVariety').textContent = '--';
+        document.getElementById('treeYield').textContent = '--';
+        return;
+      }
+      currentTreeId = String(tree.id);
+      currentTreeName = tree.tree_name || ('果树 #' + (tree.tree_code || tree.id));
+      document.getElementById('treeName').textContent = currentTreeName;
+      document.getElementById('treeVariety').textContent =
+        '品种：' + (tree.variety_name || tree.variety || '--') +
+        (tree.tree_age != null ? ' · 树龄' + tree.tree_age + '年' : '');
+      document.getElementById('treeYield').textContent = tree.plot_name
+        ? ('所在地块：' + tree.plot_name)
+        : '--';
+      document.getElementById('summaryTree').textContent = currentTreeName;
+    }
+
+    /* 可选日期：从今天起 7 天 */
+    function renderDates() {
+      var box = document.getElementById('dateScroll');
+      var weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      var html = '';
+      for (var i = 0; i < 7; i++) {
+        var d = new Date();
+        d.setDate(d.getDate() + i);
+        var y = d.getFullYear();
+        var mo = d.getMonth() + 1;
+        var day = d.getDate();
+        var iso = y + '-' + (mo < 10 ? '0' + mo : mo) + '-' + (day < 10 ? '0' + day : day);
+        if (i === 0) selectedDate = iso;
+        html += '<div class="date-item' + (i === 0 ? ' selected' : '') + '" data-date="' + iso + '" onclick="selectDate(this)">' +
+          '<div class="date-week">' + weekDays[d.getDay()] + '</div>' +
+          '<div class="date-day">' + day + '</div>' +
+          '<div class="date-month">' + mo + '月</div>' +
+        '</div>';
+      }
+      box.innerHTML = html;
+    }
+
     function goBack() {
       window.history.back();
     }
     
     function selectDate(el) {
-      document.querySelectorAll('.date-item').forEach(item => item.classList.remove('selected'));
+      document.querySelectorAll('.date-item').forEach(function (item) { item.classList.remove('selected'); });
       el.classList.add('selected');
       selectedDate = el.dataset.date;
       updateSummary();
     }
     
     function selectTime(el) {
-      document.querySelectorAll('.time-slot').forEach(slot => slot.classList.remove('selected'));
+      document.querySelectorAll('.time-slot').forEach(function (slot) { slot.classList.remove('selected'); });
       el.classList.add('selected');
       selectedTime = el.textContent.trim();
       updateSummary();
@@ -346,7 +359,7 @@
     }
     
     function updateDecreaseBtn() {
-      const btn = document.getElementById('decreaseBtn');
+      var btn = document.getElementById('decreaseBtn');
       if (peopleCount <= 1) {
         btn.classList.add('disabled');
       } else {
@@ -355,42 +368,58 @@
     }
     
     function selectMethod(el, method) {
-      document.querySelectorAll('.method-option').forEach(opt => opt.classList.remove('selected'));
+      document.querySelectorAll('.method-option').forEach(function (opt) { opt.classList.remove('selected'); });
       el.classList.add('selected');
       harvestMethod = method;
       updateSummary();
     }
     
     function updateSummary() {
-      const date = new Date(selectedDate);
-      const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-      const weekDay = weekDays[date.getDay()];
-      document.getElementById('summaryDate').textContent = `${selectedDate} ${weekDay}`;
+      var text = selectedDate;
+      if (selectedDate) {
+        var date = new Date(selectedDate.replace(/-/g, '/'));
+        var weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        if (!isNaN(date.getTime())) text = selectedDate + ' ' + weekDays[date.getDay()];
+      }
+      document.getElementById('summaryDate').textContent = text || '--';
       document.getElementById('summaryTime').textContent = selectedTime;
       document.getElementById('summaryMethod').textContent = harvestMethod === 'pickup' ? '现场采摘' : '冷链配送';
+      document.getElementById('summaryTree').textContent = currentTreeName;
     }
     
     function submitReservation() {
+      if (!currentTreeId) { MobileStore.toast('未找到认养果树，无法预约', 'error'); return; }
+      if (!selectedDate) { MobileStore.toast('请选择预约日期', 'warning'); return; }
+      if (!(window.Api && Api.isLoggedIn())) { MobileStore.toast('登录已失效，请重新登录', 'error'); return; }
+
       var timeStart = selectedTime.split('-')[0].trim();
       var d = selectedDate.split('-');
       var dateText = d[0] + '年' + d[1] + '月' + d[2] + '日';
-      document.getElementById('successDesc').textContent =
-        '您已成功预约' + dateText + ' ' + timeStart + '的采摘体验，请准时到达基地。';
-      if (window.MobileStore) {
-        // 持久化预约，存入的日期即选中项 data-date（与界面显示严格一致）
-        MobileStore.push('smartorchard_harvest_reservations', {
-          orderId: currentOrderId,
-          treeId: currentTreeId,
-          treeName: currentTreeName,
-          date: selectedDate,
-          time: selectedTime,
-          people: peopleCount,
-          method: harvestMethod === 'pickup' ? '现场采摘' : '冷链配送',
-          status: 'pending'
-        });
-        MobileStore.toast('采摘预约已提交', 'success');
-      }
-      document.getElementById('successModal').classList.add('show');
+
+      Api.create('adoption_harvest', {
+        record_code: 'HX' + Date.now(),
+        tree_id: Number(currentTreeId),
+        adopter: (MD.user() || {}).realName || '',
+        phone: (MD.user() || {}).phone || '',
+        order_code: currentOrderId || '',
+        harvest_date: selectedDate,
+        method: harvestMethod === 'pickup' ? '现场采摘' : '冷链配送',
+        source: 'mobile',
+        status: 'pending',
+        remark: '预约时段 ' + selectedTime + ' · ' + peopleCount + '人'
+      }).then(function (res) {
+        if (res && res.ok) {
+          document.getElementById('successDesc').textContent =
+            '您已成功预约' + dateText + ' ' + timeStart + '的采摘体验，请准时到达基地。';
+          document.getElementById('successModal').classList.add('show');
+          MD.reload('adoption_harvest');
+          MobileStore.toast('采摘预约已提交', 'success');
+        } else {
+          MobileStore.toast((res && res.message) || '预约提交失败，请稍后重试', 'error');
+        }
+      }).catch(function () {
+        MobileStore.toast('预约提交失败，请检查网络', 'error');
+      });
     }
     
     function closeSuccess() {
@@ -398,11 +427,18 @@
       window.location.href = 'mb_adoption.html';
     }
 
-    /* 跨端同步：后台确认采收/认养状态变化时刷新预约概要 */
-    window.addEventListener('storage', function (e) {
-      if (e.key && (e.key === 'snzg_adoptions' || e.key === 'applefarm_adoption_v1' || e.key === 'smartorchard_harvest_reservations')) {
-        if (typeof updateSummary === 'function') updateSummary();
-      }
+    function init() {
+      currentOrderId = queryParam('orderId');
+      currentTreeId = queryParam('treeId');
+      renderTree();
+      renderDates();
+      updateSummary();
+    }
+
+    init();
+    MD.subscribe(function () {
+      renderTree();
+      updateSummary();
     });
   </script>
 </body>

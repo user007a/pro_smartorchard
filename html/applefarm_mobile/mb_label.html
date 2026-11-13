@@ -10,6 +10,8 @@
   <script src="../applefarm_backhand/icons/icons.js"></script>
   <!-- 移动端共享数据层 -->
   <script src="js/mobile-store.js"></script>
+  <!-- 移动端统一数据层（严格空库 · 只读后端） -->
+  <script src="js/mobile-data.js"></script>
   <style>
     /* 基础重置已由设计系统提供 */
     .app { width: 100%; max-width: 750px; margin: 0 auto; min-height: 100vh; position: relative; overflow: hidden; padding-bottom: 66px; }
@@ -143,147 +145,118 @@
 
   <script>
     /* ============================================================
-     * T19 标签库存双源治理 —— 移动端只读库存 + 提交申请
-     * ------------------------------------------------------------
-     * 库存权威源：localStorage['smartorchard_label_stock']
-     *   对象结构 { 标签名: 剩余张数 }
-     *   维护入口 = 后台「溯源编码」打印环节扣减 /「标签管理」库存管理弹窗改数
-     * 移动端提交领用申请时：
-     *   1. 只读库存做可用量校验，不做任何扣减
-     *   2. 记录走 MobileStore.push（正规 API，可触发 subscribe 广播与跨端读取）
-     * 标签领用记录：localStorage['smartorchard_label_records']（MobileStore.KEYS.labelRecords）
+     * 标签领用 —— 严格空库：类型/库存/记录全部读后端
+     *   sf_label_type   标签类型（唯一来源，无硬编码兜底）
+     *   sf_label_stock  库存，按 label_type_id 汇总 quantity
+     *   sf_label_record 领用记录
+     * 提交领用申请写入 sf_label_record（status=pending），不扣库存。
      * ============================================================ */
+    var MD = window.MobileData;
+    var esc = MD.esc;
 
-    /* 存储键统一到移动端共享数据层 MobileStore.KEYS，与后台共用同一份数据 */
-    const STOCK_KEY = MobileStore.KEYS.labelStock;
+    function labelTypes() {
+      return MD.list('label_type')
+        .filter(function (t) { return t && t.label_name && t.status !== 'inactive' && t.status !== 'disabled'; })
+        .map(function (t) {
+          return {
+            dbId: t.id,
+            code: t.label_code || '',
+            name: t.label_name,
+            desc: t.spec || t.label_type || ''
+          };
+        });
+    }
 
-    // 标签类型基础信息（库存由后台统一维护，此处仅用于名称/描述展示与兜底）
-    const LABEL_TYPES = [
-      { id: 'LB-A', name: '花牛苹果专用标签（双层纸袋型）', desc: '双层纸袋，防水防虫', stock: 12500 },
-      { id: 'LB-B', name: '花牛苹果专用标签（透气膜袋型）', desc: '透气膜袋，早熟品种适用', stock: 8200 },
-      { id: 'LB-C', name: '秦冠专用标签', desc: '三色可选，中熟品种', stock: 6800 }
-    ];
+    /* 库存：按标签类型汇总 sf_label_stock.quantity */
+    function stockByType() {
+      var map = {};
+      MD.list('label_stock').forEach(function (s) {
+        var key = String(s.label_type_id == null ? '' : s.label_type_id);
+        if (!key) return;
+        map[key] = (map[key] || 0) + (parseFloat(s.quantity) || 0);
+      });
+      return map;
+    }
 
-    // 标签类型权威源：由后台「标签管理 - 标签类型」维护，读不到时回落到上面的 LABEL_TYPES 兜底
-    var LABEL_TYPES_KEY = 'smartorchard_label_types';
+    function plotOptions() {
+      return MD.list('plot').map(function (p) {
+        var code = p.code || p.plot_code || '';
+        var name = p.name || p.plot_name || '';
+        return { value: code || String(p.id), label: (code ? code + ' · ' : '') + name };
+      });
+    }
 
-    /* 标签类型缓存：由 loadLabelTypes 从后端 sf_label_type 拉取后填充 */
-    var labelTypesCache = null;
+    function recordStatus(status) {
+      if (status === 'printed') return { text: '已打印', cls: 'approved' };
+      if (status === 'rejected') return { text: '已驳回', cls: 'rejected' };
+      return { text: '待打印', cls: 'pending' };
+    }
 
-    /* 从后端拉取标签类型（sf_label_type），映射为页面既有结构 */
-    function loadLabelTypes(cb) {
-      if (labelTypesCache !== null) { cb(labelTypesCache); return; }
-      if (window.Api && typeof Api.get === 'function') {
-        Api.get('label_type', { size: 500 }).then(function (res) {
-          var list = [];
-          if (res && res.ok && res.data && Array.isArray(res.data.list)) {
-            list = res.data.list
-              .filter(function (t) { return t && t.status !== 'inactive'; })
-              .map(function (t) {
-                return { id: t.label_code || '', name: t.label_name || '', desc: t.spec || t.label_type || '', stock: 0 };
-              })
-              .filter(function (t) { return t.name; });
-          }
-          labelTypesCache = list.length ? list : null;
-          cb(labelTypesCache);
-        }).catch(function () { labelTypesCache = null; cb(null); });
-      } else {
-        labelTypesCache = null;
-        cb(null);
+    function typeNameById(id) {
+      var types = labelTypes();
+      for (var i = 0; i < types.length; i++) {
+        if (String(types[i].dbId) === String(id)) return types[i].name;
       }
-    }
-
-    /* 只读标签类型清单；后端无数据时回落到硬编码 LABEL_TYPES */
-    function readLabelTypes() {
-      return labelTypesCache || LABEL_TYPES;
-    }
-
-    // 地块（与企业管理 - 地块管理一致）
-    const PLOT_OPTIONS = ['D-001 · 东区1号地','D-002 · 东区2号地','D-003 · 西区1号地','D-004 · 北区1号地','D-005 · 南区1号地',
-      'D-006 · 中区1号地','D-007 · 南区2号地','D-008 · 西区2号地','D-009 · 北区2号地','D-010 · 东区3号地'];
-
-    function esc(s) {
-      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-      });
-    }
-
-    /* 只读库存：标签库存由后台「打印标签」统一扣减，移动端仅展示类型默认值兜底，不读本地业务键 */
-    function readStock() {
-      const stock = {};
-      LABEL_TYPES.forEach(t => { stock[t.name] = t.stock; });
-      readLabelTypes().forEach(t => {
-        if (t && t.name && !(t.name in stock)) stock[t.name] = 0;
-      });
-      return stock;
-    }
-
-    /* 领用记录统一走 MobileStore，读取失败回退空数组 */
-    function readRecords() {
-      const list = MobileStore.list(MobileStore.KEYS.labelRecords);
-      return Array.isArray(list) ? list : [];
-    }
-
-    /* 记录状态归一：pending → 审批中 */
-    function recordStatusText(r) {
-      if (r.status === 'pending') return { text: '待打印', cls: 'pending' };
-      if (r.status === '已打印') return { text: '已打印', cls: 'approved' };
-      if (r.status === '已驳回') return { text: '已驳回', cls: 'rejected' };
-      return { text: r.status || '待打印', cls: 'pending' };
+      return '标签 #' + id;
     }
 
     function renderLabels() {
-      const stock = readStock();
-      document.getElementById('labelList').innerHTML = readLabelTypes().map(t => {
-        const left = stock[t.name] != null ? stock[t.name] : 0;
-        return `
-          <div class="label-item">
-            <div class="label-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-                <path d="M7 7h.01"/>
-              </svg>
-            </div>
-            <div class="label-info">
-              <div class="label-name">${esc(t.name)}</div>
-              <div class="label-desc">${esc(t.desc)}</div>
-              <div class="label-meta">
-                <span class="label-stock">可用：${left}张</span>
-                <button class="btn btn-primary" ${left <= 0 ? 'disabled style="opacity:.5;cursor:not-allowed;"' : ''}
-                  onclick="openLabelModal('${t.name}')">${left <= 0 ? '无库存' : '申请'}</button>
-              </div>
-            </div>
-          </div>`;
+      var box = document.getElementById('labelList');
+      var types = labelTypes();
+      if (!types.length) {
+        box.innerHTML = MD.inlineEmpty('暂无标签类型，请在后台「溯源编码 › 标签管理」中维护');
+        return;
+      }
+      var stock = stockByType();
+      box.innerHTML = types.map(function (t) {
+        var left = stock[String(t.dbId)] || 0;
+        return '<div class="label-item">' +
+          '<div class="label-icon">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>' +
+              '<path d="M7 7h.01"/>' +
+            '</svg>' +
+          '</div>' +
+          '<div class="label-info">' +
+            '<div class="label-name">' + esc(t.name) + '</div>' +
+            '<div class="label-desc">' + esc(t.desc || '—') + '</div>' +
+            '<div class="label-meta">' +
+              '<span class="label-stock">可用：' + left + '张</span>' +
+              '<button class="btn btn-primary" ' + (left <= 0 ? 'disabled style="opacity:.5;cursor:not-allowed;"' : '') +
+                ' onclick="openLabelModal(' + t.dbId + ')">' + (left <= 0 ? '无库存' : '申请') + '</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
       }).join('');
     }
 
     function renderRecords() {
-      const records = readRecords();
-      const box = document.getElementById('recordList');
-      if (!records.length) {
-        box.innerHTML = '<div style="text-align:center;color:var(--text-light);font-size:var(--font-sm);padding:12px;">暂无领用记录</div>';
+      var box = document.getElementById('recordList');
+      var rows = MD.list('label_record').slice().sort(function (a, b) {
+        return String(b.apply_time || b.created_at || '').localeCompare(String(a.apply_time || a.created_at || ''));
+      });
+      if (!rows.length) {
+        box.innerHTML = MD.inlineEmpty('暂无领用记录');
         return;
       }
-      box.innerHTML = records.map(r => {
-        const st = recordStatusText(r);
-        let tail;
-        if (st.cls === 'pending') tail = '待后台打印，打印时统一扣减库存';
-        else if (st.cls === 'approved') tail = `已打印 · ${esc(r.printTime || '')}`;
-        else tail = esc(r.approveRemark || '后台已驳回');
-        return `
-        <div class="record-item">
-          <div class="record-header">
-            <div class="record-name">${esc(r.name)}</div>
-            <span class="record-status ${st.cls}">${esc(st.text)}</span>
-          </div>
-          <div class="record-info">
-            <span>数量：${esc(r.qty)}张</span>
-            <span>${esc(r.time || r.createTime || '')}</span>
-          </div>
-          <div style="font-size:var(--font-sm);color:var(--text-light);margin-top:var(--space-2);">
-            用途：${esc(r.plot || '-')} · ${tail}
-          </div>
-        </div>`;
+      box.innerHTML = rows.map(function (r) {
+        var st = recordStatus(r.status);
+        var tail = st.cls === 'approved'
+          ? '已打印'
+          : (st.cls === 'rejected' ? esc(r.remark || '后台已驳回') : '待后台打印，打印时统一扣减库存');
+        return '<div class="record-item">' +
+          '<div class="record-header">' +
+            '<div class="record-name">' + esc(typeNameById(r.label_type_id)) + '</div>' +
+            '<span class="record-status ' + st.cls + '">' + esc(st.text) + '</span>' +
+          '</div>' +
+          '<div class="record-info">' +
+            '<span>数量：' + (r.quantity == null ? '--' : esc(r.quantity)) + '张</span>' +
+            '<span>' + esc(MD.dateTimeText(r.apply_time || r.created_at)) + '</span>' +
+          '</div>' +
+          '<div style="font-size:var(--font-sm);color:var(--text-light);margin-top:var(--space-2);">' +
+            '用途：' + esc(r.plot_ids || '-') + ' · ' + tail +
+          '</div>' +
+        '</div>';
       }).join('');
     }
 
@@ -295,20 +268,31 @@
     function navigateTo(page) { window.location.href = page; }
     function goBack() { window.history.back(); }
 
-    function openLabelModal(name) {
-      const stock = readStock();
-      const left = stock[name] != null ? stock[name] : 0;
-      document.getElementById('labelName').value = name;
+    function openLabelModal(typeId) {
+      var types = labelTypes();
+      var type = null;
+      for (var i = 0; i < types.length; i++) {
+        if (String(types[i].dbId) === String(typeId)) { type = types[i]; break; }
+      }
+      if (!type) return;
+      var left = stockByType()[String(typeId)] || 0;
+
+      document.getElementById('labelName').value = type.name;
       document.getElementById('labelStockView').value = left + ' 张';
-      document.getElementById('labelQty').value = '';
+      var qty = document.getElementById('labelQty');
+      qty.value = '';
+      qty.max = left;
       document.getElementById('labelRemark').value = '';
 
-      const plotSelect = document.getElementById('labelPlot');
-      plotSelect.innerHTML = '<option value="">请选择地块</option>' +
-        PLOT_OPTIONS.map(p => `<option value="${p}">${p}</option>`).join('');
+      var opts = plotOptions();
+      var select = document.getElementById('labelPlot');
+      select.innerHTML = '<option value="">请选择地块</option>' +
+        (opts.length ? opts.map(function (p) {
+          return '<option value="' + esc(p.value) + '">' + esc(p.label) + '</option>';
+        }).join('') : '<option value="" disabled>暂无可选地块</option>');
 
       document.getElementById('labelModal').classList.add('show');
-      document.getElementById('labelModal').dataset.labelName = name;
+      document.getElementById('labelModal').dataset.typeId = typeId;
     }
 
     function closeLabelModal() {
@@ -316,40 +300,45 @@
     }
 
     function submitLabel() {
-      const name = document.getElementById('labelModal').dataset.labelName || document.getElementById('labelName').value;
-      const qtyRaw = document.getElementById('labelQty').value.trim();
-      const qty = Number(qtyRaw);
-      const plot = document.getElementById('labelPlot').value;
-      const remark = document.getElementById('labelRemark').value.trim();
+      var typeId = document.getElementById('labelModal').dataset.typeId;
+      var qtyRaw = document.getElementById('labelQty').value.trim();
+      var qty = Number(qtyRaw);
+      var plot = document.getElementById('labelPlot').value;
+      var remark = document.getElementById('labelRemark').value.trim();
 
-      /* 只做提交前的可用量校验，库存扣减统一发生在后台「溯源编码 - 打印标签」 */
-      const stock = readStock();
-      const left = stock[name] != null ? stock[name] : 0;
-
+      var left = stockByType()[String(typeId)] || 0;
       if (!qtyRaw) { MobileStore.toast('请输入领用数量', 'warning'); return; }
       if (!isFinite(qty) || qty < 1) { MobileStore.toast('领用数量必须是大于 0 的数字', 'error'); return; }
-      if (qty > left) { MobileStore.toast(`库存不足，当前可领取 ${left} 张`, 'error'); return; }
+      if (qty > left) { MobileStore.toast('库存不足，当前可领取 ' + left + ' 张', 'error'); return; }
       if (!plot) { MobileStore.toast('请选择使用地块', 'warning'); return; }
+      if (!(window.Api && Api.isLoggedIn())) { MobileStore.toast('登录已失效，请重新登录', 'error'); return; }
 
-      /* 走 MobileStore.push：写入记录并广播，移动端/后台读到同一份数据 */
-      MobileStore.push(MobileStore.KEYS.labelRecords, {
-        name: name,
-        qty: qty,
-        plot: plot,
-        remark: remark,
+      var u = MD.user() || {};
+      Api.create('label_record', {
+        apply_code: 'LB' + Date.now(),
+        label_type_id: Number(typeId),
+        quantity: qty,
+        plot_ids: plot,
+        apply_user: u.realName || u.account || '',
+        apply_time: MD.today() + ' ' + new Date().toTimeString().slice(0, 8),
         status: 'pending',
-        time: MobileStore.fmtTime(Date.now())
+        remark: remark
+      }).then(function (res) {
+        if (res && res.ok) {
+          closeLabelModal();
+          MD.reload('label_record').then(refresh);
+          MobileStore.toast('申请已提交：' + typeNameById(typeId) + ' ' + qty + ' 张，由后台打印标签时统一扣减库存', 'success');
+        } else {
+          MobileStore.toast((res && res.message) || '提交失败，请稍后重试', 'error');
+        }
+      }).catch(function () {
+        MobileStore.toast('提交失败，请检查网络', 'error');
       });
-
-      closeLabelModal();
-      refresh();
-      MobileStore.toast(`申请已提交：${name} ${qty} 张，由后台打印标签时统一扣减库存（当前可用 ${left} 张，提交不扣减）`, 'success');
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-      /* 先从后端拉取标签类型，再渲染（严格空库：类型来自数据库） */
-      loadLabelTypes(function () { refresh(); });
-      /* 订阅领用记录写回，让列表与可用量同步刷新 */
+      refresh();
+      MD.subscribe(refresh);
       MobileStore.subscribe(refresh);
     });
   </script>

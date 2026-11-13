@@ -70,87 +70,39 @@
         <div class="today-header">
           <div class="today-location">
             <span>📍</span>
-            <span>天水市·麦积区</span>
+            <span id="weatherLocation">--</span>
           </div>
-          <div class="today-date" id="todayDate">10月21日 周三</div>
+          <div class="today-date" id="todayDate">--</div>
         </div>
         <div class="today-main">
-          <div class="today-icon" data-mf="weather.lists.forecast.0.icon">☀️</div>
-          <div class="today-temp" data-mf="weather.kpi.0.value" data-mf-suffix="°">26°</div>
+          <div class="today-icon" data-mf="weather.lists.forecast.0.icon">--</div>
+          <div class="today-temp" data-mf="weather.kpi.0.value" data-mf-suffix="°">--</div>
         </div>
         <div class="today-info">
           <div class="today-info-item">
             <div class="today-info-label">湿度</div>
-            <div class="today-info-value" data-mf="weather.kpi.1.value" data-mf-suffix="%">68%</div>
+            <div class="today-info-value" data-mf="weather.kpi.1.value" data-mf-suffix="%">--</div>
           </div>
           <div class="today-info-item">
             <div class="today-info-label">风速</div>
-            <div class="today-info-value" data-mf="weather.kpi.2.trend.text">3级</div>
+            <div class="today-info-value" data-mf="weather.kpi.2.trend.text">--</div>
           </div>
           <div class="today-info-item">
             <div class="today-info-label">紫外线</div>
-            <div class="today-info-value">中等</div>
+            <div class="today-info-value" id="weatherUv">--</div>
           </div>
         </div>
       </div>
 
       <div class="forecast-title">📅 未来3天预报</div>
-      <div class="forecast-list" id="forecastList">
-        <div class="forecast-item">
-          <div class="forecast-day">
-            <div class="forecast-day-name">明天</div>
-            <div class="forecast-day-date" data-rel="1">10月22日</div>
-          </div>
-          <div class="forecast-icon" data-mf="weather.lists.forecast.1.icon">⛅</div>
-          <div class="forecast-temp">
-            <span class="forecast-high" data-mf="weather.lists.forecast.1.high">28°</span>
-            <span class="forecast-low" data-mf="weather.lists.forecast.1.low" data-mf-prefix="/ ">/ 19°</span>
-          </div>
-          <div class="forecast-rain">20%</div>
-        </div>
-        <div class="forecast-item">
-          <div class="forecast-day">
-            <div class="forecast-day-name">后天</div>
-            <div class="forecast-day-date" data-rel="2">10月23日</div>
-          </div>
-          <div class="forecast-icon" data-mf="weather.lists.forecast.2.icon">☁</div>
-          <div class="forecast-temp">
-            <span class="forecast-high" data-mf="weather.lists.forecast.2.high">25°</span>
-            <span class="forecast-low" data-mf="weather.lists.forecast.2.low" data-mf-prefix="/ ">/ 17°</span>
-          </div>
-          <div class="forecast-rain" style="background: var(--primary-light); color: var(--primary);">60%</div>
-        </div>
-        <div class="forecast-item">
-          <div class="forecast-day">
-            <div class="forecast-day-name">大后天</div>
-            <div class="forecast-day-date" data-rel="3">10月24日</div>
-          </div>
-          <div class="forecast-icon" data-mf="weather.lists.forecast.3.icon">🌧</div>
-          <div class="forecast-temp">
-            <span class="forecast-high" data-mf="weather.lists.forecast.3.high">22°</span>
-            <span class="forecast-low" data-mf="weather.lists.forecast.3.low" data-mf-prefix="/ ">/ 16°</span>
-          </div>
-          <div class="forecast-rain">10%</div>
-        </div>
-      </div>
+      <div class="forecast-list" id="forecastList"></div>
 
       <div class="tips-card">
         <div class="tips-title">
           <span class="tips-icon">🍎</span>
           <span>苹果种植提醒</span>
         </div>
-        <div class="tips-item">
-          <div class="tips-dot"></div>
-          <div class="tips-text">近日昼夜温差较大，建议优先安排阳面果采收并启动早霜防御预案</div>
-        </div>
-        <div class="tips-item">
-          <div class="tips-dot"></div>
-          <div class="tips-text">本周后期降温概率较高，请提前协调冷链入库与冷库预冷空间</div>
-        </div>
-        <div class="tips-item">
-          <div class="tips-dot"></div>
-          <div class="tips-text">明日若有降雨，请推迟分级与包装作业，避免果面二次伤害</div>
-        </div>
+        <div id="weatherTips"></div>
       </div>
     </div>
     
@@ -180,9 +132,18 @@
   
   <script src="../applefarm_backhand/js/shared/model-store.js"></script>
   <script src="../applefarm_backhand/js/shared/model-bind.js"></script>
+  <script src="js/mobile-data.js"></script>
   <script>
     function navigateTo(page) { window.location.href = page; }
     function goBack() { window.history.back(); }
+
+    var MD = window.MobileData;
+
+    function esc(s) {
+      return MD ? MD.esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
 
     // 动态计算今日与未来3天的「月日」与「星期」，避免硬编码过期
     (function () {
@@ -190,20 +151,100 @@
       function fmt(d) { return (d.getMonth() + 1) + '月' + d.getDate() + '日'; }
       var now = new Date();
       var dateEl = document.getElementById('todayDate');
-      if (dateEl) {
-        var base = fmt(now) + ' ' + WEEK[now.getDay()];
-        var m = base.match(/^\d+月\d+日\s*周\S/);
-        // 若动态星期为周末且与历史文案「周三」冲突，叠加显示
-        dateEl.textContent = base;
-      }
-      var nodes = document.querySelectorAll('#forecastList .forecast-day-date');
-      nodes.forEach(function (n) {
-        var rel = parseInt(n.getAttribute('data-rel') || '0', 10);
-        if (!rel) return;
-        var d = new Date(now.getTime() + rel * 86400000);
-        n.textContent = fmt(d);
-      });
+      if (dateEl) dateEl.textContent = fmt(now) + ' ' + WEEK[now.getDay()];
     })();
+
+    /* ============================================================
+     * 气象页数据绑定（严格空库）
+     * 数据源：ModelStore 气象模型（后台「模型中心 › 气象模型」维护，落库 sf_model_config）
+     *   预报   → weather.lists.forecast[]
+     *   指标   → weather.kpi[]
+     *   提醒   → weather.lists.extremeWarnings[] / weather.lists.riskProbability[]
+     * 库中无气象模型数据时显示空态，不回落任何演示文案。
+     * ============================================================ */
+    function renderWeather() {
+      var W = null;
+      try { W = window.ModelStore ? ModelStore.get('weather') : null; } catch (e) { W = null; }
+
+      /* 位置：取当前用户所属基地 */
+      var loc = document.getElementById('weatherLocation');
+      if (loc) loc.textContent = (MD && MD.baseName()) || '--';
+
+      /* 紫外线：取气象模型 index 列表中「紫外线」项 */
+      var uv = document.getElementById('weatherUv');
+      if (uv) {
+        var uvVal = '';
+        if (W && W.lists && Array.isArray(W.lists.indexes)) {
+          W.lists.indexes.forEach(function (i) {
+            if (String(i.name || '').indexOf('紫外') >= 0) uvVal = i.value;
+          });
+        }
+        uv.textContent = uvVal || '--';
+      }
+
+      /* 未来3天预报 */
+      var box = document.getElementById('forecastList');
+      if (box) {
+        var forecast = (W && W.lists && Array.isArray(W.lists.forecast)) ? W.lists.forecast : [];
+        var days = forecast.slice(0, 3);
+        if (!days.length) {
+          box.innerHTML = '<div class="mb-list-empty">暂无天气预报数据</div>';
+        } else {
+          var WEEK = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+          var names = ['明天', '后天', '大后天'];
+          box.innerHTML = days.map(function (d, i) {
+            var dateText = '';
+            if (d.date) {
+              var parsed = new Date(String(d.date).replace(/-/g, '/'));
+              if (!isNaN(parsed.getTime())) {
+                dateText = (parsed.getMonth() + 1) + '月' + parsed.getDate() + '日';
+              } else dateText = String(d.date);
+            }
+            var rain = d.rain != null ? d.rain : (d.rainProbability != null ? d.rainProbability : null);
+            var rainTxt = rain == null ? '--' : (String(rain).indexOf('%') >= 0 ? rain : rain + '%');
+            return '<div class="forecast-item">' +
+              '<div class="forecast-day">' +
+                '<div class="forecast-day-name">' + esc(names[i] || d.name || '') + '</div>' +
+                '<div class="forecast-day-date">' + esc(dateText) + '</div>' +
+              '</div>' +
+              '<div class="forecast-icon">' + esc(d.icon || '--') + '</div>' +
+              '<div class="forecast-temp">' +
+                '<span class="forecast-high">' + esc(d.high == null ? '--' : d.high) + '</span>' +
+                '<span class="forecast-low" data-mf-prefix="/ ">' + esc(d.low == null ? '--' : d.low) + '</span>' +
+              '</div>' +
+              '<div class="forecast-rain">' + esc(rainTxt) + '</div>' +
+            '</div>';
+          }).join('');
+        }
+      }
+
+      /* 种植提醒：取气象模型预警 / 风险概率列表 */
+      var tips = document.getElementById('weatherTips');
+      if (tips) {
+        var items = [];
+        if (W && W.lists && Array.isArray(W.lists.extremeWarnings)) {
+          W.lists.extremeWarnings.forEach(function (w) {
+            items.push(w.name + (w.time ? '（' + w.time + '）' : '') + (w.desc ? '：' + w.desc : ''));
+          });
+        }
+        if (W && W.lists && Array.isArray(W.lists.riskProbability)) {
+          W.lists.riskProbability.forEach(function (r) {
+            items.push(r.name + ' ' + r.value + '（' + (r.percent != null ? r.percent + '%' : '--') + '）');
+          });
+        }
+        tips.innerHTML = items.length
+          ? items.map(function (t) {
+              return '<div class="tips-item"><div class="tips-dot"></div><div class="tips-text">' + esc(t) + '</div></div>';
+            }).join('')
+          : '<div class="mb-list-empty">暂无气象提醒</div>';
+      }
+    }
+
+    renderWeather();
+    if (window.ModelStore && ModelStore.subscribe) {
+      ModelStore.subscribe(renderWeather);
+    }
+    if (MD) MD.subscribe(renderWeather);
   </script>
 </body>
 </html>

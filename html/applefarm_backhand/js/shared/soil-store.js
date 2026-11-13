@@ -47,6 +47,7 @@
 
   var backendLoadPromise = null;
   var persistTimer = null;
+  var backendRefs = null;   // 后端下发的地块字典（plot_id ↔ plot_code）
 
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
@@ -71,6 +72,8 @@
         // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
         if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
         var agg = global.SoilMapper.toAggregate(res.data);
+        // 保留后端下发的地块 refs，落库时用于把地块编号换算回 plot_id
+        backendRefs = res.data.refs || null;
         inMemory = agg.tests || []; save(); notify('backend-loaded');
       }
       return res;
@@ -82,7 +85,7 @@
   function persistToBackend() {
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
-    var body = global.SoilMapper.fromAggregate({ tests: ensure(), deleted: {} });
+    var body = global.SoilMapper.fromAggregate({ tests: ensure(), deleted: {}, refs: backendRefs });
     return api.create('soil/aggregate', body);
   }
   function schedulePersist(reason) {
@@ -157,7 +160,9 @@
 
   function save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory));
+      global.__STRICT_DB_INTERNAL_WRITE__ = true;
+
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemory)); } finally { global.__STRICT_DB_INTERNAL_WRITE__ = false; }
       return true;
     } catch (e) {
       console.error('[SoilStore] 保存失败', e);
@@ -183,6 +188,10 @@
   }
 
   function commit(reason) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     save();
     notify(reason);
     if (typeof schedulePersist === 'function' && reason !== 'backend-loaded') schedulePersist(reason);
@@ -287,6 +296,10 @@
   }
 
   function upsert(item) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var check = validate(item);
     if (!check.ok) return check;
     var list = ensure();
@@ -308,6 +321,10 @@
   }
 
   function remove(id) {
+
+    /* 用户主动写入：计入预加载竞态计数 */
+
+    global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
     var list = ensure();
     var before = list.length;
     inMemory = list.filter(function (x) { return String(x.id) !== String(id); });
