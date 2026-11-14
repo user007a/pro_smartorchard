@@ -54,6 +54,8 @@
   })();
 
   var backendLoadPromise = null;
+  /* 本 store 局部写入标记：竞态守卫只看自身写入，避免多 store 页面共享全局计数器互相误丢预加载 */
+  var localWriteMark = 0;
   var persistTimer = null;
 
   function backendApi() {
@@ -68,7 +70,7 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
-    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
+    var writeMark0 = localWriteMark;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -77,11 +79,15 @@
     }).then(function (res) {
       if (res && res.ok && res.data) {
         // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
-        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
+        if (localWriteMark !== writeMark0) return res;
         var models = global.ModelMapper.toAggregate(res.data);
         var e = ensure();
+        var defs = defaults();
         KEYS.forEach(function (k) {
-          e[k] = models[k] || [];
+          // 空库无快照时保留默认空结构（kpi/lists/charts 均为空），
+          // 不能退化成 []，否则页面读取 model.kpi / model.lists 会报错。
+          // 有快照时用其覆盖默认顶层字段，缺失的脚手架（如 meta）仍由默认补齐。
+          e[k] = models[k] ? Object.assign({}, defs[k], models[k]) : defs[k];
         });
         save();
         notify('backend-loaded');
@@ -556,6 +562,7 @@
   }
 
   function broadcast(reason){
+    if (reason !== 'backend-loaded') localWriteMark++;
     save();
     notify(reason);
     if (typeof schedulePersist === 'function') schedulePersist(reason);
@@ -836,7 +843,8 @@
      * 视图辅助：把模型 KPI 渲染到页面顶部指标带
      * @param {string} selector 指标带容器选择器，如 '.patrol-stats'
      * @param {string} key 模型键名
-     * 只覆盖 stat-value / stat-label / stat-trend 的文本，不动卡片结构与内联样式
+     * 只覆盖 stat-value / stat-label / stat-trend 的文本，不动卡片结构与内联样式。
+     * 严格空库：kpi 无对应项的卡片显示 '--' 并清空趋势文案，不保留 HTML 写死的演示值。
      */
     hydrateKpi: function(selector, key){
       var model = ModelStore.get(key);
@@ -844,20 +852,24 @@
       var root = document.querySelector(selector);
       if (!root) return;
       var cards = root.querySelectorAll('.patrol-stat-card');
-      model.kpi.forEach(function(item, i){
-        var card = cards[i];
-        if (!card) return;
+      cards.forEach(function(card, i){
+        var item = model.kpi[i];
         var value = card.querySelector('.stat-value');
         var label = card.querySelector('.stat-label');
         var trend = card.querySelector('.stat-trend');
+        if (!item) {
+          if (value) value.textContent = '--';
+          if (trend) trend.textContent = '';
+          return;
+        }
         if (value) {
           value.innerHTML = String(item.value) +
             (item.unit ? '<small style="font-size:16px;font-weight:400;">' + item.unit + '</small>' : '');
         }
-        if (label) label.textContent = item.label;
-        if (trend && item.trend && item.trend.text) {
-          trend.textContent = item.trend.text;
-          if (item.trend.color) trend.style.color = item.trend.color;
+        if (label && item.label) label.textContent = item.label;
+        if (trend) {
+          trend.textContent = (item.trend && item.trend.text) || '';
+          if (item.trend && item.trend.color) trend.style.color = item.trend.color;
         }
       });
     }

@@ -179,6 +179,7 @@ const ALLOWED_TABLES = new Set([
   'sf_permission',
   'sf_system_config',
   'sf_notification',
+  'sf_system_notice',
 ]);
 
 /**

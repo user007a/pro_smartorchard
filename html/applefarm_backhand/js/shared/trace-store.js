@@ -44,6 +44,8 @@
 
   var backendReady = false;
   var backendLoadPromise = null;
+  /* 本 store 局部写入标记：竞态守卫只看自身写入，避免多 store 页面共享全局计数器互相误丢预加载 */
+  var localWriteMark = 0;
   var persistTimer = null;
 
   function backendApi() {
@@ -61,7 +63,7 @@
 
   /** 从后端聚合接口拉取溯源数据，成功后合并进内存并通知 */
   function preloadFromBackend() {
-    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
+    var writeMark0 = localWriteMark;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -70,7 +72,7 @@
     }).then(function (res) {
       if (res && res.ok && res.data) {
         // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
-        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
+        if (localWriteMark !== writeMark0) return res;
         var agg = global.TraceMapper.toAggregate(res.data);
         var d = ensure();
         // 后端数据合并进 store 内存（空数组时保留默认种子兜底）
@@ -758,6 +760,7 @@
     return inMemory;
   }
   function commit(reason) {
+    if (reason !== 'backend-loaded') localWriteMark++;
     var ok = save();
     for (var i = 0; i < subscribers.length; i++) {
       try { subscribers[i](reason); } catch (e) { console.warn('[TraceStore]', e); }

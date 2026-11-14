@@ -66,10 +66,10 @@
 
   <!-- 顶部 4 指标 -->
   <div class="patrol-stats">
-    <div class="patrol-stat-card green"><div class="stat-value">450<small style="font-size:16px;font-weight:400;">吨</small></div><div class="stat-label">预估总产量</div><div class="stat-trend" style="font-size:12px;color:var(--success);">↑ 7.1% 较去年</div></div>
-    <div class="patrol-stat-card blue"><div class="stat-value">168<small style="font-size:16px;font-weight:400;">吨</small></div><div class="stat-label">天水基地</div><div class="stat-trend" style="font-size:12px;color:var(--success);">占37.3%</div></div>
-    <div class="patrol-stat-card orange"><div class="stat-value">95<small style="font-size:16px;font-weight:400;">吨</small></div><div class="stat-label">麦积区基地</div><div class="stat-trend" style="font-size:12px;color:var(--success);">占21.1%</div></div>
-    <div class="patrol-stat-card purple"><div class="stat-value">315<small style="font-size:16px;font-weight:400;">吨</small></div><div class="stat-label">花牛苹果品种</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">70% 占比</div></div>
+    <div class="patrol-stat-card green"><div class="stat-value">--</div><div class="stat-label">预估总产量</div><div class="stat-trend" style="font-size:12px;color:var(--success);"></div></div>
+    <div class="patrol-stat-card blue"><div class="stat-value">--</div><div class="stat-label">天水基地</div><div class="stat-trend" style="font-size:12px;color:var(--success);"></div></div>
+    <div class="patrol-stat-card orange"><div class="stat-value">--</div><div class="stat-label">麦积区基地</div><div class="stat-trend" style="font-size:12px;color:var(--success);"></div></div>
+    <div class="patrol-stat-card purple"><div class="stat-value">--</div><div class="stat-label">花牛苹果品种</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);"></div></div>
   </div>
 
   <!-- 页签 -->
@@ -136,9 +136,9 @@
 <script src="js/shared/alert-data.js"></script>
 <script>
 // 产量模型数据统一取自 ModelStore（与移动端/大屏共用）
-const YIELD_MODEL = ModelStore.get('yield');
+let YIELD_MODEL = ModelStore.get('yield');
 // 各基地产量（模型预估 + 上年度实采，用于对比图与偏差率说明）
-const baseYieldData = YIELD_MODEL.lists.baseYield;
+let baseYieldData = YIELD_MODEL.lists.baseYield;
 
 // 偏差率着色：|偏差| ≤3% success / 3-7% warning / >7% error
 function deviationClass(dev) {
@@ -156,6 +156,11 @@ function renderDeviationNote() {
     base: b.base,
     dev: ((b.predict - b.actual) / b.actual) * 100
   }));
+  // 空库无基地数据时只展示口径说明，不计算平均/最大偏差
+  if (!items.length) {
+    box.innerHTML = '<strong>偏差率说明：</strong>' + note.formula + '暂无基地产量数据。' + note.rule;
+    return;
+  }
   const avg = items.reduce((s, i) => s + i.dev, 0) / items.length;
   const max = items.reduce((a, b) => (Math.abs(b.dev) > Math.abs(a.dev) ? b : a));
   const avgClass = deviationClass(avg);
@@ -187,7 +192,7 @@ function renderPlotYieldTable(M) {
   if (!tbody) return;
   const colorOf = c => c === 'success' ? 'var(--success)' : (c === 'warning' ? 'var(--warning)' : 'var(--error)');
   tbody.innerHTML = M.lists.plots.map(function(p) {
-    return '<tr>' +
+    return '<tr style="cursor:pointer;">' +
       '<td>' + p.plot + '</td>' +
       '<td>' + p.variety + '</td>' +
       '<td>' + p.area + '</td>' +
@@ -201,81 +206,84 @@ function renderPlotYieldTable(M) {
   }).join('');
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+// 产量模型偏差预警 → AlertStore（source=model / category=yield）
+function syncYieldAlerts() {
+  if (!(window.AlertStore && typeof AlertStore.syncSource === 'function')) return;
+  const items = [];
+  baseYieldData.forEach(function (b) {
+    const dev = (b.predict - b.actual) / b.actual * 100;
+    const abs = Math.abs(dev);
+    if (abs <= 3) return;                     // |偏差|≤3% 视为模型可信，不产警
+    items.push({
+      dedupeKey: 'model:yield:' + b.base,
+      category: 'yield',
+      level: abs > 7 ? 'important' : 'reminder',
+      title: '产量预测偏差：' + b.base + '基地 ' + (dev > 0 ? '+' : '') + dev.toFixed(1) + '%',
+      desc: '模型预估 ' + b.predict + ' 吨，上年度实采 ' + b.actual + ' 吨，偏差 '
+            + (dev > 0 ? '+' : '') + dev.toFixed(1) + '%，建议'
+            + (abs > 7 ? '校准模型参数并复核样本。' : '关注该基地挂果情况。'),
+      base: b.base,
+      value: Number(dev.toFixed(1)),
+      threshold: '|偏差率| > 3%'
+    });
+  });
+  AlertStore.syncSource('model', items, 'model:yield:');
+}
+
+// 整页重绘：统一取最新 ModelStore，空库时图表/列表为空、偏差说明降级
+function refreshYield() {
+  YIELD_MODEL = ModelStore.get('yield');
+  baseYieldData = YIELD_MODEL.lists.baseYield;
   ModelStore.hydrateKpi('.patrol-stats', 'yield');
   renderYieldFactors(YIELD_MODEL);
   renderPlotYieldTable(YIELD_MODEL);
-
-  // 各基地产量对比
   Chart.bar('#chart-bar', YIELD_MODEL.charts.baseYield);
-
-  // 模型预估 vs 上年度实采（分组柱状图）
   Chart.bar('#chart-yield-compare', YIELD_MODEL.charts.yieldCompare);
-
   renderDeviationNote();
-
-  // 产量模型偏差预警 → AlertStore（source=model / category=yield）
-  if (window.AlertStore && typeof AlertStore.syncSource === 'function') {
-    const items = [];
-    baseYieldData.forEach(function (b) {
-      const dev = (b.predict - b.actual) / b.actual * 100;
-      const abs = Math.abs(dev);
-      if (abs <= 3) return;                     // |偏差|≤3% 视为模型可信，不产警
-      items.push({
-        dedupeKey: 'model:yield:' + b.base,
-        category: 'yield',
-        level: abs > 7 ? 'important' : 'reminder',
-        title: '产量预测偏差：' + b.base + '基地 ' + (dev > 0 ? '+' : '') + dev.toFixed(1) + '%',
-        desc: '模型预估 ' + b.predict + ' 吨，上年度实采 ' + b.actual + ' 吨，偏差 '
-              + (dev > 0 ? '+' : '') + dev.toFixed(1) + '%，建议'
-              + (abs > 7 ? '校准模型参数并复核样本。' : '关注该基地挂果情况。'),
-        base: b.base,
-        value: Number(dev.toFixed(1)),
-        threshold: '|偏差率| > 3%'
-      });
-    });
-    AlertStore.syncSource('model', items, 'model:yield:');
-  }
-
-  // 果径分布
+  syncYieldAlerts();
   Chart.bar('#chart-fruit-size', YIELD_MODEL.charts.fruitSize);
+}
 
-  // 表格行点击 → 跳地块详情
-  document.querySelectorAll('#plotYieldBody tr').forEach(tr => {
-    tr.style.cursor = 'pointer';
-    tr.addEventListener('click', () => {
-      const name = tr.querySelector('td').textContent.trim();
-      const f = window.parent.document.querySelector('iframe[name="mainFrame"]');
-      if (f) f.src = 'enterprise_plot.html?plot=' + encodeURIComponent(name);
-      else location.href = 'enterprise_plot.html?plot=' + encodeURIComponent(name);
-    });
+document.addEventListener('DOMContentLoaded', function() {
+  refreshYield();
+
+  // 表格行点击 → 跳地块详情（事件委托，重绘后仍生效）
+  const tbody = document.getElementById('plotYieldBody');
+  if (tbody) tbody.addEventListener('click', function(e) {
+    if (e.target.closest('a')) return;        // 「详情」链接自行跳转
+    const tr = e.target.closest('tr');
+    if (!tr) return;
+    const td = tr.querySelector('td');
+    if (!td) return;
+    const name = td.textContent.trim();
+    const f = window.parent.document.querySelector('iframe[name="mainFrame"]');
+    if (f) f.src = 'enterprise_plot.html?plot=' + encodeURIComponent(name);
+    else location.href = 'enterprise_plot.html?plot=' + encodeURIComponent(name);
   });
 });
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-<script src="js/typography.js">
+<script src="js/typography.js"></script>
+<script>
 /* ============================================================
  * 后端数据到达后自动重绘
  * ------------------------------------------------------------
  * 数据层在「后端预加载完成」与「本地写入」两条路径上都会派发
  * <store>StoreChange 窗口事件；页面若不监听，首次渲染发生在数据
  * 到达之前，界面会一直停在空列表。此处统一订阅后自动重绘。
+ *
+ * 注意：只订阅 modelStoreChange。refreshYield 内部 syncYieldAlerts
+ * 会广播 alertStoreChange，若再订阅它会造成无限循环。
  * ============================================================ */
 (function () {
-  // StoreLive 由 common/js/api.js 提供；部分页面未静态引入该文件，
-  // 此时回退到原生窗口事件订阅，避免订阅被静默跳过导致页面不重绘。
   function bind(events, handler) {
     if (typeof StoreLive !== 'undefined') return StoreLive.on(events, handler);
     (Array.isArray(events) ? events : [events]).forEach(function (ev) {
       if (ev) window.addEventListener(ev, function () { try { handler(); } catch (e) { console.warn('[store-live]', e); } });
     });
   }
-  bind(["modelStoreChange","alertStoreChange"], function () {
-      renderDeviationNote();
-      renderYieldFactors();
-      renderPlotYieldTable();
-  });
+  bind(["modelStoreChange"], refreshYield);
 })();
 </script>
 </body>

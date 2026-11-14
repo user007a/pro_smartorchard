@@ -67,6 +67,8 @@
   /* 后端桥接状态 */
   var backendReady = false;
   var backendLoadPromise = null;
+  /* 本 store 局部写入标记：竞态守卫只看自身写入，避免多 store 页面共享全局计数器互相误丢预加载 */
+  var localWriteMark = 0;
   var persistTimer = null;
 
   function backendApi() {
@@ -84,7 +86,7 @@
 
   /** 从后端聚合接口拉取生产数据，成功后合并进内存并通知 */
   function preloadFromBackend() {
-    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
+    var writeMark0 = localWriteMark;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -93,7 +95,7 @@
     }).then(function (res) {
       if (res && res.ok && res.data) {
         // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
-        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
+        if (localWriteMark !== writeMark0) return res;
         var agg = global.ProductionMapper.toAggregate(res.data);
         // 后端数据合并进 store 内存（空数组时保留默认种子兜底）
         var base = defaults();
@@ -528,6 +530,7 @@
     /* 用户主动写入：计入预加载竞态计数 */
 
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     try { recompute(); } catch (e) { console.warn('[ProductionStore] recompute 失败', e); }
     var ok = save();
     notify(reason);
@@ -740,6 +743,7 @@
     /* 用户主动写入：计入预加载竞态计数 */
 
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     if (!item || typeof item !== 'object') { lastError = '写入数据为空'; return null; }
     var d = ensure();
     var list = d[entity];
@@ -760,6 +764,7 @@
     /* 用户主动写入：计入预加载竞态计数 */
 
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var d = ensure();
     if (!Array.isArray(d[entity])) { lastError = '未知的数据集合：' + entity; return false; }
     var exists = d[entity].some(function (x) { return String(x.id) === String(id); });

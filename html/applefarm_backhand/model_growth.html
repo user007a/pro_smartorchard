@@ -69,10 +69,10 @@
 
   <!-- 顶部4指标 -->
   <div class="patrol-stats">
-    <div class="patrol-stat-card green"><div class="stat-value">126</div><div class="stat-label">监测地块总数</div><div class="stat-trend" style="font-size:12px;color:var(--success);">覆盖率 100%</div></div>
-    <div class="patrol-stat-card blue"><div class="stat-value">98</div><div class="stat-label">膨大期地块</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">占比 77.8%</div></div>
-    <div class="patrol-stat-card red"><div class="stat-value">5</div><div class="stat-label">生长异常地块</div><div class="stat-trend" style="font-size:12px;color:var(--error);">↑ 1 较上周</div></div>
-    <div class="patrol-stat-card orange"><div class="stat-value">12</div><div class="stat-label">本周农事建议</div><div class="stat-trend" style="font-size:12px;color:var(--success);">采纳率 88%</div></div>
+    <div class="patrol-stat-card green"><div class="stat-value">--</div><div class="stat-label">监测地块总数</div><div class="stat-trend" style="font-size:12px;color:var(--success);"></div></div>
+    <div class="patrol-stat-card blue"><div class="stat-value">--</div><div class="stat-label">膨大期地块</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);"></div></div>
+    <div class="patrol-stat-card red"><div class="stat-value">--</div><div class="stat-label">生长异常地块</div><div class="stat-trend" style="font-size:12px;color:var(--error);"></div></div>
+    <div class="patrol-stat-card orange"><div class="stat-value">--</div><div class="stat-label">本周农事建议</div><div class="stat-trend" style="font-size:12px;color:var(--success);"></div></div>
   </div>
 
   <!-- 页签 -->
@@ -114,7 +114,7 @@
     </div>
 
     <div class="chart-section">
-      <h2 class="section-title">异常报警 <span id="alertCountBadge" style="background:var(--error);color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;font-weight:500;margin-left:4px;">5</span></h2>
+      <h2 class="section-title">异常报警 <span id="alertCountBadge" style="background:var(--error);color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;font-weight:500;margin-left:4px;">0</span></h2>
       <div class="alert-list" id="alertList"></div>
     </div>
   </div>
@@ -204,15 +204,13 @@ function renderGrowthAlerts(M) {
   if (badge) badge.textContent = M.lists.alertCount;
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+// 整页重绘：KPI + 列表 + 图表统一取最新 ModelStore（后端预加载到达 / 本地写入都会触发）
+function renderGrowthAll() {
   const M = ModelStore.get('growth');
-
-  // 0. 顶部指标与列表
   ModelStore.hydrateKpi('.patrol-stats', 'growth');
   renderGrowthAdvice(M);
   renderGrowthAlerts(M);
   renderGrowthPanels();
-  ModelStore.subscribe(renderGrowthPanels);
 
   // 1. 积温曲线
   Chart.line('#chart-temp', M.charts.tempTrend);
@@ -229,18 +227,24 @@ document.addEventListener('DOMContentLoaded', function() {
     yAxis: { type: 'category' },
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } }
   });
+}
 
-  // 4. 报警点击
-  document.querySelectorAll('#alertList .alert-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const plot = item.dataset.plot;
-      const f = window.parent.document.querySelector('iframe[name="mainFrame"]');
-      if (f) f.src = 'enterprise_plot.html?plot=' + encodeURIComponent(plot);
-      else location.href = 'enterprise_plot.html?plot=' + encodeURIComponent(plot);
-    });
+document.addEventListener('DOMContentLoaded', function() {
+  // subscribe 会先同步回调一次完成首渲染，之后随数据到达自动重绘
+  ModelStore.subscribe(renderGrowthAll);
+
+  // 报警点击（事件委托，重绘后仍有效）
+  const alertList = document.getElementById('alertList');
+  if (alertList) alertList.addEventListener('click', function(e) {
+    const item = e.target.closest('.alert-item');
+    if (!item) return;
+    const plot = item.dataset.plot;
+    const f = window.parent.document.querySelector('iframe[name="mainFrame"]');
+    if (f) f.src = 'enterprise_plot.html?plot=' + encodeURIComponent(plot);
+    else location.href = 'enterprise_plot.html?plot=' + encodeURIComponent(plot);
   });
 
-  // 5. 顶部统计卡点击
+  // 顶部统计卡点击
   document.querySelectorAll('.patrol-stat-card').forEach((card, i) => {
     card.addEventListener('click', () => {
       const targets = ['enterprise_plot.html', 'enterprise_plot.html?stage=enlarging', 'alert_farming.html', 'farming_plan.html'];
@@ -328,13 +332,16 @@ function editKeyMetric(index) {
 function renderGrowthParams(M) {
   const tbody = document.getElementById('growthParamBody');
   if (!tbody) return;
+  const dash = M.dashboard || {};
+  const gdd = M.gdd || {};
+  const num = function(v, suffix) { return (v === null || v === undefined || v === '') ? '--' : v + suffix; };
   const rows = [
-    ['长势指数', M.dashboard.vigorIndex + ' / 100'],
-    ['成熟度预测吻合率', M.dashboard.maturityHitRate + ' %'],
-    ['生育期积温累计', M.gdd.cumulative + ' ' + M.gdd.unit],
-    ['近 12 周周均积温', '+' + M.gdd.weeklyAvg + ' ' + M.gdd.unit],
-    ['较常年同期', M.gdd.compareNormal],
-    ['最近采样日期', M.dashboard.lastSampledAt || '-']
+    ['长势指数', num(dash.vigorIndex, ' / 100')],
+    ['成熟度预测吻合率', num(dash.maturityHitRate, ' %')],
+    ['生育期积温累计', num(gdd.cumulative, ' ' + (gdd.unit || ''))],
+    ['近 12 周周均积温', (gdd.weeklyAvg === null || gdd.weeklyAvg === undefined) ? '--' : '+' + gdd.weeklyAvg + ' ' + (gdd.unit || '')],
+    ['较常年同期', gdd.compareNormal || '--'],
+    ['最近采样日期', dash.lastSampledAt || '-']
   ];
   tbody.innerHTML = rows.map(function (r) {
     return '<tr><td>' + r[0] + '</td><td style="text-align:right;"><b>' + r[1] + '</b></td></tr>';

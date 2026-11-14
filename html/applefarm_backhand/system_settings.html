@@ -687,6 +687,12 @@
           </svg>
           系统配置
         </div>
+        <div class="system-tab" onclick="switchTab(event, 'notice')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+          </svg>
+          系统通知
+        </div>
         <div class="system-tab" onclick="switchTab(event, 'logs')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>
@@ -1096,6 +1102,40 @@
           </div>
         </div>
       </div>
+      <div id="tab-notice" class="system-tab-content">
+        <div class="panel-container">
+          <div class="panel-header">
+            <div class="panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+              </svg>
+              系统通知列表
+            </div>
+            <div class="search-wrapper">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                </svg>
+                <input type="text" placeholder="搜索通知标题..." id="noticeSearchInput" onkeyup="searchNotices()">
+              </div>
+              <button class="primary-btn" onclick="openAddNoticeModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 5v14"/><path d="M5 12h14"/>
+                </svg>
+                新增通知
+              </button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <table class="data-grid">
+              <thead>
+                <tr><th>通知标题</th><th>类型</th><th>内容摘要</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
+              </thead>
+              <tbody id="noticeTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
       <div id="tab-logs" class="system-tab-content">
         <div class="panel-container">
           <div class="panel-header">
@@ -1145,6 +1185,7 @@
 </div>
 <script src="../common/js/api.js"></script>
 <script src="js/shared/data-store.js"></script>
+<script src="js/shared/notice-store.js"></script>
 <script>
 let mockUsers = [];
 let mockRoles = [];
@@ -1917,6 +1958,8 @@ function switchTab(event, tabId) {
   document.querySelectorAll('.system-tab-content').forEach(function(content) { content.classList.remove('active'); });
   event.currentTarget.classList.add('active');
   document.getElementById('tab-' + tabId).classList.add('active');
+  /* 跨 iframe 内存镜像不互通：进入通知 tab 时重拉后端，保证看到最新数据 */
+  if (tabId === 'notice' && window.NoticeStore) NoticeStore.reload();
 }
 /* ============================================================
  * 部门管理 / 岗位管理
@@ -2484,6 +2527,171 @@ function nowText() {
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
+/* ============================================================
+ * 系统通知（数据来自共享 Store：js/shared/notice-store.js）
+ *   类型 / 状态枚举取 sf_dict（NOTICE_TYPE / NOTICE_STATUS），不硬编码
+ * ============================================================ */
+var noticeData = [];
+var noticeTypeOptions = [];
+var noticeStatusOptions = [];
+
+/* 解析字典值：兼容 JSON [{value,label}] 与 "code=label,..." / "a,b" 两种格式 */
+function parseDictOptions(raw) {
+  var out = [];
+  var text = String(raw || '').trim();
+  if (!text) return out;
+  if (text.charAt(0) === '[') {
+    try {
+      JSON.parse(text).forEach(function (it) {
+        var value = it.value || it.code || '';
+        if (value) out.push({ value: String(value), label: String(it.label || it.name || value) });
+      });
+      return out;
+    } catch (e) { /* 解析失败按逗号分隔兜底 */ }
+  }
+  text.split(/[,，]/).forEach(function (part) {
+    var kv = part.split(/[=:]/);
+    var value = (kv[0] || '').trim();
+    if (value) out.push({ value: value, label: (kv[1] || kv[0]).trim() });
+  });
+  return out;
+}
+
+function loadNoticeDicts() {
+  if (!window.Api) return;
+  Api.dict('NOTICE_TYPE').then(function (r) {
+    if (r && r.ok && r.data) noticeTypeOptions = parseDictOptions(r.data.dict_value);
+    renderNotices();
+  }).catch(function () {});
+  Api.dict('NOTICE_STATUS').then(function (r) {
+    if (r && r.ok && r.data) noticeStatusOptions = parseDictOptions(r.data.dict_value);
+    renderNotices();
+  }).catch(function () {});
+}
+
+function noticeOptionLabel(options, code) {
+  var found = options.filter(function (o) { return o.value === code; })[0];
+  return found ? found.label : (code || '-');
+}
+
+function refreshNotices() {
+  if (!window.NoticeStore) { setTbodyStatus('noticeTableBody', 6, '数据加载失败：接口未就绪', true); return; }
+  noticeData = NoticeStore.notices();
+  renderNotices();
+}
+
+function renderNotices() {
+  var body = document.getElementById('noticeTableBody');
+  if (!body) return;
+  var keyword = ((document.getElementById('noticeSearchInput') || {}).value || '').toLowerCase();
+  var list = noticeData.filter(function (n) {
+    return !keyword || String(n.title).toLowerCase().indexOf(keyword) >= 0;
+  });
+  if (!list.length) {
+    setTbodyStatus('noticeTableBody', 6, noticeData.length ? '未找到匹配的通知' : '暂无系统通知，点击右上角「新增通知」创建', false);
+    return;
+  }
+  body.innerHTML = list.map(function (n) {
+    var statusClass = n.status === 'active' ? 'active' : 'disabled';
+    var summary = String(n.content || '').replace(/\s+/g, ' ');
+    if (summary.length > 40) summary = summary.slice(0, 40) + '…';
+    return '<tr>' +
+      '<td><strong>' + escSource(n.title) + '</strong></td>' +
+      '<td>' + escSource(noticeOptionLabel(noticeTypeOptions, n.type)) + '</td>' +
+      '<td>' + escSource(summary || '-') + '</td>' +
+      '<td><span class="status-badge ' + statusClass + '">' + escSource(noticeOptionLabel(noticeStatusOptions, n.status)) + '</span></td>' +
+      '<td>' + escSource(n.createdAt || '-') + '</td>' +
+      '<td><div class="action-group">' +
+        '<button class="action-btn edit" onclick="openEditNoticeModal(\'' + n.code + '\')">编辑</button>' +
+        '<button class="action-btn delete" onclick="openDeleteNoticeModal(\'' + n.code + '\')">删除</button>' +
+      '</div></td></tr>';
+  }).join('');
+}
+
+function searchNotices() { renderNotices(); }
+
+function noticeFormHtml(item) {
+  var v = item || {};
+  function opts(options, cur) {
+    if (!options.length) {
+      return cur
+        ? '<option value="' + escSource(cur) + '" selected>' + escSource(cur) + '</option>'
+        : '<option value="">（字典未配置）</option>';
+    }
+    var html = options.map(function (o) {
+      return '<option value="' + escSource(o.value) + '"' + (o.value === cur ? ' selected' : '') + '>' + escSource(o.label) + '</option>';
+    }).join('');
+    if (cur && !options.some(function (o) { return o.value === cur; })) {
+      html = '<option value="' + escSource(cur) + '" selected>' + escSource(cur) + '</option>' + html;
+    }
+    return html;
+  }
+  return '<div class="form-row">' +
+      '<div class="form-group full"><label class="form-label required">通知标题</label><input type="text" class="form-input" id="modalNoticeTitle" maxlength="200" value="' + escSource(v.title || '') + '" placeholder="请输入通知标题"></div>' +
+      '<div class="form-group half"><label class="form-label">类型</label><select class="form-select" id="modalNoticeType">' + opts(noticeTypeOptions, v.type || '') + '</select></div>' +
+      '<div class="form-group half"><label class="form-label">状态</label><select class="form-select" id="modalNoticeStatus">' + opts(noticeStatusOptions, v.status || 'active') + '</select></div>' +
+      '<div class="form-group full"><label class="form-label">通知内容</label><textarea class="form-input" id="modalNoticeContent" rows="4" placeholder="请输入通知内容">' + escSource(v.content || '') + '</textarea></div>' +
+    '</div>';
+}
+
+function openAddNoticeModal() {
+  openModal('新增系统通知', noticeFormHtml(null),
+    '<button class="btn btn-secondary" onclick="closeModal()">取消</button>' +
+    '<button class="btn btn-primary" onclick="addNotice()">确定</button>');
+}
+function openEditNoticeModal(code) {
+  var item = noticeData.filter(function (n) { return n.code === code; })[0];
+  if (!item) { alert('通知不存在'); return; }
+  window.__currentNoticeCode = code;
+  openModal('编辑系统通知', noticeFormHtml(item),
+    '<button class="btn btn-secondary" onclick="closeModal()">取消</button>' +
+    '<button class="btn btn-primary" onclick="editNotice()">确定</button>');
+}
+function collectNoticeForm() {
+  return {
+    title: ((document.getElementById('modalNoticeTitle') || {}).value || '').trim(),
+    type: (document.getElementById('modalNoticeType') || {}).value || '',
+    status: (document.getElementById('modalNoticeStatus') || {}).value || 'active',
+    content: ((document.getElementById('modalNoticeContent') || {}).value || '').trim(),
+  };
+}
+function addNotice() {
+  var form = collectNoticeForm();
+  if (!form.title) { alert('请填写通知标题'); return; }
+  var res = NoticeStore.saveNotice(form);
+  if (!res.ok) { alert('新增通知失败：' + res.message); return; }
+  closeModal();
+  alert('新增通知成功：' + form.title);
+}
+function editNotice() {
+  var code = window.__currentNoticeCode;
+  if (!code) { alert('未获取到目标通知，请重新打开弹窗'); return; }
+  var form = collectNoticeForm();
+  if (!form.title) { alert('请填写通知标题'); return; }
+  form.code = code;
+  var res = NoticeStore.saveNotice(form);
+  if (!res.ok) { alert('编辑通知失败：' + res.message); return; }
+  closeModal();
+  alert('编辑通知成功：' + form.title);
+}
+function openDeleteNoticeModal(code) {
+  var item = noticeData.filter(function (n) { return n.code === code; })[0];
+  if (!item) { alert('通知不存在'); return; }
+  window.__currentNoticeCode = code;
+  openModal('删除系统通知',
+    '<div class="confirm-warning"><p>确认要删除通知「' + escSource(item.title) + '」吗？删除后首页不再展示。</p></div>',
+    '<button class="btn btn-secondary" onclick="closeModal()">取消</button>' +
+    '<button class="btn btn-primary" onclick="deleteNotice()">确定删除</button>');
+}
+function deleteNotice() {
+  var code = window.__currentNoticeCode;
+  if (!code) { closeModal(); return; }
+  var res = NoticeStore.removeNotice(code);
+  if (!res.ok) { alert('删除通知失败：' + res.message); return; }
+  closeModal();
+  alert('通知已删除');
+}
+
 /* 严格空库模式：字典 / 数据源由 loadSystemData()，用户 / 角色 / 权限 / 菜单由 loadAccountData() 从后端 API 取数 */
 document.addEventListener('DOMContentLoaded', function() {
   // 字典 / 数据源 / 用户 / 角色 / 权限矩阵：先显示加载态，数据由后端 API 异步取数
@@ -2496,12 +2704,16 @@ document.addEventListener('DOMContentLoaded', function() {
   setTbodyStatus('logTableBody', 7, '暂无数据', false);
   setTbodyStatus('deptTableBody', 6, '暂无数据', false);
   setTbodyStatus('postTableBody', 6, '暂无数据', false);
+  setTbodyStatus('noticeTableBody', 6, '正在加载数据...', false);
   renderUserStats([]);
   var permSel = document.getElementById('permRoleSelect');
   if (permSel) permSel.addEventListener('change', renderPermMatrix);
   syncPostSelection();
   loadSystemData();
   loadAccountData();
+  loadNoticeDicts();
+  if (window.NoticeStore) NoticeStore.subscribe(refreshNotices);
+  refreshNotices();
 });
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>

@@ -3213,3 +3213,19 @@ CREATE TABLE `sf_notification` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_notice_user_code` (`user_id`,`notice_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='通知设置';
+
+DROP TABLE IF EXISTS `sf_system_notice`;
+CREATE TABLE `sf_system_notice` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `notice_code` varchar(50) NOT NULL COMMENT '通知编号（业务唯一键，如 SN-0001）',
+  `title` varchar(200) NOT NULL COMMENT '通知标题',
+  `content` text COMMENT '通知内容',
+  `notice_type` varchar(50) DEFAULT NULL COMMENT '类型（→ sf_dict NOTICE_TYPE）',
+  `notice_status` varchar(20) NOT NULL DEFAULT 'active' COMMENT '状态：active=启用 disabled=停用（→ sf_dict NOTICE_STATUS）',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_system_notice_code` (`notice_code`),
+  KEY `idx_system_notice_status` (`notice_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='系统通知（系统设置维护，首页展示）';

@@ -856,6 +856,8 @@
 
   var backendReady = false;      // 后端桥接是否已启用
   var backendLoadPromise = null; // 预加载 Promise（防重入）
+  /* 本 store 局部写入标记：竞态守卫只看自身写入，避免多 store 页面共享全局计数器互相误丢预加载 */
+  var localWriteMark = 0;
 
   function backendApi() {
     // 依赖全局 Api（common/js/api.js）与 DeviceMapper（device-mapper.js）
@@ -875,7 +877,7 @@
   /** 预加载：从后端拉取聚合数据，成功后替换内存并通知
    *  必须等依赖（Api / DeviceMapper）加载完成后再发起，否则映射层未就绪会静默失败。 */
   function preloadFromBackend() {
-    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
+    var writeMark0 = localWriteMark;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -884,7 +886,7 @@
     }).then(function (res) {
       if (res && res.ok && res.data) {
         // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
-        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
+        if (localWriteMark !== writeMark0) return res;
         var agg = global.DeviceMapper.toAggregate(res.data);
         inMemory = agg;
         backendReady = true;
@@ -1651,6 +1653,7 @@
     /* 用户主动写入：计入预加载竞态计数 */
 
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var d = ensure();
     var list = d[listName];
     if (!list) return false;
@@ -1666,6 +1669,7 @@
     /* 用户主动写入：计入预加载竞态计数 */
 
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var d = ensure();
     var existed = d[listName].some(function (x) { return x.id === id; });
     if (!existed) return false;

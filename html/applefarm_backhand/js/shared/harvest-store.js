@@ -66,6 +66,8 @@
   /* 后端桥接状态 */
   var backendReady = false;
   var backendLoadPromise = null;
+  /* 本 store 局部写入标记：竞态守卫只看自身写入，避免多 store 页面共享全局计数器互相误丢预加载 */
+  var localWriteMark = 0;
   var persistTimer = null;
 
   function backendApi() {
@@ -83,7 +85,7 @@
 
   /** 从后端聚合接口拉取采收数据，成功后合并进内存并通知 */
   function preloadFromBackend() {
-    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
+    var writeMark0 = localWriteMark;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -92,7 +94,7 @@
     }).then(function (res) {
       if (res && res.ok && res.data) {
         // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
-        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
+        if (localWriteMark !== writeMark0) return res;
         var agg = global.HarvestMapper.toAggregate(res.data);
         // 后端数据合并进 store 内存（空数组时保留默认种子兜底）
         var base = defaults();
@@ -674,6 +676,7 @@
     /* 用户主动写入：计入预加载竞态计数 */
 
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var ok = save();
     notify(reason);
     // 后端持久化（防抖，未登录/依赖未就绪时静默跳过）
@@ -1268,6 +1271,7 @@
   function signShipment(id, opts) {
     /* 用户主动写入：计入预加载竞态计数 */
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     opts = opts || {};
     var item = get('shipments', id);
     if (!item) return { ok: false, item: null, message: '发货单不存在或已被删除' };
@@ -1295,6 +1299,7 @@
   function remove(entity, id) {
     /* 用户主动写入：计入预加载竞态计数 */
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var d = ensure();
     if (!Array.isArray(d[entity])) return { ok: false, message: '未知的数据集合：' + entity };
     var idx = findIndexById(d[entity], id);
@@ -1320,6 +1325,7 @@
   function advance(entity, id, to, patch) {
     /* 用户主动写入：计入预加载竞态计数 */
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var item = get(entity, id);
     if (!item) return { ok: false, item: null, message: '数据不存在或已被删除' };
     if (!canTransition(entity, item.status, to)) {

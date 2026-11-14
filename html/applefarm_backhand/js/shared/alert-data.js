@@ -63,6 +63,8 @@
   })();
 
   var backendLoadPromise = null;
+  /* 本 store 局部写入标记：竞态守卫只看自身写入，避免多 store 页面共享全局计数器互相误丢预加载 */
+  var localWriteMark = 0;
   var persistTimer = null;
 
   function backendApi() {
@@ -77,7 +79,7 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
-    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
+    var writeMark0 = localWriteMark;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -85,8 +87,8 @@
       return api.get('alert/aggregate');
     }).then(function (res) {
       if (res && res.ok && res.data) {
-        // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
-        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
+        // 严格模式：预加载在途期间本 store 有过本地写入，保留本地结果，避免陈旧快照覆盖
+        if (localWriteMark !== writeMark0) return res;
         var agg = global.AlertMapper.toAggregate(res.data);
         var e = ensureLoaded();
         e.alerts = agg.alerts || [];
@@ -721,6 +723,7 @@
 
   function broadcast(reason){
     try {
+      if (reason !== 'backend-loaded') localWriteMark++;
       saveToStorage();
       notify(reason);
       try {

@@ -77,10 +77,10 @@
 
   <!-- 顶部 4 指标 -->
   <div class="patrol-stats">
-    <div class="patrol-stat-card green"><div class="stat-value" style="font-size:20px;">膨大期</div><div class="stat-label">花牛苹果·晚熟</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">98块地块</div></div>
-    <div class="patrol-stat-card purple"><div class="stat-value" style="font-size:20px;">着色期</div><div class="stat-label">花牛苹果·早熟</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">8块地块</div></div>
-    <div class="patrol-stat-card orange"><div class="stat-value" style="font-size:20px;">采收期</div><div class="stat-label">金帅·中熟</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">4块地块</div></div>
-    <div class="patrol-stat-card blue"><div class="stat-value">3</div><div class="stat-label">品种跟踪</div><div class="stat-trend" style="font-size:12px;color:var(--success);">本周全预测</div></div>
+    <div class="patrol-stat-card green"><div class="stat-value" style="font-size:20px;">--</div><div class="stat-label">花牛苹果·晚熟</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);"></div></div>
+    <div class="patrol-stat-card purple"><div class="stat-value" style="font-size:20px;">--</div><div class="stat-label">花牛苹果·早熟</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);"></div></div>
+    <div class="patrol-stat-card orange"><div class="stat-value" style="font-size:20px;">--</div><div class="stat-label">金帅·中熟</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);"></div></div>
+    <div class="patrol-stat-card blue"><div class="stat-value">--</div><div class="stat-label">品种跟踪</div><div class="stat-trend" style="font-size:12px;color:var(--success);"></div></div>
   </div>
 
   <!-- 页签 -->
@@ -93,7 +93,7 @@
   <div class="mp-panel active" data-panel="calendar">
   <!-- 物候期年历视图（整行） -->
   <div class="chart-section" style="margin-bottom:20px;">
-    <h2 class="section-title">物候期年历视图 <span style="font-size:12px;color:var(--text-tertiary);font-weight:400;">红虚线=今天 09-24</span></h2>
+    <h2 class="section-title">物候期年历视图 <span id="todayHint" style="font-size:12px;color:var(--text-tertiary);font-weight:400;">红虚线=今天</span></h2>
     <div id="chart-calendar" class="chart-container" style="height:340px;"></div>
   </div>
   </div>
@@ -190,8 +190,8 @@
 <script>
 // ===== 物候期配置（localStorage: snzg_phenology_stages）=====
 // 默认值与品种偏移统一取自 ModelStore，避免与移动端/大屏数据分叉
-const PHENOLOGY_MODEL = ModelStore.get('phenology');
-const PHENOLOGY_STAGE_DEFAULTS = PHENOLOGY_MODEL.lists.stages.map(s => ({ ...s }));
+let PHENOLOGY_MODEL = ModelStore.get('phenology');
+let PHENOLOGY_STAGE_DEFAULTS = PHENOLOGY_MODEL.lists.stages.map(s => ({ ...s }));
 const PHENOLOGY_STORAGE_KEY = PHENOLOGY_MODEL.meta.storageKey || 'snzg_phenology_stages';
 
 // 品种偏移（保持原有逻辑不变）
@@ -202,16 +202,18 @@ let calendarChart = null;
 let editingStageIndex = -1;
 
 function loadPhenologyStages() {
+  // 默认物候期以最新 ModelStore 为准（后端预加载异步到达，不能只用首屏快照）
+  const defaults = (ModelStore.get('phenology').lists.stages || []);
   try {
     const raw = localStorage.getItem(PHENOLOGY_STORAGE_KEY);
     if (raw) {
       const saved = JSON.parse(raw);
-      if (Array.isArray(saved) && saved.length === PHENOLOGY_STAGE_DEFAULTS.length) {
-        return saved.map((s, i) => ({ ...PHENOLOGY_STAGE_DEFAULTS[i], ...s }));
+      if (Array.isArray(saved) && saved.length === defaults.length) {
+        return saved.map((s, i) => ({ ...defaults[i], ...s }));
       }
     }
   } catch (e) { /* 存储不可用时使用默认值 */ }
-  return PHENOLOGY_STAGE_DEFAULTS.map(s => ({ ...s }));
+  return defaults.map(s => ({ ...s }));
 }
 
 function savePhenologyStages() {
@@ -445,11 +447,20 @@ function renderTaskList(M) {
   }).join('');
 }
 
+// 年历「今天」标注文案（日期来自物候期快照，无配置时不显示具体日期）
+function renderTodayHint() {
+  const el = document.getElementById('todayHint');
+  if (!el) return;
+  const snap = ModelStore.phenologySnapshot();
+  el.textContent = '红虚线=今天' + (snap && snap.today ? ' ' + snap.today : '');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   const M = PHENOLOGY_MODEL;
   ModelStore.hydrateKpi('.patrol-stats', 'phenology');
   renderDeviationList(M);
   renderTaskList(M);
+  renderTodayHint();
 
   renderStageConfig();
 
@@ -499,12 +510,13 @@ function publishPhenologyTask(taskType, variety) {
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-<script src="js/typography.js">
+<script src="js/typography.js"></script>
+<script>
 /* ============================================================
  * 后端数据到达后自动重绘
  * ------------------------------------------------------------
  * 数据层在「后端预加载完成」与「本地写入」两条路径上都会派发
- * <store>StoreChange 窗口事件；页面若不监听，首次渲染发生在数据
+ * modelStoreChange 窗口事件；页面若不监听，首次渲染发生在数据
  * 到达之前，界面会一直停在空列表。此处统一订阅后自动重绘。
  * ============================================================ */
 (function () {
@@ -517,9 +529,15 @@ function publishPhenologyTask(taskType, variety) {
     });
   }
   bind(["modelStoreChange"], function () {
-      renderDeviationList();
-      renderTaskList();
-      loadPhenologyStages();
+      PHENOLOGY_MODEL = ModelStore.get('phenology');
+      PHENOLOGY_STAGE_DEFAULTS = PHENOLOGY_MODEL.lists.stages.map(s => ({ ...s }));
+      phenologyStages = loadPhenologyStages();
+      ModelStore.hydrateKpi('.patrol-stats', 'phenology');
+      renderDeviationList(PHENOLOGY_MODEL);
+      renderTaskList(PHENOLOGY_MODEL);
+      renderTodayHint();
+      renderStageConfig();
+      renderCalendarChart();
   });
 })();
 </script>

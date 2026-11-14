@@ -36,6 +36,8 @@
   })();
 
   var backendLoadPromise = null;
+  /* 本 store 局部写入标记：竞态守卫只看自身写入，避免多 store 页面共享全局计数器互相误丢预加载 */
+  var localWriteMark = 0;
   var persistTimer = null;
 
   function backendApi() {
@@ -50,7 +52,7 @@
     try { return !!api.isLoggedIn(); } catch (e) { return false; }
   }
   function preloadFromBackend() {
-    var writeMark0 = global.__STRICT_DB_WRITES__ || 0;
+    var writeMark0 = localWriteMark;
     if (backendLoadPromise) return backendLoadPromise;
     backendLoadPromise = Promise.resolve(depsReady).then(function () {
       var api = backendApi();
@@ -59,7 +61,7 @@
     }).then(function (res) {
       if (res && res.ok && res.data) {
         // 严格模式：预加载在途期间用户保存过数据，保留本地结果，避免陈旧快照覆盖
-        if (typeof global.__STRICT_DB_WRITES__ === "number" && global.__STRICT_DB_WRITES__ !== writeMark0) return res;
+        if (localWriteMark !== writeMark0) return res;
         var agg = global.AdoptionMapper.toAggregate(res.data);
         var e = ensure();
         ['trees', 'orders', 'harvests', 'farmings'].forEach(function (k) {
@@ -578,6 +580,7 @@
     /* 用户主动写入：计入预加载竞态计数 */
 
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var ok = save();
     if (ok) notify(reason || 'commit');
     if (typeof schedulePersist === 'function' && reason !== 'backend-loaded') schedulePersist(reason);
@@ -681,6 +684,7 @@
     /* 用户主动写入：计入预加载竞态计数 */
 
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var d = payload || {};
     var code = normalizeCode(d.treeCode || d.treeNo);
     if (!code) fail('果树编号格式不正确，请使用 A1-001 形式');
@@ -759,6 +763,7 @@
     /* 用户主动写入：计入预加载竞态计数 */
 
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var t = getTree(idOrCode);
     if (!t) fail('果树不存在或已被删除');
     var active = orders().filter(function (o) {
@@ -824,6 +829,7 @@
     /* 用户主动写入：计入预加载竞态计数 */
 
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var d = payload || {};
     var tree = findTree(d.treeCode || d.treeNo);
     if (!tree) fail('所选果树不存在，请先在认养果树中登记编号');
@@ -1235,6 +1241,7 @@
     /* 用户主动写入：计入预加载竞态计数 */
 
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var d = payload || {};
     var tree = findTree(d.treeCode);
     if (!tree) fail('所选果树不在认养台账中');
@@ -1331,6 +1338,7 @@
   function confirmHarvest(idOrCode, extra) {
     /* 用户主动写入：计入预加载竞态计数 */
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var key = String(idOrCode || '');
     var h = harvests().filter(function (x) { return x.id === key || x.treeCode === normalizeCode(key); })[0];
     if (!h) fail('采收记录不存在');
@@ -1424,6 +1432,7 @@
   function saveFarming(payload) {
     /* 用户主动写入：计入预加载竞态计数 */
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var d = payload || {};
     var tree = findTree(d.treeCode);
     if (!tree) fail('所选果树不在认养台账中');
@@ -1656,6 +1665,7 @@
   function saveCert(payload) {
     /* 用户主动写入：计入预加载竞态计数 */
     global.__STRICT_DB_WRITES__ = (global.__STRICT_DB_WRITES__ || 0) + 1;
+    localWriteMark++;
     var d = payload || {};
     var code = normalizeCode(d.treeNo || d.treeCode);
     if (!code) fail('证书关联的果树编号格式不正确');

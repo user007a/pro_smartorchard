@@ -94,10 +94,10 @@
 
   <!-- 顶部4指标 -->
   <div class="patrol-stats">
-    <div class="patrol-stat-card blue"><div class="stat-value">26<small style="font-size:16px;font-weight:400;">°C</small></div><div class="stat-label">当前温度</div><div class="stat-trend" style="font-size:12px;color:var(--success);">↑ 2° 较昨日</div></div>
-    <div class="patrol-stat-card green"><div class="stat-value">68<small style="font-size:16px;font-weight:400;">%</small></div><div class="stat-label">相对湿度</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">适宜</div></div>
-    <div class="patrol-stat-card orange"><div class="stat-value">3.2<small style="font-size:16px;font-weight:400;">m/s</small></div><div class="stat-label">风速·东南风</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">3级</div></div>
-    <div class="patrol-stat-card purple"><div class="stat-value">0<small style="font-size:16px;font-weight:400;">mm</small></div><div class="stat-label">今日降雨</div><div class="stat-trend" style="font-size:12px;color:var(--success);">晴朗</div></div>
+    <div class="patrol-stat-card blue"><div class="stat-value">--</div><div class="stat-label">当前温度</div><div class="stat-trend" style="font-size:12px;color:var(--success);"></div></div>
+    <div class="patrol-stat-card green"><div class="stat-value">--</div><div class="stat-label">相对湿度</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);"></div></div>
+    <div class="patrol-stat-card orange"><div class="stat-value">--</div><div class="stat-label">风速·东南风</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);"></div></div>
+    <div class="patrol-stat-card purple"><div class="stat-value">--</div><div class="stat-label">今日降雨</div><div class="stat-trend" style="font-size:12px;color:var(--success);"></div></div>
   </div>
 
   <!-- 页签 -->
@@ -229,42 +229,43 @@ function renderWeatherWarnings(M) {
   }).join('');
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-  const M = ModelStore.get('weather');
+// 极端天气模型预警 → AlertStore（source=model / category=weather）
+function syncWeatherAlerts() {
+  if (!window.AlertStore || typeof AlertStore.syncSource !== 'function') return;
+  const items = [];
+  document.querySelectorAll('.countdown-card').forEach(function(card) {
+    const name = (card.querySelector('.countdown-name') || {}).textContent || '';
+    const hours = parseInt((card.querySelector('.countdown-time') || {}).textContent, 10);
+    if (!name || isNaN(hours)) return;          // 「暂无风险」卡片不入库
+    const level = hours <= 24 ? 'urgent' : (hours <= 48 ? 'important' : (hours <= 72 ? 'reminder' : 'notice'));
+    items.push({
+      dedupeKey: 'model:weather:' + name.replace(/风险|预警/g, ''),
+      category: 'weather',
+      level: level,
+      title: name + '：预计 ' + hours + ' 小时后',
+      desc: '气象模型预测 ' + hours + ' 小时内出现' + name.replace(/风险|预警/g, '') + '天气，已生成应对预案入口。',
+      base: '',
+      value: hours,
+      threshold: '极端天气模型阈值'
+    });
+  });
+  AlertStore.syncSource('model', items, 'model:weather:');
+}
 
-  // 顶部指标与列表
+// 整页重绘：KPI + 列表 + 图表统一取最新 ModelStore
+function refreshWeather() {
+  const M = ModelStore.get('weather');
   ModelStore.hydrateKpi('.patrol-stats', 'weather');
   renderWeatherForecast(M);
   renderWeatherRisk(M);
   renderWeatherIndexes(M);
   renderWeatherHistory(M);
   renderWeatherWarnings(M);
-
-  // 温度趋势 ECharts
   Chart.line('#chart-temp', M.charts.tempTrend);
+  syncWeatherAlerts();
+}
 
-  // 极端天气模型预警 → AlertStore（source=model / category=weather）
-  if (window.AlertStore && typeof AlertStore.syncSource === 'function') {
-    const items = [];
-    document.querySelectorAll('.countdown-card').forEach(function(card) {
-      const name = (card.querySelector('.countdown-name') || {}).textContent || '';
-      const hours = parseInt((card.querySelector('.countdown-time') || {}).textContent, 10);
-      if (!name || isNaN(hours)) return;          // 「暂无风险」卡片不入库
-      const level = hours <= 24 ? 'urgent' : (hours <= 48 ? 'important' : (hours <= 72 ? 'reminder' : 'notice'));
-      items.push({
-        dedupeKey: 'model:weather:' + name.replace(/风险|预警/g, ''),
-        category: 'weather',
-        level: level,
-        title: name + '：预计 ' + hours + ' 小时后',
-        desc: '气象模型预测 ' + hours + ' 小时内出现' + name.replace(/风险|预警/g, '') + '天气，已生成应对预案入口。',
-        base: '',
-        value: hours,
-        threshold: '极端天气模型阈值'
-      });
-    });
-    AlertStore.syncSource('model', items, 'model:weather:');
-  }
-});
+document.addEventListener('DOMContentLoaded', refreshWeather);
 
 function selectDay(el) {
   document.querySelectorAll('.forecast-item').forEach(i => i.classList.remove('active'));
@@ -288,12 +289,13 @@ function createPrecaution(name) {
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-<script src="js/typography.js">
+<script src="js/typography.js"></script>
+<script>
 /* ============================================================
  * 后端数据到达后自动重绘
  * ------------------------------------------------------------
  * 数据层在「后端预加载完成」与「本地写入」两条路径上都会派发
- * <store>StoreChange 窗口事件；页面若不监听，首次渲染发生在数据
+ * modelStoreChange 窗口事件；页面若不监听，首次渲染发生在数据
  * 到达之前，界面会一直停在空列表。此处统一订阅后自动重绘。
  * ============================================================ */
 (function () {
@@ -305,13 +307,9 @@ function createPrecaution(name) {
       if (ev) window.addEventListener(ev, function () { try { handler(); } catch (e) { console.warn('[store-live]', e); } });
     });
   }
-  bind(["modelStoreChange","alertStoreChange"], function () {
-      renderWeatherForecast();
-      renderWeatherRisk();
-      renderWeatherIndexes();
-      renderWeatherHistory();
-      renderWeatherWarnings();
-  });
+  // 只订阅 modelStoreChange：本页渲染只依赖 ModelStore；
+  // syncWeatherAlerts 会写 AlertStore 并广播 alertStoreChange，若回绑该事件将形成循环。
+  bind(["modelStoreChange"], refreshWeather);
 })();
 </script>
 </body>

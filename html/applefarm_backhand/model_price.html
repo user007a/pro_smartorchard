@@ -87,10 +87,10 @@
 
   <!-- 顶部 4 指标 -->
   <div class="patrol-stats">
-    <div class="patrol-stat-card green"><div class="stat-value">5.2<small style="font-size:16px;font-weight:400;">元/斤</small></div><div class="stat-label">当前均价</div><div class="stat-trend" style="font-size:12px;color:var(--success);">↑ 0.3 较上周</div></div>
-    <div class="patrol-stat-card blue"><div class="stat-value" style="color:var(--primary-500);">上涨</div><div class="stat-label">预测趋势</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">11月达峰</div></div>
-    <div class="patrol-stat-card orange"><div class="stat-value">8.5<small style="font-size:16px;font-weight:400;">元/斤</small></div><div class="stat-label">预测高价</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">11月上旬</div></div>
-    <div class="patrol-stat-card purple"><div class="stat-value" style="font-size:20px;">10月中旬</div><div class="stat-label">最佳销售窗口</div><div class="stat-trend" style="font-size:12px;color:var(--success);">21天后</div></div>
+    <div class="patrol-stat-card green"><div class="stat-value">--</div><div class="stat-label">当前均价</div><div class="stat-trend" style="font-size:12px;color:var(--success);"></div></div>
+    <div class="patrol-stat-card blue"><div class="stat-value" style="color:var(--primary-500);">--</div><div class="stat-label">预测趋势</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);"></div></div>
+    <div class="patrol-stat-card orange"><div class="stat-value">--</div><div class="stat-label">预测高价</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);"></div></div>
+    <div class="patrol-stat-card purple"><div class="stat-value" style="font-size:20px;">--</div><div class="stat-label">最佳销售窗口</div><div class="stat-trend" style="font-size:12px;color:var(--success);"></div></div>
   </div>
 
   <!-- 页签 -->
@@ -117,7 +117,7 @@
         <div class="simulate-row"><span class="simulate-label">消费需求</span><input type="range" min="-30" max="30" value="15" class="simulate-input" oninput="updateSimulate()"><span class="simulate-value" id="simDemand">+15%</span></div>
         <div class="simulate-result">
           <div class="simulate-result-label">模拟预测价格</div>
-          <div class="simulate-result-value" id="simResult">5.60 元/斤</div>
+          <div class="simulate-result-value" id="simResult">--</div>
           <div class="simulate-result-hint">基于弹性系数 · 实时计算</div>
         </div>
       </div>
@@ -162,8 +162,7 @@
 <script src="js/components/chart.js"></script>
 <script>
 // 价格模型数据统一取自 ModelStore（与移动端/大屏共用）
-const PRICE_MODEL = ModelStore.get('price');
-const SIMULATE = PRICE_MODEL.lists.simulate;
+let PRICE_MODEL = ModelStore.get('price');
 
 // 品种标签（数据来自 ModelStore）
 function renderPriceVarieties(M) {
@@ -215,24 +214,25 @@ function renderPriceFactors(M) {
   }).join('');
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+// 整页重绘：统一取最新 ModelStore，空库时各列表为空、结果显示 '--'
+function refreshPrice() {
+  PRICE_MODEL = ModelStore.get('price');
   ModelStore.hydrateKpi('.patrol-stats', 'price');
   renderPriceVarieties(PRICE_MODEL);
   renderPriceSaleWindow(PRICE_MODEL);
   renderPriceSpecs(PRICE_MODEL);
   renderPriceFactors(PRICE_MODEL);
 
-  // 情景模拟初始结果与滑块基准值（数据来自 ModelStore）
   const simResult = document.getElementById('simResult');
-  if (simResult) simResult.textContent = SIMULATE.result;
+  if (simResult) simResult.textContent = PRICE_MODEL.lists.simulate.result || '--';
 
-  // 价格走势
   Chart.line('#chart-price', PRICE_MODEL.charts.priceTrend);
-});
+}
 
-const BASE_PRICE = SIMULATE.basePrice;
-const ELASTICITY = SIMULATE.elasticity;
+document.addEventListener('DOMContentLoaded', refreshPrice);
+
 function updateSimulate() {
+  const sim = ModelStore.get('price').lists.simulate;
   const inputs = document.querySelectorAll('.simulate-input');
   const y = parseInt(inputs[0].value, 10);
   const s = parseInt(inputs[1].value, 10);
@@ -240,9 +240,13 @@ function updateSimulate() {
   document.getElementById('simYield').textContent = (y >= 0 ? '+' : '') + y + '%';
   document.getElementById('simSupply').textContent = (s >= 0 ? '+' : '') + s + '%';
   document.getElementById('simDemand').textContent = (d >= 0 ? '+' : '') + d + '%';
-  const delta = ELASTICITY.yield * y + ELASTICITY.supply * s + ELASTICITY.demand * d;
-  const newPrice = Math.max(0.5, BASE_PRICE * (1 + delta / 100));
-  document.getElementById('simResult').textContent = newPrice.toFixed(2) + ' 元/斤';
+  const out = document.getElementById('simResult');
+  // 空库无基准价时不做模拟，避免凭空算出价格
+  if (sim.basePrice == null) { out.textContent = '--'; return; }
+  const e = sim.elasticity;
+  const delta = e.yield * y + e.supply * s + e.demand * d;
+  const newPrice = Math.max(0.5, sim.basePrice * (1 + delta / 100));
+  out.textContent = newPrice.toFixed(2) + ' 元/斤';
 }
 
 function selectVariety(tab) {
@@ -253,7 +257,8 @@ function selectVariety(tab) {
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-<script src="js/typography.js">
+<script src="js/typography.js"></script>
+<script>
 /* ============================================================
  * 后端数据到达后自动重绘
  * ------------------------------------------------------------
@@ -262,20 +267,13 @@ function selectVariety(tab) {
  * 到达之前，界面会一直停在空列表。此处统一订阅后自动重绘。
  * ============================================================ */
 (function () {
-  // StoreLive 由 common/js/api.js 提供；部分页面未静态引入该文件，
-  // 此时回退到原生窗口事件订阅，避免订阅被静默跳过导致页面不重绘。
   function bind(events, handler) {
     if (typeof StoreLive !== 'undefined') return StoreLive.on(events, handler);
     (Array.isArray(events) ? events : [events]).forEach(function (ev) {
       if (ev) window.addEventListener(ev, function () { try { handler(); } catch (e) { console.warn('[store-live]', e); } });
     });
   }
-  bind(["modelStoreChange"], function () {
-      renderPriceVarieties();
-      renderPriceSaleWindow();
-      renderPriceSpecs();
-      renderPriceFactors();
-  });
+  bind(["modelStoreChange"], refreshPrice);
 })();
 </script>
 </body>

@@ -131,10 +131,10 @@
 
   <!-- 顶部 4 指标 -->
   <div class="patrol-stats">
-    <div class="patrol-stat-card red"><div class="stat-value" id="statHighRisk">3</div><div class="stat-label">高风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--error);">需立即处理</div></div>
-    <div class="patrol-stat-card orange"><div class="stat-value" id="statMidRisk">18</div><div class="stat-label">中风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--warning);">监测中</div></div>
-    <div class="patrol-stat-card green"><div class="stat-value" id="statLowRisk">105</div><div class="stat-label">低风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--success);">安全</div></div>
-    <div class="patrol-stat-card blue"><div class="stat-value">6</div><div class="stat-label">今日防治建议</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);">已生成</div></div>
+    <div class="patrol-stat-card red"><div class="stat-value" id="statHighRisk">--</div><div class="stat-label">高风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--error);"></div></div>
+    <div class="patrol-stat-card orange"><div class="stat-value" id="statMidRisk">--</div><div class="stat-label">中风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--warning);"></div></div>
+    <div class="patrol-stat-card green"><div class="stat-value" id="statLowRisk">--</div><div class="stat-label">低风险地块</div><div class="stat-trend" style="font-size:12px;color:var(--success);"></div></div>
+    <div class="patrol-stat-card blue"><div class="stat-value">--</div><div class="stat-label">今日防治建议</div><div class="stat-trend" style="font-size:12px;color:var(--text-tertiary);"></div></div>
   </div>
 
   <!-- 页签 -->
@@ -214,13 +214,28 @@
 <script src="js/shared/alert-data.js"></script>
 <script>
 // 病虫害模型数据统一取自 ModelStore（与移动端/大屏共用）
-const PEST_MODEL = ModelStore.get('pest');
-const PEST_META = PEST_MODEL.meta;
+let PEST_MODEL = ModelStore.get('pest');
+let PEST_META = PEST_MODEL.meta;
 
 // ===== 病虫害风险地图（参照大屏 GIS 真实布局） =====
-(function() {
+// 详情面板 / tooltip / 选中态在多次重建间复用，地块 SVG 随数据重建
+let pestDetail = null;
+let pestTooltip = null;
+let pestSelectedG = null;
+let pestMapBuilt = false;
+
+function hidePestDetail() {
+  if (pestDetail) pestDetail.classList.remove('show');
+  if (pestSelectedG) { pestSelectedG.classList.remove('sel'); pestSelectedG = null; }
+}
+
+function buildPestMap() {
   const map = document.getElementById('gisMap');
   if (!map) return;
+  // 移除上一次的地块 SVG（保留图例与详情面板），重置选中态
+  const oldSvg = map.querySelector('svg');
+  if (oldSvg) oldSvg.remove();
+  pestSelectedG = null;
 
   const NS = 'http://www.w3.org/2000/svg';
   function el(tag, attrs) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
@@ -282,47 +297,55 @@ const PEST_META = PEST_MODEL.meta;
   const COLB = { high: '#ff5d63', medium: '#f5b53d', low: '#2bd46e' };
   const LV_TXT = { high: '高风险', medium: '中风险', low: '低风险' };
 
-  // 详情面板 DOM
-  const detail = document.createElement('div');
-  detail.className = 'plot-detail';
-  detail.id = 'plotDetail';
-  detail.innerHTML =
-    '<div class="plot-detail-head">' +
-      '<div class="plot-detail-title">' +
-        '<span class="plot-detail-name" id="pd-name"></span>' +
-        '<span class="plot-detail-id" id="pd-id"></span>' +
+  // 详情面板 / tooltip 只创建一次（重建地图时复用），空白处点击关闭也只绑一次
+  if (!pestMapBuilt) {
+    pestDetail = document.createElement('div');
+    pestDetail.className = 'plot-detail';
+    pestDetail.id = 'plotDetail';
+    pestDetail.innerHTML =
+      '<div class="plot-detail-head">' +
+        '<div class="plot-detail-title">' +
+          '<span class="plot-detail-name" id="pd-name"></span>' +
+          '<span class="plot-detail-id" id="pd-id"></span>' +
+        '</div>' +
+        '<button class="plot-detail-close" id="pd-close">×</button>' +
       '</div>' +
-      '<button class="plot-detail-close" id="pd-close">×</button>' +
-    '</div>' +
-    '<div class="plot-detail-row"><span class="plot-detail-label">风险等级</span><span class="plot-detail-level" id="pd-level"></span></div>' +
-    '<div class="plot-detail-row"><span class="plot-detail-label">品种</span><span class="plot-detail-value" id="pd-variety"></span></div>' +
-    '<div class="plot-detail-row"><span class="plot-detail-label">面积</span><span class="plot-detail-value" id="pd-area"></span></div>' +
-    '<div class="plot-detail-row"><span class="plot-detail-label">主要病虫害</span><span class="plot-detail-value" id="pd-pest"></span></div>' +
-    '<div class="plot-detail-row"><span class="plot-detail-label">预估产量</span><span class="plot-detail-value" id="pd-yield"></span></div>' +
-    '<div class="plot-detail-row"><span class="plot-detail-label">健康指数</span><span class="plot-detail-value" id="pd-health"></span></div>' +
-    '<div class="plot-detail-row"><span class="plot-detail-label">负责人</span><span class="plot-detail-value" id="pd-manager"></span></div>' +
-    '<div class="plot-detail-row"><span class="plot-detail-label">更新时间</span><span class="plot-detail-value" id="pd-updated"></span></div>' +
-    '<div class="plot-detail-actions">' +
-      '<button class="btn-primary" id="pd-detail">查看详情</button>' +
-      '<button class="btn-secondary" id="pd-treat">生成防治</button>' +
-    '</div>';
-  map.appendChild(detail);
+      '<div class="plot-detail-row"><span class="plot-detail-label">风险等级</span><span class="plot-detail-level" id="pd-level"></span></div>' +
+      '<div class="plot-detail-row"><span class="plot-detail-label">品种</span><span class="plot-detail-value" id="pd-variety"></span></div>' +
+      '<div class="plot-detail-row"><span class="plot-detail-label">面积</span><span class="plot-detail-value" id="pd-area"></span></div>' +
+      '<div class="plot-detail-row"><span class="plot-detail-label">主要病虫害</span><span class="plot-detail-value" id="pd-pest"></span></div>' +
+      '<div class="plot-detail-row"><span class="plot-detail-label">预估产量</span><span class="plot-detail-value" id="pd-yield"></span></div>' +
+      '<div class="plot-detail-row"><span class="plot-detail-label">健康指数</span><span class="plot-detail-value" id="pd-health"></span></div>' +
+      '<div class="plot-detail-row"><span class="plot-detail-label">负责人</span><span class="plot-detail-value" id="pd-manager"></span></div>' +
+      '<div class="plot-detail-row"><span class="plot-detail-label">更新时间</span><span class="plot-detail-value" id="pd-updated"></span></div>' +
+      '<div class="plot-detail-actions">' +
+        '<button class="btn-primary" id="pd-detail">查看详情</button>' +
+        '<button class="btn-secondary" id="pd-treat">生成防治</button>' +
+      '</div>';
+    map.appendChild(pestDetail);
 
-  // Hover tooltip
-  const tooltip = document.createElement('div');
-  tooltip.className = 'plot-tooltip';
-  tooltip.id = 'plotTooltip';
-  map.appendChild(tooltip);
+    // Hover tooltip
+    pestTooltip = document.createElement('div');
+    pestTooltip.className = 'plot-tooltip';
+    pestTooltip.id = 'plotTooltip';
+    map.appendChild(pestTooltip);
 
-  let selectedG = null;
+    document.getElementById('pd-close').addEventListener('click', hidePestDetail);
+    // 点击地图空白处关闭
+    map.addEventListener('click', (e) => {
+      if (e.target === map || e.target.tagName === 'image' || e.target.classList.contains('base-boundary')) hidePestDetail();
+    });
+    pestMapBuilt = true;
+  }
+
   function centroid(pts) {
     let x = 0, y = 0; pts.forEach(p => { x += p[0]; y += p[1]; }); return [x / pts.length, y / pts.length];
   }
 
   function selectPlot(g, p) {
     // 取消上一次选中
-    if (selectedG && selectedG !== g) selectedG.classList.remove('sel');
-    selectedG = g;
+    if (pestSelectedG && pestSelectedG !== g) pestSelectedG.classList.remove('sel');
+    pestSelectedG = g;
     g.classList.add('sel');
 
     // 填充详情
@@ -338,7 +361,7 @@ const PEST_META = PEST_MODEL.meta;
     document.getElementById('pd-health').textContent = p.health ? p.health + ' / 100' : '—';
     document.getElementById('pd-manager').textContent = p.manager || '—';
     document.getElementById('pd-updated').textContent = p.updated || '—';
-    detail.classList.add('show');
+    pestDetail.classList.add('show');
 
     // 详情按钮 → 跳地块详情页
     document.getElementById('pd-detail').onclick = () => {
@@ -368,19 +391,6 @@ const PEST_META = PEST_MODEL.meta;
     };
   }
 
-  function hideDetail() {
-    detail.classList.remove('show');
-    if (selectedG) { selectedG.classList.remove('sel'); selectedG = null; }
-  }
-
-  // 关闭按钮
-  document.getElementById('pd-close').addEventListener('click', hideDetail);
-
-  // 点击地图空白处关闭
-  map.addEventListener('click', (e) => {
-    if (e.target === map || e.target.tagName === 'image' || e.target.classList.contains('base-boundary')) hideDetail();
-  });
-
   // 绘制地块 + 绑定交互
   ALL.forEach(p => {
     const g = el('g', { class: 'plot', 'data-plot': p.id, tabindex: '0', role: 'button' });
@@ -407,23 +417,23 @@ const PEST_META = PEST_MODEL.meta;
         e.preventDefault();
         selectPlot(g, p);
       }
-      if (e.key === 'Escape') hideDetail();
+      if (e.key === 'Escape') hidePestDetail();
     });
 
     // Hover → 显示 tooltip
     g.addEventListener('mouseenter', (e) => {
-      tooltip.textContent = p.id + ' ' + p.name + ' · ' + LV_TXT[p.level] + ' · ' + (p.pest || '无');
-      tooltip.classList.add('show');
+      pestTooltip.textContent = p.id + ' ' + p.name + ' · ' + LV_TXT[p.level] + ' · ' + (p.pest || '无');
+      pestTooltip.classList.add('show');
     });
     g.addEventListener('mousemove', (e) => {
       const rect = map.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      tooltip.style.left = (x - tooltip.offsetWidth / 2) + 'px';
-      tooltip.style.top = (y - tooltip.offsetHeight - 10) + 'px';
+      pestTooltip.style.left = (x - pestTooltip.offsetWidth / 2) + 'px';
+      pestTooltip.style.top = (y - pestTooltip.offsetHeight - 10) + 'px';
     });
     g.addEventListener('mouseleave', () => {
-      tooltip.classList.remove('show');
+      pestTooltip.classList.remove('show');
     });
 
     // 双击 → 直接跳详情页
@@ -436,7 +446,7 @@ const PEST_META = PEST_MODEL.meta;
 
   // 把 legend 之外的 svg 插入 map
   map.insertBefore(svg, map.firstChild);
-})();
+}
 
 // ===== 地块风险指数表（数值化，level 保留给原图表使用）=====
 // 风险等级由 riskIndex 推导：≥70 高 / 40-69 中 / <40 低
@@ -511,33 +521,41 @@ function renderPestTreatment(M) {
 }
 
 // ===== ECharts 风险趋势（可切换 3 天 / 7 天）=====
-document.addEventListener('DOMContentLoaded', function() {
+let pestTrendRange = 3;
+function renderPestTrend() {
+  const M = ModelStore.get('pest');
+  Chart.line('#chart-trend', pestTrendRange == 7 ? M.charts.riskTrend7 : M.charts.riskTrend3);
+}
+
+// 整页重绘：KPI + 地图 + 列表 + 趋势统一取最新 ModelStore
+function refreshPest() {
+  PEST_MODEL = ModelStore.get('pest');
+  PEST_META = PEST_MODEL.meta;
   ModelStore.hydrateKpi('.patrol-stats', 'pest');
+  buildPestMap();
   renderPestLegend(PEST_MODEL);
   renderPestSelector(PEST_MODEL);
   renderPestFactors(PEST_MODEL);
   renderPestTreatment(PEST_MODEL);
   renderRiskTable();
+  renderPestTrend();
+}
 
-  const dataMap = {
-    3: PEST_MODEL.charts.riskTrend3,
-    7: PEST_MODEL.charts.riskTrend7
-  };
-  // 默认按 3 天渲染
-  Chart.line('#chart-trend', dataMap[3]);
+document.addEventListener('DOMContentLoaded', function() {
+  refreshPest();
 
   // 切换按钮交互
   const btns = document.querySelectorAll('.trend-switch-btn');
   btns.forEach(function(btn) {
     btn.addEventListener('click', function() {
-      const range = this.getAttribute('data-range');
+      pestTrendRange = this.getAttribute('data-range') == 7 ? 7 : 3;
       btns.forEach(function(b) {
         const isActive = b === btn;
         b.classList.toggle('active', isActive);
         b.style.background = isActive ? 'var(--primary-500)' : '#fff';
         b.style.color = isActive ? '#fff' : 'var(--text-secondary)';
       });
-      Chart.line('#chart-trend', dataMap[range] || dataMap[3]);
+      renderPestTrend();
     });
   });
 });
@@ -551,7 +569,9 @@ function selectPest(tag) {
 function adoptPestAdvice(pestName) {
   try {
     const prefills = JSON.parse(localStorage.getItem('orchard_farming_prefill') || '[]');
-    prefills.push({ title: pestName + '任务（来自病虫害模型）', taskType: '病虫害防治', plotRange: '高风险' + PEST_MODEL.kpi[0].value + '块 + 中风险' + PEST_MODEL.kpi[1].value + '块', priority: '高' });
+    const high = PEST_MODEL.kpi[0] ? PEST_MODEL.kpi[0].value : '--';
+    const mid = PEST_MODEL.kpi[1] ? PEST_MODEL.kpi[1].value : '--';
+    prefills.push({ title: pestName + '任务（来自病虫害模型）', taskType: '病虫害防治', plotRange: '高风险' + high + '块 + 中风险' + mid + '块', priority: '高' });
     localStorage.setItem('orchard_farming_prefill', JSON.stringify(prefills));
     Toast.show('已生成' + pestName + '任务', 'success');
     setTimeout(() => {
@@ -564,28 +584,27 @@ function adoptPestAdvice(pestName) {
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
-<script src="js/typography.js">
+<script src="js/typography.js"></script>
+<script>
 /* ============================================================
  * 后端数据到达后自动重绘
  * ------------------------------------------------------------
  * 数据层在「后端预加载完成」与「本地写入」两条路径上都会派发
  * <store>StoreChange 窗口事件；页面若不监听，首次渲染发生在数据
  * 到达之前，界面会一直停在空列表。此处统一订阅后自动重绘。
+ *
+ * 注意：只订阅 modelStoreChange。buildPestMap 内部会 syncSource
+ * 同步预警并广播 alertStoreChange，若再订阅它会造成重绘→同步→
+ * 再广播的无限循环。
  * ============================================================ */
 (function () {
-  // StoreLive 由 common/js/api.js 提供；部分页面未静态引入该文件，
-  // 此时回退到原生窗口事件订阅，避免订阅被静默跳过导致页面不重绘。
   function bind(events, handler) {
     if (typeof StoreLive !== 'undefined') return StoreLive.on(events, handler);
     (Array.isArray(events) ? events : [events]).forEach(function (ev) {
       if (ev) window.addEventListener(ev, function () { try { handler(); } catch (e) { console.warn('[store-live]', e); } });
     });
   }
-  bind(["modelStoreChange","alertStoreChange"], function () {
-      renderRiskTable();
-      renderPestFactors();
-      renderPestTreatment();
-  });
+  bind(["modelStoreChange"], refreshPest);
 })();
 </script>
 </body>
