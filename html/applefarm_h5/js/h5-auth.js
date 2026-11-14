@@ -23,7 +23,7 @@ window.H5Auth = (function () {
     if (typeof window.Api === 'object' || typeof window.Api === 'function') return Promise.resolve();
     var selfEl = document.currentScript;
     var baseDir = selfEl && selfEl.src ? selfEl.src.replace(/[^\/]*$/, '') : '';
-    var src = baseDir + '../common/js/api.js';
+    var src = baseDir + '../../common/js/api.js';
     return new Promise(function (resolve) {
       var s = document.createElement('script');
       s.src = src; s.async = false; s.onload = resolve; s.onerror = resolve;

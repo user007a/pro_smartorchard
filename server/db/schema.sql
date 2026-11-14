@@ -288,7 +288,7 @@ CREATE TABLE `sf_vr_scene` (
 DROP TABLE IF EXISTS `sf_vr_hotspot`;
 CREATE TABLE `sf_vr_hotspot` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `scene_id` bigint NOT NULL COMMENT '所属场景（→ sf_vr_scene.id）',
+  `scene_id` bigint DEFAULT NULL COMMENT '所属场景（→ sf_vr_scene.id；基地地图热点可空）',
   `hotspot_code` varchar(50) DEFAULT NULL COMMENT '热点编码',
   `hotspot_type` varchar(20) DEFAULT NULL COMMENT '热点类型：plot/device/task/building/scene',
   `title` varchar(100) NOT NULL COMMENT '标题',
@@ -296,6 +296,8 @@ CREATE TABLE `sf_vr_hotspot` (
   `target_id` varchar(100) DEFAULT NULL COMMENT '关联目标（地块/设备/任务等）',
   `pitch` decimal(6,2) DEFAULT '0.00' COMMENT '俯仰角',
   `yaw` decimal(6,2) DEFAULT '0.00' COMMENT '水平角',
+  `pos_x` decimal(5,2) DEFAULT NULL COMMENT '基地地图横向坐标（百分比0-100）',
+  `pos_y` decimal(5,2) DEFAULT NULL COMMENT '基地地图纵向坐标（百分比0-100）',
   `hotspot_status` varchar(20) DEFAULT 'normal' COMMENT '状态：normal/warning/danger',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',

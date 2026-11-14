@@ -57,6 +57,18 @@
 
   var backendLoadPromise = null;
   var persistTimer = null;
+  // 显式删除登记：table → [待删键]（不做「快照缺失即删」，避免严格模式镜像不全误删）
+  var deletedReg = {};
+  function markDeleted(table, key) {
+    (deletedReg[table] = deletedReg[table] || []).push(key);
+  }
+  function takeDeleted() {
+    var out = {};
+    Object.keys(deletedReg).forEach(function (k) {
+      if (deletedReg[k] && deletedReg[k].length) out[k] = deletedReg[k].slice();
+    });
+    return out;
+  }
 
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
@@ -98,12 +110,20 @@
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
     var e = ensure();
+    var pendingDeleted = takeDeleted();
     var agg = {
       sources: e.sources || [], collections: e.collections || [], models: e.models || [],
-      achievements: e.achievements || [], milestones: e.milestones || [], highlights: e.highlights || [], deleted: {},
+      achievements: e.achievements || [], milestones: e.milestones || [], highlights: e.highlights || [], deleted: pendingDeleted,
     };
     var body = global.DataMapper.fromAggregate(agg);
-    return api.create('data/aggregate', body);
+    return api.create('data/aggregate', body).then(function (res) {
+      if (res && res.ok) {
+        Object.keys(pendingDeleted).forEach(function (k) {
+          deletedReg[k] = (deletedReg[k] || []).slice(pendingDeleted[k].length);
+        });
+      }
+      return res;
+    });
   }
   function schedulePersist(reason) {
     if (!backendEnabled()) return;
@@ -367,6 +387,7 @@
     removeSource: function(id){
       var d = ensure();
       d.sources = d.sources.filter(function(x){ return x.id !== id; });
+      markDeleted('sources', id);
       broadcast('source-remove:' + id);
       return true;
     },
@@ -410,7 +431,9 @@
     },
     removeCollection: function(id){
       var d = ensure();
+      var item = d.collections.filter(function(x){ return x.id === id; })[0];
       d.collections = d.collections.filter(function(x){ return x.id !== id; });
+      if (item) markDeleted('collections', { source: item.source, category: item.category || item.source });
       broadcast('collection-remove:' + id);
       return true;
     },
@@ -460,7 +483,9 @@
     },
     removeMilestone: function(id){
       var d = ensure();
+      var item = d.milestones.filter(function(x){ return x.id === id; })[0];
       d.milestones = d.milestones.filter(function(x){ return x.id !== id; });
+      if (item) markDeleted('milestones', item.title);
       broadcast('milestone-remove:' + id);
       return true;
     },
@@ -490,6 +515,7 @@
     removeHighlight: function(id){
       var d = ensure();
       d.highlights = d.highlights.filter(function(x){ return x.id !== id; });
+      markDeleted('highlights', id);
       broadcast('highlight-remove:' + id);
       return true;
     },

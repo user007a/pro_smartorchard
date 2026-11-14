@@ -21,7 +21,7 @@
  *   2. 账号密码只落 SHA-256 摘要（pwdHash），兼容历史明文 pwd 登录。
  *   3. 同页写入即时广播，跨标签页通过 storage 事件同步，页面无需轮询。
  */
-window.MobileOpsStore = (function () {
+window.MobileOpsStore = (function (global) {
   'use strict';
 
   /* ============================================================
@@ -49,6 +49,21 @@ window.MobileOpsStore = (function () {
 
   var backendLoadPromise = null;
   var persistTimer = null;
+  // 显式删除登记：entity → [待删键]。严格模式内存镜像可能不全，
+  // 删除必须显式上报后端（不做「快照缺失即删」，避免误删未加载表）。
+  var deletedReg = {};
+  function toEntity(key) {
+    var real = resolve(key);
+    for (var e in KEYS) { if (KEYS[e] === real) return e; }
+    return key;
+  }
+  function takeDeleted() {
+    var out = {};
+    Object.keys(deletedReg).forEach(function (k) {
+      if (deletedReg[k] && deletedReg[k].length) out[k] = deletedReg[k].slice();
+    });
+    return out;
+  }
 
   function backendApi() {
     if (typeof window.Api !== 'object' && typeof window.Api !== 'function') return null;
@@ -95,14 +110,22 @@ window.MobileOpsStore = (function () {
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
     var ai = readObj(KEYS.aiConfig) || {};
+    var pendingDeleted = takeDeleted();
     var agg = {
       feedbacks: readList(KEYS.feedbacks), expertQuestions: readList(KEYS.expertQuestions),
       staff: readList(KEYS.staff), messages: readList(KEYS.messages), news: readList(KEYS.news),
       syncQueue: readList(KEYS.syncQueue), diseaseRules: readList(KEYS.diseaseRules), faultKb: readList(KEYS.faultKb),
-      aiCategories: ai.categories || [], aiQuestions: ai.hotQuestions || [], deleted: {},
+      aiCategories: ai.categories || [], aiQuestions: ai.hotQuestions || [], deleted: pendingDeleted,
     };
     var body = window.MobileOpsMapper.fromAggregate(agg);
-    return api.create('mobile-ops/aggregate', body);
+    return api.create('mobile-ops/aggregate', body).then(function (res) {
+      if (res && res.ok) {
+        Object.keys(pendingDeleted).forEach(function (k) {
+          deletedReg[k] = (deletedReg[k] || []).slice(pendingDeleted[k].length);
+        });
+      }
+      return res;
+    });
   }
   function schedulePersist(reason) {
     if (!backendEnabled()) return;
@@ -241,6 +264,10 @@ window.MobileOpsStore = (function () {
     var list = readList(key);
     var next = list.filter(function (it) { return String(it.id) !== String(id); });
     if (next.length === list.length) return false;
+    var ent = toEntity(key);
+    if (ent !== 'audit') {
+      (deletedReg[ent] = deletedReg[ent] || []).push(String(id));
+    }
     writeList(key, next);
     return true;
   }
@@ -815,7 +842,7 @@ window.MobileOpsStore = (function () {
     increaseNewsView: increaseNewsView,
     _preload: function () { if (typeof preloadFromBackend === 'function') preloadFromBackend(); }
   };
-})();
+})(window);
 
 // 异步触发后端预加载
 setTimeout(function () {

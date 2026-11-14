@@ -5,59 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>基地地图展示 - 智慧果园</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" media="print" onload="this.media='all'">
-    <!-- API Mock 数据（内联） -->
-    <script>
-        var VRAPI = {
-            baseUrl: '/api',
-            plots: [
-                { id: 'plot_a1', name: 'A1地块（花牛苹果核心区）', variety: '花牛苹果', age: 8, area: 25, status: 'normal' },
-                { id: 'plot_a2', name: 'A2地块（新品种试验区）', variety: '花牛苹果', age: 8, area: 22, status: 'normal' },
-                { id: 'plot_b1', name: 'B1地块（花牛苹果早熟区）', variety: '花牛苹果', age: 6, area: 20, status: 'warning' },
-                { id: 'plot_b2', name: 'B2地块（金帅区）', variety: '金帅', age: 5, area: 18, status: 'normal' },
-                { id: 'plot_c1', name: 'C1地块（有机种植区）', variety: '花牛苹果', age: 10, area: 30, status: 'normal' },
-                { id: 'plot_c2', name: 'C2地块（花牛苹果区）', variety: '花牛苹果', age: 12, area: 25, status: 'error' }
-            ],
-            devices: [
-                { id: 'device_water1', name: '水肥一体化设备A区', type: '滴灌系统', status: 'online' },
-                { id: 'device_water2', name: '水肥一体化设备B区', type: '滴灌系统', status: 'online' },
-                { id: 'device_camera1', name: '高清监控摄像头-B1区东北角', type: '监控设备', status: 'online' },
-                { id: 'device_camera2', name: '高清监控摄像头-C1区西南角', type: '监控设备', status: 'warning' },
-                { id: 'device_meteor1', name: '农业气象站-C区', type: '气象设备', status: 'online' },
-                { id: 'device_sensor1', name: '土壤监测传感器-A1区', type: '传感器', status: 'online' },
-                { id: 'device_sensor2', name: '土壤监测传感器-C2区', type: '传感器', status: 'offline' },
-                { id: 'device_env1', name: '环境监测终端-包装车间', type: '环境监测', status: 'online' }
-            ],
-            buildings: [
-                { id: 'building_office', name: '综合办公楼', type: 'office', status: 'normal' },
-                { id: 'building_storage', name: '智能仓储中心', type: 'storage', status: 'normal' },
-                { id: 'building_workshop', name: '水果分选加工车间', type: 'workshop', status: 'normal' },
-                { id: 'building_cold', name: '冷链保鲜库', type: 'cold_storage', status: 'normal' }
-            ],
-            alerts: [
-                { id: 'alert_001', type: 'device', level: 'error', title: '土壤传感器离线告警', content: 'C2区土壤监测传感器离线超过30分钟', status: 'pending' },
-                { id: 'alert_002', type: 'plot', level: 'warning', title: '病虫害风险预警', content: 'C2地块轮纹病风险指数升至80%', status: 'pending' },
-                { id: 'alert_003', type: 'material', level: 'warning', title: '农资库存不足告警', content: '硫酸钾库存低于安全库存', status: 'pending' },
-                { id: 'alert_004', type: 'device', level: 'warning', title: '监控摄像头画面异常', content: 'C1区西南角摄像头画面被遮挡', status: 'pending' }
-            ],
-            getPlots: function(callback) {
-                setTimeout(function() { callback(null, { code: 200, data: VRAPI.plots }); }, 300);
-            },
-            getDevices: function(callback) {
-                setTimeout(function() { callback(null, { code: 200, data: VRAPI.devices }); }, 300);
-            },
-            getAlerts: function(callback) {
-                setTimeout(function() {
-                    var deviceAlerts = VRAPI.devices.filter(function(d) { return d.status === 'warning' || d.status === 'error'; }).map(function(d) {
-                        return { id: d.id, type: 'device', message: d.name + '状态异常', level: d.status === 'warning' ? 'warning' : 'error', time: new Date().toISOString() };
-                    });
-                    var plotAlerts = VRAPI.plots.filter(function(p) { return p.status === 'warning' || p.status === 'error'; }).map(function(p) {
-                        return { id: p.id, type: 'plot', message: p.name + (p.status === 'warning' ? '需关注' : '风险高'), level: p.status, time: new Date().toISOString() };
-                    });
-                    callback(null, { code: 200, data: deviceAlerts.concat(plotAlerts) });
-                }, 200);
-            }
-        };
-    </script>
     <style>
         :root {
             --color-primary: #22a84a;
@@ -816,6 +763,9 @@
         <div class="zoom-level" id="zoomLevel">100%</div>
     </div>
 
+    <script src="../common/js/api.js"></script>
+    <script src="../applefarm_backhand/js/shared/plot-store.js"></script>
+    <script src="../applefarm_backhand/js/shared/device-store.js"></script>
     <script>
         var currentZoom = 1;
         var minZoom = 0.5;
@@ -823,17 +773,32 @@
         var hiddenTypes = [];
         var lastUpdateTime = null;
 
-        var hotspotData = [
-            { id: "plot_a1", type: "plot", x: 25, y: 35, title: "A1地块", content: "<p><span class='label'>品种:</span><span class='value'>花牛苹果</span></p><p><span class='label'>树龄:</span><span class='value'>8年</span></p><p><span class='label'>面积:</span><span class='value'>25亩</span></p><span class='info-status normal'>正常</span>", status: "normal" },
-            { id: "device_water1", type: "device", x: 40, y: 25, title: "水肥设备A区", content: "<p><span class='label'>类型:</span><span class='value'>滴灌系统</span></p><p><span class='label'>状态:</span><span class='value'>运行中</span></p><p><span class='label'>流量:</span><span class='value'>2.5 m³/h</span></p><span class='info-status normal'>在线</span>", status: "normal" },
-            { id: "task_pruning", type: "task", x: 55, y: 45, title: "修剪任务", content: "<p><span class='label'>地块:</span><span class='value'>A1-A3区</span></p><p><span class='label'>负责人:</span><span class='value'>李师傅</span></p><p><span class='label'>进度:</span><span class='value'>75%</span></p><span class='info-status warning'>进行中</span>", status: "warning" },
-            { id: "building_office", type: "building", x: 70, y: 60, title: "办公楼", content: "<p><span class='label'>建筑面积:</span><span class='value'>1200㎡</span></p><p><span class='label'>用途:</span><span class='value'>办公、会议室</span></p><span class='info-status normal'>正常</span>", status: "normal" },
-            { id: "plot_b1", type: "plot", x: 30, y: 55, title: "B1地块", content: "<p><span class='label'>品种:</span><span class='value'>花牛苹果</span></p><p><span class='label'>树龄:</span><span class='value'>6年</span></p><p><span class='label'>面积:</span><span class='value'>20亩</span></p><span class='info-status warning'>需关注</span>", status: "warning" },
-            { id: "device_camera1", type: "device", x: 45, y: 70, title: "监控摄像头", content: "<p><span class='label'>位置:</span><span class='value'>B1区西北角</span></p><p><span class='label'>状态:</span><span class='value'>在线</span></p><span class='info-status normal'>实时监控中</span>", status: "normal" },
-            { id: "plot_b2", type: "plot", x: 60, y: 75, title: "B2地块", content: "<p><span class='label'>品种:</span><span class='value'>金帅</span></p><p><span class='label'>树龄:</span><span class='value'>5年</span></p><p><span class='label'>面积:</span><span class='value'>18亩</span></p><span class='info-status normal'>正常</span>", status: "normal" },
-            { id: "plot_c1", type: "plot", x: 75, y: 40, title: "C1地块", content: "<p><span class='label'>品种:</span><span class='value'>花牛苹果</span></p><p><span class='label'>树龄:</span><span class='value'>10年</span></p><p><span class='label'>面积:</span><span class='value'>30亩</span></p><span class='info-status normal'>正常</span>", status: "normal" },
-            { id: "device_meteor1", type: "device", x: 85, y: 55, title: "气象站", content: "<p><span class='label'>温度:</span><span class='value'>26.5°C</span></p><p><span class='label'>湿度:</span><span class='value'>68%</span></p><p><span class='label'>风速:</span><span class='value'>3.2 m/s</span></p><span class='info-status normal'>在线</span>", status: "normal" }
-        ];
+        /* 热点来自后端 sf_vr_hotspot（与移动端 VR 同源），空库显示空 */
+        var hotspotData = [];
+
+        function loadHotspots() {
+            if (!window.Api) return Promise.resolve();
+            return Api.get('vr_hotspot', { size: 500 }).then(function(res) {
+                if (!res || !res.ok) {
+                    console.warn('[vr_panorama] 热点加载失败：' + ((res && res.message) || '未知错误'));
+                    hotspotData = [];
+                } else {
+                    var list = (res.data && res.data.list) || [];
+                    hotspotData = list.map(function(row) {
+                        return {
+                            id: row.hotspot_code || String(row.id),
+                            type: row.hotspot_type || 'plot',
+                            x: parseFloat(row.pos_x),
+                            y: parseFloat(row.pos_y),
+                            title: row.title || '',
+                            content: row.content || '',
+                            status: row.hotspot_status || 'normal'
+                        };
+                    }).filter(function(h) { return !isNaN(h.x) && !isNaN(h.y); });
+                }
+                createHotspots();
+            });
+        }
 
         function createHotspots() {
             var container = document.getElementById('hotspotsContainer');
@@ -1013,14 +978,16 @@
 
         function refreshData() {
             showLoading(true);
-            setTimeout(function() {
+            var tasks = [loadHotspots()];
+            if (window.PlotStore && PlotStore.load) tasks.push(PlotStore.load());
+            Promise.all(tasks).then(function() {
                 loadDeviceData();
                 loadPlotData();
                 loadAlerts();
                 lastUpdateTime = new Date();
                 updateLastUpdateTime();
                 showLoading(false);
-            }, 800);
+            });
         }
 
         function updateLastUpdateTime() {
@@ -1035,37 +1002,40 @@
         }
 
         function loadDeviceData() {
-            VRAPI.getDevices(function(err, result) {
-                if (!err && result.code === 200) {
-                    var onlineCount = result.data.filter(function(d) { return d.status === 'online'; }).length;
-                    var totalCount = result.data.length;
-                    document.getElementById('deviceOnline').textContent = onlineCount;
-                    document.getElementById('deviceTotal').textContent = totalCount;
-                }
-            });
+            if (!window.DeviceStore) return;
+            var s = DeviceStore.stats();
+            document.getElementById('deviceOnline').textContent = s.online;
+            document.getElementById('deviceTotal').textContent = s.total;
         }
 
         function loadPlotData() {
-            VRAPI.getPlots(function(err, result) {
-                if (!err && result.code === 200) {
-                    var normalCount = result.data.filter(function(p) { return p.status === 'normal'; }).length;
-                    var totalCount = result.data.length;
-                    document.getElementById('plotNormal').textContent = normalCount;
-                    document.getElementById('plotTotal').textContent = totalCount;
-                }
-            });
+            if (!window.PlotStore) return;
+            var plots = PlotStore.plots();
+            var normalCount = plots.filter(function(p) { return p.status === 'normal'; }).length;
+            document.getElementById('plotNormal').textContent = normalCount;
+            document.getElementById('plotTotal').textContent = plots.length;
         }
 
         function loadAlerts() {
-            VRAPI.getAlerts(function(err, result) {
-                if (!err && result.code === 200 && result.data.length > 0) {
-                    var alert = result.data[0];
-                    document.getElementById('alertBody').textContent = alert.message;
-                    document.getElementById('alertPanel').classList.add('show');
-                } else {
-                    document.getElementById('alertPanel').classList.remove('show');
-                }
-            });
+            var alerts = [];
+            if (window.DeviceStore) {
+                DeviceStore.devices().forEach(function(d) {
+                    if (d.status === 'offline') alerts.push({ message: d.name + ' 离线', level: 'error' });
+                    else if (d.status === 'maintain') alerts.push({ message: d.name + ' 维护中', level: 'warning' });
+                });
+            }
+            if (window.PlotStore) {
+                PlotStore.plots().forEach(function(p) {
+                    if (p.status === 'danger') alerts.push({ message: p.name + ' 风险高', level: 'error' });
+                    else if (p.status === 'warning') alerts.push({ message: p.name + ' 需关注', level: 'warning' });
+                });
+            }
+            if (alerts.length > 0) {
+                document.getElementById('alertBody').textContent = alerts[0].message;
+                document.getElementById('alertPanel').classList.add('show');
+            } else {
+                document.getElementById('alertPanel').classList.remove('show');
+            }
         }
 
         function initWheelZoom() {
@@ -1080,9 +1050,8 @@
 
         window.addEventListener('load', function() {
             showLoading(true);
-            
-            setTimeout(function() {
-                createHotspots();
+
+            loadHotspots().then(function() {
                 loadDeviceData();
                 loadPlotData();
                 loadAlerts();
@@ -1091,7 +1060,15 @@
                 lastUpdateTime = new Date();
                 updateLastUpdateTime();
                 showLoading(false);
-            }, 500);
+            });
+
+            if (window.StoreLive) {
+                StoreLive.on(['deviceStoreChange', 'plotStoreChange'], function() {
+                    loadDeviceData();
+                    loadPlotData();
+                    loadAlerts();
+                });
+            }
         });
 
         document.addEventListener('keydown', function(e) {

@@ -1,8 +1,10 @@
 # 智慧果园管理平台
 
-> 湖南智农数果科技有限公司 · 苹果种植企业数字化管理平台
+> 湖南数字农业科技有限公司 · 苹果种植企业数字化管理平台
 >
 > 本项目由 **HTML 高保真原型** 转化而来。界面与原型 1:1，数据全部落 MySQL。
+>
+> **开发者 / AI agent 开工前必读**：[AGENTS.md](AGENTS.md)（交接规则）→ [docs/数据设计约定.md](docs/数据设计约定.md)（数据铁律）→ [docs/审计台账.md](docs/审计台账.md)（模块进度与待修清单，进度的唯一事实源）。
 
 ---
 
@@ -28,9 +30,6 @@
 数据库 MySQL 8.0（143 张表，sf_ 前缀）
 部署   Docker Compose（前端 + 后端 + MySQL 三容器）
 ```
-
-> **为什么不用 Vue**：验收标准就是原型。保留原生界面代码，只替换数据读写层，
-> 是唯一能保证"界面与原型 1:1"的方式。
 
 ---
 
@@ -174,12 +173,15 @@ npm run dev               # 或 npm start
 
 ```
 pro_smartorchard/
+├── AGENTS.md      开发者 / AI agent 交接规则（开工必读）
 ├── docs/          需求与设计文档（不进入 Docker 镜像）
-│   ├── 需求说明书.md              主文档 V2.7
+│   ├── 需求说明书.md              主文档 V2.8
+│   ├── 数据设计约定.md            数据层铁律
+│   ├── 审计台账.md                模块进度与待修清单（进度唯一事实源）
 │   └── ...
 ├── html/          四端前端页面 + common 公共资源
 │   ├── index.html  portal.html
-│   ├── applefarm_backhand/        PC 后台
+│   ├── applefarm_backhand/        PC 后台（js/shared/ 下为各模块 store/mapper）
 │   ├── applefarm_mobile/          移动工作端
 │   ├── applefarm_h5/              H5 消费者端
 │   ├── applefarm_dataanlye/       数据大屏
@@ -187,8 +189,8 @@ pro_smartorchard/
 ├── server/        后端服务
 │   ├── app.js                     入口
 │   ├── config/db.js               数据库连接池
-│   ├── middleware/auth.js         JWT 鉴权
-│   ├── routes/                    路由（auth / crud / meta / 各模块聚合）
+│   ├── middleware/                auth.js（JWT 鉴权）+ errorHandler.js（错误脱敏）
+│   ├── routes/                    auth / crud / meta + 17 个模块聚合路由
 │   ├── utils/table-meta.js        表结构元数据（动态判断列是否存在）
 │   ├── resources.js               资源白名单与敏感字段保护
 │   └── db/                        schema.sql + seed.sql（单一数据源）
@@ -245,10 +247,19 @@ pro_smartorchard/
 | `POST /api/:resource` | 新增（支持批量） | 是 |
 | `PUT /api/:resource/:id` | 更新 | 是 |
 | `DELETE /api/:resource/:id` | 逻辑删除 | 是 |
-| `GET /api/device/aggregate` | 设备模块聚合读取（13 表） | 是 |
-| `POST /api/device/aggregate` | 设备模块聚合保存 | 是 |
+| `GET /api/{module}/aggregate` | 模块聚合读取 | 是 |
+| `POST /api/{module}/aggregate` | 模块聚合保存（upsert + 逻辑删除） | 是 |
 
 `:resource` 为表名去掉 `sf_` 前缀，如 `sf_device` → `device`。
+
+`{module}` 共 **17 个**，与前端 store 一一对应：
+
+```
+device  enterprise  cert  production  harvest  trace  sales  biz  mall
+adoption  material  data  model  soil  mobile-ops  alert  vr
+```
+
+> 各模块「页面 → store → 路由 → 表」的对应关系与接通状态，见 [docs/审计台账.md](docs/审计台账.md)。
 
 ---
 
@@ -280,10 +291,14 @@ A：在。密码由 MySQL 镜像的环境变量决定，只在首次创建数据
 
 ## 十一、当前进度
 
+> 进度的**唯一事实源**是 [docs/审计台账.md](docs/审计台账.md)（2026-11-14 全量只读审计），本表仅为摘要。
+
 | 阶段 | 状态 |
 |---|---|
 | 数据设计约定 / ER 图 / 目录规划 | ✅ 完成 |
 | 143 张表建表 + 基础系统数据初始化 | ✅ 完成 |
 | Node 后端骨架 + 三端登录 + 通用 CRUD | ✅ 完成 |
 | **Docker 一键部署** | ✅ **完成**（自动建库灌数，页面与接口同源） |
-| 前端数据层打通 | 🔄 设备模块样板已完成，其余 15 个模块待铺开 |
+| 前端数据层打通 | ✅ 17 个模块聚合接口 + store 全部接通（174/180 页；其余为 iframe 容器页与静态页） |
+| 数据审计整改 | 🔄 5 项违规待修、5 项灰区待决策、字典迁移待启动，详见审计台账 |
+| 验证层 | ⬜ 聚合路由契约测试 + 空库巡检待建 |

@@ -85,19 +85,6 @@ async function upsertByCode(table, codeCol, rows) {
   return n;
 }
 
-async function rebuildTable(table, rows) {
-  await execute('DELETE FROM `' + table + '`');
-  let n = 0;
-  for (const row of rows) {
-    const data = cleanRow(row);
-    const keys = Object.keys(data);
-    if (!keys.length) continue;
-    await execute('INSERT INTO `' + table + '` (' + keys.map((c) => '`' + c + '`').join(', ') + ') VALUES (' + keys.map(() => '?').join(', ') + ')', keys.map((c) => norm(data[c])));
-    n++;
-  }
-  return n;
-}
-
 async function applyDeletes(deleted) {
   let n = 0;
   for (const [key, codes] of Object.entries(deleted)) {

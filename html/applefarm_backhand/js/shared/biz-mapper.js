@@ -104,6 +104,7 @@
       baseProfit: (agg.baseProfit || []).map(baseProfitToRow),
       metrics: (agg.metrics || []).map(metricToRow),
       receivable: receivableToRows({ aging: (agg.receivable && agg.receivable.aging) || [], rank: agg.customerRank || [] }),
+      deleted: agg.deleted || {},
     };
   }
 

@@ -37,6 +37,45 @@
   var backendLoadPromise = null;
   var persistTimer = null;
 
+  /* 显式删除推导（基线差集）：预加载成功时记录后端各表业务键基线，
+   * 保存时把「基线有、当前快照无」的键作为 deleted 显式上报。
+   * 基线初始为 null（未加载）→ 不推导删除，避免严格模式内存镜像不全时误删。 */
+  var DELETE_TABLES = ['products', 'promotions', 'coupons', 'claims', 'members', 'orders', 'afterSales', 'invoices', 'posts', 'categories', 'varieties', 'freight', 'levelRules', 'banners', 'notices'];
+  function deleteKey(table, it) {
+    it = it || {};
+    switch (table) {
+      case 'promotions': return it.title || it.id;
+      case 'coupons': return it.code;
+      case 'orders': return it.id || it.no;
+      case 'categories': case 'varieties': return it.code;
+      case 'freight': return it.name;
+      case 'levelRules': return it.level;
+      case 'banners': return it.title;
+      case 'notices': return { trigger_scene: it.scene, title: it.title };
+      default: return it.id;
+    }
+  }
+  var baselineKeys = null;
+  function snapshotKeys(agg) {
+    var snap = {};
+    DELETE_TABLES.forEach(function (t) {
+      snap[t] = (agg[t] || []).map(function (it) { return JSON.stringify(deleteKey(t, it)); });
+    });
+    return snap;
+  }
+  function computeDeleted(agg) {
+    if (!baselineKeys) return {};
+    var cur = snapshotKeys(agg);
+    var del = {};
+    DELETE_TABLES.forEach(function (t) {
+      var seen = {};
+      cur[t].forEach(function (k) { seen[k] = 1; });
+      var removed = (baselineKeys[t] || []).filter(function (k) { return !seen[k]; });
+      if (removed.length) del[t] = removed.map(function (k) { return JSON.parse(k); });
+    });
+    return del;
+  }
+
   function backendApi() {
     if (typeof window.Api !== 'object' && typeof window.Api !== 'function') return null;
     if (!window.Api.get || !window.Api.create) return null;
@@ -77,6 +116,7 @@
         st.home = st.home || {}; st.home.banners = agg.banners || [];
         st.notices = agg.notices || [];
         safeWrite(KEYS.settings, st);
+        baselineKeys = snapshotKeys(agg);
       }
       return res;
     }).catch(function (err) {
@@ -93,10 +133,13 @@
       members: members(), orders: orders(), afterSales: afterSales(), invoices: invoices(), posts: posts(),
       categories: st.categories || [], varieties: st.varieties || [], freight: st.freight || [],
       levelRules: st.levelRules || [], banners: (st.home && st.home.banners) || [], notices: st.notices || [],
-      deleted: {},
     };
+    agg.deleted = computeDeleted(agg);
     var body = window.MallMapper.fromAggregate(agg);
-    return api.create('mall/aggregate', body);
+    return api.create('mall/aggregate', body).then(function (res) {
+      if (res && res.ok) baselineKeys = snapshotKeys(agg);
+      return res;
+    });
   }
   function schedulePersist(reason) {
     if (!backendEnabled()) return;

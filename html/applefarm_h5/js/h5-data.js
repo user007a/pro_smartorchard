@@ -51,6 +51,14 @@
   function nval(v) { var n = parseFloat(v); return isNaN(n) ? null : n; }
   function jparse(v, d) { try { return v ? JSON.parse(v) : d; } catch (e) { return d; } }
   function dstr(v) { return v ? String(v).replace('T', ' ').slice(0, 19) : ''; }
+  /* 写库 datetime 统一为 'YYYY-MM-DD HH:MM:SS'（MySQL 拒绝 ISO 的 T/Z 与本地化格式） */
+  function sqlDt(v) {
+    if (!v) return null;
+    var d = (v instanceof Date) ? v : new Date(v);
+    if (isNaN(d.getTime())) return null;
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
   function ddstr(v) { return v ? String(v).slice(0, 10) : ''; }
   function i2b(v) { return v === 1 || v === '1' || v === true; }
   function b2i(v) { return v ? 1 : 0; }
@@ -186,7 +194,7 @@
     toRow: function (c) {
       return {
         claim_code: c.id || uid('CLM'), coupon_code: c.code, member_key: c.memberKey || memberKey(),
-        status: c.status, claimed_at: c.claimedAt || null, used_at: c.usedAt || null, order_no: c.orderNo || null
+        status: c.status, claimed_at: sqlDt(c.claimedAt), used_at: sqlDt(c.usedAt), order_no: c.orderNo || null
       };
     }
   };
@@ -228,8 +236,8 @@
         author: p.author, member_id: p.memberId || null, content: p.content,
         images: p.images ? JSON.stringify(p.images) : null, topic: p.topic || null,
         product_id: p.productId || null, like_count: nval(p.likeCount), comment_count: nval(p.commentCount),
-        status: p.status || 'pending', publish_time: p.time || null,
-        audit_by: p.auditBy || null, audit_at: p.auditAt || null, reject_reason: p.rejectReason || null
+        status: p.status || 'pending', publish_time: sqlDt(p.time),
+        audit_by: p.auditBy || null, audit_at: sqlDt(p.auditAt), reject_reason: p.rejectReason || null
       };
     }
   };
@@ -264,8 +272,8 @@
         email: v.email || null, phone: v.phone || null, company_address: v.companyAddress || null,
         company_phone: v.companyPhone || null, bank_name: v.bankName || null, bank_account: v.bankAccount || null,
         invoice_type: v.type, content_type: v.contentType || null, amount: nval(v.amount),
-        apply_time: v.applyTime || null, status: v.status, invoice_no: v.invoiceNo || null,
-        issue_time: v.issueTime || null, reject_reason: v.rejectReason || null,
+        apply_time: sqlDt(v.applyTime), status: v.status, invoice_no: v.invoiceNo || null,
+        issue_time: sqlDt(v.issueTime), reject_reason: v.rejectReason || null,
         void_reason: v.voidReason || null, reissue_of: v.reissueOf || null, operator: v.operator || null
       };
     }
@@ -285,7 +293,7 @@
       return {
         title: f.title, content: f.content, feedback_type: f.type || 'suggestion',
         submitter: f.operator || null, operator_id: f.operatorId || null,
-        submit_time: f.createTime || nowIso(), status: f.status || 'pending',
+        submit_time: sqlDt(f.createTime || nowIso()), status: f.status || 'pending',
         source: f.source || 'h5', contact: f.contact || null
       };
     }
@@ -331,11 +339,11 @@
         coupon_code: o.couponCode || null, coupon_discount: nval(o.couponDiscount),
         points_used: nval(o.pointsUsed), points_discount: nval(o.pointsDiscount),
         freight: nval(o.freight), pay_way: o.payment,
-        pay_txn_no: o.payTxnNo || null, pay_time: o.payTime || null,
+        pay_txn_no: o.payTxnNo || null, pay_time: sqlDt(o.payTime),
         invoice_id: o.invoiceId || (o.invoice ? (o.id || o.no) : null), address: o.address ? JSON.stringify(o.address) : null,
         status: normalizeOrderStatusCode(o.statusCode || o.status), remark: o.remark,
         after_sales_id: o.afterSalesId || null, logistics: o.logistics ? JSON.stringify(o.logistics) : null,
-        order_time: o.createdAt || null
+        order_time: sqlDt(o.createdAt)
       };
     }
   };
@@ -397,7 +405,10 @@
   /* 逻辑资源名 → 真实表名（通用 CRUD 的 resolveTable 会补 sf_ 前缀） */
   var TABLE_OF = {
     cart: 'mall_cart', address: 'mall_address', favorite: 'mall_favorite',
-    order: 'mall_order', member: 'mall_member'
+    order: 'mall_order', member: 'mall_member',
+    product: 'mall_product', promotion: 'mall_promotion', coupon: 'mall_coupon',
+    post: 'mall_post', notice: 'mall_notice', invoice: 'mall_invoice',
+    feedback: 'mb_feedback'
   };
   function actual(res) { return TABLE_OF[res] || res; }
 

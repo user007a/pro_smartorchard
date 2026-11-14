@@ -119,22 +119,6 @@
     }
     .input-group input::placeholder { color: var(--text-placeholder); }
 
-    /* 验证码按钮 */
-    .code-btn {
-      flex-shrink: 0;
-      border: none;
-      background: transparent;
-      color: var(--primary-600);
-      font-size: var(--font-sm);
-      font-weight: var(--font-medium);
-      font-family: var(--font-family);
-      padding: 0 0 0 var(--space-3);
-      border-left: 1px solid var(--border);
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .code-btn:disabled { color: var(--text-placeholder); cursor: not-allowed; }
-
     .error-msg {
       display: none;
       font-size: var(--font-xs);
@@ -283,13 +267,12 @@
         <div class="error-msg" id="phoneError">请输入手机号</div>
       </div>
 
-      <div class="input-group" id="codeGroup">
+      <div class="input-group" id="pwdGroup">
         <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h5"/>
+          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
         </svg>
-        <input type="tel" id="smsCode" inputmode="numeric" maxlength="6" placeholder="短信验证码" autocomplete="one-time-code" aria-label="短信验证码">
-        <button type="button" class="code-btn" id="btnSendCode">获取验证码</button>
-        <div class="error-msg" id="codeError">请输入验证码</div>
+        <input type="password" id="password" maxlength="32" placeholder="请输入密码" autocomplete="current-password" aria-label="密码">
+        <div class="error-msg" id="pwdError">请输入密码</div>
       </div>
 
       <!-- 图形验证码：连发 3 次以上才出现，兼顾顺滑与防爆破 -->
@@ -314,7 +297,7 @@
       </div>
 
       <div class="demo-hint">
-        演示：手机号 <strong>15111480531</strong> · 验证码 <strong>123456</strong>
+        演示：手机号 <strong>13800000001</strong> · 密码 <strong>admin123</strong>
       </div>
     </div>
 
@@ -346,27 +329,19 @@
     }
 
     /* ------------------------------------------------------------
-     * 演示账号。原型无后端，验证码在本机校验；
-     * 生产环境必须改为服务端下发与校验短信验证码。
+     * 密码登录：手机号 + 密码经后端 /api/auth/member-login 校验，
+     * 成功后 token 由 Api 写入。图形验证码用于本机防爆破。
      * ------------------------------------------------------------ */
-    var DEMO_PHONE = '15111480531';
-    var DEMO_CODE = '123456';
-    var CODE_TTL = 60;          // 验证码有效期（秒）
-    var RESEND_INTERVAL = 60;   // 重发冷却（秒）
-    var MAX_ATTEMPTS = 5;       // 验证码错误上限，超出后要求图形验证码
+    var MAX_ATTEMPTS = 5;       // 密码错误上限，超出后要求图形验证码
     var LOCK_MS = 30000;        // 锁定 30 秒
 
-    var issuedCode = '';        // 本机已下发的验证码
-    var issuedAt = 0;           // 下发时间戳
     var failCount = 0;
     var lockUntil = 0;
     var captchaAnswer = '';
-    var sendCount = 0;          // 本次会话已发送次数
 
     var phoneEl = document.getElementById('phone');
-    var codeEl = document.getElementById('smsCode');
+    var pwdEl = document.getElementById('password');
     var captchaInput = document.getElementById('captchaInput');
-    var btnSend = document.getElementById('btnSendCode');
     var btnLogin = document.getElementById('btnLogin');
 
     /* ---------- 错误提示 ---------- */
@@ -435,7 +410,7 @@
     });
 
     function captchaRequired() {
-      return failCount >= MAX_ATTEMPTS - 2 || sendCount >= 3;
+      return failCount >= MAX_ATTEMPTS - 2;
     }
     function syncCaptcha() {
       var need = captchaRequired();
@@ -450,55 +425,10 @@
       }
     }
 
-    /* ---------- 发送验证码 ---------- */
-    var coolTimer = null;
-    function startCooldown(seconds) {
-      btnSend.disabled = true;
-      var left = seconds;
-      btnSend.textContent = left + ' 秒后重发';
-      clearInterval(coolTimer);
-      coolTimer = setInterval(function () {
-        left--;
-        if (left <= 0) {
-          clearInterval(coolTimer);
-          btnSend.disabled = false;
-          btnSend.textContent = '重新获取';
-        } else {
-          btnSend.textContent = left + ' 秒后重发';
-        }
-      }, 1000);
-    }
-
-    btnSend.addEventListener('click', function () {
-      clearError('phoneGroup', 'phoneError');
-      clearError('captchaGroup', 'captchaError');
-      var phone = phoneEl.value.trim();
-      if (!/^1\d{10}$/.test(phone)) {
-        setError('phoneGroup', 'phoneError', '请输入正确的 11 位手机号');
-        return;
-      }
-      if (captchaRequired() &&
-          captchaInput.value.trim().toUpperCase() !== captchaAnswer) {
-        setError('captchaGroup', 'captchaError', '图形验证码错误');
-        drawCaptcha();
-        captchaInput.value = '';
-        return;
-      }
-
-      issuedCode = phone === DEMO_PHONE ? DEMO_CODE : String(Math.floor(100000 + Math.random() * 900000));
-      issuedAt = Date.now();
-      sendCount++;
-      syncCaptcha();
-      startCooldown(RESEND_INTERVAL);
-      showToast(phone === DEMO_PHONE
-        ? '演示环境验证码为 ' + DEMO_CODE
-        : '验证码已发送（演示环境任意 6 位数字均可通过）');
-    });
-
     /* ---------- 登录 ---------- */
     btnLogin.addEventListener('click', function () {
       clearError('phoneGroup', 'phoneError');
-      clearError('codeGroup', 'codeError');
+      clearError('pwdGroup', 'pwdError');
       clearError('captchaGroup', 'captchaError');
 
       if (Date.now() < lockUntil) {
@@ -507,23 +437,14 @@
       }
 
       var phone = phoneEl.value.trim();
-      var code = codeEl.value.trim();
+      var password = pwdEl.value;
 
       if (!/^1\d{10}$/.test(phone)) {
         setError('phoneGroup', 'phoneError', '请输入正确的 11 位手机号');
         return;
       }
-      if (!/^\d{6}$/.test(code)) {
-        setError('codeGroup', 'codeError', '请输入 6 位短信验证码');
-        return;
-      }
-      if (!issuedCode) {
-        setError('codeGroup', 'codeError', '请先获取验证码');
-        return;
-      }
-      if (Date.now() - issuedAt > CODE_TTL * 1000) {
-        issuedCode = '';
-        setError('codeGroup', 'codeError', '验证码已过期，请重新获取');
+      if (!password) {
+        setError('pwdGroup', 'pwdError', '请输入密码');
         return;
       }
       if (captchaRequired() &&
@@ -533,25 +454,27 @@
         captchaInput.value = '';
         return;
       }
-      if (code !== issuedCode) {
-        failCount++;
-        setError('codeGroup', 'codeError', failCount >= MAX_ATTEMPTS
-          ? '验证码错误次数过多'
-          : '验证码错误，还可尝试 ' + (MAX_ATTEMPTS - failCount) + ' 次');
-        if (failCount >= MAX_ATTEMPTS) lockUntil = Date.now() + LOCK_MS;
-        syncCaptcha();
-        return;
-      }
 
-      failCount = 0;
       btnLogin.classList.add('loading');
       btnLogin.disabled = true;
 
-      // 演示环境以手机号尾号派生用户名，保持与既有 C 端数据的归属字段一致
-      setTimeout(function () {
-        H5Auth.login(phone, { phone: phone, role: '普通会员' });
-        location.replace(backUrl);
-      }, 600);
+      H5Auth.login(phone, { phone: phone, password: password }).then(function (r) {
+        btnLogin.classList.remove('loading');
+        btnLogin.disabled = false;
+        if (r && r.ok) {
+          failCount = 0;
+          location.replace(backUrl);
+          return;
+        }
+        failCount++;
+        setError('pwdGroup', 'pwdError', (r && r.message) || '手机号或密码错误');
+        if (failCount >= MAX_ATTEMPTS) lockUntil = Date.now() + LOCK_MS;
+        syncCaptcha();
+      }).catch(function () {
+        btnLogin.classList.remove('loading');
+        btnLogin.disabled = false;
+        setError('pwdGroup', 'pwdError', '登录服务暂不可用，请稍后重试');
+      });
     });
 
     /* ---------- 游客浏览 ---------- */
@@ -599,7 +522,7 @@
       clearError('phoneGroup', 'phoneError');
       syncCaptcha();
     });
-    codeEl.addEventListener('input', function () { clearError('codeGroup', 'codeError'); });
+    pwdEl.addEventListener('input', function () { clearError('pwdGroup', 'pwdError'); });
     captchaInput.addEventListener('input', function () { clearError('captchaGroup', 'captchaError'); });
   })();
   </script>

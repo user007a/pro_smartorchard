@@ -178,7 +178,7 @@
   /* ---------- 帖子 ---------- */
   function rowToPost(row) {
     return {
-      id: '', author: row.author, memberId: row.member_id || '', content: row.content,
+      id: String(row.id), author: row.author, memberId: row.member_id || '', content: row.content,
       images: jparse(row.images, []), topic: row.topic || '', productId: row.product_id || '',
       status: row.status, time: dstr(row.publish_time), auditBy: row.audit_by || '',
       auditAt: dstr(row.audit_at), rejectReason: row.reject_reason || '',
@@ -186,6 +186,7 @@
   }
   function postToRow(item) {
     return {
+      _dbId: item.id,
       author: item.author, member_id: item.memberId || null, content: item.content,
       images: item.images ? JSON.stringify(item.images) : null, topic: item.topic || null,
       product_id: item.productId || null, status: item.status, publish_time: item.time || null,

@@ -51,6 +51,25 @@
 
   var backendLoadPromise = null;
   var persistTimer = null;
+  // 显式删除登记：table → [待删键]（不做「快照缺失即删」，避免严格模式镜像不全误删）
+  var deletedReg = {};
+  function markDeleted(table, key) { (deletedReg[table] = deletedReg[table] || []).push(key); }
+  function takeDeleted() {
+    var out = {};
+    Object.keys(deletedReg).forEach(function (k) {
+      if (deletedReg[k] && deletedReg[k].length) out[k] = deletedReg[k].slice();
+    });
+    return out;
+  }
+  // 整表替换式 setter 的删除推导：旧列表中有、新列表中无的键 → 显式待删
+  function diffRemoved(oldList, newList, table, keyFn) {
+    var seen = {};
+    (newList || []).forEach(function (x) { seen[JSON.stringify(keyFn(x))] = 1; });
+    (oldList || []).forEach(function (x) {
+      var k = keyFn(x);
+      if (!seen[JSON.stringify(k)]) markDeleted(table, k);
+    });
+  }
 
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
@@ -95,13 +114,22 @@
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
     var e = ensure();
+    var pendingDeleted = takeDeleted();
     var agg = {
       revenueMix: e.revenueMix || [], costStructure: e.costStructure || [],
       baseProfit: e.baseProfit || [], metrics: e.metrics || [],
       receivable: { aging: (e.receivable && e.receivable.aging) || [] }, customerRank: e.customerRank || [],
+      deleted: pendingDeleted,
     };
     var body = global.BizMapper.fromAggregate(agg);
-    return api.create('biz/aggregate', body);
+    return api.create('biz/aggregate', body).then(function (res) {
+      if (res && res.ok) {
+        Object.keys(pendingDeleted).forEach(function (k) {
+          deletedReg[k] = (deletedReg[k] || []).slice(pendingDeleted[k].length);
+        });
+      }
+      return res;
+    });
   }
   function schedulePersist(reason) {
     if (!backendEnabled()) return;
@@ -259,6 +287,7 @@
     setRevenueMix: function(list){
       var d = ensure();
       var clean = deepClone(list);
+      diffRemoved(d.revenueMix, clean, 'revenueMix', function(x){ return { revenue_type: x.name, fiscal_year: '2026' }; });
       var total = clean.reduce(function(s, x){ return s + (Number(x.value) || 0); }, 0);
       d.totalRevenue = Math.round(total * 10) / 10;
       d.revenueMix = clean.map(function(x){
@@ -284,12 +313,16 @@
     },
     setReceivable: function(obj){
       var d = ensure();
+      if (obj && Array.isArray(obj.aging)) {
+        diffRemoved(d.receivable.aging, obj.aging, 'receivable', function(x){ return { age_range: x.name, customer_name: '', fiscal_year: '2026' }; });
+      }
       d.receivable = Object.assign({}, d.receivable, obj);
       broadcast('receivable');
       return true;
     },
     setMetrics: function(list){
       var d = ensure();
+      diffRemoved(d.metrics, list, 'metrics', function(x){ return { metric_name: x.name, fiscal_year: '2026' }; });
       d.metrics = deepClone(list);
       broadcast('metrics');
       return true;
@@ -356,6 +389,7 @@
     setBaseProfit: function(list){
       var d = ensure();
       if (!Array.isArray(list) || !list.length) return deepClone(d.baseProfit);
+      diffRemoved(d.baseProfit, list, 'baseProfit', function(x){ return { base_name: x.base, fiscal_year: '2026' }; });
       d.baseProfit = deepClone(list).map(function(x){
         return {
           base: String(x.base || '未命名基地'),

@@ -460,7 +460,7 @@
  * ============================================================ */
 
 const OPERATOR_LIST = [];
-const PRODUCT_LIST = ['花牛苹果', '金帅苹果', '秦冠苹果', '礼盒装苹果'];
+const PRODUCT_LIST = [];
 
 let currentBatch = null;   // 当前选中批次的采收记录
 let currentInspection = null; // 当前批次的有效检测报告
@@ -501,7 +501,15 @@ function syncFromBatch() {
     return;
   }
   document.getElementById('certProduceDate').value = (currentBatch.startTime || '').slice(0, 10);
-  document.getElementById('certProduct').value = currentBatch.variety || '花牛苹果';
+  const productEl = document.getElementById('certProduct');
+  const variety = currentBatch.variety || '';
+  if (variety && !Array.prototype.some.call(productEl.options, function (o) { return o.value === variety; })) {
+    const opt = document.createElement('option');
+    opt.value = variety;
+    opt.textContent = variety;
+    productEl.appendChild(opt);
+  }
+  productEl.value = variety;
   document.getElementById('certGrade').value = currentBatch.levelName || '一级';
   document.getElementById('certNetWeight').value = currentBatch.qty ? (currentBatch.qty + ' kg') : '';
 
@@ -864,9 +872,27 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   const productSelect = document.getElementById('certProduct');
-  productSelect.innerHTML = PRODUCT_LIST.map(function (p) {
-    return '<option value="' + p + '">' + p + '</option>';
-  }).join('');
+  function fillProducts() {
+    productSelect.innerHTML = '<option value="">请选择产品</option>' + PRODUCT_LIST.map(function (p) {
+      return '<option value="' + p + '">' + p + '</option>';
+    }).join('');
+  }
+  fillProducts();
+  // 从真实商品表加载产品（严格空库：空库时下拉为空）
+  if (typeof window.Api === 'object' && window.Api.get) {
+    window.Api.get('mall_product', { size: 500 }).then(function (res) {
+      var list = (res && res.data && res.data.list) || [];
+      var names = [];
+      list.forEach(function (p) {
+        var n = p && p.product_name;
+        n = n == null ? '' : String(n).trim();
+        if (n && names.indexOf(n) === -1) names.push(n);
+      });
+      PRODUCT_LIST.length = 0;
+      names.forEach(function (n) { PRODUCT_LIST.push(n); });
+      fillProducts();
+    }).catch(function () {});
+  }
 
   const operatorSelect = document.getElementById('certOperator');
   function fillOperators() {

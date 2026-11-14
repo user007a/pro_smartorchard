@@ -173,11 +173,11 @@
       </div>
       <div class="address-card">
         <div class="address-header">
-          <span class="address-name" id="checkoutAddrName">刘友宝</span>
-          <span class="address-phone" id="checkoutAddrPhone">151****0531</span>
-          <span class="address-tag">默认</span>
+          <span class="address-name" id="checkoutAddrName">暂无收货地址</span>
+          <span class="address-phone" id="checkoutAddrPhone"></span>
+          <span class="address-tag" style="display:none;">默认</span>
         </div>
-        <div class="address-detail" id="checkoutAddrDetail">湖南省长沙市麓云路159号佳境小区15#1406</div>
+        <div class="address-detail" id="checkoutAddrDetail"></div>
       </div>
 
       <div class="section-title">
@@ -293,16 +293,24 @@
 
     function renderAddress() {
       var list = addressList;
-      if (!list.length) return;
       var def = list.filter(function(a) { return a.default; })[0] || list[0];
       var nameEl = document.getElementById('checkoutAddrName');
       var phoneEl = document.getElementById('checkoutAddrPhone');
       var detailEl = document.getElementById('checkoutAddrDetail');
+      var tagEl = document.querySelector('.address-tag');
+      if (!def) {
+        if (nameEl) nameEl.textContent = '暂无收货地址';
+        if (phoneEl) phoneEl.textContent = '';
+        if (detailEl) detailEl.textContent = '';
+        if (tagEl) tagEl.style.display = 'none';
+        return;
+      }
       if (nameEl) nameEl.textContent = def.name || '';
       if (phoneEl) phoneEl.textContent = String(def.phone || '').replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2');
       if (detailEl) {
         detailEl.textContent = [def.region, def.detail].filter(Boolean).join(' ');
       }
+      if (tagEl) tagEl.style.display = def.default ? '' : 'none';
     }
 
     /* 优惠券规则来源：后台「商城管理 / 优惠券管理」维护的 mall_coupons
@@ -362,7 +370,7 @@
       // 首页加购时会把当时的地址快照写入 sessionStorage h5_checkout_draft，24h 内优先沿用
       try {
         var draft = checkoutDraft;
-        if (draft && draft.address && Date.now() - (Number(draft.ts) || 0) < 86400000) {
+        if (draft && draft.address && (draft.address.name || draft.address.detail) && Date.now() - (Number(draft.ts) || 0) < 86400000) {
           return {
             name: draft.address.name || '', phone: draft.address.phone || '',
             region: draft.address.region || '', detail: draft.address.detail || ''
@@ -372,7 +380,7 @@
       var list = addressList;
       if (!Array.isArray(list)) list = [];
       var def = list.filter(function (a) { return a && a.default; })[0] || list[0];
-      if (!def) return { name: '刘友宝', phone: '15111480531', region: '湖南省长沙市', detail: '麓云路159号佳境小区15#1406' };
+      if (!def) return { name: '', phone: '', region: '', detail: '' };
       return { name: def.name || '', phone: def.phone || '', region: def.region || '', detail: def.detail || '' };
     }
 
@@ -504,6 +512,8 @@
       var data = renderCheckout();
       var items = data.items;
       if (!items.length) { showToast('订单为空，请先选购商品'); return; }
+      var addr = snapshotAddress();
+      if (!addr.name && !addr.phone && !addr.detail) { showToast('请先在「我的」页添加收货地址'); return; }
       var orderNo = 'ORD' + Date.now();
       // 券码在下单后会被 MallCoupons.clear() 清除，需在此之前留档
       var couponCode = MallCoupons.selected();
@@ -529,8 +539,8 @@
         total: data.total,
         payment: payment,
         invoice: needInvoice,
-        address: snapshotAddress(),
-        receiveName: snapshotAddress().name,
+        address: addr,
+        receiveName: addr.name,
         status: '待付款',
         statusCode: 'pending',
         createdAt: new Date().toISOString()
