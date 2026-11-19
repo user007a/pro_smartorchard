@@ -985,10 +985,16 @@ const IO_SUPPLIER_RESOURCE = 'material_supplier';
 const IO_PLOT_RESOURCE = 'plot';
 /* 出入库单据：由 loadIo() 从后端 API 异步填充，页面不再内置演示记录 */
 let ioData = [];
-/* 表单下拉候选值：取自后端，取不到时保持为空 */
+/* 表单下拉候选值：取自后端，取不到时保持为空
+   material_id / supplier_id / warehouse_id 均存数据库物理 id，故下拉 value 用 id，
+   显示名称另存映射表（名称仅用于渲染）。 */
 let ioMaterialNames = [];
 let ioSupplierNames = [];
 let ioPlotCodes = [];
+/* 名称/编码 → 物理 id 映射（写入 sf_material_io 时用） */
+let ioMaterialIdByName = {};
+let ioSupplierIdByName = {};
+let ioWarehouseIdByCode = {};
 
 /* 数据库行(snake_case) → 页面渲染字段；农资名称/单位、供应商名来自关联表 */
 function mapIoRow(row, matMap, supMap) {
@@ -1054,16 +1060,25 @@ function loadIo() {
       return;
     }
     var matMap = {}, matNames = [];
+    ioMaterialIdByName = {};
     if (res[1] && res[1].ok && res[1].data && res[1].data.list) {
       res[1].data.list.forEach(function (x) {
         matMap[x.id] = x;
-        if (x.material_name) matNames.push(x.material_name);
+        if (x.material_name) {
+          matNames.push(x.material_name);
+          ioMaterialIdByName[x.material_name] = x.id;
+        }
       });
     }
     var supMap = {}, supplierNames = [];
+    ioSupplierIdByName = {};
     if (res[2] && res[2].ok && res[2].data && res[2].data.list) {
       res[2].data.list.forEach(function (x) {
-        if (x.supplier_name) { supMap[x.id] = x.supplier_name; supplierNames.push(x.supplier_name); }
+        if (x.supplier_name) {
+          supMap[x.id] = x.supplier_name;
+          supplierNames.push(x.supplier_name);
+          ioSupplierIdByName[x.supplier_name] = x.id;
+        }
       });
     }
     var plotCodes = [];
@@ -1076,6 +1091,7 @@ function loadIo() {
     ioMaterialNames = matNames;
     ioSupplierNames = supplierNames;
     ioPlotCodes = plotCodes;
+    loadWarehouseIds();
     populateMaterialSelect();
     populateSupplierSelect();
     populatePlotSelect();
@@ -1415,6 +1431,22 @@ function populatePlotSelect() {
   });
 }
 
+/* 仓库编号 → 物理 id（sf_material_io.warehouse_id 存物理 id；
+   页面下拉用仓库编码作为 value，故需一次映射） */
+function loadWarehouseIds() {
+  if (!window.Api || !Api.get) return;
+  Api.get('material_warehouse', { page: 1, size: 500 }).then(function (res) {
+    if (!res || !res.ok || !res.data) return;
+    ioWarehouseIdByCode = {};
+    (res.data.list || []).forEach(function (w) {
+      if (w.warehouse_code) ioWarehouseIdByCode[w.warehouse_code] = w.id;
+      if (w.warehouse_name) ioWarehouseIdByCode[w.warehouse_name] = w.id;
+    });
+  }).catch(function (e) {
+    console.warn('[material_io] 仓库列表加载失败', e);
+  });
+}
+
 // 金额自动计算：金额 = 单价 × 数量
 function bindAmountCalc(qtyId, priceId, amountId) {
   const qtyInput = document.getElementById(qtyId);
@@ -1492,53 +1524,49 @@ function saveInbound() {
     return;
   }
 
-  // 联动更新共享库存
+  const body = {
+    io_code: genIoCode(date),
+    warehouse_id: ioWarehouseIdByCode[warehouseSel.value] != null ? ioWarehouseIdByCode[warehouseSel.value] : null,
+    io_type: 'in',
+    material_id: ioMaterialIdByName[material] != null ? ioMaterialIdByName[material] : null,
+    batch_no: document.getElementById('inboundBatchNo').value || null,
+    quantity: Number(qty),
+    price: price,
+    amount: Number((price * Number(qty)).toFixed(2)),
+    handler: document.getElementById('inboundOperator').value || null,
+    supplier_id: (function () {
+      var n = document.getElementById('inboundSupplier').value;
+      return n && ioSupplierIdByName[n] != null ? ioSupplierIdByName[n] : null;
+    })(),
+    source_code: document.getElementById('inboundSourceNo').value || document.getElementById('inboundPurchaseCode').value || null,
+    related_target: null,
+    pay_status: document.getElementById('inboundPayStatus').value || '未付款',
+    audit_status: 'pending',
+    expire_date: document.getElementById('inboundExpireDate').value || null,
+    io_date: date || new Date().toISOString().split('T')[0],
+    remark: document.getElementById('inboundRemark').value || '入库登记'
+  };
+
+  // 联动更新共享库存（库存台账独立于单据，先校验额度）
   const result = MaterialStore.applyDelta(material, parseInt(qty));
   if (!result.ok) {
     alert(result.message);
     return;
   }
 
-  const m = MaterialStore.get(material);
-  ioData.unshift({
-    id: String(Date.now()),
-    code: genIoCode(date),
-    warehouse: WAREHOUSE_NAME[warehouseSel.value] || warehouseSel.options[warehouseSel.selectedIndex].text,
-    warehouseCode: warehouseSel.value,
-    type: 'in',
-    typeText: '入库',
-    material: material,
-    supplier: document.getElementById('inboundSupplier').value || '-',
-    qty: String(qty),
-    unit: m ? m.unit : document.getElementById('inboundUnit').value,
-    price: price,
-    amount: (price * Number(qty)).toFixed(2),
-    batchNo: document.getElementById('inboundBatchNo').value,
-    prodDate: document.getElementById('inboundProdDate').value,
-    expireDate: document.getElementById('inboundExpireDate').value,
-    plot: '',
-    task: '',
-    auditStatus: 'pending',
-    operator: document.getElementById('inboundOperator').value,
-    date: (date || new Date().toISOString().split('T')[0]) + ' ' + nowTime(),
-    remark: document.getElementById('inboundRemark').value || '入库登记',
-    purchaseCode: document.getElementById('inboundPurchaseCode').value,
-    qc: document.getElementById('inboundQc').value,
-    sourceNo: document.getElementById('inboundSourceNo').value || document.getElementById('inboundPurchaseCode').value || '',
-    invoiceNo: document.getElementById('inboundInvoiceNo').value || '',
-    taxRate: Number(document.getElementById('inboundTaxRate').value) || 0,
-    payStatus: document.getElementById('inboundPayStatus').value || '未付款',
-    reviewer: '',
-    reviewTime: '',
-    useType: '',
-    useTypeText: '',
-    purpose: ''
+  Api.create(IO_RESOURCE, body).then(function (res) {
+    if (!res || !res.ok) {
+      alert('入库登记失败：' + ((res && res.message) || '后端拒绝写入'));
+      loadIo();
+      return;
+    }
+    alert('入库登记成功，库存已增加，单据待审核');
+    closeInboundModal();
+    loadIo();
+  }).catch(function (e) {
+    alert('入库登记失败：' + ((e && e.message ? e.message : '网络异常')));
+    loadIo();
   });
-  ioData.sort((a, b) => b.date.localeCompare(a.date));
-
-  alert('入库登记成功，库存已增加，单据待审核');
-  closeInboundModal();
-  search();
 }
 
 // 打开出库弹窗
@@ -1579,7 +1607,6 @@ function saveOutbound() {
   const warehouseSel = document.getElementById('outboundWarehouse');
   const date = document.getElementById('outboundDate').value;
   const price = parseFloat(document.getElementById('outboundPrice').value) || 0;
-  const useTypeSel = document.getElementById('outboundUseType');
 
   if (!material) {
     alert('请选择农资');
@@ -1597,68 +1624,79 @@ function saveOutbound() {
     return;
   }
 
-  const m = MaterialStore.get(material);
-  ioData.unshift({
-    id: String(Date.now()),
-    code: genIoCode(date),
-    warehouse: WAREHOUSE_NAME[warehouseSel.value] || warehouseSel.options[warehouseSel.selectedIndex].text,
-    warehouseCode: warehouseSel.value,
-    type: 'out',
-    typeText: '出库',
-    material: material,
-    supplier: '',
-    qty: String(qty),
-    unit: m ? m.unit : document.getElementById('outboundUnit').value,
+  const body = {
+    io_code: genIoCode(date),
+    warehouse_id: ioWarehouseIdByCode[warehouseSel.value] != null ? ioWarehouseIdByCode[warehouseSel.value] : null,
+    io_type: 'out',
+    material_id: ioMaterialIdByName[material] != null ? ioMaterialIdByName[material] : null,
+    batch_no: document.getElementById('outboundBatchNo').value || null,
+    quantity: Number(qty),
     price: price,
-    amount: (price * Number(qty)).toFixed(2),
-    batchNo: document.getElementById('outboundBatchNo').value,
-    prodDate: '',
-    expireDate: '',
-    plot: document.getElementById('outboundPlot').value,
-    task: document.getElementById('outboundTask').value,
-    auditStatus: 'pending',
-    operator: document.getElementById('outboundOperator').value,
-    date: (date || new Date().toISOString().split('T')[0]) + ' ' + nowTime(),
-    remark: document.getElementById('outboundRemark').value || '出库登记',
-    purchaseCode: '',
-    qc: '',
-    sourceNo: document.getElementById('outboundSourceNo').value || '',
-    invoiceNo: document.getElementById('outboundInvoiceNo').value || '',
-    taxRate: Number(document.getElementById('outboundTaxRate').value) || 0,
-    payStatus: document.getElementById('outboundPayStatus').value || '未付款',
-    reviewer: '',
-    reviewTime: '',
-    useType: useTypeSel.value,
-    useTypeText: useTypeSel.options[useTypeSel.selectedIndex].text,
-    purpose: document.getElementById('outboundPurpose').value
-  });
-  ioData.sort((a, b) => b.date.localeCompare(a.date));
+    amount: Number((price * Number(qty)).toFixed(2)),
+    handler: document.getElementById('outboundOperator').value || null,
+    supplier_id: null,
+    source_code: document.getElementById('outboundSourceNo').value || null,
+    related_target: document.getElementById('outboundPlot').value || document.getElementById('outboundTask').value || null,
+    pay_status: document.getElementById('outboundPayStatus').value || '未付款',
+    audit_status: 'pending',
+    expire_date: null,
+    io_date: date || new Date().toISOString().split('T')[0],
+    remark: document.getElementById('outboundRemark').value || '出库登记'
+  };
 
-  alert('出库登记成功，库存已扣减，单据待审核');
-  closeOutboundModal();
-  search();
+  Api.create(IO_RESOURCE, body).then(function (res) {
+    if (!res || !res.ok) {
+      alert('出库登记失败：' + ((res && res.message) || '后端拒绝写入'));
+      loadIo();
+      return;
+    }
+    alert('出库登记成功，库存已扣减，单据待审核');
+    closeOutboundModal();
+    loadIo();
+  }).catch(function (e) {
+    alert('出库登记失败：' + ((e && e.message ? e.message : '网络异常')));
+    loadIo();
+  });
 }
 
 // 审核通过
 function approveRecord(id) {
   const item = ioData.find(i => i.id === id);
   if (!item || item.auditStatus !== 'pending') return;
-  item.auditStatus = 'approved';
-  item.reviewer = currentUserName();
-  item.reviewTime = new Date().toISOString().split('T')[0];
-  renderTable();
-  if (typeof Toast !== 'undefined') Toast.success('单据 ' + item.code + ' 审核通过');
-  else alert('单据 ' + item.code + ' 审核通过');
+  Api.update(IO_RESOURCE, id, {
+    audit_status: 'approved',
+    auditor: currentUserName()
+  }).then(function (res) {
+    if (!res || !res.ok) {
+      alert('审核失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    loadIo();
+    if (typeof Toast !== 'undefined') Toast.success('单据 ' + item.code + ' 审核通过');
+    else alert('单据 ' + item.code + ' 审核通过');
+  }).catch(function (e) {
+    alert('审核失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 // 驳回
 function rejectRecord(id) {
   const item = ioData.find(i => i.id === id);
   if (!item || item.auditStatus !== 'pending') return;
-  item.auditStatus = 'rejected';
-  renderTable();
-  if (typeof Toast !== 'undefined') Toast.warning('单据 ' + item.code + ' 已驳回');
-  else alert('单据 ' + item.code + ' 已驳回');
+  Api.update(IO_RESOURCE, id, {
+    audit_status: 'rejected',
+    auditor: currentUserName()
+  }).then(function (res) {
+    if (!res || !res.ok) {
+      alert('驳回失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    loadIo();
+    if (typeof Toast !== 'undefined') Toast.warning('单据 ' + item.code + ' 已驳回');
+    else alert('单据 ' + item.code + ' 已驳回');
+  }).catch(function (e) {
+    alert('驳回失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 // 作废（仅已审核单据）
@@ -1666,10 +1704,20 @@ function voidRecord(id) {
   const item = ioData.find(i => i.id === id);
   if (!item || item.auditStatus !== 'approved') return;
   if (!confirm('确认作废单据 ' + item.code + ' 吗？作废后不可恢复。')) return;
-  item.auditStatus = 'void';
-  renderTable();
-  if (typeof Toast !== 'undefined') Toast.success('单据 ' + item.code + ' 已作废');
-  else alert('单据 ' + item.code + ' 已作废');
+  Api.update(IO_RESOURCE, id, {
+    audit_status: 'void',
+    auditor: currentUserName()
+  }).then(function (res) {
+    if (!res || !res.ok) {
+      alert('作废失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    loadIo();
+    if (typeof Toast !== 'undefined') Toast.success('单据 ' + item.code + ' 已作废');
+    else alert('单据 ' + item.code + ' 已作废');
+  }).catch(function (e) {
+    alert('作废失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 // 查看详情

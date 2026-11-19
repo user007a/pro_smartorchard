@@ -13,6 +13,16 @@
   function nval(v) { var n = parseFloat(v); return isNaN(n) ? null : n; }
   function dstr(v) { return v ? String(v).replace('T', ' ').slice(0, 19) : ''; }
   function ddstr(v) { return v ? String(v).slice(0, 10) : ''; }
+  /* 写库 datetime 统一为 'YYYY-MM-DD HH:MM:SS'。
+   * MySQL STRICT 模式拒绝 ISO 的 'T'/'Z' 与本地化格式（1292 Incorrect datetime value），
+   * 一条非法 datetime 会让整批 /api/mall/aggregate 事务失败 → 该表之后所有表都不写。 */
+  function sqlDt(v) {
+    if (!v) return null;
+    var d = (v instanceof Date) ? v : new Date(v);
+    if (isNaN(d.getTime())) return null;
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
   function jparse(v, def) { try { return v ? JSON.parse(v) : def; } catch (e) { return def; } }
   function b2i(v) { return v ? 1 : 0; }
   function i2b(v) { return v === 1 || v === '1' || v === true; }
@@ -65,11 +75,11 @@
       coupon_code: item.couponCode || null, coupon_discount: nval(item.couponDiscount),
       points_used: nval(item.pointsUsed), points_discount: nval(item.pointsDiscount),
       freight: nval(item.freight), pay_way: item.payment,
-      pay_txn_no: item.payTxnNo || null, pay_time: item.payTime || null,
+      pay_txn_no: item.payTxnNo || null, pay_time: sqlDt(item.payTime),
       invoice_id: item.invoiceId || null, address: item.address ? JSON.stringify(item.address) : null,
       status: item.statusCode || item.status, remark: item.remark, after_sales_id: item.afterSalesId || null,
       logistics: item.logistics ? JSON.stringify(item.logistics) : null,
-      order_time: item.createdAt || null,
+      order_time: sqlDt(item.createdAt),
     };
   }
 
@@ -91,7 +101,7 @@
       level: item.level, points: nval(item.points), growth: nval(item.growth),
       tags: item.tags ? JSON.stringify(item.tags) : null, source: item.source || null,
       address: item.address || null, status: item.status,
-      register_time: item.regDate || null, last_order_time: item.lastOrderAt || null,
+      register_time: sqlDt(item.regDate), last_order_time: sqlDt(item.lastOrderAt),
     };
   }
 
@@ -129,7 +139,7 @@
   function claimToRow(item) {
     return {
       claim_code: item.id, coupon_code: item.code, member_key: item.memberKey,
-      status: item.status, claimed_at: item.claimedAt || null, used_at: item.usedAt || null, order_no: item.orderNo || null,
+      status: item.status, claimed_at: sqlDt(item.claimedAt), used_at: sqlDt(item.usedAt), order_no: item.orderNo || null,
     };
   }
 
@@ -146,7 +156,7 @@
     return {
       aftersale_code: item.id, order_code: item.orderNo || null, aftersale_type: item.type,
       refund_amount: nval(item.amount), reason: item.reason, status: item.status,
-      handler: item.handler || null, handle_at: item.handleAt || null, apply_at: item.applyAt || null,
+      handler: item.handler || null, handle_at: sqlDt(item.handleAt), apply_at: sqlDt(item.applyAt),
       remark: item.remark || null,
     };
   }
@@ -169,8 +179,8 @@
       email: item.email || null, phone: item.phone || null, company_address: item.companyAddress || null,
       company_phone: item.companyPhone || null, bank_name: item.bankName || null, bank_account: item.bankAccount || null,
       invoice_type: item.type, content_type: item.contentType || null, amount: nval(item.amount),
-      apply_time: item.applyTime || null, status: item.status, invoice_no: item.invoiceNo || null,
-      issue_time: item.issueTime || null, reject_reason: item.rejectReason || null,
+      apply_time: sqlDt(item.applyTime), status: item.status, invoice_no: item.invoiceNo || null,
+      issue_time: sqlDt(item.issueTime), reject_reason: item.rejectReason || null,
       void_reason: item.voidReason || null, reissue_of: item.reissueOf || null, operator: item.operator || null,
     };
   }
@@ -189,8 +199,8 @@
       _dbId: item.id,
       author: item.author, member_id: item.memberId || null, content: item.content,
       images: item.images ? JSON.stringify(item.images) : null, topic: item.topic || null,
-      product_id: item.productId || null, status: item.status, publish_time: item.time || null,
-      audit_by: item.auditBy || null, audit_at: item.auditAt || null, reject_reason: item.rejectReason || null,
+      product_id: item.productId || null, status: item.status, publish_time: sqlDt(item.time),
+      audit_by: item.auditBy || null, audit_at: sqlDt(item.auditAt), reject_reason: item.rejectReason || null,
     };
   }
 
@@ -245,10 +255,19 @@
     return { level: item.level, level_name: item.name, threshold: nval(item.min) };
   }
   function rowToBanner(row) {
-    return { title: row.name, subtitle: row.subtitle || '', img: '', link: row.jump_link || '', status: row.status };
+    return {
+      title: row.name, subtitle: row.subtitle || '',
+      /* 图片存 sf_mall_banner.file_id（铁律 4：图片存 file_id） */
+      img: row.file_id != null ? String(row.file_id) : '',
+      link: row.jump_link || '', status: row.status,
+    };
   }
   function bannerToRow(item) {
-    return { name: item.title, subtitle: item.subtitle || null, jump_link: item.link || null, status: item.status };
+    return {
+      name: item.title, subtitle: item.subtitle || null,
+      file_id: item.img != null && item.img !== '' ? Number(item.img) : null,
+      jump_link: item.link || null, status: item.status,
+    };
   }
   function rowToNotice(row) {
     return { scene: row.trigger_scene, title: row.title, content: row.content, status: row.status };

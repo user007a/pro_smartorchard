@@ -765,6 +765,86 @@ var ENTERPRISE_RESOURCES = {
   biz: 'enterprise_biz'
 };
 
+/* 各区块写入体的构造：把页面视图字段翻译成 sf_* 表的真实列。
+   只提交表里真实存在的列，避免后端 1054 Unknown column。 */
+var ENTERPRISE_WRITERS = {
+  staff: function (rows) {
+    return rows.map(function (r, i) {
+      return {
+        role_type: r.role || '', count: Number(r.count) || 0, sort_order: Number(r.sort) || (i + 1)
+      };
+    });
+  },
+  expert: function (rows) {
+    return rows.map(function (r, i) {
+      return {
+        name: r.name || '', role: r.role || '', org: r.org || '',
+        join_date: r.joinDate || null, description: r.desc || '',
+        sort_order: Number(r.sort) || (i + 1)
+      };
+    });
+  },
+  timeline: function (rows) {
+    return rows.map(function (r, i) {
+      return {
+        timeline_date: r.date || '', title: r.title || '', description: r.desc || '',
+        sort_order: Number(r.sort) || (i + 1)
+      };
+    });
+  },
+  operation: function (rows) {
+    return rows.map(function (r, i) {
+      return {
+        label: r.label || '',
+        value: r.value === '' || r.value == null ? null : Number(r.value),
+        unit: r.unit || '', sort_order: Number(r.sort) || (i + 1)
+      };
+    });
+  },
+  biz: function (rows) {
+    return rows.map(function (r, i) {
+      return {
+        name: r.name || '', description: r.desc || '', icon: r.icon || '', color: r.color || '',
+        m1_label: r.m1Label || '', m1_value: r.m1Value || '',
+        m2_label: r.m2Label || '', m2_value: r.m2Value || '',
+        sort_order: Number(r.sort) || (i + 1)
+      };
+    });
+  }
+};
+
+/* 区块原始行（保留 id，供删除定位） */
+var enterpriseRawRows = { staff: [], expert: [], timeline: [], operation: [], biz: [] };
+
+/* 保存某个表格区块到后端：新增走 POST，删除走 DELETE（逻辑删除） */
+function persistEnterpriseSection(key, rows) {
+  var resource = ENTERPRISE_RESOURCES[key];
+  var writer = ENTERPRISE_WRITERS[key];
+  if (!resource || !writer) return Promise.resolve({ ok: true });
+
+  var bodies = writer(rows);
+  var rawRows = enterpriseRawRows[key] || [];
+  /* 页面行没有回传数据库 id，按行序与库中原始行对齐：多余的行视为新增 */
+  var ops = [];
+  bodies.forEach(function (body, i) {
+    var raw = rawRows[i];
+    if (raw && raw.id) {
+      ops.push(Api.update(resource, raw.id, body));
+    } else {
+      ops.push(Api.create(resource, body));
+    }
+  });
+  /* 库中多出来的行 → 删除 */
+  for (var j = bodies.length; j < rawRows.length; j++) {
+    if (rawRows[j] && rawRows[j].id) ops.push(Api.remove(resource, rawRows[j].id));
+  }
+  if (!ops.length) return Promise.resolve({ ok: true });
+  return Promise.all(ops).then(function (results) {
+    var failed = results.filter(function (r) { return !r || !r.ok; });
+    return failed.length ? { ok: false, message: (failed[0] && failed[0].message) || '后端拒绝写入' } : { ok: true };
+  });
+}
+
 var ENTERPRISE_SECTIONS = {
   staff: 'staffTableBody',
   expert: 'expertGrid',
@@ -877,6 +957,12 @@ function loadEnterpriseData() {
       }
     }
     function listOf(r) { return (r.data && r.data.list) || []; }
+    /* 保留原始行（含 id），供写入时定位更新/删除 */
+    enterpriseRawRows.staff = listOf(res[1]);
+    enterpriseRawRows.expert = listOf(res[2]);
+    enterpriseRawRows.timeline = listOf(res[3]);
+    enterpriseRawRows.operation = listOf(res[4]);
+    enterpriseRawRows.biz = listOf(res[5]);
     refill(STAFF_ROLES, listOf(res[1]).map(mapStaffRow));
     refill(EXPERTS, listOf(res[2]).map(mapExpertRow));
     refill(TIMELINE_DATA, listOf(res[3]).map(mapTimelineRow));
@@ -1518,6 +1604,29 @@ function saveSection(){
     else if(key === 'cert'){ saveCertTableToStore(); renderCerts(); renderBanner(); }
     else if(key === 'timeline') renderTimeline();
     else if(key === 'operation') renderOperation();
+
+    // 表格区块必须落库：只改内存数组则刷新即失
+    if (key !== 'cert') {
+      var source = key === 'staff' ? STAFF_ROLES
+        : key === 'expert' ? EXPERTS
+        : key === 'timeline' ? TIMELINE_DATA
+        : key === 'operation' ? OPERATION_DATA
+        : key === 'biz' ? BIZ_STRUCTURE : null;
+      if (source) {
+        persistEnterpriseSection(key, source).then(function (res) {
+          if (!res || !res.ok) {
+            showToast('保存失败：' + ((res && res.message) || '后端拒绝写入'), 'error');
+            return;
+          }
+          showToast('信息已保存', 'success');
+          loadEnterpriseData();
+        }).catch(function (e) {
+          showToast('保存失败：' + ((e && e.message) || '网络异常'), 'error');
+        });
+        closeModal();
+        return;
+      }
+    }
   }
 
   closeModal();

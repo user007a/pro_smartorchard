@@ -295,18 +295,26 @@ var STAFF_RESOURCE = 'mb_staff_account';
 /* 账号缓存：由 loadStaff() 从后端 API 异步填充，页面不再读写 localStorage 播种 */
 let staffData = [];
 
-/* 数据库行(snake_case) → 页面渲染字段 */
+/* 数据库行(snake_case) → 页面渲染字段。
+   同时带出 mapper 字段名（account/realName/expertise/baseId），
+   使本页写入 MobileOpsStore 后能被 mobile-ops-mapper 正确映射回数据库列。 */
 function mapStaffRow(row) {
   return {
+    id: row.account || '',
     username: row.account || '',
+    account: row.account || '',
     pwdHash: row.password || '',
+    password: row.password || '',
     name: row.real_name || '',
+    realName: row.real_name || '',
     role: row.role || '果农',
     phone: row.phone || '',
     base: '',
+    baseId: row.base_id ? String(row.base_id) : '',
     status: row.status || 'active',
     isExpert: !!row.is_expert,
     expertTitle: row.expertise || '',
+    expertise: row.expertise || '',
     createdAt: row.created_at || '',
     lastLoginAt: ''
   };
@@ -355,7 +363,9 @@ function readStaff() {
   return staffData;
 }
 
-/* 仅更新内存缓存，保证增删改交互即时生效；不写 localStorage */
+/* ---------- 数据读写 ---------- */
+/* 账号写入必须落库（sf_mb_staff_account）：只改内存数组则刷新即失，
+   移动端 login 校验的正是该表，运营开的账号将永远无法生效。 */
 function writeList(list) {
   staffData = list;
 }
@@ -496,37 +506,41 @@ function submitEdit() {
   }
 
   var isExpert = document.getElementById('editIsExpert').checked;
-  var payload = {
-    username: username,
-    name: name,
-    role: document.getElementById('editRole').value,
-    phone: phone,
-    base: document.getElementById('editBase').value.trim(),
-    status: document.getElementById('editStatus').value,
-    isExpert: isExpert,
-    expertTitle: isExpert ? document.getElementById('editExpertTitle').value.trim() : '',
+  /* 账号行 → sf_mb_staff_account 列；密码存 SHA-256 摘要（与 auth/mobile-login 一致）。
+     走 mobile-ops 聚合接口（/api/mobile-ops/aggregate）：通用 CRUD 把 password
+     列为敏感字段不可写，而聚合路由按 mapper 回传，允许写入密码摘要。 */
+  var staffRow = {
+    id: username,
+    account: username,
+    password: pwd ? MobileOpsStore.hashPwd(pwd) : (old ? old.pwdHash : ''),
     pwdHash: pwd ? MobileOpsStore.hashPwd(pwd) : (old ? old.pwdHash : ''),
-    createdAt: old ? old.createdAt : MobileOpsStore.now(),
-    lastLoginAt: old ? (old.lastLoginAt || '') : '',
-    updatedAt: MobileOpsStore.now()
+    realName: name,
+    name: name,
+    phone: phone,
+    role: document.getElementById('editRole').value,
+    baseId: document.getElementById('editBase').value.trim(),
+    isExpert: isExpert,
+    expertise: isExpert ? document.getElementById('editExpertTitle').value.trim() : '',
+    status: document.getElementById('editStatus').value
   };
 
+  /* 组装完整列表：编辑则替换，新增则插入 */
+  var next = list.slice();
   if (editingUsername) {
-    for (var k = 0; k < list.length; k++) {
-      if (list[k].username === editingUsername) {
-        list[k] = payload;
-        break;
-      }
+    for (var k = 0; k < next.length; k++) {
+      if (next[k].username === editingUsername) { next[k] = staffRow; break; }
     }
   } else {
-    list.push(payload);
+    next.push(staffRow);
   }
 
-  writeList(list);
+  /* 写穿后端：MobileOpsStore.writeList 会把 staff 子集合随聚合载荷提交 */
+  MobileOpsStore.writeList(MobileOpsStore.KEYS.staff, next);
+
   MobileOpsStore.audit(editingUsername ? '编辑账号' : '新增账号', 'staff', username,
-    name + ' / ' + payload.role + (isExpert ? ' / 农技专家' : ''));
+    name + ' / ' + staffRow.role + (isExpert ? ' / 农技专家' : ''));
   closeEditModal();
-  renderTable();
+  loadStaff();
   Toast.success(editingUsername ? '账号已更新' : '账号已新增');
 }
 
@@ -534,12 +548,16 @@ function toggleStatus(username) {
   var list = readStaff();
   for (var i = 0; i < list.length; i++) {
     if (list[i].username === username) {
-      list[i].status = list[i].status === 'disabled' ? 'active' : 'disabled';
-      list[i].updatedAt = MobileOpsStore.now();
-      writeList(list);
-      MobileOpsStore.audit(list[i].status === 'active' ? '启用账号' : '停用账号', 'staff', username);
-      renderTable();
-      Toast.success(list[i].status === 'active' ? '账号已启用' : '账号已停用');
+      var next = list.slice();
+      next[i] = Object.assign({}, list[i], {
+        status: list[i].status === 'disabled' ? 'active' : 'disabled',
+        updatedAt: MobileOpsStore.now()
+      });
+      /* 写穿后端：随 mobile-ops 聚合载荷提交 sf_mb_staff_account */
+      MobileOpsStore.writeList(MobileOpsStore.KEYS.staff, next);
+      MobileOpsStore.audit(next[i].status === 'active' ? '启用账号' : '停用账号', 'staff', username);
+      loadStaff();
+      Toast.success(next[i].status === 'active' ? '账号已启用' : '账号已停用');
       return;
     }
   }
@@ -550,10 +568,12 @@ function removeStaff(username) {
     title: '删除账号',
     message: '确定删除作业人员账号「' + username + '」吗？该账号将无法再登录移动端。',
     onConfirm: function () {
-      var list = readStaff().filter(function (s) { return s.username !== username; });
-      writeList(list);
+      var next = readStaff().filter(function (s) { return s.username !== username; });
+      /* 删除需显式上报 deleted 载荷（聚合路由按业务键 account 逻辑删除） */
+      MobileOpsStore.remove(MobileOpsStore.KEYS.staff, username);
+      MobileOpsStore.writeList(MobileOpsStore.KEYS.staff, next);
       MobileOpsStore.audit('删除账号', 'staff', username);
-      renderTable();
+      loadStaff();
       Toast.success('账号已删除');
     }
   });

@@ -190,10 +190,10 @@ pro_smartorchard/
 │   ├── app.js                     入口
 │   ├── config/db.js               数据库连接池
 │   ├── middleware/                auth.js（JWT 鉴权）+ errorHandler.js（错误脱敏）
-│   ├── routes/                    auth / crud / meta + 17 个模块聚合路由
+│   ├── routes/                    auth / crud / meta + 20 个模块聚合路由
 │   ├── utils/table-meta.js        表结构元数据（动态判断列是否存在）
 │   ├── resources.js               资源白名单与敏感字段保护
-│   └── db/                        schema.sql + seed.sql（单一数据源）
+│   └── db/                        schema.sql + seed.sql + migrations/（增量迁移）
 ├── docker/        Docker 镜像与配置
 │   ├── Dockerfile.api             后端镜像（node:20-alpine）
 │   ├── Dockerfile.web             前端镜像（nginx:1.27-alpine）
@@ -252,11 +252,11 @@ pro_smartorchard/
 
 `:resource` 为表名去掉 `sf_` 前缀，如 `sf_device` → `device`。
 
-`{module}` 共 **17 个**，与前端 store 一一对应：
+`{module}` 共 **19 个**，与前端 store / 数据层一一对应：
 
 ```
 device  enterprise  cert  production  harvest  trace  sales  biz  mall
-adoption  material  data  model  soil  mobile-ops  alert  vr
+adoption  material  data  model  soil  mobile-ops  alert  vr  notice  dict
 ```
 
 > 各模块「页面 → store → 路由 → 表」的对应关系与接通状态，见 [docs/审计台账.md](docs/审计台账.md)。
@@ -299,6 +299,6 @@ A：在。密码由 MySQL 镜像的环境变量决定，只在首次创建数据
 | 143 张表建表 + 基础系统数据初始化 | ✅ 完成 |
 | Node 后端骨架 + 三端登录 + 通用 CRUD | ✅ 完成 |
 | **Docker 一键部署** | ✅ **完成**（自动建库灌数，页面与接口同源） |
-| 前端数据层打通 | ✅ 17 个模块聚合接口 + store 全部接通（174/180 页；其余为 iframe 容器页与静态页） |
-| 数据审计整改 | 🔄 5 项违规待修、5 项灰区待决策、字典迁移待启动，详见审计台账 |
+| 前端数据层打通 | ✅ 19 个模块聚合接口 + store 全部接通（174/180 页；其余为 iframe 容器页与静态页） |
+| 数据审计整改 | 🔄 V14 待修、7 项灰区待决策、字典迁移待启动，详见审计台账 |
 | 验证层 | ⬜ 聚合路由契约测试 + 空库巡检待建 |

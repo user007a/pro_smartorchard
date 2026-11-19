@@ -31,6 +31,38 @@ const { getColumns: getTableColumns, hasSoftDelete } = require('../utils/table-m
 
 const router = express.Router();
 
+/* ============================================================
+ * 会员私有数据归属隔离
+ * ------------------------------------------------------------
+ * H5 会员端的购物车 / 收货地址 / 收藏 / 订单按「会员」归属，
+ * 若只靠前端传 member_id 过滤，篡改参数即可读到他人数据。
+ * 故：token 类型为 member 时，服务端强制覆盖归属条件，
+ * 且忽略前端传入的 member_id / member_key。
+ * ============================================================ */
+const MEMBER_OWNED = {
+  mall_cart: ['member_id'],
+  mall_address: ['member_id'],
+  mall_favorite: ['member_id'],
+  mall_order: ['member_id'],
+};
+
+function isMember(req) {
+  return !!(req.user && req.user.type === 'member');
+}
+
+/**
+ * 计算会员私有资源的归属过滤条件
+ * @returns {null|{cols:string[], value:string}}
+ */
+function memberScope(req, table) {
+  // table 形如 sf_mall_cart → 资源名 mall_cart
+  const resource = table.replace(/^sf_/, '');
+  const cols = MEMBER_OWNED[resource];
+  if (!cols || !isMember(req)) return null;
+  const id = req.user.id != null ? String(req.user.id) : '';
+  return { cols, value: id };
+}
+
 /**
  * 从请求体中过滤出可写字段，返回 { columns, values, placeholders }
  */
@@ -89,12 +121,23 @@ router.get('/:resource', async (req, res, next) => {
 
     // 其他查询参数作为精确筛选（只接受表中存在的字段，且排除分页/排序保留字）
     const reserved = new Set(['page', 'size', 'keyword', 'sort', 'order', 'fields']);
+    const scope = memberScope(req, table);
     for (const [key, value] of Object.entries(req.query)) {
       if (reserved.has(key)) continue;
       if (!allCols.includes(key)) continue;
       if (!isReadableField(table, key)) continue;
+      // 会员私有资源的归属列由服务端强制覆盖，忽略前端传入值
+      if (scope && scope.cols.includes(key)) continue;
       where.push('`' + key + '` = ?');
       params.push(value);
+    }
+    // 会员归属条件
+    if (scope) {
+      scope.cols.forEach((c) => {
+        if (!allCols.includes(c)) return;
+        where.push('`' + c + '` = ?');
+        params.push(scope.value);
+      });
     }
 
     const whereSql = where.length ? ' WHERE ' + where.join(' AND ') : '';
@@ -140,10 +183,22 @@ router.get('/:resource/:id', async (req, res, next) => {
     const selectCols = allCols.filter((c) => isReadableField(table, c));
     const selectSql = selectCols.map((c) => '`' + c + '`').join(', ');
 
+    const where = ['`id` = ?'];
+    const params = [req.params.id];
+    if (await hasSoftDelete(table)) where.push('`is_deleted` = 0');
+    // 会员私有资源：详情也必须校验归属，否则可按 id 读他人记录
+    const scope = memberScope(req, table);
+    if (scope) {
+      scope.cols.forEach((c) => {
+        if (!allCols.includes(c)) return;
+        where.push('`' + c + '` = ?');
+        params.push(scope.value);
+      });
+    }
+
     const rows = await query(
-      'SELECT ' + selectSql + ' FROM `' + table + '` WHERE `id` = ?' +
-        (await hasSoftDelete(table) ? ' AND `is_deleted` = 0' : ''),
-      [req.params.id]
+      'SELECT ' + selectSql + ' FROM `' + table + '` WHERE ' + where.join(' AND '),
+      params
     );
     if (!rows.length) return res.status(404).json({ ok: false, message: '记录不存在' });
     res.json({ ok: true, data: rows[0] });
@@ -164,6 +219,19 @@ router.post('/:resource', async (req, res, next) => {
     const body = req.body;
     const list = Array.isArray(body) ? body : [body];
     if (!list.length) return res.status(400).json({ ok: false, message: '请求体为空' });
+
+    const allCols = await getTableColumns(table);
+    const scope = memberScope(req, table);
+
+    // 会员私有资源：归属列由服务端强制覆盖，防止把记录写到别人名下
+    if (scope) {
+      list.forEach((item) => {
+        if (!item || typeof item !== 'object') return;
+        scope.cols.forEach((c) => {
+          if (allCols.includes(c)) item[c] = scope.value;
+        });
+      });
+    }
 
     // 批量插入（每条生成各自的列，但列名需一致，取第一条为基准）
     const first = list[0];
@@ -209,14 +277,36 @@ router.put('/:resource/:id', async (req, res, next) => {
       return res.status(403).json({ ok: false, message: '该资源只读' });
     }
 
+    const allCols = await getTableColumns(table);
+    const scope = memberScope(req, table);
+
     const { sets, values } = buildUpdate(table, req.body);
     if (!sets.length) return res.status(400).json({ ok: false, message: '无可更新字段' });
 
-    values.push(req.params.id);
+    // 会员私有资源：归属列由服务端强制覆盖，防止把自己的记录改到别人名下
+    if (scope) {
+      scope.cols.forEach((c) => {
+        if (!allCols.includes(c)) return;
+        const idx = sets.indexOf('`' + c + '` = ?');
+        if (idx >= 0) values[idx] = scope.value;
+        else { sets.push('`' + c + '` = ?'); values.push(scope.value); }
+      });
+    }
+
+    const where = ['`id` = ?'];
+    const params = [...values, req.params.id];
+    if (await hasSoftDelete(table)) where.push('`is_deleted` = 0');
+    if (scope) {
+      scope.cols.forEach((c) => {
+        if (!allCols.includes(c)) return;
+        where.push('`' + c + '` = ?');
+        params.push(scope.value);
+      });
+    }
+
     const result = await execute(
-      'UPDATE `' + table + '` SET ' + sets.join(', ') + ' WHERE `id` = ?' +
-        (await hasSoftDelete(table) ? ' AND `is_deleted` = 0' : ''),
-      values
+      'UPDATE `' + table + '` SET ' + sets.join(', ') + ' WHERE ' + where.join(' AND '),
+      params
     );
 
     if (result.affectedRows === 0) {
@@ -242,9 +332,21 @@ router.delete('/:resource/:id', async (req, res, next) => {
       return res.status(400).json({ ok: false, message: '该表不支持删除（无逻辑删除字段）' });
     }
 
+    const allCols = await getTableColumns(table);
+    const where = ['`id` = ?', '`is_deleted` = 0'];
+    const params = [req.params.id];
+    const scope = memberScope(req, table);
+    if (scope) {
+      scope.cols.forEach((c) => {
+        if (!allCols.includes(c)) return;
+        where.push('`' + c + '` = ?');
+        params.push(scope.value);
+      });
+    }
+
     const result = await execute(
-      'UPDATE `' + table + '` SET `is_deleted` = 1 WHERE `id` = ? AND `is_deleted` = 0',
-      [req.params.id]
+      'UPDATE `' + table + '` SET `is_deleted` = 1 WHERE ' + where.join(' AND '),
+      params
     );
     if (result.affectedRows === 0) {
       return res.status(404).json({ ok: false, message: '记录不存在或已删除' });

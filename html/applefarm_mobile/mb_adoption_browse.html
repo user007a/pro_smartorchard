@@ -366,6 +366,7 @@
     
     function showAdoptGuide() {
       document.getElementById('guideModal').classList.add('show');
+      loadAdoptionGuide();   /* 打开时刷新，展示后台最新编辑的指南文案 */
     }
 
     function closeGuide() {
@@ -568,9 +569,19 @@
     }
 
     /* ---------- 认养指南文案 ----------
-     * 无对应业务表，属固定说明文案（非业务数据），保留页面静态内容 */
-    function readAdoptionGuide() {
-      return null;
+     * 数据源：sf_adoption_guide（后台「认养浏览 · 展示配置」编辑写库）。
+     * 有库行则按 buildGuideHtml 解析渲染；无库行保留页面静态文案。 */
+    function loadAdoptionGuide() {
+      if (!window.Api || !Api.get) return Promise.resolve();
+      return Api.get('adoption_guide').then(function (r) {
+        var row = null;
+        if (r && r.ok && r.data && r.data.list) {
+          row = r.data.list.find(function (x) { return x.guide_code === 'default'; }) || r.data.list[0] || null;
+        }
+        if (row && (row.title || row.content)) {
+          renderAdoptionGuide({ title: row.title, content: row.content });
+        }
+      }).catch(function () { /* 拉取失败保留静态文案，静默 */ });
     }
 
     /* 将纯文本指南解析为「小节标题 / 步骤 / 权益」结构，复用既有 class */
@@ -627,9 +638,8 @@
       return html || ('<div class="guide-rights">' + escHtml(String(content)) + '</div>');
     }
 
-    function renderAdoptionGuide() {
-      var g = readAdoptionGuide();
-      if (!g) return false; /* 无数据 → 保留硬编码文案 */
+    function renderAdoptionGuide(g) {
+      if (!g) return false; /* 无数据 → 保留页面静态文案 */
       var body = document.getElementById('guideBody');
       if (!body) return false;
       var titleEl = document.getElementById('guideTitle');
@@ -662,6 +672,7 @@
       MD.ready.then(function () {
         renderVarietyTags();
         renderTreeCards();
+        loadAdoptionGuide();
       });
     }
 

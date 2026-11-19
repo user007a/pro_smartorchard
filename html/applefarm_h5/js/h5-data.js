@@ -419,8 +419,15 @@
       var params = { size: 500 };
       if (resource === 'cart' || resource === 'address' || resource === 'favorite' || resource === 'order') {
         var m = currentMember();
-        if (m) params.member_id = m.id;
-        else if (resource !== 'order') params.member_key = deviceKey();
+        if (m) {
+          params.member_id = m.id;
+        } else if (resource === 'order') {
+          /* 游客态：订单表含姓名/手机号等敏感列，不允许无归属地拉全表。
+             游客本就没有自己的订单，直接返回空。 */
+          return { ok: true, data: { list: [] } };
+        } else {
+          params.member_key = deviceKey();
+        }
       }
       return api.get(actual(resource), params);
     }).then(function (res) {

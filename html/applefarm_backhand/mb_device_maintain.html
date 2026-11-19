@@ -348,17 +348,17 @@
 <script>
 /* ============================================================
  * 设备报修受理
- * 数据源：MobileBridge.maintenanceLogs()
- *   写入方 = 移动端设备页维护申请
- *   字段：{ device, urgency, urgencyText, reason,
- *          status:'pending', statusText:'待受理', id, createTime }
- *   urgency：low 一般 / normal 较急 / high 紧急
- * 状态流转：pending 待受理 → accepted 已受理 → done 已完成
- *          另支持 rejected 已驳回
- * 每次操作均回写 MobileBridge.KEYS.maintenance，移动端状态同步更新
+ * 数据源：sf_device_maintain（maintain_type='故障报修' 的行）
+ *   写入方 = 移动端设备页 mb_device.html「申请维护」，直接 Api.create('device_maintain')
+ *   本页读同一表，状态流转结果也回写同一行 → 与「运维工单」device_maintain.html 同源
+ * 页面状态（展示用） ↔ 库中状态（sf_device_maintain.status 规范值）：
+ *   pending 待受理 ↔ pending
+ *   accepted 已受理 ↔ processing
+ *   done 已完成 ↔ completed
+ *   rejected 已驳回 ↔ cancelled（库无独立 rejected 值，复用 cancelled，运维工单展示为「已取消」）
  * ============================================================ */
 
-/* 状态枚举：值 → 展示文案 / 标签样式类 */
+/* 页面状态 → 展示文案 / 标签样式类 */
 var STATUS_MAP = {
   pending: { text: '待受理', cls: 'pending' },
   accepted: { text: '已受理', cls: 'accepted' },
@@ -366,11 +366,20 @@ var STATUS_MAP = {
   rejected: { text: '已驳回', cls: 'rejected' }
 };
 
+/* 库状态 ↔ 页面状态 双向映射 */
+var DB_TO_PAGE = { pending: 'pending', processing: 'accepted', completed: 'done', cancelled: 'rejected' };
+var PAGE_TO_DB = { pending: 'pending', accepted: 'processing', done: 'completed', rejected: 'cancelled' };
+
 /* 紧急程度枚举 */
 var URGENCY_TEXT = { low: '一般', normal: '较急', high: '紧急' };
 
 var currentId = null;
+var currentTarget = null;   // 当前处理中的报修记录（含 _dbId 用于回写）
 var page = null;
+
+/* 后端拉取的缓存：报修记录 + 设备台账（numeric id → 行） */
+var maintainRows = [];
+var deviceMap = {};
 
 /* ============================================================
  * 分页组件（与设备管理其他页一致：‹ 1 2 3 › 第 X 页/共 Y 页，共 Z 条记录）
@@ -452,27 +461,69 @@ function esc(s) {
   });
 }
 
-/* 读取移动端报修申请，读取失败回退空数组 */
-function readList() {
-  try {
-    if (typeof MobileBridge === 'undefined') return [];
-    var list = MobileBridge.maintenanceLogs();
-    return Array.isArray(list) ? list : [];
-  } catch (e) {
-    return [];
-  }
+/* MySQL datetime 合法格式：YYYY-MM-DD HH:MM:SS */
+function nowStr() {
+  var d = new Date();
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + ' ' +
+         p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
 }
 
-/* 取台账设备（用于回填设备类型；台账不可用时降级为仅显示名称） */
+/* 把 sf_device_maintain 行映射为页面展示模型 */
+function mapMaintainRow(r) {
+  var dev = deviceMap[String(r.device_id)] || {};
+  var pageStatus = DB_TO_PAGE[r.status] || 'pending';
+  return {
+    id: r.maintain_code || ('MT' + r.id),
+    _dbId: r.id,
+    deviceDbId: r.device_id,
+    device: dev.device_name || '',                 // 关键词搜索用
+    deviceId: dev.device_code || '',               // 展示「设备编号」
+    deviceName: dev.device_name || '',
+    deviceType: dev.device_type || '',
+    urgency: r.priority || 'low',
+    urgencyText: URGENCY_TEXT[r.priority] || r.priority || '-',
+    reason: r.fault_desc || r.content || '',
+    status: pageStatus,
+    statusText: (STATUS_MAP[pageStatus] || STATUS_MAP.pending).text,
+    createTime: String(r.plan_time || r.created_at || '').slice(0, 19),
+    assignee: r.manager || '',
+    handleRemark: r.content || '',
+    handleResult: r.result || '',
+    handleTime: String(r.end_time || r.updated_at || '').slice(0, 19)
+  };
+}
+
+/* 从后端拉取报修记录（sf_device_maintain 中 maintain_type='故障报修'）+ 设备台账 */
+function loadMaintainData() {
+  if (!window.Api || !Api.get) return;
+  Promise.all([
+    Api.get('device_maintain', { page: 1, size: 500 }),
+    Api.get('device', { page: 1, size: 500 })
+  ]).then(function (res) {
+    var mRes = res[0], dRes = res[1];
+    deviceMap = {};
+    if (dRes && dRes.ok && dRes.data && dRes.data.list) {
+      dRes.data.list.forEach(function (d) { deviceMap[String(d.id)] = d; });
+    }
+    var list = (mRes && mRes.ok && mRes.data) ? (mRes.data.list || []) : [];
+    maintainRows = list.filter(function (r) {
+      return r.maintain_type === '故障报修';
+    }).map(mapMaintainRow);
+    renderTable();
+  }).catch(function (e) {
+    console.warn('[mb_device_maintain] 加载报修数据失败', e);
+  });
+}
+
+/* 当前缓存的报修记录 */
+function readList() { return maintainRows; }
+
+/* 取台账设备（用于回填设备名称/类型） */
 function deviceOf(item) {
-  try {
-    if (typeof DeviceStore === 'undefined') return null;
-    var id = item.deviceId || '';
-    if (!id) return null;
-    return DeviceStore.deviceOf(id);
-  } catch (e) {
-    return null;
-  }
+  if (!item) return null;
+  var dev = deviceMap[String(item.deviceDbId)];
+  return dev ? { id: dev.device_code, name: dev.device_name, type: dev.device_type } : null;
 }
 
 function statusInfo(item) {
@@ -562,7 +613,7 @@ function resetFilter() {
 }
 
 function refreshList() {
-  renderTable();
+  loadMaintainData();
   Toast.success('报修数据已刷新');
 }
 
@@ -576,6 +627,7 @@ function openHandleModal(id) {
   if (!target) { Toast.error('未找到该报修申请'); return; }
 
   currentId = target.id;
+  currentTarget = target;
   var st = statusInfo(target);
   var dev = deviceOf(target);
   document.getElementById('handleTitle').textContent = '报修处理';
@@ -624,10 +676,10 @@ function closeHandleModal() {
   currentId = null;
 }
 
-/* 提交状态流转：accepted 受理 / done 完成维修 / rejected 驳回；均回写移动端记录 */
+/* 提交状态流转：accepted 受理 / done 完成维修 / rejected 驳回；回写 sf_device_maintain */
 function submitHandle(next) {
-  if (typeof MobileBridge === 'undefined') {
-    Toast.error('数据桥接未加载，无法保存处理结果');
+  if (!currentTarget || currentTarget._dbId == null) {
+    Toast.error('未找到该报修记录，请刷新后重试');
     return;
   }
   var remark = document.getElementById('hmRemark').value.trim();
@@ -645,8 +697,8 @@ function submitHandle(next) {
     ConfirmDialog.show({
       title: next === 'rejected' ? '驳回报修申请' : '确认完成维修',
       message: next === 'rejected'
-        ? '确定要驳回该报修申请吗？驳回后移动端将标记为「已驳回」。'
-        : '确定该设备已维修完成吗？完成后移动端将标记为「已完成」。',
+        ? '确定要驳回该报修申请吗？驳回后状态将标记为「已驳回」。'
+        : '确定该设备已维修完成吗？完成后状态将标记为「已完成」。',
       onConfirm: function () { doHandle(next, remark, assignee, result); }
     });
     return;
@@ -654,100 +706,43 @@ function submitHandle(next) {
   doHandle(next, remark, assignee, result);
 }
 
+/* 回写 sf_device_maintain：页面状态 → 库状态映射，与运维工单 device_maintain.html 同源 */
 function doHandle(next, remark, assignee, result) {
-  var ok = MobileBridge.updateRecord(MobileBridge.KEYS.maintenance, currentId, {
-    status: next,
-    statusText: STATUS_MAP[next].text,
-    handleRemark: remark,
-    assignee: assignee,
-    handleResult: result,
-    handleTime: MobileBridge.stampNow()
+  var dbStatus = PAGE_TO_DB[next] || next;
+  var body = { status: dbStatus, manager: assignee };
+  var now = nowStr();
+  if (next === 'accepted') { body.start_time = now; body.content = remark; }
+  if (next === 'rejected') { body.content = remark; body.result = result || remark; }
+  if (next === 'done') {
+    body.end_time = now;
+    body.result = result || remark || '已完成维修';
+    body.work_hours = 1;
+  }
+  Api.update('device_maintain', currentTarget._dbId, body).then(function (res) {
+    if (!res || !res.ok) {
+      Toast.error('处理结果保存失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    closeHandleModal();
+    loadMaintainData();
+    Toast.success('已标记为「' + STATUS_MAP[next].text + '」');
+  }).catch(function (e) {
+    Toast.error('处理结果保存失败：' + ((e && e.message ? e.message : '网络异常')));
   });
-  if (!ok) { Toast.error('处理结果保存失败，请刷新后重试'); return; }
-
-  /* 受理 / 完成后同步生成设备维护工单，实现「报修 → 维保」闭环 */
-  if (next === 'accepted' || next === 'done') {
-    syncMaintainOrder(next, remark, assignee, result);
-  }
-
-  closeHandleModal();
-  renderTable();
-  Toast.success('已标记为「' + STATUS_MAP[next].text + '」，移动端可查看');
-}
-
-/**
- * 报修单同步生成设备维护工单
- * 已受理 → 生成「故障维修」工单（待处理）
- * 已完成 → 回写该工单为已完成并补齐闭环字段
- */
-function syncMaintainOrder(next, remark, assignee, result) {
-  try {
-    if (typeof DeviceStore === 'undefined') return;
-    var list = readList();
-    var target = null;
-    for (var i = 0; i < list.length; i++) {
-      if (String(list[i].id) === String(currentId)) { target = list[i]; break; }
-    }
-    if (!target || !target.deviceId) return;
-
-    var deviceId = target.deviceId;
-    var exists = DeviceStore.maintains().filter(function (m) {
-      return m.deviceId === deviceId && m.sourceId === target.id;
-    })[0];
-
-    var base = {
-      deviceId: deviceId,
-      type: '故障维修',
-      faultType: '硬件故障',
-      priority: target.urgency === 'high' ? 'urgent' : (target.urgency === 'normal' ? 'high' : 'normal'),
-      faultDesc: target.reason || '',
-      content: '移动端报修：' + (target.reason || '设备异常'),
-      planDate: (target.createTime || '').slice(0, 10) || DeviceStore.todayStr(),
-      manager: assignee || '',
-      outsourced: '',
-      remark: '来源：移动端报修 ' + (target.id || ''),
-      sourceId: target.id
-    };
-
-    if (next === 'accepted') {
-      if (exists) return;
-      var item = Object.assign({}, base, {
-        id: DeviceStore.nextId('maintain'),
-        status: 'pending',
-        startTime: DeviceStore.stampNow(),
-        endTime: '', downtime: 0, workHours: 0, cost: 0,
-        acceptor: '', parts: '', result: '', createdAt: DeviceStore.stampNow()
-      });
-      var chk = DeviceStore.validate('maintain', item, null);
-      if (!chk.ok) return;
-      DeviceStore.upsertMaintain(item);
-    } else if (next === 'done') {
-      if (!exists) return;
-      DeviceStore.upsertMaintain(Object.assign({}, exists, {
-        status: 'completed',
-        endTime: DeviceStore.stampNow(),
-        result: result || remark || '已完成维修',
-        acceptor: assignee || exists.manager,
-        workHours: exists.workHours || 1
-      }));
-    }
-  } catch (e) {
-    console.warn('[mb_device_maintain] 同步维保工单失败', e);
-  }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  // 严格空库模式：演示数据播种已停用，数据一律来自后端 API
+  // 严格空库模式：数据一律来自后端 API（sf_device_maintain + sf_device）
   page = Pagination;
   Pagination.init({
     currentPage: 1,
     pageSize: 10,
-    data: readList(),
+    data: [],
     containerId: 'pagination-container',
     tbodyId: 'maintainBody',
     renderRow: renderRow
   });
-  renderStats(readList());
+  loadMaintainData();
   document.getElementById('searchInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') renderTable();
   });

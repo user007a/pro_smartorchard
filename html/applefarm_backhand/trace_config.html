@@ -643,12 +643,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* ============================================================
  * T15 · C 端溯源展示配置
- * 【严格空库模式】数据源：后端 API（GET /api/trace_stage）
+ * 【严格空库模式】数据源：后端 API（GET /api/trace-stage/aggregate）
  *   页面通过 loadCStages() 取数渲染，不再使用写死的固定环节清单，
  *   也不再读写 localStorage；无数据时显示暂无数据。
  * ============================================================ */
 /* 严格空库模式：C 端展示环节来自后端 API（sf_trace_stage），不再使用写死示例数据 */
-var CSTAGE_RESOURCE = 'trace_stage';
+var CSTAGE_RESOURCE = 'trace-stage';
 var cstageData = [];
 
 /* 数据库行 → C 端环节渲染字段 */
@@ -658,10 +658,33 @@ function mapCStageRow(row) {
     key: row.stage_code || '',
     title: row.stage_name || '',
     icon: row.stage_icon || '',
-    img: row.stage_icon || '',
+    img: row.stage_img || '',
     desc: row.stage_desc || '',
+    detail: row.stage_detail || '',
+    operator: row.stage_operator || '',
+    location: row.stage_location || '',
+    tags: row.stage_tags || '',
+    dayOffset: Number(row.day_offset) || 0,
     enabled: row.status !== 'disabled',
     order: Number(row.sort_order) || 0
+  };
+}
+
+/* C 端环节渲染字段 → 数据库行 */
+function toCStageRow(s) {
+  return {
+    stage_code: s.key,
+    stage_name: s.title,
+    stage_icon: s.icon,
+    stage_img: s.img,
+    stage_desc: s.desc,
+    stage_detail: s.detail,
+    stage_operator: s.operator,
+    stage_location: s.location,
+    stage_tags: s.tags,
+    day_offset: Number(s.dayOffset) || 0,
+    sort_order: Number(s.order) || 0,
+    status: s.enabled === false ? 'disabled' : 'active'
   };
 }
 
@@ -676,9 +699,9 @@ function setCStageStatus(text, isError) {
 function loadCStages() {
   if (!window.Api) { setCStageStatus('数据加载失败：接口未就绪', true); return; }
   setCStageStatus('正在加载数据...', false);
-  Api.get(CSTAGE_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+  Api.get(CSTAGE_RESOURCE + '/aggregate').then(function (r) {
     if (!r || !r.ok) { setCStageStatus('数据加载失败：' + ((r && r.message) || '请求异常'), true); return; }
-    var list = (r.data && r.data.list) || [];
+    var list = (r.data && r.data.stages) || [];
     cstageData = list.map(mapCStageRow).sort(function (a, b) { return a.order - b.order; });
     if (!cstageData.length) { setCStageStatus('暂无数据', false); return; }
     renderCStages();
@@ -696,8 +719,21 @@ function escCStage(s) {
 /* 严格空库模式：环节数据来自 loadCStages() 的 API 结果，不再读写 localStorage */
 function getCStages() { return cstageData; }
 
-/* 交互保存：严格空库模式下仅更新内存视图，不写 localStorage */
-function saveCStages(list) { cstageData = list; return true; }
+/* 保存环节配置：落库到 sf_trace_stage（按 stage_code upsert），成功后重拉 */
+function saveCStages(list) {
+  if (!window.Api) { showToast('保存失败：接口未就绪', 'error'); return Promise.resolve(false); }
+  var rows = list.map(toCStageRow);
+  return Api.create('trace-stage/aggregate', { stages: rows }).then(function (r) {
+    if (!r || !r.ok) {
+      showToast('保存失败：' + ((r && r.message) || '请求异常'), 'error');
+      return false;
+    }
+    return true;
+  }).catch(function (e) {
+    showToast('保存失败：' + (e && e.message ? e.message : '网络异常'), 'error');
+    return false;
+  });
+}
 
 function renderCStages() {
   var list = getCStages();
@@ -710,11 +746,12 @@ function renderCStages() {
       '<td><div class="stage-name-cell">' + escCStage(s.title) + '</div>' +
           '<div class="stage-key">' + escCStage(s.key) + '</div></td>' +
       '<td class="stage-desc-cell">' + escCStage(s.desc) + '</td>' +
-      '<td><span class="status-tag active">' + (s.key === 'testing' ? '必需启用' : '启用中') + '</span></td>' +
+      '<td><span class="status-tag ' + (s.enabled === false ? 'inactive' : 'active') + '">' +
+        (s.key === 'testing' ? '必需启用' : (s.enabled === false ? '已停用' : '启用中')) + '</span></td>' +
       '<td><div class="action-btns">' +
         '<button class="action-btn detail" ' + (s.key === 'testing' ? 'disabled title="农残检测为必需环节"' : '') +
           ' onclick="toggleCStage(\'' + escCStage(s.key) + '\')">' +
-          (s.key === 'testing' ? '不可停用' : '停用') + '</button>' +
+          (s.key === 'testing' ? '不可停用' : (s.enabled === false ? '启用' : '停用')) + '</button>' +
         '<button class="action-btn edit" onclick="editCStage(\'' + escCStage(s.key) + '\')">编辑</button>' +
       '</div>' +
       '<div class="order-btns" style="margin-top:6px;">' +
@@ -743,10 +780,12 @@ function toggleCStage(key) {
   var target = findCStage(list, key);
   if (!target) { showToast('未找到该环节', 'error'); return; }
   target.enabled = !target.enabled;
-  if (saveCStages(list)) {
+  var enabled = target.enabled;
+  saveCStages(list).then(function (ok) {
+    if (!ok) { target.enabled = !enabled; return; }
     renderCStages();
-    showToast(target.enabled ? '「' + target.title + '」已启用，C 端将展示该环节' : '「' + target.title + '」已停用，C 端不再展示');
-  }
+    showToast(enabled ? '「' + target.title + '」已启用，C 端将展示该环节' : '「' + target.title + '」已停用，C 端不再展示');
+  });
 }
 
 function moveCStage(key, delta) {
@@ -762,13 +801,14 @@ function moveCStage(key, delta) {
   list[idx] = list[target];
   list[target] = tmp;
   list.forEach(function (s, i) { s.order = i + 1; });
-  if (saveCStages(list)) {
+  saveCStages(list).then(function (ok) {
+    if (!ok) return;
     renderCStages();
     showToast('环节顺序已更新');
-  }
+  });
 }
 
-/* 编辑环节：图标 / 名称 / 说明 / 图片文件名（7 个 key 固定，不支持增删） */
+/* 编辑环节：图标 / 名称 / 图片 / 说明 / 详情正文 / 负责人 / 地点 / 标签 / 天数偏移 */
 function editCStage(key) {
   var list = getCStages();
   var target = findCStage(list, key);
@@ -781,8 +821,18 @@ function editCStage(key) {
   if (!title.trim()) { showToast('环节名称不能为空', 'error'); return; }
   var img = prompt('请输入环节图片文件名（相对 applefarm_h5/images/，如 trace_planting.jpg）', target.img);
   if (img === null) return;
-  var desc = prompt('请输入环节说明', target.desc);
+  var desc = prompt('请输入环节说明（时间轴摘要）', target.desc);
   if (desc === null) return;
+  var detail = prompt('请输入环节详情正文（C 端溯源详情页）', target.detail);
+  if (detail === null) return;
+  var operator = prompt('请输入环节负责人/作业方', target.operator);
+  if (operator === null) return;
+  var location = prompt('请输入环节作业地点（留空则显示批次所属基地与地块）', target.location);
+  if (location === null) return;
+  var tags = prompt('请输入环节标签（多个用逗号分隔）', target.tags);
+  if (tags === null) return;
+  var dayOffset = prompt('请输入相对批次采收日期的天数偏移（负数=采收前）', String(target.dayOffset));
+  if (dayOffset === null) return;
 
   target.icon = icon.trim();
   target.title = title.trim();
@@ -790,11 +840,17 @@ function editCStage(key) {
   var imgRaw = img.trim();
   target.img = !imgRaw ? '' : (/^images\//i.test(imgRaw) || /^(https?:|data:)/i.test(imgRaw) ? imgRaw : 'images/' + imgRaw.replace(/^\.?\/?images\//i, ''));
   target.desc = desc.trim();
+  target.detail = detail.trim();
+  target.operator = operator.trim();
+  target.location = location.trim();
+  target.tags = tags.trim();
+  target.dayOffset = parseInt(dayOffset, 10) || 0;
 
-  if (saveCStages(list)) {
+  saveCStages(list).then(function (ok) {
+    if (!ok) return;
     renderCStages();
     showToast('环节已保存，C 端实时生效');
-  }
+  });
 }
 
 /* Tab 切换（沿用页面现有 Tab 视觉，不影响模板配置原有逻辑） */

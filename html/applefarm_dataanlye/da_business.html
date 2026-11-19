@@ -609,16 +609,9 @@ function setJit(id,val,amp){
 /* 客单价取商城口径；认养收入 / 订单 / 续费率统一走 BizStore 财务口径 */
 var ORDER_AOV = 0;            /* 客单价：优先商城统一口径，其次订单均值；无数据保持 0 */
 (function () {
-  function readArr(key) {
-    try {
-      var v = JSON.parse(localStorage.getItem(key) || '[]');
-      return Array.isArray(v) ? v : [];
-    } catch (e) { return []; }
-  }
-
   function render() {
-    var orders = readArr('h5_orders');
     var m = (typeof MallStore !== 'undefined' && MallStore.metrics) ? MallStore.metrics() : null;
+    var orders = (typeof MallStore !== 'undefined' && MallStore.orders) ? MallStore.orders() : [];
 
     // 客单价：优先取商城统一口径（排除待付款/已取消/已退款），其次回落订单均值
     if (m && m.orderCount > 0) {
@@ -653,12 +646,6 @@ var ORDER_AOV = 0;            /* 客单价：优先商城统一口径，其次�
 
   function init() {
     render();
-    window.addEventListener('storage', function (e) {
-      if (!e.key) return;
-      if (e.key === 'h5_orders' || e.key.indexOf('mall_') === 0 || e.key === 'mall_store_version') {
-        render();
-      }
-    });
   }
   window.__daBizOrders = renderOrders;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
@@ -782,25 +769,24 @@ var ORDER_AOV = 0;            /* 客单价：优先商城统一口径，其次�
     legend.appendChild(row);
   }
 
-  /* ---------- 成本结构：优先读取成本报表的成本科目配置 ---------- */
+  /* ---------- 成本结构：与「成本报表 › 成本科目配置」同源 ----------
+     数据源：BizStore.costStructure()（sf_cost_item）。
+     科目占比优先取后台成本科目配置写入的 ratio（全部科目都配置了才按占比分摊总额），
+     否则按各科目金额的实际占比展示。
+     不再读已废弃的 localStorage 键 snzg_cost_structure（该键早已无任何写入方）。 */
   function costStructureView(){
-    var fallback=BizStore.costStructure();
-    try{
-      var raw=localStorage.getItem('snzg_cost_structure');
-      if(!raw) return fallback;
-      var saved=JSON.parse(raw);
-      if(!saved||!saved.subjects||!saved.subjects.length) return fallback;
-      var total=fallback.reduce(function(a,x){return a+(Number(x.value)||0);},0);
-      var shares=saved.subjects.map(function(s){var n=Number(s.share);return isFinite(n)&&n>0?n:0;});
-      var shareSum=shares.reduce(function(a,b){return a+b;},0);
-      if(!total||!shareSum) return fallback;
-      return saved.subjects.map(function(s,i){
-        return {
-          name:s.name||('科目'+(i+1)),
-          value:Math.round(total*shares[i]/shareSum*100)/100
-        };
-      });
-    }catch(e){ return fallback; }
+    var list=BizStore.costStructure();
+    if(!list||!list.length) return [];
+    var plain=list.map(function(x){ return {name:x.name||'', value:Number(x.value)||0}; });
+    var total=plain.reduce(function(a,x){return a+x.value;},0);
+    if(!total) return plain;
+    var shares=list.map(function(x){var n=Number(x.ratio);return isFinite(n)&&n>0?n:0;});
+    var shareSum=shares.reduce(function(a,b){return a+b;},0);
+    // 未全部配置占比时按金额实际占比展示，避免部分科目分摊为 0
+    if(!shareSum||shares.some(function(n){return n<=0;})) return plain;
+    return plain.map(function(x,i){
+      return {name:x.name, value:Math.round(total*shares[i]/shareSum*100)/100};
+    });
   }
 
   /* ---------- 销售渠道占比：与收入构成同源（营收口径） ---------- */
@@ -1093,12 +1079,6 @@ var ORDER_AOV = 0;            /* 客单价：优先商城统一口径，其次�
         SalesStore.subscribe(function(){ try{ render(); }catch(e){} });
       }
     }catch(e){}
-    window.addEventListener('storage', function(e){
-      if(!e.key) return;
-      if(e.key === 'snzg_cost_structure' || e.key === 'applefarm_sales_v1' || e.key === 'h5_orders'){
-        try{ render(); }catch(err){}
-      }
-    });
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();

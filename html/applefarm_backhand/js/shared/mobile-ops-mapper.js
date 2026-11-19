@@ -11,6 +11,14 @@
   function num(v, def) { var n = parseFloat(v); return isNaN(n) ? (def === undefined ? 0 : def) : n; }
   function nval(v) { var n = parseFloat(v); return isNaN(n) ? null : n; }
   function dstr(v) { return v ? String(v).replace('T', ' ').slice(0, 19) : ''; }
+  /* 写库 datetime 统一为 'YYYY-MM-DD HH:MM:SS'（MySQL STRICT 拒绝 ISO 的 'T'/'Z'） */
+  function sqlDt(v) {
+    if (!v) return null;
+    var d = (v instanceof Date) ? v : new Date(v);
+    if (isNaN(d.getTime())) return null;
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
   function b2i(v) { return v ? 1 : 0; }
   function i2b(v) { return v === 1 || v === '1' || v === true; }
 
@@ -27,10 +35,10 @@
     return {
       _dbId: item.id,
       title: item.title, content: item.content, feedback_type: item.feedbackType, source: item.source,
-      submitter: item.submitter, submit_time: item.submitTime || null, status: item.status,
+      submitter: item.submitter, submit_time: sqlDt(item.submitTime), status: item.status,
       conclusion: item.conclusion || null, reply: item.reply || null, reject_reason: item.rejectReason || null,
       operator: item.operator || null, operator_id: item.operatorId || null, contact: item.contact || null,
-      review_time: item.reviewTime || null,
+      review_time: sqlDt(item.reviewTime),
     };
   }
 
@@ -45,9 +53,9 @@
   function questionToRow(item) {
     return {
       _dbId: item.id,
-      title: item.title, content: item.content, questioner: item.questioner, question_time: item.questionTime || null,
+      title: item.title, content: item.content, questioner: item.questioner, question_time: sqlDt(item.questionTime),
       expert_reply: item.expertReply || null, status: item.status, source: item.source || null,
-      operator: item.operator || null, reply_time: item.replyTime || null,
+      operator: item.operator || null, reply_time: sqlDt(item.replyTime),
     };
   }
 
@@ -63,7 +71,9 @@
   function staffToRow(item) {
     return {
       account: item.account, password: item.pwdHash || item.password || null, real_name: item.realName || null,
-      phone: item.phone || null, role: item.role || '果农', is_expert: b2i(item.isExpert),
+      phone: item.phone || null, role: item.role || '果农',
+      base_id: item.baseId != null && item.baseId !== '' ? Number(item.baseId) : null,
+      is_expert: b2i(item.isExpert),
       expertise: item.expertise || null, status: item.status || 'active',
     };
   }
@@ -80,7 +90,7 @@
     return {
       _dbId: item.id,
       title: item.title, content: item.content, category: item.category, target: item.target || 'mobile',
-      publisher: item.publisher || '系统管理员', publish_time: item.publishTime || null,
+      publisher: item.publisher || '系统管理员', publish_time: sqlDt(item.publishTime),
       status: item.enabled === false ? 'inactive' : 'active', source: item.source || null,
     };
   }
@@ -89,7 +99,9 @@
   function rowToNews(row) {
     return {
       id: String(row.id), category: row.category, title: row.title, summary: row.summary || '', content: row.content,
-      cover: '', author: row.author || '', source: row.source || '', publishTime: dstr(row.publish_time),
+      /* 封面存 sf_mb_news.cover_file_id（铁律 4：图片存 file_id） */
+      cover: row.cover_file_id != null ? String(row.cover_file_id) : '',
+      author: row.author || '', source: row.source || '', publishTime: dstr(row.publish_time),
       publisher: row.publisher || '', status: row.status, top: i2b(row.is_top), viewCount: num(row.read_count),
     };
   }
@@ -97,8 +109,9 @@
     return {
       _dbId: item.id,
       category: item.category, title: item.title, summary: item.summary || null, content: item.content,
+      cover_file_id: item.cover != null && item.cover !== '' ? Number(item.cover) : null,
       author: item.author || null, source: item.source || null, read_count: nval(item.viewCount),
-      publisher: item.publisher || null, publish_time: item.publishTime || null, is_top: b2i(item.top),
+      publisher: item.publisher || null, publish_time: sqlDt(item.publishTime), is_top: b2i(item.top),
       status: item.status || 'published',
     };
   }
@@ -114,7 +127,7 @@
     return {
       _dbId: item.id,
       sync_type: item.syncType, record_id: item.recordId, payload: item.payload || null,
-      enqueue_time: item.enqueueTime || item.queuedAt || null, status: item.status, retry: nval(item.retry),
+      enqueue_time: sqlDt(item.enqueueTime || item.queuedAt), status: item.status, retry: nval(item.retry),
     };
   }
 

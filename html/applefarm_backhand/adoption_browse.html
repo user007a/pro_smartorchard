@@ -388,8 +388,10 @@
  * 认养展示配置（移动端 mb_adoption_browse.html 数据源）
  * ============================================================ */
 
-var GUIDE_KEY = 'adoption_guide';
 var S = window.AdoptionStore;
+var GUIDE_CODE = 'default';   /* sf_adoption_guide 单行配置的唯一键 */
+var guideCache = null;        /* 已加载的指南行（{title,content,updatedAt}），null=未加载/无库行 */
+var guideRowId = null;        /* 已加载指南行的物理 id，用于 update；null 时走 create */
 
 var DEFAULT_GUIDE = {
   title: '果树认养指南',
@@ -422,42 +424,32 @@ function esc(s) {
     return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
   });
 }
-function readJSON(key, fallback) {
-  try {
-    var raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    var v = JSON.parse(raw);
-    return Array.isArray(v) ? v : (fallback && typeof fallback === 'object' && !Array.isArray(fallback) ? fallback : fallback);
-  } catch (e) { return fallback; }
-}
-function readObject(key, fallback) {
-  try {
-    var raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    var v = JSON.parse(raw);
-    return v && typeof v === 'object' ? v : fallback;
-  } catch (e) { return fallback; }
-}
-function writeJSON(key, val) {
-  try { localStorage.setItem(key, JSON.stringify(val)); return true; }
-  catch (e) { Toast.error('本地存储写入失败'); return false; }
-}
-
 /* ---------- 数据 ---------- */
 /* 果树池统一由 AdoptionStore 承载：本页只读写展示字段，不再维护独立种子 */
 function readTrees() {
   return S.browsePool();
 }
 
+/* 指南文案统一存 sf_adoption_guide（guide_code='default'）：后台编辑写库、移动端读库渲染。
+ * 无库行时回退 DEFAULT_GUIDE（仅展示，不写 localStorage）。 */
 function readGuide() {
-  var v = readObject(GUIDE_KEY, null);
-  if (!v || !v.title) {
-    v = Object.assign({}, DEFAULT_GUIDE);
-    writeJSON(GUIDE_KEY, v);   /* 与果树池一致：首次访问即落库，供移动端 mb_adoption_browse.html 读取 */
-  }
-  return v;
+  return guideCache || Object.assign({}, DEFAULT_GUIDE);
 }
-function writeGuide(g) { return writeJSON(GUIDE_KEY, g); }
+function loadGuide() {
+  if (!window.Api || !Api.get) { renderGuide(); return; }
+  Api.get('adoption_guide').then(function (r) {
+    var row = null;
+    if (r && r.ok && r.data && r.data.list) {
+      row = r.data.list.find(function (x) { return x.guide_code === GUIDE_CODE; }) || r.data.list[0] || null;
+    }
+    guideRowId = row ? row.id : null;
+    guideCache = row ? { title: row.title, content: row.content, updatedAt: row.updated_at || '' } : null;
+    renderGuide();
+  }).catch(function (e) {
+    console.warn('[adoption_browse] 加载指南失败', e);
+    guideCache = null; guideRowId = null; renderGuide();
+  });
+}
 
 /* 品种筛选项从果树池聚合 */
 function refreshVarietyFilter() {
@@ -682,15 +674,20 @@ function submitGuideEdit() {
   var content = (document.getElementById('editGuideContent').value || '').trim();
   if (!title) { Toast.warning('请填写标题'); return; }
   if (!content) { Toast.warning('请填写正文'); return; }
-  var g = {
-    title: title,
-    content: content,
-    updatedAt: new Date().toLocaleString('zh-CN', { hour12: false })
-  };
-  writeGuide(g);
-  Toast.success('已保存');
-  closeGuideEdit();
-  renderGuide();
+  /* 与项目其它泛型 CRUD 页一致：审计列 updated_by 不由前端伪造，留待后端/后续补齐 */
+  var body = { title: title, content: content };
+  /* guideRowId 有值 → 更新既有行；否则按唯一键 guide_code 新建一行 */
+  var p = guideRowId != null
+    ? Api.update('adoption_guide', guideRowId, body)
+    : Api.create('adoption_guide', Object.assign({ guide_code: GUIDE_CODE }, body));
+  p.then(function (r) {
+    if (!r || !r.ok) { Toast.error('保存失败：' + ((r && r.message) || '后端拒绝写入')); return; }
+    loadGuide();   /* 重拉以同步服务端 id / updated_at */
+    closeGuideEdit();
+    Toast.success('已保存');
+  }).catch(function (e) {
+    Toast.error('保存失败：' + ((e && e.message) ? e.message : '网络异常'));
+  });
 }
 
 function switchTab(name, el) {
@@ -715,6 +712,7 @@ document.addEventListener('DOMContentLoaded', function () {
   renderStats();
   renderTreeTable();
   renderGuide();
+  loadGuide();
   S.onChange(function () {
     // 后端数据到达后需重新发布一次果树池：首次 publishBrowsePool() 发生在
     // DOMContentLoaded，此时 store 尚未拿到后端数据，池子会被写成空数组，

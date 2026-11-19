@@ -407,21 +407,17 @@ function readPromotions() { return promotionsData; }
 
 function writeList(list) {
   promotionsData = list;
-  if (typeof MallStore !== 'undefined') {
-    var ok = true;
-    list.forEach(function (p) {
-      var r = MallStore.savePromotion(p);
-      if (!r.ok) { Toast.error(r.error || '活动保存失败'); ok = false; }
-    });
-    return ok;
-  }
-  try {
-    localStorage.setItem(PROMOTION_KEY, JSON.stringify(list));
-    return true;
-  } catch (e) {
-    Toast.error('本地存储写入失败，活动未能保存');
+  if (typeof MallStore === 'undefined') {
+    /* 共享数据层未就绪 → 明确报错，不降级写本地（严格空库铁律 1） */
+    Toast.error('数据服务未就绪，活动未能保存');
     return false;
   }
+  var ok = true;
+  list.forEach(function (p) {
+    var r = MallStore.savePromotion(p);
+    if (!r.ok) { Toast.error(r.error || '活动保存失败'); ok = false; }
+  });
+  return ok;
 }
 
 function esc(s) {

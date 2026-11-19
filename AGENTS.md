@@ -16,7 +16,7 @@
 ## 二、项目一句话
 
 原生 HTML 四端（后台 119 / 移动 35 / H5 16 / 大屏 10 页）→ 各模块 store/mapper →
-Express 单体（auth / meta / 通用 CRUD / 17 个聚合路由）→ MySQL 143 张 `sf_` 表；
+Express 单体（auth / meta / 通用 CRUD / 20 个聚合路由）→ MySQL 143 张 `sf_` 表；
 Docker 三容器一键部署（`docker compose up -d`，入口 http://localhost:8080/portal.html）。
 
 ## 三、铁律（违反即返工）

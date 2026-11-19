@@ -547,16 +547,17 @@
 <script src="js/shared/data-store.js"></script>
 <script src="../common/js/api.js"></script>
 <script>
-  const STORAGE_KEY = 'orchard_model_config';
-  // 严格空库模式：删除训练历史的本地存储键，训练历史只来自后端 model_config.last_train_time
-
   /* ===== 严格空库模式：模型配置与训练历史一律来自后端 API ===== */
   const MODEL_RESOURCE = 'model_config';
+  const THRESHOLD_RESOURCE = 'model_threshold';
   let modelConfigRows = [];
+  /* 阈值行（保留 id，供更新定位） */
+  let thresholdRows = [];
 
   // 数据库字段(snake_case) -> 页面视图字段映射
   function mapModelRow(row) {
     return {
+      id: row.id,
       name: row.model_name || '',
       modelCode: row.model_code || '',
       calls: Number(row.call_count) || 0,
@@ -566,6 +567,8 @@
       status: row.enabled ? 'online' : 'disabled',
       statusText: row.enabled ? '运行中' : '已停用',
       lastTrainTime: row.last_train_time || '',
+      trainCycle: row.train_cycle || '',
+      dataRange: row.data_range || '',
       accuracy: row.accuracy
     };
   }
@@ -589,6 +592,8 @@
       }
       var list = (r.data && r.data.list) || [];
       modelConfigRows = list.map(mapModelRow);
+      /* 开关状态依赖 modelConfigRows（enabled），故取数完成后再回填开关 */
+      loadConfig();
       if (!modelConfigRows.length) {
         setModelStatus('暂无数据', false);
         renderTrainHistory();
@@ -636,35 +641,80 @@
     if (live) live.textContent = on + ' 个模型运行中';
   }
 
+  /* 模型开关落库：sf_model_config.enabled（model_code 为业务键） */
   function toggleCard(card, modelName) {
     const cb = card.querySelector('input[type=checkbox]');
     cb.checked = !cb.checked;
     syncCardState(card);
     updateEnabledKpi();
     const label = card.querySelector('.model-name').textContent;
-    Toast.show(label + (cb.checked ? ' 已启用' : ' 已停用'), cb.checked ? 'success' : 'warning');
-    try {
-      const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      data.switches = data.switches || {};
-      data.switches[modelName] = cb.checked;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch (e) {}
+
+    var row = modelConfigRows.find(function (m) { return m.modelCode === modelName; });
+    if (!row || !row.id) {
+      /* 库中尚无该模型配置行 → 先补一行再更新 */
+      Api.create(MODEL_RESOURCE, {
+        model_code: modelName,
+        model_name: label,
+        enabled: cb.checked ? 1 : 0
+      }).then(function (res) {
+        if (!res || !res.ok) {
+          Toast.show((cb.checked ? '启用' : '停用') + '失败：' + ((res && res.message) || '后端拒绝写入'), 'error');
+          loadModelConfig();
+          return;
+        }
+        Toast.show(label + (cb.checked ? ' 已启用' : ' 已停用'), cb.checked ? 'success' : 'warning');
+        loadModelConfig();
+      }).catch(function (e) {
+        Toast.show('操作失败：' + ((e && e.message) || '网络异常'), 'error');
+        loadModelConfig();
+      });
+      return;
+    }
+
+    Api.update(MODEL_RESOURCE, row.id, { enabled: cb.checked ? 1 : 0 }).then(function (res) {
+      if (!res || !res.ok) {
+        Toast.show((cb.checked ? '启用' : '停用') + '失败：' + ((res && res.message) || '后端拒绝写入'), 'error');
+        loadModelConfig();
+        return;
+      }
+      Toast.show(label + (cb.checked ? ' 已启用' : ' 已停用'), cb.checked ? 'success' : 'warning');
+      loadModelConfig();
+    }).catch(function (e) {
+      Toast.show('操作失败：' + ((e && e.message) || '网络异常'), 'error');
+      loadModelConfig();
+    });
   }
 
+  /* 阈值落库：sf_model_threshold（threshold_key 为业务键） */
+  const THRESHOLD_META = {
+    'th-pest-high': { key: 'pest_high', name: '病害高风险阈值(%)', unit: '%' },
+    'th-pest-mid': { key: 'pest_mid', name: '病害中风险阈值(%)', unit: '%' },
+    'th-yield-conf': { key: 'yield_confidence', name: '产量预测置信度(%)', unit: '%' },
+    'th-temp-dev': { key: 'temp_deviation', name: '温度偏差阈值(℃)', unit: '℃' },
+    'th-phen-day': { key: 'phenology_offset', name: '物候期偏移(天)', unit: '天' },
+    'th-price-flip': { key: 'price_fluctuation', name: '价格波动阈值(%)', unit: '%' }
+  };
+
   function loadConfig() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      if (saved.switches) {
-        document.querySelectorAll('.toggle-switch input[data-model]').forEach(el => {
-          if (saved.switches[el.dataset.model] === false) el.checked = false;
+    /* 开关状态：读 sf_model_config.enabled */
+    modelConfigRows.forEach(function (m) {
+      var box = document.querySelector('.toggle-switch input[data-model="' + m.modelCode + '"]');
+      if (box) box.checked = m.status !== 'disabled';
+    });
+    /* 阈值：读 sf_model_threshold */
+    if (window.Api && Api.get) {
+      Api.get(THRESHOLD_RESOURCE, { page: 1, size: 500 }).then(function (r) {
+        if (!r || !r.ok || !r.data) return;
+        thresholdRows = r.data.list || [];
+        var byKey = {};
+        thresholdRows.forEach(function (t) { byKey[t.threshold_key] = t.threshold_value; });
+        Object.keys(THRESHOLD_META).forEach(function (id) {
+          var el = document.getElementById(id);
+          var v = byKey[THRESHOLD_META[id].key];
+          if (el && v !== undefined && v !== null) el.value = v;
         });
-      }
-      const map = {'th-pest-high':saved.pestHigh,'th-pest-mid':saved.pestMid,'th-yield-conf':saved.yieldConf,'th-temp-dev':saved.tempDev,'th-phen-day':saved.phenDay,'th-price-flip':saved.priceFlip};
-      Object.keys(map).forEach(id => { const v = map[id]; const el = document.getElementById(id); if (el && v !== undefined) el.value = v; });
-      if (saved.trainCycle) document.getElementById('cfg-train-cycle').value = saved.trainCycle;
-      if (saved.trainRange) document.getElementById('cfg-train-range').value = saved.trainRange;
-      if (saved.trainModels) document.getElementById('cfg-train-models').value = saved.trainModels;
-    } catch (e) { console.warn(e); }
+      }).catch(function (e) { console.warn('[model_config] 阈值加载失败', e); });
+    }
     document.querySelectorAll('.model-card').forEach(syncCardState);
     updateEnabledKpi();
     renderTrainHistory();
@@ -687,26 +737,66 @@
   }
 
   function saveThresholds() {
-    const cfg = collectConfig();
-    try {
-      const existed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      cfg.switches = existed.switches || cfg.switches;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+    var cfg = collectConfig();
+    /* sf_model_threshold.threshold_key 有唯一键 → 已存在则按 id 更新，避免重复键报错 */
+    var ops = [];
+    Object.keys(THRESHOLD_META).forEach(function (id) {
+      var meta = THRESHOLD_META[id];
+      var el = document.getElementById(id);
+      var value = el && el.value !== '' ? String(el.value) : '';
+      if (!value) return;
+      var body = {
+        threshold_key: meta.key,
+        threshold_name: meta.name,
+        threshold_value: value,
+        unit: meta.unit
+      };
+      var existing = thresholdRows.find(function (t) { return t.threshold_key === meta.key; });
+      if (existing && existing.id) {
+        ops.push(Api.update(THRESHOLD_RESOURCE, existing.id, body));
+      } else {
+        ops.push(Api.create(THRESHOLD_RESOURCE, body));
+      }
+    });
+    if (!ops.length) { Toast.show('没有可保存的阈值', 'warning'); return; }
+    Promise.all(ops).then(function (results) {
+      var failed = results.filter(function (r) { return !r || !r.ok; });
+      if (failed.length) {
+        Toast.show('阈值保存失败：' + ((failed[0] && failed[0].message) || '后端拒绝写入'), 'error');
+        return;
+      }
       Toast.show('阈值已保存', 'success');
-    } catch (e) { Toast.show('保存失败：' + e.message, 'error'); }
+      loadConfig();
+    }).catch(function (e) {
+      Toast.show('阈值保存失败：' + ((e && e.message) || '网络异常'), 'error');
+    });
   }
 
   function saveTrainCfg() {
-    const cfg = collectConfig();
-    try {
-      const existed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      cfg.switches = existed.switches || cfg.switches;
-      cfg.pestHigh = existed.pestHigh; cfg.pestMid = existed.pestMid;
-      cfg.yieldConf = existed.yieldConf; cfg.tempDev = existed.tempDev;
-      cfg.phenDay = existed.phenDay; cfg.priceFlip = existed.priceFlip;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+    var cfg = collectConfig();
+    /* 训练配置落库：sf_model_config.train_cycle / data_range */
+    var targets = modelConfigRows.filter(function (m) { return m.id; });
+    if (!targets.length) {
+      Toast.show('训练配置保存失败：库中尚无模型配置', 'error');
+      return;
+    }
+    var ops = targets.map(function (m) {
+      return Api.update(MODEL_RESOURCE, m.id, {
+        train_cycle: cfg.trainCycle || null,
+        data_range: cfg.trainRange || null
+      });
+    });
+    Promise.all(ops).then(function (results) {
+      var failed = results.filter(function (r) { return !r || !r.ok; });
+      if (failed.length) {
+        Toast.show('训练配置更新失败：' + ((failed[0] && failed[0].message) || '后端拒绝写入'), 'error');
+        return;
+      }
       Toast.show('训练配置已更新', 'success');
-    } catch (e) {}
+      loadModelConfig();
+    }).catch(function (e) {
+      Toast.show('训练配置更新失败：' + ((e && e.message) || '网络异常'), 'error');
+    });
   }
 
   function renderTrainHistory() {
@@ -812,6 +902,7 @@
   loadConfig();
   // 严格空库模式：模型配置 / 训练历史由后端 API 异步取数并渲染三态
   loadModelConfig();
+
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>

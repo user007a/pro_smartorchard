@@ -446,7 +446,7 @@
   <span id="toastMessage">操作成功</span>
 </div>
 
-<!-- T19：标签领用记录回写依赖桥接层（MobileBridge.updateRecord / stampNow） -->
+<!-- T19：标签领用记录回写走通用 CRUD → sf_label_record（print 后 status=printed） -->
 <script src="js/shared/mobile-bridge.js"></script>
 <script src="js/shared/harvest-store.js"></script>
 <script src="js/shared/trace-store.js"></script>
@@ -894,10 +894,29 @@ function allCodes() {
   return codeList;
 }
 
-// 标签库存（与移动端「标签领用」共用同一份本地存储）
+// 标签领用记录（sf_label_record）+ 标签类型（sf_label_type）缓存，供打印后回写状态
 // T19 治理：库存扣减权归本打印环节，移动端只读库存 + 提交申请，不再本地扣减。
 // 维护入口：本页打印扣减 + 后台「标签管理」库存管理弹窗改数。
-const LABEL_RECORDS_KEY = 'smartorchard_label_records';
+let labelTypeById = {};     // label_type.id → 行
+let labelRecordRows = [];   // sf_label_record 行缓存
+
+/* 加载标签类型 + 领用记录，供打印后回写 sf_label_record 状态使用 */
+function loadLabelRecordsForPrint() {
+  if (!window.Api || !Api.get) return Promise.resolve();
+  return Promise.all([
+    Api.get('label_type', { page: 1, size: 500 }),
+    Api.get('label_record', { page: 1, size: 500 })
+  ]).then(function (res) {
+    var tRes = res[0], rRes = res[1];
+    labelTypeById = {};
+    if (tRes && tRes.ok && tRes.data && tRes.data.list) {
+      tRes.data.list.forEach(function (t) { labelTypeById[String(t.id)] = t; });
+    }
+    labelRecordRows = (rRes && rRes.ok && rRes.data) ? (rRes.data.list || []) : [];
+  }).catch(function (e) {
+    console.warn('[trace_code] 加载标签领用记录失败', e);
+  });
+}
 
 // 标签类型 / 库存统一由 TraceStore 提供（与标签管理页共用）
 function labelTypeNames() {
@@ -932,54 +951,47 @@ function consumeLabelStock(name, count) {
   return { ok: true, stock: res.stock ? res.stock.stock : null };
 }
 
-/* T19：把本次打印关联到「同标签名 + 待打印」的领用记录，按 FIFO 推进状态
- * 返回本次打印推进的记录条数 */
+/* T19：把本次打印关联到「同标签名 + 待打印(pending)」的领用记录，按 FIFO 推进为已打印
+ * 返回本次打印推进的记录条数；回写 sf_label_record.status='printed'（与标签管理页同源） */
 function syncLabelRecordsAfterPrint(name, printedCount) {
-  let records = [];
-  try {
-    const raw = localStorage.getItem(LABEL_RECORDS_KEY);
-    if (raw) {
-      const v = JSON.parse(raw);
-      if (Array.isArray(v)) records = v;
-    }
-  } catch (e) { return 0; }
+  // 标签名 → label_type.id 集合
+  const typeIds = {};
+  Object.keys(labelTypeById).forEach(function (id) {
+    const t = labelTypeById[id];
+    if (t && t.label_name === name) typeIds[id] = true;
+  });
+  if (!Object.keys(typeIds).length) return 0;
 
-  // 领用记录为 unshift 写入（新的在前），此处按写入顺序取最早申请，保证 FIFO
-  // 第一遍：确定本次打印实际覆盖的记录 id 集合
+  // 该类型下 status='pending' 的记录，按 id 升序 = 最早申请先扣减（FIFO）
+  const pending = labelRecordRows.filter(function (r) {
+    return r.status === 'pending' && typeIds[String(r.label_type_id)];
+  }).sort(function (a, b) { return Number(a.id) - Number(b.id); });
+
   let remain = Math.floor(Number(printedCount) || 0);
-  const targetIds = [];
-  for (let i = records.length - 1; i >= 0 && remain > 0; i--) {
-    const r = records[i];
-    if (!r || r.status !== 'pending') continue;
-    if ((r.name || '') !== name) continue;
-    const qty = Math.floor(Number(r.qty) || 0);
+  const targets = [];
+  for (let i = 0; i < pending.length && remain > 0; i++) {
+    const qty = Math.floor(Number(pending[i].quantity) || 0);
     if (!(qty > 0)) continue;
-
     remain -= Math.min(qty, remain);
-    if (r.id != null) targetIds.push(r.id);
+    targets.push(pending[i]);
   }
-
-  if (!targetIds.length) return 0;
+  if (!targets.length) return 0;
 
   const stamp = new Date();
   const p = n => String(n).padStart(2, '0');
-  const printTime = `${stamp.getFullYear()}-${p(stamp.getMonth() + 1)}-${p(stamp.getDate())} ${p(stamp.getHours())}:${p(stamp.getMinutes())}`;
   // 优先用当前筛选的溯源批次号关联，无筛选时用打印时间生成批次号
   const batchNo = currentPrintBatchNo || ('PT-' + p(stamp.getMonth() + 1) + p(stamp.getDate()) + '-' + p(stamp.getHours()) + p(stamp.getMinutes()));
 
-  // 第二遍：按第一遍确定的 id 集合回写，保证覆盖的记录与扣减数量一致
-  let done = 0;
-  if (typeof MobileBridge !== 'undefined') {
-    targetIds.forEach(function (id) {
-      if (MobileBridge.updateRecord(LABEL_RECORDS_KEY, id, {
-        status: '已打印',
-        printTime: printTime,
-        printBatch: batchNo,
-        approveRemark: '后台打印环节已扣减库存'
-      })) done++;
-    });
-  }
-  return done;
+  // 先更新本地缓存避免重复匹配，再回写 sf_label_record
+  targets.forEach(function (r) {
+    r.status = 'printed';
+    Api.update('label_record', r.id, {
+      status: 'printed',
+      batch_no: batchNo,
+      print_user: '管理员'
+    }).catch(function (e) { console.warn('[trace_code] 领用记录回写失败', r.id, e); });
+  });
+  return targets.length;
 }
 
 function currentLabelType() {
@@ -1169,6 +1181,8 @@ document.addEventListener('DOMContentLoaded', function() {
   loadCodes();
   loadOrderOptions();
   loadTemplateOptions();
+  // 打印回写用：加载标签类型 + 领用记录（sf_label_type / sf_label_record）
+  loadLabelRecordsForPrint();
 
   TraceStore.subscribe(function () {
     loadCodes();

@@ -277,8 +277,8 @@
 
   <script src="../applefarm_backhand/js/shared/harvest-store.js"></script>
   <script src="../applefarm_backhand/js/shared/trace-store.js"></script>
-  <script src="js/trace-stages.js"></script>
   <script src="js/h5-data.js"></script>
+  <script src="js/trace-stages.js"></script>
   <script>
     /* ============================================================
      * H5 溯源页 —— 由后台溯源编码生成的追溯码驱动
@@ -302,27 +302,14 @@
       '默认模板':['基地介绍','种植管理','施肥喷药','农残检测','采摘入库','冷链配送']
     };
 
-    // 展示环节：已抽离到 js/trace-stages.js（数据源 localStorage['h5_trace_stages']，
-    // 由后台「溯源配置 - C 端展示配置」维护）。此处仅做兜底映射，保证数据层异常时仍可渲染。
-    const STAGE_FALLBACK = (window.TraceStages && window.TraceStages.DEFAULT) || [
-      { key:'planting',   name:'种植管理', icon:'🌱', img:'images/trace_planting.jpg',   desc:'A1区花牛苹果果园，有机种植，施用有机肥', enabled:true, order:1 },
-      { key:'pruning',    name:'修剪疏果', icon:'✂️', img:'images/trace_pruning.jpg',    desc:'采用开心形整形，去除过密枝条，保证通风透光', enabled:true, order:2 },
-      { key:'bagging',    name:'套袋保护', icon:'🛡️', img:'images/trace_bagging.jpg',    desc:'使用双层纸袋套袋，防止虫害和农药污染', enabled:true, order:3 },
-      { key:'fertilizer', name:'施肥喷药', icon:'🌿', img:'images/trace_fertilizer.jpg', desc:'使用生物有机肥和绿色农药，确保果实安全', enabled:true, order:4 },
-      { key:'testing',    name:'农残检测', icon:'🔬', img:'images/trace_testing.jpg',    desc:'采摘前第三方农残检测，全部指标未检出', enabled:true, order:5 },
-      { key:'harvest',    name:'采摘入库', icon:'🍎', img:'images/trace_harvest.jpg',    desc:'人工采摘，精选一级果，全程冷链保鲜', enabled:true, order:6 },
-      { key:'coldchain',  name:'冷链配送', icon:'🚚', img:'images/trace_coldchain.jpg',  desc:'全程冷链配送，运输温度维持 2-8°C', enabled:true, order:7 }
-    ];
-
+    // 展示环节：来自 js/trace-stages.js（数据源后端 sf_trace_stage，
+    // 由后台「溯源配置 - C 端展示配置」维护）。无数据时时间轴显示空态。
     // 环节定义：module 与后台模板模块名一一对应（module 仅用于与模板模块名匹配）
     function getStages() {
       var list = [];
       try {
         list = (window.TraceStages && typeof TraceStages.onSale === 'function') ? TraceStages.onSale() : [];
       } catch (e) { list = []; }
-      if (!Array.isArray(list) || !list.length) {
-        list = STAGE_FALLBACK.filter(function (s) { return s.enabled !== false; });
-      }
       return list.map(function (s) {
         return {
           key: s.key,
@@ -330,7 +317,8 @@
           icon: s.icon || '',
           label: s.name || s.key,
           img: s.img || '',
-          desc: s.desc || ''
+          desc: s.desc || '',
+          dayOffset: Number(s.dayOffset) || 0
         };
       });
     }
@@ -343,9 +331,7 @@
 
     function formatDate(d) { return d ? d.replace(/-/g, '.') : '—'; }
 
-    // 以批次采收日期为基准推算各环节时间（种植/修剪/套袋等在前，配送在后）
-    const DAY_OFFSET = { planting:-35, pruning:-25, bagging:-15, fertilizer:-3, testing:-1, harvest:0, coldchain:2 };
-
+    // 各环节时间以批次采收日期为基准、按环节配置的天数偏移推算
     function shiftDate(dateStr, days) {
       if (!dateStr) return '—';
       const d = new Date(dateStr + 'T00:00:00');
@@ -416,13 +402,6 @@
       document.getElementById('codeText').textContent = item.code;
       document.getElementById('shortLinkText').textContent = TraceStore.shortUrlOf(item);
 
-      // 缓存批次采收日期，供详情页按同一规则推算各环节时间
-      try {
-        var cache = JSON.parse(sessionStorage.getItem('trace_batch_cache') || '{}');
-        cache[item.code] = batch.harvestDate || null;
-        sessionStorage.setItem('trace_batch_cache', JSON.stringify(cache));
-      } catch (e) {}
-
       const ins = TraceStore.inspectionState(item.batch);
       document.getElementById('productTags').innerHTML =
         (ins.hasValid
@@ -444,7 +423,7 @@
       }
 
       timelineBox.innerHTML = visible.map(s => {
-        const time = formatDate(shiftDate(batch.harvestDate, DAY_OFFSET[s.key] || 0));
+        const time = formatDate(shiftDate(batch.harvestDate, s.dayOffset || 0));
         return `
         <div class="timeline-item">
           <div class="timeline-dot-line">
@@ -606,6 +585,7 @@
     /* ========== 区块链存证 ========== */
     var currentChainEvent = null;
     var currentTraceCode = '';
+    var requestedTraceCode = '';
     function downloadEvidencePack() {
       if (!window.TraceStore || !currentTraceCode) return;
       var item = TraceStore.code(currentTraceCode);
@@ -753,10 +733,15 @@
       function resolve(raw) {
         const item = (window.TraceStore && raw) ? TraceStore.code(raw) : null;
         const code = item ? item.code : raw;
+        requestedTraceCode = code;
         renderTrace(code);
         if (item) recordH5Scan(item.code);
         if (window.TraceStages && typeof TraceStages.subscribe === 'function') {
           TraceStages.subscribe(function() { renderTrace(code); });
+        }
+        // 环节配置异步到达后重绘（首次渲染可能早于接口返回）
+        if (window.TraceStages && TraceStages.ready && typeof TraceStages.ready.then === 'function') {
+          TraceStages.ready.then(function() { renderTrace(code); });
         }
       }
 
@@ -796,7 +781,8 @@
     });
   }
   bind(["traceStoreChange"], function () {
-      renderTrace();
+      var c = currentTraceCode || requestedTraceCode;
+      if (c) renderTrace(c);
   });
 })();
 </script>

@@ -433,29 +433,6 @@
             <label>供应商</label>
             <select id="materialSupplier">
               <option value="">请选择供应商</option>
-              <option value="甘肃化肥厂">甘肃化肥厂</option>
-              <option value="青岛农药公司">青岛农药公司</option>
-              <option value="天水有机肥厂">天水有机肥厂</option>
-              <option value="临沂工具厂">临沂工具厂</option>
-              <option value="济南农化公司">济南农化公司</option>
-              <option value="甘肃化肥集团">甘肃化肥集团</option>
-              <option value="潍坊农药厂">潍坊农药厂</option>
-              <option value="永康五金厂">永康五金厂</option>
-              <option value="郑州农化公司">郑州农化公司</option>
-              <option value="北京生物科技">北京生物科技</option>
-              <option value="甘肃农业机械">甘肃农业机械</option>
-              <option value="青海钾肥厂">青海钾肥厂</option>
-              <option value="甘肃农药公司">甘肃农药公司</option>
-              <option value="阳江刀具厂">阳江刀具厂</option>
-              <option value="上海保鲜科技">上海保鲜科技</option>
-              <option value="台州喷雾器厂">台州喷雾器厂</option>
-              <option value="广州微量元素厂">广州微量元素厂</option>
-              <option value="成都农化研究所">成都农化研究所</option>
-              <option value="温州五金厂">温州五金厂</option>
-              <option value="甘肃钙肥厂">甘肃钙肥厂</option>
-              <option value="深圳新能源">深圳新能源</option>
-              <option value="甘肃土壤科技">甘肃土壤科技</option>
-              <option value="甘肃塑料厂">甘肃塑料厂</option>
             </select>
           </div>
         </div>
@@ -775,7 +752,8 @@ function normalizeMaterial(m, idx) {
   if (!m.typeName) m.typeName = TYPE_LABEL[m.type] || '其他';
   if (m.purpose === undefined) m.purpose = '-';
   if (m.safetyInterval === undefined) m.safetyInterval = '-';
-  if (m.manufacturer === undefined) m.manufacturer = m.supplier || '-';
+  /* 厂家是独立字段，缺失时显示 '-'，不可拿供应商顶替（供应商存的是 id） */
+  if (m.manufacturer === undefined) m.manufacturer = '-';
   if (m.registrationNo === undefined) m.registrationNo = '-';
   if (m.activeIngredient === undefined) m.activeIngredient = '-';
   if (m.toxicity === undefined) m.toxicity = '-';
@@ -794,6 +772,15 @@ materialData.forEach(normalizeMaterial);
 
 /* ===== 严格空库模式：农资档案主数据一律来自后端 API ===== */
 const MATERIAL_RESOURCE = 'material_info';
+/* 数据库原始行（保留 id，供通用 CRUD 的更新/删除定位） */
+let materialRows = [];
+
+/* HTML 转义：所有后端数据渲染前必须走这里 */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
 
 // 数据库字段(snake_case) -> 页面视图字段映射
 function mapMaterialRow(row) {
@@ -817,6 +804,18 @@ function mapMaterialRow(row) {
     currentStock: row.current_stock,
     dailyUse: row.daily_use,
     leadDays: row.lead_days,
+    manufacturer: row.manufacturer || '',
+    registrationNo: row.registration_no || '',
+    activeIngredient: row.active_ingredient || '',
+    toxicity: row.toxicity || '',
+    shelfLife: row.shelf_life == null ? '' : String(row.shelf_life),
+    expiryDate: row.expiry_date || '',
+    productionLicenseNo: row.production_license_no || '',
+    registrationValidUntil: row.registration_valid_until || '',
+    storageCondition: row.storage_condition || '',
+    barcode: row.barcode || '',
+    defaultLocation: row.default_location || '',
+    batchRule: row.batch_rule || 'fifo',
     createdAt: row.created_at || ''
   };
 }
@@ -837,6 +836,7 @@ function loadMaterials() {
       return;
     }
     var list = (r.data && r.data.list) || [];
+    materialRows = list;
     materialData = list.map(mapMaterialRow);
     materialData.forEach(normalizeMaterial);
     totalItems = materialData.length;
@@ -924,6 +924,7 @@ function init() {
   updateComplianceRequired();
   setMaterialStatus('正在加载数据...', false);
   loadMaterials();
+  loadSuppliers();
 }
 
 // 填充默认仓库下拉（优先共享字典）
@@ -983,7 +984,7 @@ function renderTable() {
       <td class="text-right">${item.stock}</td>
       <td class="text-right">${curStock === null ? '-' : curStock}</td>
       <td>${stockStatusTag(item.code)}</td>
-      <td>${item.supplier}</td>
+      <td>${item.supplierName || '-'}</td>
       <td>${licenseStatusTag(item)}</td>
       <td>${archiveStatusTag(item.status)}</td>
       <td>
@@ -1112,6 +1113,33 @@ function setSupplierValue(value) {
   select.value = v;
 }
 
+/* 供应商下拉来自 sf_material_supplier（真实台账），空库则为空，不内置演示名单。
+   sf_material_info.supplier_id 存物理 id，故 option.value = id；
+   表格/详情展示 supplierName（由 id 关联台账得到），避免把 id 当名称展示。 */
+let supplierNameById = {};
+function loadSuppliers() {
+  const select = document.getElementById('materialSupplier');
+  if (!select || !window.Api || !Api.get) return;
+  const current = select.value;
+  Api.get('material_supplier', { page: 1, size: 500, sort: 'id', order: 'asc' }).then(function (res) {
+    if (!res || !res.ok || !res.data) return;
+    var list = res.data.list || [];
+    supplierNameById = {};
+    list.forEach(function (s) { supplierNameById[String(s.id)] = s.supplier_name || s.supplier_code || ''; });
+    select.innerHTML = '<option value="">请选择供应商</option>' + list.map(function (s) {
+      return '<option value="' + s.id + '">' + esc(s.supplier_name || s.supplier_code || '') + '</option>';
+    }).join('');
+    if (current) select.value = current;
+    // 供应商名回填到已渲染的行（列表数据来自后端，名称需二次关联）
+    materialData.forEach(function (m) {
+      m.supplierName = supplierNameById[String(m.supplier)] || '-';
+    });
+    renderTable();
+  }).catch(function (e) {
+    console.warn('[material_info] 供应商列表加载失败', e);
+  });
+}
+
 // 打开新建弹窗
 function openAddModal() {
   modalTitle.textContent = '新建农资';
@@ -1216,6 +1244,38 @@ function collectFormData() {
   };
 }
 
+/* 表单 -> 数据库写入体（只提交 sf_material_info 真实存在的列） */
+function materialBody(code, data) {
+  return {
+    material_code: code,
+    material_name: data.name.trim(),
+    material_type: data.type || 'other',
+    type_name: data.typeName || null,
+    spec: data.spec === '-' ? null : data.spec,
+    unit: data.unit === '-' ? null : data.unit,
+    warehouse_name: data.defaultWarehouse === '-' ? null : data.defaultWarehouse,
+    default_location: data.defaultLocation === '-' ? null : data.defaultLocation,
+    batch_rule: data.batchRule || 'fifo',
+    price: data.price === '' ? null : data.price,
+    safety_stock: data.stock === '' ? null : data.stock,
+    supplier_id: data.supplier ? Number(data.supplier) : null,
+    manufacturer: data.manufacturer || null,
+    registration_no: data.registrationNo || null,
+    production_license_no: data.productionLicenseNo || null,
+    registration_valid_until: data.registrationValidUntil || null,
+    active_ingredient: data.activeIngredient || null,
+    toxicity: data.toxicity || null,
+    shelf_life: data.shelfLife === '' ? null : Number(data.shelfLife),
+    expiry_date: data.expiryDate || null,
+    storage_condition: data.storageCondition || null,
+    barcode: data.barcode || null,
+    purpose: data.purpose === '-' ? null : data.purpose,
+    safety_interval: data.safetyInterval === '-' ? null : data.safetyInterval,
+    file_status: data.status || 'enabled',
+    remark: data.remark || null
+  };
+}
+
 // 保存农资
 function saveMaterial() {
   const code = document.getElementById('materialCode').value;
@@ -1251,23 +1311,37 @@ function saveMaterial() {
   }
 
   const isNew = code.startsWith('NEW-');
+  // 业务编号唯一：新建时按库内最大编号 +1 生成
+  const finalCode = isNew
+    ? 'M-' + String(materialData.reduce(function (max, m) {
+        const n = parseInt(String(m.code || '').replace(/\D/g, ''), 10);
+        return isFinite(n) && n > max ? n : max;
+      }, 0) + 1).padStart(3, '0')
+    : code;
 
-  if (isNew) {
-    // 新建
-    const newItem = Object.assign({ code: 'M-' + String(materialData.length + 1).padStart(3, '0') }, data);
-    materialData.push(newItem);
-    alert('新建成功');
-  } else {
-    // 编辑
-    const index = materialData.findIndex(m => m.code === code);
-    if (index !== -1) {
-      materialData[index] = Object.assign({}, materialData[index], data);
-      alert('编辑成功');
+  const body = materialBody(finalCode, data);
+
+  const req = isNew
+    ? Api.create(MATERIAL_RESOURCE, body)
+    : Api.update(MATERIAL_RESOURCE, rowIdOf(finalCode), body);
+
+  req.then(function (res) {
+    if (!res || !res.ok) {
+      alert((isNew ? '新建失败：' : '编辑失败：') + ((res && res.message) || '后端拒绝写入'));
+      return;
     }
-  }
+    closeEditModal();
+    alert(isNew ? '新建成功' : '编辑成功');
+    loadMaterials();
+  }).catch(function (e) {
+    alert((isNew ? '新建失败：' : '编辑失败：') + ((e && e.message ? e.message : '网络异常')));
+  });
+}
 
-  closeEditModal();
-  search();
+// 业务编号 -> 数据库物理 id（通用 CRUD 的更新/删除按 id 定位）
+function rowIdOf(code) {
+  var hit = materialRows.find(function (r) { return r.material_code === code; });
+  return hit ? hit.id : null;
 }
 
 // 查看农资详情
@@ -1281,7 +1355,7 @@ function viewMaterial(code) {
     document.getElementById('viewUnit').textContent = item.unit;
     document.getElementById('viewPrice').textContent = item.price;
     document.getElementById('viewStock').textContent = item.stock;
-    document.getElementById('viewSupplier').textContent = item.supplier || '-';
+    document.getElementById('viewSupplier').textContent = item.supplierName || '-';
     document.getElementById('viewStatus').textContent = item.status === 'disabled' ? '停用' : '启用';
     document.getElementById('viewManufacturer').textContent = item.manufacturer || '-';
     document.getElementById('viewRegNo').textContent = item.registrationNo || '-';
@@ -1331,14 +1405,19 @@ function doExport() {
 
 // 删除农资
 function deleteMaterial(code) {
-  if (confirm(`确定要删除农资 ${code} 吗？`)) {
-    const index = materialData.findIndex(m => m.code === code);
-    if (index !== -1) {
-      materialData.splice(index, 1);
-      alert('删除成功');
-      search();
+  if (!confirm(`确定要删除农资 ${code} 吗？`)) return;
+  var id = rowIdOf(code);
+  if (!id) { alert('未找到该农资记录'); return; }
+  Api.remove(MATERIAL_RESOURCE, id).then(function (res) {
+    if (!res || !res.ok) {
+      alert('删除失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
     }
-  }
+    alert('删除成功');
+    loadMaterials();
+  }).catch(function (e) {
+    alert('删除失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 // 生成新编号

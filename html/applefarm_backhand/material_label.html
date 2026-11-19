@@ -529,11 +529,15 @@
 /* ============================================================
  * 标签管理
  * 数据源：
- *   MobileBridge.labelRecords() → 标签领用记录（移动端 mb_label.html 写入）
- *     { name, qty, time, plot, status:'pending', remark, id, createTime }
- *   MobileBridge.labelStock()   → 标签库存对象 { 标签名: 剩余张数 }
- * 审批结果回写 MobileBridge.KEYS.labelRecords，库存维护回写 KEYS.labelStock
+ *   sf_label_record → 标签领用记录（移动端 mb_label.html 写穿该表）
+ *   sf_label_stock  → 标签库存（label_type_id → 数量）
+ *   sf_label_type   → 标签类型（编码 / 名称 / 规格）
+ * 审批结果回写 sf_label_record.status，库存扣减回写 sf_label_stock.quantity
  * ============================================================ */
+
+var LABEL_RECORD_RESOURCE = 'label_record';
+var LABEL_STOCK_RESOURCE = 'label_stock';
+var LABEL_TYPE_RESOURCE = 'label_type';
 
 /* 状态归一：pending 分为「待审批」与「待打印」
  * 通过审批后保持 status='pending' 并写入 printReady，既满足本页状态字典，
@@ -551,6 +555,11 @@ var LOW_STOCK_THRESHOLD = 1000;
 
 var currentId = null;
 
+/* 领用记录 / 库存 / 类型：由 loadLabelData() 从后端拉取 */
+var labelRecords = [];
+var labelStockRows = [];
+var labelTypeRows = [];
+
 /* HTML 转义，所有用户数据渲染前必须走这里 */
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -558,26 +567,59 @@ function esc(s) {
   });
 }
 
-/* 读取领用记录，读取失败回退空数组 */
-function readRecords() {
-  try {
-    if (typeof MobileBridge === 'undefined') return [];
-    var list = MobileBridge.labelRecords();
-    return Array.isArray(list) ? list : [];
-  } catch (e) {
-    return [];
-  }
+/* 从后端拉取标签数据（领用记录 + 库存 + 类型） */
+function loadLabelData() {
+  if (!window.Api || !Api.get) return;
+  Promise.all([
+    Api.get(LABEL_RECORD_RESOURCE, { page: 1, size: 500, sort: 'id', order: 'asc' }),
+    Api.get(LABEL_STOCK_RESOURCE, { page: 1, size: 500, sort: 'id', order: 'asc' }),
+    Api.get(LABEL_TYPE_RESOURCE, { page: 1, size: 500, sort: 'id', order: 'asc' })
+  ]).then(function (res) {
+    var recRes = res[0], stockRes = res[1], typeRes = res[2];
+    if (!recRes || !recRes.ok || !recRes.data) return;
+    labelTypeRows = (typeRes && typeRes.ok && typeRes.data) ? (typeRes.data.list || []) : [];
+    var typeNameById = {};
+    labelTypeRows.forEach(function (t) { typeNameById[String(t.id)] = t.label_name || ''; });
+    labelRecords = (recRes.data.list || []).map(function (r) {
+      return {
+        id: r.id,
+        _dbId: r.id,
+        applyCode: r.apply_code || '',
+        name: typeNameById[String(r.label_type_id)] || '',
+        labelTypeId: r.label_type_id != null ? String(r.label_type_id) : '',
+        qty: r.quantity != null ? r.quantity : 0,
+        plot: r.plot_ids || '',
+        operator: r.apply_user || '',
+        time: r.apply_time || r.created_at || '',
+        createTime: r.apply_time || r.created_at || '',
+        status: r.status || 'pending',
+        printTime: r.status === 'printed' ? (r.updated_at || '') : '',
+        batchNo: r.batch_no || '',
+        remark: r.remark || ''
+      };
+    });
+    labelStockRows = (stockRes && stockRes.ok && stockRes.data) ? (stockRes.data.list || []) : [];
+    renderTable();
+    renderStockStats();
+  }).catch(function (e) {
+    console.warn('[material_label] 标签数据加载失败', e);
+  });
 }
 
-/* 读取库存对象（库存以对象形式存储，桥接层已按对象型读取处理） */
+/* 读取领用记录 */
+function readRecords() {
+  return labelRecords;
+}
+
+/* 读取库存：按标签类型汇总 sf_label_stock.quantity */
 function readStock() {
-  try {
-    if (typeof MobileBridge === 'undefined') return {};
-    var stock = MobileBridge.labelStock();
-    return (stock && typeof stock === 'object') ? stock : {};
-  } catch (e) {
-    return {};
-  }
+  var stock = {};
+  labelStockRows.forEach(function (r) {
+    if (r.label_type_id == null) return;
+    var key = String(r.label_type_id);
+    stock[key] = (stock[key] || 0) + (r.quantity != null ? r.quantity : 0);
+  });
+  return stock;
 }
 
 /* 状态归一：pending 未审批 → 待审批，审批通过 → 待打印
@@ -608,24 +650,24 @@ function isPendingPrint(item) {
   return statusText(item) === '待打印';
 }
 
-/* 新增字段读取：移动端老数据缺失时给出默认值 */
+/* 字段读取：均对应 sf_label_record 的真实列，缺失时给出中性默认值 */
 function orderNoOf(item) {
-  return item.orderNo || item.applyNo || item.id || '-';
+  return item.applyCode || item.orderNo || item.applyNo || '-';
 }
 function labelCodeOf(item) {
-  return item.labelCode || item.code || '—';
+  return item.applyCode || item.labelCode || item.code || '—';
 }
 function traceBatchNoOf(item) {
-  return item.traceBatchNo || '';
+  return item.batchNo || item.traceBatchNo || '';
 }
 function labelTypeOf(item) {
-  return item.labelType || '一物一码';
+  return item.name || item.labelType || '一物一码';
 }
 function specOf(item) {
   return item.spec || '标准规格';
 }
 function applicantOf(item) {
-  return item.applicant || item.operator || '移动端用户';
+  return item.operator || item.applicant || '移动端用户';
 }
 function printerOf(item) {
   return item.printer || item.printOperator || (item.printTime ? '后台打印' : '—');
@@ -634,10 +676,12 @@ function printerOf(item) {
 /* 渲染各标签库存统计卡 */
 function renderStockStats() {
   var records = readRecords();
-  var stockMap = window.TraceStore ? TraceStore.stock() : null;
+  /* 库存口径统一以 sf_label_stock（按 label_type_id）为准；
+     TraceStore.stock() 存的是预占视图（按名称），两者键不同，不混用。 */
   var stock = readStock();
+  var nameById = labelTypeNameById();
   var row = document.getElementById('stockStatRow');
-  var names = stockMap ? Object.keys(stockMap) : Object.keys(stock);
+  var names = Object.keys(stock);
 
   /* 本月领用张数：优先当前月，数据不在当前月时回退到最新月份 */
   var now = new Date();
@@ -680,17 +724,15 @@ function renderStockStats() {
   }
 
   var TONES = ['tone-green', 'tone-purple', 'tone-orange'];
-  row.innerHTML = summary + names.map(function (name, idx) {
-    var s = stockMap
-      ? stockMap[name]
-      : { stock: Number(stock[name]) || 0, reserved: 0, available: Number(stock[name]) || 0 };
-    var low = s.available < LOW_STOCK_THRESHOLD ? ' is-low' : ' ' + TONES[idx % TONES.length];
+  row.innerHTML = summary + names.map(function (id, idx) {
+    var available = Number(stock[id]) || 0;
+    var label = nameById[id] || ('类型 ' + id);
+    var low = available < LOW_STOCK_THRESHOLD ? ' is-low' : ' ' + TONES[idx % TONES.length];
     return '<div class="stat-card' + low + '">' +
-      '<div class="stat-label">' + esc(name) + '</div>' +
-      '<div class="stat-value">' + s.available.toLocaleString('zh-CN') + '<span class="stat-unit">张可用</span></div>' +
+      '<div class="stat-label">' + esc(label) + '</div>' +
+      '<div class="stat-value">' + available.toLocaleString('zh-CN') + '<span class="stat-unit">张可用</span></div>' +
       '<div class="stat-meta">' +
-        '<span class="stat-chip">库存 ' + s.stock.toLocaleString('zh-CN') + '</span>' +
-        '<span class="stat-chip">预占 ' + s.reserved + '</span>' +
+        '<span class="stat-chip">库存 ' + available.toLocaleString('zh-CN') + '</span>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -895,76 +937,60 @@ function submitApprove(decision) {
 
 /* 审批落库：通过 → 待打印；驳回 → 已驳回 */
 function doApprove(decision, remark) {
-  if (typeof MobileBridge === 'undefined') {
-    Toast.error('数据桥接未加载，无法保存审批结果');
-    return;
-  }
-
   var target = null;
   var all = readRecords();
   for (var i = 0; i < all.length; i++) {
     if (String(all[i].id) === String(currentId)) { target = all[i]; break; }
   }
-  var labelTypeSel = document.getElementById('apLabelType');
+  if (!target) { Toast.error('未找到该领用记录'); return; }
 
-  var patch = {
-    approveRemark: remark,
-    approveTime: MobileBridge.stampNow(),
-    traceBatchNo: target ? traceBatchNoOf(target) : document.getElementById('apTraceBatchNo').textContent || '',
-    labelType: (labelTypeSel && labelTypeSel.value) || (target ? labelTypeOf(target) : '一物一码')
-  };
+  var labelTypeSel = document.getElementById('apLabelType');
   var resultText = decision;
 
-  if (decision === '通过' || decision === '待打印') {
-    /* 保持 status='pending' 以兼容 trace_code.html 的打印关联逻辑，
-     * 通过 printReady 标记区分「待审批」与「待打印」。 */
-    patch.status = 'pending';
-    patch.printReady = true;
-    patch.approvedBy = '管理员';
-    patch.approveResult = '通过';
-    resultText = '待打印';
-  } else {
-    patch.status = decision;
-    patch.approveResult = decision;
-  }
+  /* 审批结论落库：sf_label_record.status + remark */
+  var body = {
+    status: decision === '通过' || decision === '待打印' ? 'pending' : decision,
+    remark: (remark || '') + (labelTypeSel && labelTypeSel.value ? ' 标签类型：' + labelTypeSel.value : ''),
+    label_type_id: (labelTypeSel && labelTypeSel.value) ? Number(labelTypeSel.value) : (target.labelTypeId ? Number(target.labelTypeId) : null),
+    batch_no: target.batchNo || document.getElementById('apTraceBatchNo').textContent || ''
+  };
+  if (decision === '通过' || decision === '待打印') resultText = '待打印';
 
-  // 通过审批即预占库存，驳回则释放预占；实际扣减发生在打印环节
-  var reservationId = '';
-  if (window.TraceStore && target) {
-    if (decision === '通过' || decision === '待打印') {
-      if (target.labelReservationId) {
-        reservationId = target.labelReservationId;
-      } else {
-        var rv = TraceStore.reserveStock(target.name, target.qty, { ref: orderNoOf(target), operator: '管理员' });
-        if (!rv.ok) { Toast.error(rv.message || '标签库存预占失败'); return; }
-        reservationId = rv.reservation.id;
-      }
-    } else if (target.labelReservationId) {
-      TraceStore.releaseReservation(target.labelReservationId);
+  Api.update(LABEL_RECORD_RESOURCE, target._dbId, body).then(function (res) {
+    if (!res || !res.ok) {
+      Toast.error('审批结果保存失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
     }
-  }
-  patch.labelReservationId = reservationId;
-
-  var ok = MobileBridge.updateRecord(MobileBridge.KEYS.labelRecords, currentId, patch);
-  if (!ok) { Toast.error('审批结果保存失败，请刷新后重试'); return; }
-  closeApproveModal();
-  renderTable();
-  Toast.success('审批结果已保存（' + resultText + '），移动端可查看');
+    closeApproveModal();
+    loadLabelData();
+    Toast.success('审批结果已保存（' + resultText + '），移动端可查看');
+  }).catch(function (e) {
+    Toast.error('审批结果保存失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 /* ---------- 库存管理弹窗 ---------- */
+/* 标签类型 id → 名称（库存按 label_type_id 聚合，展示时用名称） */
+function labelTypeNameById() {
+  var map = {};
+  labelTypeRows.forEach(function (t) { map[String(t.id)] = t.label_name || ''; });
+  return map;
+}
+
 function openStockModal() {
   var stock = readStock();
   var box = document.getElementById('stockEditBox');
   var names = Object.keys(stock);
+  var nameById = labelTypeNameById();
 
   if (!names.length) {
     box.innerHTML = '<div class="empty-state" style="padding:20px 0;">暂无库存记录</div>';
   } else {
-    box.innerHTML = names.map(function (name, i) {
+    box.innerHTML = names.map(function (id, i) {
+      var label = nameById[id] || ('类型 ' + id);
       return '<div class="stock-row">' +
-        '<div class="stock-name">' + esc(name) + '</div>' +
-        '<input type="number" min="0" step="1" value="' + esc(stock[name]) + '" data-stock-index="' + i + '">' +
+        '<div class="stock-name">' + esc(label) + '</div>' +
+        '<input type="number" min="0" step="1" value="' + esc(stock[id]) + '" data-stock-index="' + i + '">' +
         '<span style="font-size:13px;color:var(--text-tertiary);">张</span>' +
       '</div>';
     }).join('');
@@ -976,7 +1002,7 @@ function closeStockModal() {
   document.getElementById('stockModal').classList.remove('show');
 }
 
-/* 保存库存：整份对象回写 localStorage */
+/* 保存库存：按标签类型回写 sf_label_stock.quantity */
 function saveStock() {
   var stock = readStock();
   var names = Object.keys(stock);
@@ -994,29 +1020,49 @@ function saveStock() {
 
   if (invalid) { Toast.warning('库存数量必须为不小于 0 的整数'); return; }
 
-  try {
-    if (typeof MobileBridge === 'undefined') { Toast.error('数据桥接未加载，无法保存库存'); return; }
-    localStorage.setItem(MobileBridge.KEYS.labelStock, JSON.stringify(stock));
-  } catch (e) {
-    Toast.error('本地存储写入失败，库存未能保存');
-    return;
-  }
+  /* 库存按标签类型（label_type_id）落库；同名多行时逐行更新，
+     库中该类型无行则新增一条。 */
+  var ops = [];
+  names.forEach(function (typeId) {
+    var rows = labelStockRows.filter(function (r) { return String(r.label_type_id) === String(typeId); });
+    if (rows.length) {
+      rows.forEach(function (r, idx) {
+        /* 同一类型的库存合并在首行，其余行归零，避免重复计数 */
+        ops.push(Api.update(LABEL_STOCK_RESOURCE, r.id, {
+          quantity: idx === 0 ? stock[typeId] : 0
+        }));
+      });
+    } else {
+      ops.push(Api.create(LABEL_STOCK_RESOURCE, {
+        label_type_id: Number(typeId),
+        quantity: stock[typeId]
+      }));
+    }
+  });
+  if (!ops.length) { Toast.warning('没有可保存的库存记录'); return; }
 
-  // 同步到溯源库存（预占/可用/打印扣减的统一数据源）
-  if (window.TraceStore) {
-    names.forEach(function (n) { TraceStore.setStock(n, stock[n]); });
-  }
-
-  closeStockModal();
-  renderTable();
-  Toast.success('标签库存已更新');
+  Promise.all(ops).then(function (results) {
+    var failed = results.filter(function (r) { return !r || !r.ok; });
+    if (failed.length) {
+      Toast.error('库存保存失败：' + ((failed[0] && failed[0].message) || '后端拒绝写入'));
+      return;
+    }
+    // 同步到溯源库存（预占/可用/打印扣减的统一数据源）
+    if (window.TraceStore) {
+      names.forEach(function (n) { TraceStore.setStock(n, stock[n]); });
+    }
+    closeStockModal();
+    loadLabelData();
+    Toast.success('标签库存已更新');
+  }).catch(function (e) {
+    Toast.error('库存保存失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 /* ============================================================
  * 标签类型维护（移动端 mb_label.html 可选清单的权威源）
  * 严格空库模式：标签类型一律来自后端 API（sf_label_type），不再写死/播种
  * ============================================================ */
-var TYPE_KEY = 'smartorchard_label_types';
 var LABEL_TYPE_RESOURCE = 'label_type';
 var labelTypesData = [];
 var labelTypesLoadState = 'loading';
@@ -1028,6 +1074,7 @@ var typeWorking = [];
 function mapLabelTypeRow(row) {
   return {
     id: row.label_code || (row.id == null ? '' : String(row.id)),
+    _dbId: row.id,
     name: row.label_name || '',
     desc: row.spec || row.label_type || '',
     unit: '张',
@@ -1129,28 +1176,40 @@ function saveTypes() {
     seen[list[i].name] = true;
   }
 
-  try {
-    localStorage.setItem(TYPE_KEY, JSON.stringify(list));
-  } catch (e) {
-    Toast.error('本地存储写入失败，标签类型未能保存');
-    return;
+  /* 标签类型落库：sf_label_type（label_code 唯一键）
+     已有类型按 id 更新，新增类型补一个编码；库中多余的类型逻辑删除。 */
+  var existing = labelTypesData || [];
+  var ops = [];
+  list.forEach(function (t, idx) {
+    var raw = existing[idx];
+    var body = {
+      label_code: raw && raw.id && raw.id.indexOf('LB-') !== 0 ? raw.id : (t.id || ('LB-' + Date.now().toString(36) + '-' + idx)),
+      label_name: t.name,
+      label_type: t.desc || null,
+      spec: t.desc || null,
+      status: t.enabled !== false ? 'active' : 'disabled'
+    };
+    if (raw && raw._dbId) ops.push(Api.update(LABEL_TYPE_RESOURCE, raw._dbId, body));
+    else ops.push(Api.create(LABEL_TYPE_RESOURCE, body));
+  });
+  for (var j = list.length; j < existing.length; j++) {
+    if (existing[j] && existing[j]._dbId) ops.push(Api.remove(LABEL_TYPE_RESOURCE, existing[j]._dbId));
   }
+  if (!ops.length) { Toast.warning('没有可保存的标签类型'); return; }
 
-  labelTypesData = list;
-  labelTypesLoadState = 'ok';
-  /* 为新增类型补齐库存键，使「库存管理」可对其设置库存（不覆盖已有库存） */
-  if (typeof MobileBridge !== 'undefined') {
-    var stock = readStock();
-    var changed = false;
-    list.forEach(function (t) { if (stock[t.name] == null) { stock[t.name] = 0; changed = true; } });
-    if (changed) {
-      try { localStorage.setItem(MobileBridge.KEYS.labelStock, JSON.stringify(stock)); } catch (e) { /* 忽略 */ }
+  Promise.all(ops).then(function (results) {
+    var failed = results.filter(function (r) { return !r || !r.ok; });
+    if (failed.length) {
+      Toast.error('标签类型保存失败：' + ((failed[0] && failed[0].message) || '后端拒绝写入'));
+      return;
     }
-  }
-
-  closeTypeModal();
-  renderTable();
-  Toast.success('标签类型已保存');
+    closeTypeModal();
+    loadLabelTypes();
+    loadLabelData();
+    Toast.success('标签类型已保存');
+  }).catch(function (e) {
+    Toast.error('标签类型保存失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 /* ---------- 标签模板与版本 ---------- */
@@ -1294,6 +1353,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 document.addEventListener('DOMContentLoaded', function () {
   loadLabelTypes();
+  loadLabelData();
   // 严格空库模式：演示数据播种已停用，数据一律来自后端 API
   renderTable();
   document.getElementById('searchInput').addEventListener('keydown', function (e) {

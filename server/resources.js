@@ -97,6 +97,7 @@ const ALLOWED_TABLES = new Set([
   'sf_adoption_photo',
   'sf_adoption_cert',
   'sf_adoption_cert_template',
+  'sf_adoption_guide',
   'sf_alert_record',
   'sf_alert_rule',
   'sf_alert_report',

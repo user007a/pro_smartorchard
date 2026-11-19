@@ -465,7 +465,15 @@ body{display:block;background:
 <script src="../applefarm_backhand/js/shared/data-store.js"></script>
 <script src="../applefarm_backhand/js/shared/device-store.js"></script>
 <script src="../applefarm_backhand/js/shared/mobile-ops-store.js"></script>
+<script src="../applefarm_backhand/js/shared/production-store.js"></script>
+<script src="../common/js/api.js"></script>
 <script>
+/* ---------- 通用转义：库中内容（岗位名等）渲染前统一转义 ---------- */
+function escDa(v){
+  return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 /* ---------- 缩放适配（单屏不滚动） ---------- */
 (function(){
   var s=document.getElementById('stage');
@@ -558,13 +566,15 @@ body{display:block;background:
   document.addEventListener('keydown',function(e){ if(e.key==='Escape') sw.open=false; });
 })();
 
-/* ---------- 人员效率：真实口径（读取移动端运营数据层 + 共享农事记录） ---------- */
+/* ---------- 人员效率：真实口径（移动端运营数据层 + 后端农事记录台账） ----------
+   农事记录数取自 sf_farming_record（经 ProductionStore 聚合接口），
+   不再读已废弃的 localStorage 键 smartorchard_farming_records。 */
 (function(){
   function farmingCount(){
-    try{
-      var v=JSON.parse(localStorage.getItem('smartorchard_farming_records')||'[]');
-      return Array.isArray(v)?v.length:0;
-    }catch(e){return 0;}
+    if(window.ProductionStore&&typeof ProductionStore.records==='function'){
+      try{ return ProductionStore.records().length; }catch(e){}
+    }
+    return 0;
   }
   function render(){
     if(!window.MobileOpsStore) return;
@@ -580,45 +590,88 @@ body{display:block;background:
   render();
   if(window.MobileOpsStore){
     MobileOpsStore.subscribe(render);
-    window.addEventListener('storage',function(e){ if(e.key) render(); });
+  }
+  if(window.ProductionStore&&typeof ProductionStore.subscribe==='function'){
+    ProductionStore.subscribe(render);
   }
 })();
 
-/* ---------- 岗位效率：按绩效看板落库的岗位综合评分聚合 ---------- */
-var ROLE_ORDER=['作业岗','技术岗','管理岗','销售岗'];
+/* ---------- 岗位效率：按绩效看板落库的岗位综合评分聚合 ----------
+   绩效结果取自 sf_performance_result（与后台「绩效看板」同源），
+   不再读已废弃的 localStorage 键 snzg_performance_results。
+   岗位维度：sf_user.post_id → sf_post.post_name（岗位名称取自岗位台账）。 */
+var ROLE_ORDER=[];
+var perfResults=[];
 function renderRoles(){
   var box=document.getElementById('effRoles');
   if(!box) return;
-  var data=[];
-  try{ data=JSON.parse(localStorage.getItem('snzg_performance_results')||'[]'); }catch(e){ data=[]; }
+  if(!perfResults.length){ box.innerHTML='<div class="empty">暂无岗位绩效数据</div>'; return; }
   var map={}, order=ROLE_ORDER.slice();
-  (Array.isArray(data)?data:[]).forEach(function(x){
-    if(!x||!x.role) return;
-    if(!map[x.role]){
-      map[x.role]={sum:0,n:0};
-      if(order.indexOf(x.role)<0) order.push(x.role);
+  perfResults.forEach(function(x){
+    if(!x||!x.postName) return;
+    if(!map[x.postName]){
+      map[x.postName]={sum:0,n:0};
+      if(order.indexOf(x.postName)<0) order.push(x.postName);
     }
-    map[x.role].sum+=Number(x.total)||0;
-    map[x.role].n++;
+    map[x.postName].sum+=Number(x.composite)||0;
+    map[x.postName].n++;
   });
   var rows=order.filter(function(r){return map[r];}).map(function(r){
     return {role:r,score:Math.round(map[r].sum/map[r].n*10)/10};
   });
   if(!rows.length){ box.innerHTML='<div class="empty">暂无岗位绩效数据</div>'; return; }
   var top=Math.max.apply(null,rows.map(function(x){return x.score;}));
-  box.innerHTML=rows.map(function(x){
-    return '<div class="role'+(x.score===top?' top':'')+'">'+
-      '<span class="rn" title="来源：绩效看板综合评分">'+x.role+'</span>'+
-      '<span class="tk"><i style="width:'+Math.min(100,x.score)+'%"></i></span>'+
-      '<span class="p"><b>'+x.score+'%</b></span></div>';
-  }).join('');
+  try{
+    box.innerHTML=rows.map(function(x){
+      return '<div class="role'+(x.score===top?' top':'')+'">'+
+        '<span class="rn" title="来源：绩效看板综合评分">'+escDa(x.role)+'</span>'+
+        '<span class="tk"><i style="width:'+Math.min(100,x.score)+'%"></i></span>'+
+        '<span class="p"><b>'+x.score+'%</b></span></div>';
+    }).join('');
+  }catch(e){
+    /* 渲染异常不牵连已取到的数据，保留空态并记录原因 */
+    console.warn('[da_results] 岗位效率渲染失败', e);
+    box.innerHTML='<div class="empty">暂无岗位绩效数据</div>';
+  }
 }
-renderRoles();
-window.addEventListener('storage',function(e){ if(e.key==='snzg_performance_results') renderRoles(); });
+/* 绩效结果 + 岗位名称：两级关联 performance_result.user_id → user.post_id → post.post_name */
+function loadRoles(){
+  if(!window.Api||!Api.isLoggedIn||!Api.isLoggedIn()){ renderRoles(); return; }
+  Promise.all([
+    Api.get('performance_result',{page:1,size:500,sort:'id',order:'asc'}),
+    Api.get('user',{page:1,size:500,sort:'id',order:'asc'}),
+    Api.get('post',{page:1,size:500,sort:'sort_order',order:'asc'})
+  ]).then(function(res){
+    var pr=res[0],ur=res[1],po=res[2];
+    /* 岗位台账：id → 岗位名称，并作为展示顺序 */
+    var postNameById={};
+    if(po&&po.ok&&po.data&&Array.isArray(po.data.list)){
+      po.data.list.forEach(function(p){ postNameById[String(p.id)]=p.post_name||''; });
+      ROLE_ORDER=po.data.list.map(function(p){return p.post_name;}).filter(Boolean);
+    }
+    /* 人员台账：id → post_id */
+    var postIdByUserId={};
+    if(ur&&ur.ok&&ur.data&&Array.isArray(ur.data.list)){
+      ur.data.list.forEach(function(u){ postIdByUserId[String(u.id)]=String(u.post_id==null?'':u.post_id); });
+    }
+    var list=(pr&&pr.ok&&pr.data&&Array.isArray(pr.data.list))?pr.data.list:[];
+    perfResults=list.map(function(r){
+      var postId=postIdByUserId[String(r.user_id)];
+      return {
+        postName:(postId?postNameById[postId]:'')||'',
+        composite:r.composite
+      };
+    }).filter(function(r){return r.postName;});
+    renderRoles();
+  }).catch(function(){
+    perfResults=[];
+    renderRoles();
+  });
+}
+loadRoles();
 
-/* ---------- 关键数据实时刷新：仅在 ?demo=1 演示模式下做轻微数字抖动 ---------- */
-/* 抖动基准取自 data-base；Store 渲染时会同步改写 data-base，保证抖动围绕真实值 */
-var DEMO_MODE=/(?:^|[?&])demo=1(?:&|$)/.test(location.search);
+/* ---------- 关键数据刷新：数值只来自数据库，不做随机波动 ----------
+   抖动基准取自 data-base；Store 渲染时会同步改写 data-base。 */
 var LIVE_NODES=[].slice.call(document.querySelectorAll('[data-live]'));
 function regLive(el,base,dec,amp){
   if(!el) return;
@@ -631,20 +684,6 @@ function regLive(el,base,dec,amp){
 function fmtLive(v,dec){
   return dec>0 ? v.toFixed(dec) : Math.round(v).toLocaleString('en-US');
 }
-(function(){
-  if(!DEMO_MODE) return;
-  function refresh(){
-    LIVE_NODES.forEach(function(e){
-      var base=parseFloat(e.getAttribute('data-base'));
-      if(isNaN(base)) return;
-      var amp=parseFloat(e.getAttribute('data-amp')||'0');
-      var dec=parseInt(e.getAttribute('data-dec')||'0',10);
-      e.textContent=fmtLive(base+(Math.random()*2-1)*amp,dec);
-    });
-  }
-  refresh();
-  setInterval(refresh,30000);
-})();
 
 /* ============================================================
    数据运营共享源：window.DataStore → 数字成果驾驶舱

@@ -1055,9 +1055,36 @@
         return;
       }
       const record = buildGeneratedReport({ type, name, base, startDate, endDate, contents });
-      filteredData.unshift(record);
+      // 报告必须落库：交由 AlertStore.saveReport 写入 sf_alert_report，
+      // 只改内存数组则刷新即失（严格空库铁律 1）
+      const S = window.AlertStore;
+      if (!S || typeof S.saveReport !== 'function') {
+        showToast('报告生成失败：数据服务未就绪', 'error');
+        return;
+      }
+      const saved = S.saveReport({
+        id: record.id,
+        title: record.title,
+        type: record.type,
+        typeText: record.typeText,
+        time: record.time,
+        base: record.base,
+        author: record.author,
+        statDevice: record.statDevice,
+        statFarming: record.statFarming,
+        statUrgent: record.statUrgent,
+        statRate: record.statRate,
+        overview: record.overview,
+        deviceDetail: record.deviceDetail,
+        farmingDetail: record.farmingDetail,
+        suggestion: record.suggestion
+      });
+      if (!saved || !saved.ok) {
+        showToast('报告生成失败：' + ((saved && saved.message) || '后端拒绝写入'), 'error');
+        return;
+      }
       document.getElementById('generateModal').classList.remove('show');
-      Pagination.updateData(filteredData);
+      loadReports();
       showToast('《' + record.title + '》生成成功', 'success');
     });
 

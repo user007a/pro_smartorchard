@@ -318,7 +318,9 @@ var MESSAGE_RESOURCE = 'mb_message';
 /* 消息缓存：由 loadMessages() 从后端 API 异步填充，页面不再读写 localStorage 播种 */
 let msgData = [];
 
-/* 数据库行(snake_case) → 页面渲染字段 */
+/* 数据库行(snake_case) → 页面渲染字段。
+   同时带出 mapper 字段名（publishTime/enabled），使本页写入 MobileOpsStore 后
+   能被 mobile-ops-mapper 正确映射回 sf_mb_message 的列。 */
 function mapMessageRow(row) {
   return {
     id: row.id,
@@ -326,6 +328,7 @@ function mapMessageRow(row) {
     title: row.title || '',
     content: row.content || '',
     time: row.publish_time || '',
+    publishTime: row.publish_time || '',
     target: row.target || 'mobile',
     enabled: row.status !== 'disabled' && row.status !== 'inactive',
     publisher: row.publisher || '',
@@ -368,10 +371,11 @@ function loadMessages() {
   });
 }
 
-/* ---------- 数据读写（仅内存缓存，保证增删改交互即时生效） ---------- */
+/* ---------- 数据读写 ---------- */
+/* 消息写入必须落库（sf_mb_message）：只改内存数组则刷新即失，
+   移动端首页读不到运营下发的消息。 */
 function writeAll(list) {
   msgData = list;
-  return true;
 }
 
 /* 数据源：loadMessages() 从后端填充的内存缓存，不再读 localStorage / 播种 */
@@ -485,12 +489,18 @@ function toggleMsg(id) {
     if (String(list[i].id) === String(id)) { target = list[i]; break; }
   }
   if (!target) { Toast.error('未找到该消息'); return; }
-  target.enabled = target.enabled === false;
-  if (writeAll(list)) {
-    MobileOpsStore.audit(target.enabled ? '启用消息' : '停用消息', 'messages', target.id, target.title);
-    renderTable();
-    Toast.success(target.enabled ? '消息已启用，移动端可展示' : '消息已停用，移动端不再展示');
+  var next = list.slice();
+  for (var k = 0; k < next.length; k++) {
+    if (String(next[k].id) === String(id)) {
+      next[k] = Object.assign({}, next[k], { enabled: next[k].enabled === false });
+      break;
+    }
   }
+  /* 写穿后端：随 mobile-ops 聚合载荷提交 sf_mb_message */
+  MobileOpsStore.writeList(MobileOpsStore.KEYS.messages, next);
+  MobileOpsStore.audit(next[k].enabled ? '启用消息' : '停用消息', 'messages', id, target.title);
+  loadMessages();
+  Toast.success(next[k].enabled ? '消息已启用，移动端可展示' : '消息已停用，移动端不再展示');
 }
 
 /* ---------- 删除 ---------- */
@@ -506,11 +516,12 @@ function deleteMsg(id) {
     message: '将删除消息「' + (target.title || '') + '」，删除后移动端首页不再展示，删除不可恢复。',
     onConfirm: function () {
       var cur = readList().filter(function (m) { return String(m.id) !== String(id); });
-      if (writeAll(cur)) {
-        MobileOpsStore.audit('删除消息', 'messages', id, target.title);
-        renderTable();
-        Toast.success('消息已删除');
-      }
+      /* 删除需显式上报 deleted 载荷（聚合路由按物理 id 逻辑删除） */
+      MobileOpsStore.remove(MobileOpsStore.KEYS.messages, id);
+      MobileOpsStore.writeList(MobileOpsStore.KEYS.messages, cur);
+      MobileOpsStore.audit('删除消息', 'messages', id, target.title);
+      loadMessages();
+      Toast.success('消息已删除');
     }
   });
 }
@@ -584,31 +595,37 @@ function submitEdit() {
   if (!time) { Toast.warning('请选择发布时间'); return; }
 
   var list = readList();
-  if (currentEditId != null) {
+  var next = list.slice();
+  var isEdit = currentEditId != null;
+  var msgId = currentEditId;
+
+  if (isEdit) {
     var hit = null;
-    for (var i = 0; i < list.length; i++) {
-      if (String(list[i].id) === String(currentEditId)) { hit = list[i]; break; }
+    for (var i = 0; i < next.length; i++) {
+      if (String(next[i].id) === String(currentEditId)) { hit = next[i]; break; }
     }
     if (!hit) { Toast.error('未找到该消息'); return; }
-    hit.category = category;
-    hit.title = title;
-    hit.content = content;
-    hit.target = target;
-    hit.time = time;
-    hit.enabled = enabled;
-    hit.updatedAt = MobileOpsStore.now();
-  } else {
-    var maxId = 0;
-    list.forEach(function (m) {
-      var n = Number(m.id);
-      if (!isNaN(n) && n > maxId) maxId = n;
+    next[i] = Object.assign({}, hit, {
+      category: category,
+      title: title,
+      content: content,
+      target: target,
+      time: time,
+      publishTime: time,
+      enabled: enabled,
+      updatedAt: MobileOpsStore.now()
     });
-    list.push({
-      id: maxId + 1,
+  } else {
+    /* sf_mb_message 无业务编号列（聚合路由按物理 id 匹配），
+       故新增行不带 id，由后端 INSERT 生成自增 id */
+    msgId = 'NEW-' + Date.now();
+    next.unshift({
+      id: msgId,
       category: category,
       title: title,
       content: content,
       time: time,
+      publishTime: time,
       target: target,
       enabled: enabled,
       publisher: MobileOpsStore.operatorName(),
@@ -617,13 +634,12 @@ function submitEdit() {
     });
   }
 
-  var isEdit = currentEditId != null;
-  if (writeAll(list)) {
-    MobileOpsStore.audit(isEdit ? '编辑消息' : '发布消息', 'messages', isEdit ? currentEditId : maxId, title);
-    closeEdit();
-    renderTable();
-    Toast.success(isEdit ? '消息已更新，移动端实时生效' : '消息已发布，移动端首页可见');
-  }
+  /* 写穿后端：随 mobile-ops 聚合载荷提交 sf_mb_message */
+  MobileOpsStore.writeList(MobileOpsStore.KEYS.messages, next);
+  MobileOpsStore.audit(isEdit ? '编辑消息' : '发布消息', 'messages', msgId, title);
+  closeEdit();
+  loadMessages();
+  Toast.success(isEdit ? '消息已更新，移动端实时生效' : '消息已发布，移动端首页可见');
 }
 
 /* ---------- 初始化 ---------- */

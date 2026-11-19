@@ -1213,10 +1213,16 @@ var PlotMultiSelect = (function () {
 })();
 
 /* ---------- 数据合并 ---------- */
+/* 农事记录统一取自 sf_farming_record（经 ProductionStore 聚合接口）。
+   移动端「记农事」已写穿到同一张表（record_code 唯一），故后台直接读库即可，
+   不再叠加 MobileBridge 的本地副本——该副本随移动端全面后端化后恒为空，
+   叠加只会造成「移动端记录看不到」的错觉。 */
 function mobileRecords() {
-  if (typeof MobileBridge === 'undefined') return [];
+  if (!PS || typeof PS.records !== 'function') return [];
   try {
-    return (MobileBridge.farmingRecords() || []).map(function (r) {
+    return (PS.records() || []).filter(function (r) {
+      return r && (r.source === 'mobile' || r.source === 'h5');
+    }).map(function (r) {
       return {
         id: r.id, planId: r.planId || '', taskId: r.taskId || '',
         base: r.base, plot: r.plot, plotRange: r.plotRange || r.plot || '', type: r.type || 'other',
@@ -1227,7 +1233,7 @@ function mobileRecords() {
         photo: r.photo || '', photos: r.photos || (r.photo ? JSON.stringify([r.photo]) : ''),
         gps: r.gps || null,
         content: r.remark || r.content || '移动端现场记录',
-        auditRemark: '', source: 'mobile', hasPhoto: r.hasPhoto
+        auditRemark: r.auditRemark || '', source: 'mobile', hasPhoto: !!r.photo
       };
     });
   } catch (e) { return []; }
@@ -1273,10 +1279,11 @@ function isSafeImageUrl(url) {
 
 function loadAll() {
   PS.recompute();
-  var pc = PS.records();
-  var mobile = mobileRecords();
-  // 移动端记录优先展示（按日期倒序）
-  allRecords = mobile.concat(pc).sort(function (a, b) {
+  // 全部农事记录（PC + 移动端）都在 sf_farming_record 一张表里，
+  // PS.records() 已含 source='mobile' 的行，故此处不再叠加第二份来源，
+  // 否则移动端记录会重复出现两行。
+  var all = PS.records() || [];
+  allRecords = all.slice().sort(function (a, b) {
     var ad = (a.date || '') + (a.time || '');
     var bd = (b.date || '') + (b.time || '');
     return bd < ad ? -1 : (bd > ad ? 1 : 0);
@@ -2085,7 +2092,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   window.addEventListener('productionStoreChange', function () { refresh(); });
 });
-</script>
 </script>
 
 <!-- 已通过质量审查（第2轮修正）- 严过审 2026-09-18 -->

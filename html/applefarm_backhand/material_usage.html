@@ -932,6 +932,8 @@ const USAGE_RESOURCE = 'material_usage';
 const MATERIAL_RESOURCE = 'material_info';
 /* 使用记录：由 loadUsage() 从后端 API 异步填充，页面不再内置演示记录 */
 let usageData = [];
+/* 农资名称 → 物理 id（sf_material_usage.material_id 存物理 id） */
+let usageMaterialIdByName = {};
 
 /* 单价映射不再写死业务名称，补录取不到单价时用默认值 */
 const USAGE_UNIT_PRICE = {};
@@ -992,8 +994,12 @@ function loadUsage() {
       return;
     }
     var matMap = {};
+    usageMaterialIdByName = {};
     if (m && m.ok && m.data && m.data.list) {
-      m.data.list.forEach(function (x) { matMap[x.id] = x; });
+      m.data.list.forEach(function (x) {
+        matMap[x.id] = x;
+        if (x.material_name) usageMaterialIdByName[x.material_name] = x.id;
+      });
     }
     var list = (r.data && r.data.list) || [];
     usageData = list.map(function (row) { return mapUsageRow(row, matMap); });
@@ -1026,6 +1032,7 @@ const materialSelect = document.getElementById('materialSelect');
 function init() {
   // 严格空库模式：数据一律由后端 API 拉取，不再使用写死的演示记录
   loadUsage();
+  loadMobileApplies();
 }
 
 function formatCost(value) {
@@ -1448,37 +1455,38 @@ function saveNewUsage() {
     batchNo = prefix + pad2(seq);
   }
 
-  const record = {
-    id: 'U-' + String(maxId + 1).padStart(3, '0'),
-    name: name,
-    type: type,
-    spec: master && master.spec ? master.spec : '-',
-    qty: qty,
-    unit: unit,
-    time: timeValue.replace('T', ' '),
-    batchNo: batchNo,
-    safetyInterval: safetyInterval,
-    harvestDate: harvestDate,
-    area: area,
-    operator: operator,
-    task: document.getElementById('nuTask').value.trim() || '-',
-    plot: document.getElementById('nuPlot').value.trim() || '-',
-    method: document.getElementById('nuMethod').value,
-    dilution: document.getElementById('nuDilution').value.trim() || '-',
-    unitPrice: USAGE_UNIT_PRICE[name] || 50,
-    cost: isNaN(cost) ? 0 : cost,
-    status: 'approved',
-    statusText: '已审核',
+  const body = {
+    material_id: usageMaterialIdByName[name] != null ? usageMaterialIdByName[name] : null,
+    batch_no: batchNo,
+    quantity: qty,
+    use_time: timeValue.replace('T', ' ').slice(0, 19),
+    use_user: operator,
+    task_id: null,
+    plot_ids: document.getElementById('nuPlot').value.trim() || null,
+    apply_user: operator,
+    apply_time: timeValue.replace('T', ' ').slice(0, 19),
+    apply_way: document.getElementById('nuMethod').value || null,
+    cost_amount: cost,
+    safety_harvest: harvestDate,
+    audit_status: 'approved',
+    status: 'active',
     remark: document.getElementById('nuRemark').value.trim() || '后台补录'
   };
 
-  usageData.unshift(record);
-  searchInput.value = '';
-  materialSelect.value = '';
-  search();
-  renderUsageStats();
-  closeAddUsageModal();
-  Toast.success('使用记录已新增：' + record.id);
+  Api.create(USAGE_RESOURCE, body).then(function (res) {
+    if (!res || !res.ok) {
+      Toast.error('使用记录新增失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    searchInput.value = '';
+    materialSelect.value = '';
+    loadUsage();
+    renderUsageStats();
+    closeAddUsageModal();
+    Toast.success('使用记录已新增');
+  }).catch(function (e) {
+    Toast.error('使用记录新增失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 init();
@@ -1501,15 +1509,58 @@ function escMobile(s) {
   });
 }
 
-/* 读取移动端领用申请，读取失败回退空数组 */
+/* 读取移动端领用申请：来源为 sf_material_io 中 io_type='出库' 且待审核的单据
+   （移动端 mb_material.html 提交申请即写穿该表）。 */
+var mobileApplyRows = [];
 function readMobileApplies() {
-  try {
-    if (typeof MobileBridge === 'undefined') return [];
-    var list = MobileBridge.materialLogs();
-    return Array.isArray(list) ? list : [];
-  } catch (e) {
-    return [];
-  }
+  return mobileApplyRows;
+}
+
+/* 从后端拉取移动端领用申请（出库待审核单据） */
+function loadMobileApplies() {
+  if (!window.Api || !Api.get) return;
+  Promise.all([
+    Api.get('material_io', { page: 1, size: 500 }),
+    Api.get('material_info', { page: 1, size: 500 })
+  ]).then(function (res) {
+    var ioRes = res[0], matRes = res[1];
+    if (!ioRes || !ioRes.ok || !ioRes.data) return;
+    var matById = {};
+    if (matRes && matRes.ok && matRes.data && matRes.data.list) {
+      matRes.data.list.forEach(function (m) { matById[String(m.id)] = m; });
+    }
+    var rows = (ioRes.data.list || []).filter(function (r) {
+      return r.io_type === '出库' || r.io_type === 'out';
+    }).map(function (r) {
+      var mat = matById[String(r.material_id)] || {};
+      var name = mat.material_name || '';
+      var remark = r.remark || '';
+      // 移动端把农资名并入备注（material_io 无 name 列），这里还原出名称
+      var tag = remark.match(/农资[:：]\s*(\S+)/);
+      if (!name && tag) name = tag[1];
+      return {
+        id: r.id,
+        _dbId: r.id,
+        code: mat.material_code || '',
+        name: name,
+        backName: mat.material_name || '',
+        materialId: r.material_id,
+        unit: mat.unit || '',
+        qty: r.quantity != null ? r.quantity : 0,
+        plot: r.related_target || '',
+        remark: remark.replace(/农资[:：]\s*\S+/g, '').trim(),
+        status: r.audit_status === 'approved' ? '已审批' : (r.audit_status === 'rejected' ? '已驳回' : 'pending'),
+        approveRemark: r.auditor || '',
+        approveTime: r.updated_at || '',
+        time: r.io_date || r.created_at || '',
+        createTime: r.created_at || ''
+      };
+    });
+    mobileApplyRows = rows;
+    renderMobileApplies();
+  }).catch(function (e) {
+    console.warn('[material_usage] 移动端领用申请加载失败', e);
+  });
 }
 
 /* 移动端时间兼容：MobileStore.fmtTime 写的是 'HH:mm'，补充完整日期展示 */
@@ -1664,18 +1715,14 @@ function submitMobileApprove(decision) {
 }
 
 function doMobileApprove(decision, remark) {
-  if (typeof MobileBridge === 'undefined') {
-    if (typeof Toast !== 'undefined') Toast.error('数据桥接未加载，无法保存审批结果');
+  var target = findApplyById(currentApplyId);
+  if (!target) {
+    if (typeof Toast !== 'undefined') Toast.error('未找到该领用申请');
     return;
   }
 
   /* T18 治理：审批通过时由本环节统一扣减后台真实库存（移动端提交申请不扣减） */
   if (decision === '已审批') {
-    var target = findApplyById(currentApplyId);
-    if (!target) {
-      if (typeof Toast !== 'undefined') Toast.error('未找到该领用申请');
-      return;
-    }
     var deduct = deductStockForApply(target);
     if (!deduct.ok) {
       /* 扣减失败必须阻断，绝不静默通过 */
@@ -1684,71 +1731,81 @@ function doMobileApprove(decision, remark) {
     }
   }
 
-  var ok = MobileBridge.updateRecord(MobileBridge.KEYS.material, currentApplyId, {
-    status: decision,
-    approveRemark: remark,
-    approveTime: MobileBridge.stampNow(),
-    stockDeducted: decision === '已审批' ? true : undefined
-  });
+  /* 审批结论落库：sf_material_io.audit_status + auditor */
+  var status = decision === '已审批' ? 'approved' : 'rejected';
+  Api.update('material_io', target._dbId, {
+    audit_status: status,
+    auditor: remark || currentOperatorName()
+  }).then(function (res) {
+    if (!res || !res.ok) {
+      if (typeof Toast !== 'undefined') Toast.error('审批结果保存失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    loadMobileApplies();
 
-  if (!ok) {
-    if (typeof Toast !== 'undefined') Toast.error('审批结果保存失败，请刷新后重试');
-    return;
-  }
-  renderMobileApplies();
-
-  /* 审批通过：自动生成使用记录并带出批次号、安全间隔期与采收日 */
-  if (decision === '已审批') {
-    var approved = findApplyById(currentApplyId);
-    if (approved) {
-      var applyType = usageTypeOfName(approved.name) || 'other';
+    /* 审批通过：自动生成使用记录并带出批次号、安全间隔期与采收日 */
+    if (decision === '已审批') {
+      var applyType = usageTypeOfName(target.name) || 'other';
       var applyInterval = SAFETY_INTERVAL_BY_TYPE[applyType] || 0;
-      var applyDate = String(approved.time || approved.createTime || '2026-11-09').slice(0, 10);
+      var applyDate = String(target.time || target.createTime || '').slice(0, 10);
       var batchPrefix = 'B' + applyDate.replace(/-/g, '') + '-';
       var batchSeq = 1;
       usageData.forEach(function (u) {
         if (String(u.batchNo || '').indexOf(batchPrefix) === 0) batchSeq++;
       });
-      var maxUsageId = usageData.reduce(function (max, item) {
-        var n = parseInt(String(item.id || '').replace(/\D/g, ''), 10);
-        return isNaN(n) ? max : Math.max(max, n);
-      }, 0);
-      var applyQty = Number(approved.qty) || 0;
-      usageData.unshift({
-        id: 'U-' + String(maxUsageId + 1).padStart(3, '0'),
-        name: approved.name,
-        type: applyType,
-        spec: (typeof MaterialStore !== 'undefined' && MaterialStore.get(approved.name)) ? MaterialStore.get(approved.name).spec : '-',
-        qty: applyQty,
-        unit: approved.unit || '件',
-        time: applyDate,
-        batchNo: batchPrefix + pad2(batchSeq),
-        safetyInterval: applyInterval,
-        harvestDate: addDaysToDateStr(applyDate, applyInterval),
-        area: 0,
-        operator: approved.operator || '移动端用户',
-        task: '移动端领用',
-        plot: approved.plot || '-',
-        method: '-',
-        dilution: '-',
-        unitPrice: USAGE_UNIT_PRICE[approved.name] || 50,
-        cost: Math.round(applyQty * (USAGE_UNIT_PRICE[approved.name] || 50) * 100) / 100,
-        status: 'approved',
-        statusText: '已审核',
+      var applyQty = Number(target.qty) || 0;
+      var masterId = usageMaterialIdByName[target.name];
+      var body = {
+        material_id: masterId != null ? masterId : (target.materialId != null ? target.materialId : null),
+        batch_no: batchPrefix + pad2(batchSeq),
+        quantity: applyQty,
+        use_time: applyDate + ' 00:00:00',
+        use_user: target.operator || '移动端用户',
+        task_id: null,
+        plot_ids: target.plot || null,
+        apply_user: target.operator || '移动端用户',
+        apply_time: applyDate + ' 00:00:00',
+        apply_way: '-',
+        cost_amount: 0,
+        safety_harvest: addDaysToDateStr(applyDate, applyInterval),
+        audit_status: 'approved',
+        status: 'active',
         remark: '移动端领用审批通过自动生成'
+      };
+      Api.create(USAGE_RESOURCE, body).then(function (r2) {
+        if (!r2 || !r2.ok) {
+          if (typeof Toast !== 'undefined') Toast.error('使用记录生成失败：' + ((r2 && r2.message) || '后端拒绝写入'));
+          return;
+        }
+        loadUsage();
+        renderUsageStats();
+      }).catch(function (e) {
+        if (typeof Toast !== 'undefined') Toast.error('使用记录生成失败：' + ((e && e.message ? e.message : '网络异常')));
       });
-      search();
-      renderUsageStats();
     }
-  }
 
-  closeMobileApproveModal();
+    closeMobileApproveModal();
 
-  if (typeof Toast !== 'undefined') {
-    Toast.success(decision === '已审批'
-      ? '审批通过，库存已扣减，移动端可查看'
-      : '审批结果已保存（' + decision + '），移动端可查看');
-  }
+    if (typeof Toast !== 'undefined') {
+      Toast.success(decision === '已审批'
+        ? '审批通过，库存已扣减，移动端可查看'
+        : '审批结果已保存（' + decision + '），移动端可查看');
+    }
+  }).catch(function (e) {
+    if (typeof Toast !== 'undefined') Toast.error('审批结果保存失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
+}
+
+/* 当前操作人（审核人落库用） */
+function currentOperatorName() {
+  try {
+    var raw = sessionStorage.getItem('snzg_user');
+    if (raw) {
+      var u = JSON.parse(raw);
+      return (u && (u.username || u.realName || u.name)) || '管理员';
+    }
+  } catch (e) { /* 忽略解析异常 */ }
+  return '管理员';
 }
 
 /* 按 id 找回领用申请记录 */
@@ -1779,13 +1836,15 @@ function deductStockForApply(item) {
 
 /* 页面元素在本脚本之前已解析，直接初始化一次即可 */
 renderMobileApplies();
+loadMobileApplies();
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
   <script src="js/search-helper.js"></script>
   <script src="js/typography.js"></script>
-<script src="js/material-dict.js">
+<script src="js/material-dict.js"></script>
+<script>
 /* ============================================================
  * 后端数据到达后自动重绘
  * ------------------------------------------------------------

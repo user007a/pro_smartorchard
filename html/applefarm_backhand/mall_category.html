@@ -88,13 +88,26 @@ function esc(s) {
 
 /* 数据库行(snake_case) → 页面渲染字段 */
 function mapCategoryRow(row) {
-  return { code: row.category_code || '', name: row.category_name || '', sort: Number(row.sort_order) || 0, status: row.status === 'off' ? 'off' : 'on' };
+  /* 保留物理 id：商品表按 category_id 关联，靠它统计商品数 */
+  return {
+    id: row.id != null ? String(row.id) : '',
+    code: row.category_code || '', name: row.category_name || '',
+    sort: Number(row.sort_order) || 0, status: row.status === 'off' ? 'off' : 'on'
+  };
 }
 function mapVarietyRow(row) {
   return { code: row.variety_code || '', name: row.variety_name || '', sort: Number(row.sort) || 0, status: row.status === 'off' ? 'off' : 'on' };
 }
 function mapProductRow(row) {
-  return { id: row.product_code || row.id || '', cat: row.category_id || '', variety: row.variety || '' };
+  /* sf_mall_product.category_id 存的是 sf_mall_category.id（物理 id），
+     分类表主键 id 与业务编码 category_code 是两套值，
+     统计「商品数」必须按 id 关联，否则恒为 0。 */
+  return {
+    id: row.product_code || row.id || '',
+    catId: row.category_id != null ? String(row.category_id) : '',
+    cat: row.category_id != null ? String(row.category_id) : '',
+    variety: row.variety || ''
+  };
 }
 
 /* 异步取数：加载中 / 暂无数据 / 加载失败三态，不写 localStorage */
@@ -145,7 +158,8 @@ function render() {
   document.getElementById('kpiSku').textContent = list.length;
 
   document.getElementById('catBody').innerHTML = cats.map(function (c, i) {
-    var count = list.filter(function (p) { return p.cat === c.code; }).length;
+    /* 商品按 category_id 关联分类表的物理 id */
+    var count = list.filter(function (p) { return c.id && p.catId === c.id; }).length;
     return '<tr><td>' + (i + 1) + '</td>' +
       '<td><strong>' + esc(c.name) + '</strong></td>' +
       '<td class="mall-sub">' + esc(c.code) + '</td>' +

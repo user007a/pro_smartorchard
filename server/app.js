@@ -31,6 +31,8 @@ const mobileOpsAggregateRouter = require('./routes/mobile-ops-aggregate');
 const alertAggregateRouter = require('./routes/alert-aggregate');
 const vrAggregateRouter = require('./routes/vr-aggregate');
 const noticeAggregateRouter = require('./routes/notice-aggregate');
+const dictAggregateRouter = require('./routes/dict-aggregate');
+const traceStageAggregateRouter = require('./routes/trace-stage-aggregate');
 const { requireAuth } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -68,6 +70,8 @@ app.use('/api/mobile-ops', requireAuth, mobileOpsAggregateRouter); // 移动端�
 app.use('/api/alert', requireAuth, alertAggregateRouter); // 预警管理聚合读写（需登录）
 app.use('/api/vr', requireAuth, vrAggregateRouter); // VR全景聚合读写（需登录）
 app.use('/api/notice', requireAuth, noticeAggregateRouter); // 系统通知聚合读写（需登录）
+app.use('/api/dict', requireAuth, dictAggregateRouter); // 数据字典聚合读写（需登录）
+app.use('/api/trace-stage', requireAuth, traceStageAggregateRouter); // 溯源展示环节聚合读写（需登录）
 app.use('/api', requireAuth, crudRouter);  // 通用 CRUD（需登录）
 
 // 静态资源（上传文件）

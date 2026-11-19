@@ -779,12 +779,24 @@ CREATE TABLE `sf_material_info` (
   `unit` varchar(20) DEFAULT NULL COMMENT '单位',
   `warehouse_name` varchar(100) DEFAULT NULL COMMENT '仓库名称',
   `warehouse_code` varchar(50) DEFAULT NULL COMMENT '仓库编码',
+  `default_location` varchar(100) DEFAULT NULL COMMENT '默认库位',
+  `batch_rule` varchar(20) DEFAULT NULL COMMENT '批次规则：fifo/batch',
   `price` decimal(12,2) DEFAULT NULL COMMENT '单价(元)',
   `safety_stock` decimal(12,2) DEFAULT NULL COMMENT '安全库存',
   `current_stock` decimal(12,2) DEFAULT NULL COMMENT '当前库存',
   `daily_use` decimal(12,2) DEFAULT '0.00' COMMENT '日均消耗',
   `lead_days` int DEFAULT '0' COMMENT '采购提前期',
   `supplier_id` bigint DEFAULT NULL COMMENT '供应商（→ sf_material_supplier.id）',
+  `manufacturer` varchar(200) DEFAULT NULL COMMENT '生产厂家',
+  `registration_no` varchar(100) DEFAULT NULL COMMENT '农药登记证号',
+  `production_license_no` varchar(100) DEFAULT NULL COMMENT '生产许可证号',
+  `registration_valid_until` date DEFAULT NULL COMMENT '农药登记证有效期',
+  `active_ingredient` varchar(200) DEFAULT NULL COMMENT '有效成分及含量',
+  `toxicity` varchar(50) DEFAULT NULL COMMENT '毒性等级',
+  `shelf_life` int DEFAULT NULL COMMENT '保质期（月）',
+  `expiry_date` date DEFAULT NULL COMMENT '有效期至',
+  `storage_condition` varchar(100) DEFAULT NULL COMMENT '储存条件',
+  `barcode` varchar(100) DEFAULT NULL COMMENT '条形码',
   `purpose` varchar(200) DEFAULT NULL COMMENT '用途',
   `safety_interval` varchar(50) DEFAULT NULL COMMENT '安全间隔期',
   `file_status` varchar(20) DEFAULT NULL COMMENT '档案状态',
@@ -901,7 +913,7 @@ CREATE TABLE `sf_material_return` (
   `supplier_id` bigint DEFAULT NULL COMMENT '供应商（→ sf_material_supplier.id）',
   `related_code` varchar(50) DEFAULT NULL COMMENT '关联单号',
   `auditor` varchar(100) DEFAULT NULL COMMENT '审核人',
-  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending/audited/refunded/done',
+  `status` varchar(20) NOT NULL DEFAULT 'pending' COMMENT '状态：pending/audited/rejected/refunded/scrapped/completed',
   `return_date` date DEFAULT NULL COMMENT '日期',
   `remark` varchar(500) DEFAULT NULL COMMENT '备注',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -1089,7 +1101,13 @@ CREATE TABLE `sf_trace_stage` (
   `stage_code` varchar(50) NOT NULL COMMENT '环节编码（唯一，planting/pruning/bagging/fertilizer/testing/harvest/coldchain）',
   `stage_name` varchar(100) DEFAULT NULL COMMENT '环节名称',
   `stage_icon` varchar(100) DEFAULT NULL COMMENT '环节图标',
-  `stage_desc` varchar(500) DEFAULT NULL COMMENT '环节说明',
+  `stage_desc` varchar(500) DEFAULT NULL COMMENT '环节说明（时间轴列表摘要）',
+  `stage_detail` text COMMENT '环节详情正文（C 端溯源详情页）',
+  `stage_operator` varchar(100) DEFAULT NULL COMMENT '环节负责人/作业方',
+  `stage_location` varchar(200) DEFAULT NULL COMMENT '环节作业地点（留空则用批次基地+地块）',
+  `stage_tags` varchar(500) DEFAULT NULL COMMENT '环节标签（逗号分隔）',
+  `stage_img` varchar(200) DEFAULT NULL COMMENT '环节配图文件名（相对 applefarm_h5/images/）',
+  `day_offset` int DEFAULT '0' COMMENT '相对批次采收日期的天数偏移（负数=采收前）',
   `sort_order` int DEFAULT '0' COMMENT '排序',
   `status` varchar(20) NOT NULL DEFAULT 'active' COMMENT '状态（启停）',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -1444,6 +1462,20 @@ CREATE TABLE `sf_adoption_cert_template` (
   `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='认养证书模板';
+
+DROP TABLE IF EXISTS `sf_adoption_guide`;
+CREATE TABLE `sf_adoption_guide` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `guide_code` varchar(50) NOT NULL COMMENT '指南编码（唯一，默认 default）',
+  `title` varchar(200) DEFAULT NULL COMMENT '指南标题',
+  `content` text COMMENT '指南正文（纯文本，移动端按行解析为步骤/权益）',
+  `updated_by` varchar(50) DEFAULT NULL COMMENT '最后编辑人',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除：0=正常 1=已删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_adoption_guide_code` (`guide_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='认养指南文案';
 
 -- ============================================================
 -- 【预警管理（预警记录 / 规则 / 内部报告）】

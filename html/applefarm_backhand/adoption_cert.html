@@ -647,21 +647,10 @@ function writeJSON(key, value) {
   catch (e) { Toast.error('本地存储写入失败'); return false; }
 }
 
-/* ---------- 数据：模板（仅内存缓存，保证增删改交互即时生效） ---------- */
+/* ---------- 数据：模板（内存缓存；增删改启停统一走 Api → sf_adoption_cert_template 落库） ---------- */
 function readTemplates() { return tplData; }
-function writeTemplates(list) { tplData = list; return true; }
 
-function genTplId() {
-  var list = readTemplates();
-  var max = 0;
-  list.forEach(function (t) {
-    var n = parseInt(String(t.id || '').replace(/\D/g, ''), 10);
-    if (!isNaN(n) && n > max) max = n;
-  });
-  return 'TPL-' + String(max + 1).padStart(3, '0');
-}
-
-/* ---------- 数据：证书（仅内存缓存，保证增删改交互即时生效） ---------- */
+/* ---------- 数据：证书（内存缓存；写统一走 AdoptionStore.saveCert / removeCert 落库） ---------- */
 function readCerts() { return certData; }
 function writeCerts(list) { certData = list; return true; }
 
@@ -1124,6 +1113,16 @@ function closeTplEdit() {
   document.getElementById('tplEditModal').classList.remove('show');
   editingTplId = null;
 }
+/* 页面模板字段 → 数据库行(snake_case)，enabled ↔ status(active/disabled) */
+function tplRowBody(t) {
+  return {
+    template_name: t.name,
+    issue_org: t.issuer,
+    sign_unit: t.orgName,
+    status: t.enabled ? 'active' : 'disabled'
+  };
+}
+
 function submitTplEdit() {
   var name = (document.getElementById('tplEditName').value || '').trim();
   var issuer = (document.getElementById('tplEditIssuer').value || '').trim();
@@ -1135,41 +1134,44 @@ function submitTplEdit() {
     orgName: (document.getElementById('tplEditOrg').value || '').trim(),
     enabled: document.getElementById('tplEditEnabled').value === 'true'
   };
-  var list = readTemplates();
-  if (editingTplId) {
-    var idx = list.findIndex(function (t) { return t.id === editingTplId; });
-    if (idx >= 0) list[idx] = Object.assign({}, list[idx], data);
-    Toast.success('已保存');
-  } else {
-    data.id = genTplId();
-    list.unshift(data);
-    Toast.success('已新增');
-  }
-  writeTemplates(list);
-  closeTplEdit();
-  renderTplTable();
-  refreshTplOptions();
+  var body = tplRowBody(data);
+  var p = editingTplId
+    ? Api.update(TPL_RESOURCE, editingTplId, body)
+    : Api.create(TPL_RESOURCE, body);
+  p.then(function (r) {
+    if (!r || !r.ok) { Toast.error('保存失败：' + ((r && r.message) || '后端拒绝写入')); return; }
+    /* 写库成功后重拉，保证本地缓存与库一致（含服务端生成的 id） */
+    loadTemplates();
+    closeTplEdit();
+    Toast.success(editingTplId ? '已保存' : '已新增');
+  }).catch(function (e) {
+    Toast.error('保存失败：' + ((e && e.message) ? e.message : '网络异常'));
+  });
 }
 function toggleTpl(id) {
-  var list = readTemplates();
-  var idx = list.findIndex(function (t) { return t.id === id; });
-  if (idx < 0) return;
-  list[idx].enabled = !list[idx].enabled;
-  writeTemplates(list);
-  Toast.success(list[idx].enabled ? '已启用' : '已停用');
-  renderTplTable();
-  refreshTplOptions();
+  var t = readTemplates().find(function (x) { return x.id === id; });
+  if (!t) return;
+  var nextEnabled = !t.enabled;
+  Api.update(TPL_RESOURCE, id, { status: nextEnabled ? 'active' : 'disabled' }).then(function (r) {
+    if (!r || !r.ok) { Toast.error('状态更新失败：' + ((r && r.message) || '后端拒绝写入')); return; }
+    loadTemplates();
+    Toast.success(nextEnabled ? '已启用' : '已停用');
+  }).catch(function (e) {
+    Toast.error('状态更新失败：' + ((e && e.message) ? e.message : '网络异常'));
+  });
 }
 function deleteTpl(id) {
   ConfirmDialog.show({
     title: '删除模板',
     message: '确认删除该证书模板吗？删除后已使用该模板的证书将失去模板引用。',
     onConfirm: function () {
-      var list = readTemplates().filter(function (t) { return t.id !== id; });
-      writeTemplates(list);
-      Toast.success('已删除');
-      renderTplTable();
-      refreshTplOptions();
+      Api.remove(TPL_RESOURCE, id).then(function (r) {
+        if (!r || !r.ok) { Toast.error('删除失败：' + ((r && r.message) || '后端拒绝写入')); return; }
+        loadTemplates();
+        Toast.success('已删除');
+      }).catch(function (e) {
+        Toast.error('删除失败：' + ((e && e.message) ? e.message : '网络异常'));
+      });
     }
   });
 }
@@ -1199,7 +1201,8 @@ document.addEventListener('DOMContentLoaded', function () {
   refreshTreeOptions();
 });
 </script>
-<script src="js/search-helper.js">
+<script src="js/search-helper.js"></script>
+<script>
 /* ============================================================
  * 后端数据到达后自动重绘
  * ------------------------------------------------------------

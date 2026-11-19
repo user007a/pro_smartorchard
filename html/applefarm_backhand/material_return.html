@@ -375,7 +375,7 @@
           </div>
           <div class="action-right">
             <button class="jg-btn status-filter-btn" data-status="pending" onclick="filterByStatus('pending')">待审核</button>
-            <button class="jg-btn status-filter-btn" data-status="approved" onclick="filterByStatus('approved')">已审核</button>
+            <button class="jg-btn status-filter-btn" data-status="audited" onclick="filterByStatus('audited')">已审核</button>
             <button class="jg-btn status-filter-btn" data-status="rejected" onclick="filterByStatus('rejected')">已驳回</button>
             <button class="jg-btn status-filter-btn" data-status="refunded" onclick="filterByStatus('refunded')">已退款</button>
             <button class="jg-btn status-filter-btn" data-status="scrapped" onclick="filterByStatus('scrapped')">已报废</button>
@@ -851,6 +851,8 @@ const RETURN_MATERIAL_RESOURCE = 'material_info';
 let returnData = [];
 /* 农资名称下拉：取自 material_info，取不到时保持为空 */
 let returnMaterialNames = [];
+/* 名称 → 物理 id（写入 sf_material_return 时用） */
+let returnMaterialIdByName = {};
 
 /* 数据库行(snake_case) → 页面渲染字段；农资名称/单位来自 material_info */
 function mapReturnRow(row, matMap) {
@@ -879,7 +881,7 @@ function mapReturnRow(row, matMap) {
     operator: row.handler || '',
     date: row.return_date || '',
     status: row.status || 'pending',
-    statusText: { pending:'待审核', audited:'已审核', refunded:'已退款', done:'已完成' }[row.status] || row.status || '',
+    statusText: { pending:'待审核', audited:'已审核', rejected:'已驳回', refunded:'已退款', scrapped:'已报废', completed:'已完成' }[row.status] || row.status || '',
     auditor: row.auditor || '',
     auditOpinion: '',
     refundMethod: '',
@@ -914,21 +916,55 @@ function loadReturn() {
       return;
     }
     var matMap = {}, matNames = [];
+    returnMaterialIdByName = {};
     if (m && m.ok && m.data && m.data.list) {
       m.data.list.forEach(function (x) {
         matMap[x.id] = x;
-        if (x.material_name) matNames.push(x.material_name);
+        if (x.material_name) {
+          matNames.push(x.material_name);
+          returnMaterialIdByName[x.material_name] = x.id;
+        }
       });
     }
     returnMaterialNames = matNames;
     var list = (r.data && r.data.list) || [];
     returnData = list.map(function (row) { return mapReturnRow(row, matMap); });
     populateMaterialSelect();
+    loadReturnLookups();
     if (!returnData.length) { setReturnStatus('暂无数据', false); return; }
     renderStats();
     search();
   }).catch(function (e) {
     setReturnStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+  });
+}
+
+/* 仓库 / 供应商 的编码 → 物理 id（写入时用） */
+let returnWarehouseIdByCode = {};
+let returnSupplierIdByCode = {};
+function loadReturnLookups() {
+  if (!window.Api || !Api.get) return;
+  Promise.all([
+    Api.get('material_warehouse', { page: 1, size: 500 }),
+    Api.get('material_supplier', { page: 1, size: 500 })
+  ]).then(function (res) {
+    var wh = res[0], sup = res[1];
+    returnWarehouseIdByCode = {};
+    returnSupplierIdByCode = {};
+    if (wh && wh.ok && wh.data && wh.data.list) {
+      wh.data.list.forEach(function (w) {
+        if (w.warehouse_code) returnWarehouseIdByCode[w.warehouse_code] = w.id;
+        if (w.warehouse_name) returnWarehouseIdByCode[w.warehouse_name] = w.id;
+      });
+    }
+    if (sup && sup.ok && sup.data && sup.data.list) {
+      sup.data.list.forEach(function (s) {
+        if (s.supplier_code) returnSupplierIdByCode[s.supplier_code] = s.id;
+        if (s.supplier_name) returnSupplierIdByCode[s.supplier_name] = s.id;
+      });
+    }
+  }).catch(function (e) {
+    console.warn('[material_return] 仓库/供应商关联数据加载失败', e);
   });
 }
 
@@ -1401,52 +1437,44 @@ function saveReturn() {
     return;
   }
 
-  const warehouseText = { wh1: '中心仓库', wh2: '东区仓库', wh3: '西区仓库' }[warehouse] || '中心仓库';
-  const newItem = {
-    id: String(Date.now()),
-    code: code,
-    docType: docType,
-    docTypeText: DOC_TYPE_TEXT[docType],
-    warehouse: warehouseText,
-    warehouseCode: warehouse,
-    supplier: docType === 'supplier' ? supplier : '',
-    supplierCode: docType === 'supplier' ? supplierCode : '',
-    material: material,
-    batchNo: batchNo,
-    qty: qty,
-    unit: unit,
-    unitPrice: unitPrice,
+  /* 表单 → sf_material_return 写入体（只提交真实存在的列） */
+  const body = {
+    return_code: code,
+    warehouse_id: returnWarehouseIdByCode[warehouse] != null ? returnWarehouseIdByCode[warehouse] : null,
+    return_type: reasonType,
+    material_id: returnMaterialIdByName[material] != null ? returnMaterialIdByName[material] : null,
+    batch_no: batchNo || null,
+    quantity: qty,
+    price: unitPrice,
     amount: Number((qty * unitPrice).toFixed(2)),
-    sourceInCode: docType === 'supplier' ? sourceInCode : '',
-    relatedOutboundNo: docType === 'internal' ? relatedOutboundNo : '',
-    reasonType: reasonType,
-    reasonTypeText: REASON_TYPE_TEXT[reasonType] || '其他',
-    reason: reason,
-    operator: operator,
-    date: date,
+    reason: [reasonType ? (REASON_TYPE_TEXT[reasonType] || reasonType) : '', reason].filter(Boolean).join('：'),
+    handler: operator,
+    supplier_id: (docType === 'supplier' && returnSupplierIdByCode[supplierCode] != null)
+      ? returnSupplierIdByCode[supplierCode] : null,
+    related_code: docType === 'supplier' ? sourceInCode : (docType === 'internal' ? relatedOutboundNo : null),
+    auditor: null,
     status: 'pending',
-    statusText: '待审核',
-    auditor: '',
-    auditOpinion: '',
-    refundMethod: '',
-    refundNo: '',
-    disposalMethod: docType === 'scrap' ? disposalMethod : '',
-    disposalPerson: docType === 'scrap' ? disposalPerson : '',
-    disposalProof: docType === 'scrap' ? disposalProof : '',
-    remark: remark
+    return_date: date || null,
+    remark: [docType === 'scrap' ? disposalMethod : '', remark].filter(Boolean).join(' ') || null
   };
 
-  returnData.unshift(newItem);
-  currentDocType = docType;
-  currentStatus = '';
-  currentPage = 1;
-  updateDocTypeButtons();
-  updateStatusButtons();
-  renderStats();
-  search();
-
-  if (typeof Toast !== 'undefined') Toast.success('单据提交成功，待审核'); else alert('单据提交成功，待审核');
-  closeAddReturnModal();
+  Api.create(RETURN_RESOURCE, body).then(function (res) {
+    if (!res || !res.ok) {
+      alert('单据提交失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    currentDocType = docType;
+    currentStatus = '';
+    currentPage = 1;
+    updateDocTypeButtons();
+    updateStatusButtons();
+    loadReturn();
+    if (typeof Toast !== 'undefined') Toast.success('单据提交成功，待审核');
+    else alert('单据提交成功，待审核');
+    closeAddReturnModal();
+  }).catch(function (e) {
+    alert('单据提交失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 // 查看详情
@@ -1506,6 +1534,18 @@ function closeApproveModal() {
   approveModal.classList.remove('show');
 }
 
+/* 当前操作人（审核人落库用） */
+function currentReturnOperator() {
+  try {
+    var raw = sessionStorage.getItem('snzg_user');
+    if (raw) {
+      var u = JSON.parse(raw);
+      return (u && (u.username || u.realName || u.name)) || '管理员';
+    }
+  } catch (e) { /* 忽略解析异常 */ }
+  return '管理员';
+}
+
 // 执行审核
 function doApprove() {
   const id = document.getElementById('approveId').value;
@@ -1513,30 +1553,30 @@ function doApprove() {
   const opinion = (document.getElementById('approveOpinion') || {}).value || '';
   if (!approver) { alert('请填写审批人'); return; }
   const item = returnData.find(i => i.id === id);
-  if (item) {
-    // 内部退库：农资退回仓库，库存增加；供应商退货/报废：库存减少
-    const delta = item.docType === 'internal' ? (parseInt(item.qty) || 0) : -(parseInt(item.qty) || 0);
-    MaterialStore.applyDelta(item.material, delta);
-    if (item.docType === 'scrap') {
-      item.status = 'scrapped';
-      item.statusText = '已报废';
-    } else {
-      item.status = 'approved';
-      item.statusText = '已审核';
+  if (!item) { alert('未找到该单据'); return; }
+
+  // 内部退库：农资退回仓库，库存增加；供应商退货/报废：库存减少
+  const delta = item.docType === 'internal' ? (parseInt(item.qty) || 0) : -(parseInt(item.qty) || 0);
+  MaterialStore.applyDelta(item.material, delta);
+
+  // 审核结论落库：sf_material_return.status + auditor
+  const status = item.docType === 'scrap' ? 'scrapped' : 'audited';
+  Api.update(RETURN_RESOURCE, item.id, {
+    status: status,
+    auditor: approver,
+    remark: opinion ? item.remark + ' 审核意见：' + opinion : item.remark
+  }).then(function (res) {
+    if (!res || !res.ok) {
+      alert('审核失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
     }
-    item.auditor = approver;
-    item.auditOpinion = opinion;
-    item.approval = { approver: approver, opinion: opinion, approvedAt: new Date().toISOString() };
-    // 落库到审计日志
-    var logs = JSON.parse(localStorage.getItem('material_approval_logs') || '[]');
-    logs.unshift({ id: id, approver: approver, opinion: opinion, at: new Date().toISOString() });
-    localStorage.setItem('material_approval_logs', JSON.stringify(logs));
-  }
-  const msg = item && item.docType === 'scrap' ? '审核通过，该单据已报废' : '审核通过';
-  if (typeof Toast !== 'undefined') Toast.success(msg); else alert(msg);
-  closeApproveModal();
-  renderStats();
-  search();
+    const msg = item.docType === 'scrap' ? '审核通过，该单据已报废' : '审核通过';
+    if (typeof Toast !== 'undefined') Toast.success(msg); else alert(msg);
+    closeApproveModal();
+    loadReturn();
+  }).catch(function (e) {
+    alert('审核失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 // 打开驳回弹窗
@@ -1557,15 +1597,23 @@ function doReject() {
   const reason = document.getElementById('rejectReason').value.trim();
   if (!reason) { alert('请填写驳回原因'); return; }
   const item = returnData.find(i => i.id === id);
-  if (item) {
-    item.status = 'rejected';
-    item.statusText = '已驳回';
-    item.auditOpinion = reason;
-  }
-  if (typeof Toast !== 'undefined') Toast.success('单据已驳回'); else alert('单据已驳回');
-  closeRejectModal();
-  renderStats();
-  search();
+  if (!item) { alert('未找到该单据'); return; }
+  // 驳回结论落库：sf_material_return.status
+  Api.update(RETURN_RESOURCE, item.id, {
+    status: 'rejected',
+    auditor: currentReturnOperator(),
+    remark: reason
+  }).then(function (res) {
+    if (!res || !res.ok) {
+      alert('驳回失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    if (typeof Toast !== 'undefined') Toast.success('单据已驳回'); else alert('单据已驳回');
+    closeRejectModal();
+    loadReturn();
+  }).catch(function (e) {
+    alert('驳回失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 // 打开退款弹窗
@@ -1602,34 +1650,41 @@ function doRefund() {
   }
 
   const item = returnData.find(i => i.id === id);
-  if (item) {
-    item.status = 'refunded';
-    item.statusText = '已退款';
-    item.refundMethod = method;
-    item.refundNo = refundNo;
-    item.refund = { amount: amount, method: method, refundNo: refundNo, refundedAt: new Date().toISOString() };
-    // 落库到审计日志
-    var logs = JSON.parse(localStorage.getItem('material_refund_logs') || '[]');
-    logs.unshift({ id: id, amount: amount, method: method, refundNo: refundNo, at: new Date().toISOString() });
-    localStorage.setItem('material_refund_logs', JSON.stringify(logs));
-  }
-  if (typeof Toast !== 'undefined') Toast.success('退款成功：¥' + amount.toFixed(2)); else alert('退款成功：¥' + amount.toFixed(2));
-  closeRefundModal();
-  renderStats();
-  search();
+  if (!item) { alert('未找到该单据'); return; }
+  // 退款结论落库：sf_material_return.status='refunded' + 退款单号写入备注
+  Api.update(RETURN_RESOURCE, item.id, {
+    status: 'refunded',
+    auditor: currentReturnOperator(),
+    remark: '退款：' + method + ' ' + refundNo + ' ¥' + amount.toFixed(2)
+  }).then(function (res) {
+    if (!res || !res.ok) {
+      alert('退款失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    if (typeof Toast !== 'undefined') Toast.success('退款成功：¥' + amount.toFixed(2));
+    else alert('退款成功：¥' + amount.toFixed(2));
+    closeRefundModal();
+    loadReturn();
+  }).catch(function (e) {
+    alert('退款失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 // 完成退库
 function completeReturn(id) {
   if (!confirm('确定将该退库单标记为已完成吗？')) return;
   const item = returnData.find(i => i.id === id);
-  if (item) {
-    item.status = 'completed';
-    item.statusText = '已完成';
-  }
-  if (typeof Toast !== 'undefined') Toast.success('退库单已完成'); else alert('退库单已完成');
-  renderStats();
-  search();
+  if (!item) { alert('未找到该单据'); return; }
+  Api.update(RETURN_RESOURCE, item.id, { status: 'completed' }).then(function (res) {
+    if (!res || !res.ok) {
+      alert('操作失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    if (typeof Toast !== 'undefined') Toast.success('退库单已完成'); else alert('退库单已完成');
+    loadReturn();
+  }).catch(function (e) {
+    alert('操作失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 
 // 打开导出弹窗

@@ -1207,6 +1207,13 @@ function mapDictRow(row) {
     sort: Number(row.sort_order) || 0, status: row.dict_status || 'active' };
 }
 
+/* 字典内容由管理员维护，渲染前统一转义 */
+function escDict(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 /* 数据库数据源行(snake_case) → 页面渲染字段 */
 function mapSourceRow(row) {
   return { id: row.id, name: row.source_name || '', type: row.source_type || '',
@@ -1222,18 +1229,30 @@ function setTbodyStatus(tbodyId, colspan, text, isError) {
     (isError ? 'var(--error, #d03050)' : 'var(--text-secondary, #6b7b6b)') + ';">' + text + '</td></tr>';
 }
 
-/* 异步取数：字典取 sf_dict，数据源取 sf_system_config；不写 localStorage */
-function loadSystemData() {
-  if (!window.Api) { setTbodyStatus('dictTableBody', 7, '数据加载失败：接口未就绪', true); return; }
-  Api.get('dict', { page: 1, size: 500 }).then(function (r) {
+/* 字典：唯一数据源 sf_dict（聚合接口 /api/dict/aggregate，唯一键 dict_code）
+   增 / 改 / 删一律落库，刷新后仍在；不再写任何本地业务数据。 */
+function loadDicts() {
+  if (!window.Api) { setTbodyStatus('dictTableBody', 7, '数据加载失败：接口未就绪', true); return Promise.resolve(); }
+  return Api.get('dict/aggregate').then(function (r) {
     if (!r || !r.ok) { setTbodyStatus('dictTableBody', 7, '数据加载失败：' + ((r && r.message) || '请求异常'), true); return; }
-    var list = (r.data && r.data.list) || [];
+    var list = (r.data && r.data.dicts) || [];
     mockDicts = list.map(mapDictRow);
+    currentDictPage = 1;
     if (!mockDicts.length) { setTbodyStatus('dictTableBody', 7, '暂无数据', false); return; }
     refreshDictTable();
   }).catch(function (e) {
     setTbodyStatus('dictTableBody', 7, '数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
   });
+}
+
+/* 异步取数：字典取 sf_dict，数据源取 sf_system_config；不写 localStorage */
+function loadSystemData() {
+  if (!window.Api) {
+    setTbodyStatus('dictTableBody', 7, '数据加载失败：接口未就绪', true);
+    setTbodyStatus('sourceTableBody', 7, '数据加载失败：接口未就绪', true);
+    return;
+  }
+  loadDicts();
   Api.get('system_config', { page: 1, size: 500 }).then(function (r) {
     if (!r || !r.ok) { setTbodyStatus('sourceTableBody', 7, '数据加载失败：' + ((r && r.message) || '请求异常'), true); return; }
     var list = (r.data && r.data.list) || [];
@@ -1469,19 +1488,12 @@ function renderRoleRow(role) {
   return '<tr><td><strong>' + role.name + '</strong></td><td>' + role.code + '</td><td>' + role.userCount + '</td><td>' + role.desc + '</td><td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td><td><div class="action-group">' + actions + '</div></td></tr>';
 }
 /* ============================================================
- * 数据字典持久化
- * localStorage key: smartorchard_data_dict
- *   存储结构：字典条目数组 [{ id, type, code, name, value, sort, status }]
- *   用途：供移动端跨端读取（如 mb_record_task.html 的「农事类型」九宫格），
- *         后台字典的增 / 删 / 改后写回该 key，移动端通过 storage 事件同步。
+ * 数据字典读写
+ * ------------------------------------------------------------
+ * 唯一数据源：sf_dict（通用 CRUD resource='dict'，唯一键 dict_code）。
+ * 新增 / 编辑 / 删除均走真实接口并立即落库，刷新后仍在；
+ * 不写任何本地业务数据，跨端一致性由后端单一数据源保证。
  * ============================================================ */
-var DICT_STORAGE_KEY = 'smartorchard_data_dict';
-
-// 把当前字典数组完整写回 localStorage
-function saveDicts() { /* no-op：不写本地业务数据 */ }
-
-// 初始化：key 不存在时用 mockDicts 完整播种；已存在则加载回当前数组
-function initDictStorage() { /* no-op：字典由 loadSystemData() 取数 */ }
 
 // 增删改后刷新字典表格
 function refreshDictTable() {
@@ -1492,10 +1504,10 @@ function refreshDictTable() {
 function renderDictRow(dict) {
   const statusClass = dict.status === 'active' ? 'active' : 'disabled';
   const statusText = dict.status === 'active' ? '启用' : '停用';
-  const actions = dict.code === 'GRADE_TYPE' ? 
+  const actions = dict.code === 'GRADE_TYPE' ?
     '<button class="action-btn edit" onclick="openEditDictModal(' + dict.id + ')">编辑</button>' :
     '<button class="action-btn edit" onclick="openEditDictModal(' + dict.id + ')">编辑</button><button class="action-btn delete" onclick="openDeleteDictModal(' + dict.id + ')">删除</button>';
-  return '<tr><td>' + dict.type + '</td><td>' + dict.code + '</td><td>' + dict.name + '</td><td>' + dict.value + '</td><td>' + dict.sort + '</td><td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td><td><div class="action-group">' + actions + '</div></td></tr>';
+  return '<tr><td>' + escDict(dict.type) + '</td><td>' + escDict(dict.code) + '</td><td>' + escDict(dict.name) + '</td><td>' + escDict(dict.value) + '</td><td>' + escDict(dict.sort) + '</td><td><span class="status-badge ' + statusClass + '">' + statusText + '</span></td><td><div class="action-group">' + actions + '</div></td></tr>';
 }
 function renderLogRow(log) {
   const typeMap = { login: '登录', add: '新增', edit: '编辑', delete: '删除', view: '查看', export: '导出' };
@@ -1671,43 +1683,20 @@ function openAddDictModal() {
 }
 function openEditDictModal(dictId) {
   const dict = mockDicts.find(function(d) { return d.id === dictId; });
+  if (!dict) { alert('字典不存在'); return; }
   window.__currentDictId = dictId; // 编辑提交时定位目标条目
   // 解析字典值字符串为表格行（支持 JSON 数组 或 逗号分隔字符串）
-  let rows = [];
-  try {
-    const raw = (dict.value || '').trim();
-    if (raw.startsWith('[')) {
-      const arr = JSON.parse(raw);
-      rows = arr.map(function(it) {
-        return {
-          value: it.value || it.code || '',
-          label: it.label || it.name || '',
-          sort: it.sort || 1,
-          remark: it.remark || ''
-        };
-      });
-    } else if (raw) {
-      // 形如 "level1=一级,level2=二级" 或 "一级,二级"
-      raw.split(/[,，]/).forEach(function(part, idx) {
-        const kv = part.split(/[=:]/);
-        if (kv.length >= 2) {
-          rows.push({ value: kv[0].trim(), label: kv[1].trim(), sort: idx + 1, remark: '' });
-        } else if (kv[0].trim()) {
-          rows.push({ value: kv[0].trim(), label: kv[0].trim(), sort: idx + 1, remark: '' });
-        }
-      });
-    }
-  } catch (e) { /* 忽略解析错误 */ }
+  let rows = parseDictValueRows(dict.value);
   if (!rows.length) rows.push({ value: '', label: '', sort: 1, remark: '' });
   const rowsHtml = rows.map(function(r) {
-    return '<tr class="dict-value-row"><td><input type="text" class="form-input" data-field="value" value="' + (r.value || '').replace(/"/g, '&quot;') + '" placeholder="如：level1"></td><td><input type="text" class="form-input" data-field="label" value="' + (r.label || '').replace(/"/g, '&quot;') + '" placeholder="如：一级"></td><td><input type="number" class="form-input" data-field="sort" value="' + (r.sort || 1) + '" min="1"></td><td><input type="text" class="form-input" data-field="remark" value="' + (r.remark || '').replace(/"/g, '&quot;') + '" placeholder="可选"></td><td style="text-align:center;"><button type="button" class="action-btn delete" onclick="removeDictValueRow(this)">删</button></td></tr>';
+    return '<tr class="dict-value-row"><td><input type="text" class="form-input" data-field="value" value="' + escDict(r.value) + '" placeholder="如：level1"></td><td><input type="text" class="form-input" data-field="label" value="' + escDict(r.label) + '" placeholder="如：一级"></td><td><input type="number" class="form-input" data-field="sort" value="' + escDict(r.sort || 1) + '" min="1"></td><td><input type="text" class="form-input" data-field="remark" value="' + escDict(r.remark) + '" placeholder="可选"></td><td style="text-align:center;"><button type="button" class="action-btn delete" onclick="removeDictValueRow(this)">删</button></td></tr>';
   }).join('');
   const body =
     '<div class="form-row">' +
-      '<div class="form-group half"><label class="form-label">字典类型</label><input type="text" class="form-input" id="modalDictType" value="' + dict.type + '"></div>' +
-      '<div class="form-group half"><label class="form-label">字典编码</label><input type="text" class="form-input" id="modalDictCode" value="' + dict.code + '" disabled></div>' +
-      '<div class="form-group half"><label class="form-label">字典名称</label><input type="text" class="form-input" id="modalDictName" value="' + dict.name + '"></div>' +
-      '<div class="form-group half"><label class="form-label">排序</label><input type="number" class="form-input" id="modalDictSort" value="' + dict.sort + '" min="1"></div>' +
+      '<div class="form-group half"><label class="form-label">字典类型</label><input type="text" class="form-input" id="modalDictType" value="' + escDict(dict.type) + '"></div>' +
+      '<div class="form-group half"><label class="form-label">字典编码</label><input type="text" class="form-input" id="modalDictCode" value="' + escDict(dict.code) + '" disabled></div>' +
+      '<div class="form-group half"><label class="form-label">字典名称</label><input type="text" class="form-input" id="modalDictName" value="' + escDict(dict.name) + '"></div>' +
+      '<div class="form-group half"><label class="form-label">排序</label><input type="number" class="form-input" id="modalDictSort" value="' + escDict(dict.sort) + '" min="1"></div>' +
       '<div class="form-group half"><label class="form-label">状态</label><select class="form-select" id="modalDictStatus"><option value="active"' + (dict.status === 'active' ? ' selected' : '') + '>启用</option><option value="disabled"' + (dict.status === 'disabled' ? ' selected' : '') + '>停用</option></select></div>' +
     '</div>' +
     '<div class="form-group full" style="margin-top:12px;">' +
@@ -1766,8 +1755,9 @@ function collectDictValueRows() {
 }
 function openDeleteDictModal(dictId) {
   const dict = mockDicts.find(function(d) { return d.id === dictId; });
+  if (!dict) { alert('字典不存在'); return; }
   window.__currentDictId = dictId; // 删除提交时定位目标条目
-  const body = '<div class="confirm-warning"><p>确认要删除字典 <strong>' + dict.name + '</strong> 吗？此操作不可恢复。</p></div>';
+  const body = '<div class="confirm-warning"><p>确认要删除字典 <strong>' + escDict(dict.name) + '</strong> 吗？删除后不可恢复。</p></div>';
   const footer = '<button class="btn btn-secondary" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="deleteDict()">确定删除</button>';
   openModal('删除字典', body, footer);
 }
@@ -1912,45 +1902,141 @@ function editRole() {
     else alert('编辑角色失败：' + ((res && res.message) || '后端拒绝写入'));
   }).catch(function (e) { alert('编辑角色失败：' + (e && e.message ? e.message : '网络异常')); });
 }
+/* 字典值字符串 → 表格行（解析 JSON 数组或逗号分隔字符串），用于编辑回填 */
+function parseDictValueRows(raw) {
+  var rows = [];
+  var text = String(raw || '').trim();
+  if (!text) return rows;
+  try {
+    if (text.charAt(0) === '[') {
+      var arr = JSON.parse(text);
+      if (Array.isArray(arr)) {
+        rows = arr.map(function (it) {
+          return {
+            value: it.value || it.code || '',
+            label: it.label || it.name || '',
+            sort: it.sort || 1,
+            remark: it.remark || ''
+          };
+        });
+      }
+    } else {
+      // 形如 "level1=一级,level2=二级" 或 "一级,二级"
+      text.split(/[,，]/).forEach(function (part, idx) {
+        var kv = part.split(/[=:]/);
+        if (kv.length >= 2) {
+          rows.push({ value: kv[0].trim(), label: kv[1].trim(), sort: idx + 1, remark: '' });
+        } else if (kv[0].trim()) {
+          rows.push({ value: kv[0].trim(), label: kv[0].trim(), sort: idx + 1, remark: '' });
+        }
+      });
+    }
+  } catch (e) { /* 解析失败按空行处理 */ }
+  return rows;
+}
+
+/* 字典编码 → 数据库行（snake_case），与 sf_dict 列一一对应 */
+function dictRowPayload(dict) {
+  return {
+    dict_type: dict.type,
+    dict_code: dict.code,
+    dict_name: dict.name,
+    dict_value: dict.value,
+    sort_order: dict.sort,
+    dict_status: dict.status
+  };
+}
+
+/* 字段长度校验（对齐 sf_dict 列定义，避免后端截断或报错） */
+var DICT_FIELD_LIMITS = { dict_type: 50, dict_code: 50, dict_name: 100, dict_value: 500 };
+function validateDictPayload(payload) {
+  var labels = { dict_type: '字典类型', dict_code: '字典编码', dict_name: '字典名称', dict_value: '字典值' };
+  for (var key in DICT_FIELD_LIMITS) {
+    var v = String(payload[key] == null ? '' : payload[key]);
+    if (v.length > DICT_FIELD_LIMITS[key]) {
+      return labels[key] + '不能超过 ' + DICT_FIELD_LIMITS[key] + ' 个字符';
+    }
+  }
+  return '';
+}
+
+/* 写入字典：走 /api/dict/aggregate（按 dict_code upsert，命中已删行时自动复活）。
+   只提交本次变更的那一条，不做「快照缺失即删」，避免误删其它字典。 */
+function saveDictRow(payload, onOk, onFail) {
+  Api.create('dict/aggregate', { dicts: [payload] }).then(function (res) {
+    if (!res || !res.ok) { onFail((res && res.message) || '后端拒绝写入'); return; }
+    onOk();
+  }).catch(function (e) {
+    onFail(e && e.message ? e.message : '网络异常');
+  });
+}
+
 function addDict() {
   var type = ((document.getElementById('modalDictType') || {}).value || '').trim();
   var code = ((document.getElementById('modalDictCode') || {}).value || '').trim();
   var name = ((document.getElementById('modalDictName') || {}).value || '').trim();
   if (!type || !code || !name) { alert('请填写字典类型、编码与名称'); return; }
+  code = code.toUpperCase();
+  if (mockDicts.some(function (d) { return d.code === code; })) {
+    alert('字典编码已存在：' + code); return;
+  }
   var sort = parseInt((document.getElementById('modalDictSort') || {}).value, 10) || (mockDicts.length + 1);
-  var newId = 1;
-  mockDicts.forEach(function(d) { if (d.id >= newId) newId = d.id + 1; });
-  mockDicts.push({ id: newId, type: type, code: code.toUpperCase(), name: name, value: collectDictValueRows(), sort: sort, status: 'active' });
-  saveDicts();
-  refreshDictTable();
-  closeModal();
-  alert('新增字典成功：' + code);
+  var payload = dictRowPayload({
+    type: type, code: code, name: name,
+    value: collectDictValueRows(), sort: sort, status: 'active'
+  });
+  var invalid = validateDictPayload(payload);
+  if (invalid) { alert(invalid); return; }
+  saveDictRow(
+    payload,
+    function () {
+      closeModal();
+      alert('新增字典成功：' + code);
+      loadDicts();
+    },
+    function (msg) { alert('新增字典失败：' + msg); }
+  );
 }
 function editDict() {
   var dict = null;
   for (var i = 0; i < mockDicts.length; i++) { if (mockDicts[i].id === window.__currentDictId) { dict = mockDicts[i]; break; } }
-  if (!dict) { closeModal(); return; }
+  if (!dict) { closeModal(); alert('未获取到目标字典，请重新打开弹窗'); return; }
   var type = ((document.getElementById('modalDictType') || {}).value || '').trim();
   var name = ((document.getElementById('modalDictName') || {}).value || '').trim();
-  if (type) dict.type = type;
-  if (name) dict.name = name;
-  dict.sort = parseInt((document.getElementById('modalDictSort') || {}).value, 10) || dict.sort;
-  dict.status = (document.getElementById('modalDictStatus') || {}).value || dict.status;
-  dict.value = collectDictValueRows();
-  saveDicts();
-  refreshDictTable();
-  closeModal();
-  alert('编辑字典成功：' + dict.code);
+  if (!type || !name) { alert('请填写字典类型与名称'); return; }
+  var payload = dictRowPayload({
+    type: type,
+    code: dict.code,
+    name: name,
+    value: collectDictValueRows(),
+    sort: parseInt((document.getElementById('modalDictSort') || {}).value, 10) || dict.sort,
+    status: (document.getElementById('modalDictStatus') || {}).value || dict.status
+  });
+  var invalid = validateDictPayload(payload);
+  if (invalid) { alert(invalid); return; }
+  saveDictRow(
+    payload,
+    function () {
+      closeModal();
+      alert('编辑字典成功：' + dict.code);
+      loadDicts();
+    },
+    function (msg) { alert('编辑字典失败：' + msg); }
+  );
 }
 function deleteDict() {
-  var idx = -1;
-  for (var i = 0; i < mockDicts.length; i++) { if (mockDicts[i].id === window.__currentDictId) { idx = i; break; } }
-  if (idx < 0) { closeModal(); return; }
-  var removed = mockDicts.splice(idx, 1)[0];
-  saveDicts();
-  refreshDictTable();
-  closeModal();
-  alert('字典已删除：' + removed.code);
+  var dict = null;
+  for (var i = 0; i < mockDicts.length; i++) { if (mockDicts[i].id === window.__currentDictId) { dict = mockDicts[i]; break; } }
+  if (!dict) { closeModal(); alert('未获取到目标字典，请重新打开弹窗'); return; }
+  // 逻辑删除：按 dict_code 上报删除清单，后端置 is_deleted=1
+  Api.create('dict/aggregate', { deleted: { dicts: [dict.code] } }).then(function (res) {
+    if (!res || !res.ok) { alert('删除字典失败：' + ((res && res.message) || '后端拒绝写入')); return; }
+    closeModal();
+    alert('字典已删除：' + dict.code);
+    loadDicts();
+  }).catch(function (e) {
+    alert('删除字典失败：' + (e && e.message ? e.message : '网络异常'));
+  });
 }
 function switchTab(event, tabId) {
   document.querySelectorAll('.system-tab').forEach(function(tab) { tab.classList.remove('active'); });
@@ -1959,6 +2045,9 @@ function switchTab(event, tabId) {
   document.getElementById('tab-' + tabId).classList.add('active');
   /* 跨 iframe 内存镜像不互通：进入通知 tab 时重拉后端，保证看到最新数据 */
   if (tabId === 'notice' && window.NoticeStore) NoticeStore.reload();
+  /* 部门 / 岗位台账同理：切到该 tab 时重拉后端 */
+  if (tabId === 'dept') loadDeptData();
+  if (tabId === 'post') loadPostData();
 }
 /* ============================================================
  * 部门管理 / 岗位管理
@@ -1980,6 +2069,88 @@ let selectedPostIds = [];
 
 function loadLocal(key, target) { /* no-op：无本地兜底数据 */ }
 function saveLocal(key, data) { /* no-op：不写本地业务数据 */ }
+
+/* ============================================================
+ * 部门 / 岗位：读写均走后端（sf_dept / sf_post）
+ * ------------------------------------------------------------
+ * 页面视图字段与库列的对应：
+ *   部门：id/parentId/name/sort/status/owner/phone/email
+ *     → parent_id/dept_name/sort_order/dept_status/manager/phone/email
+ *   岗位：id/code/name/sort/status/remark
+ *     → post_code/post_name/sort_order/post_status/remark
+ * ============================================================ */
+const DEPT_RESOURCE = 'dept';
+const POST_RESOURCE = 'post';
+
+function mapDeptRow(row) {
+  return {
+    id: row.id,
+    parentId: row.parent_id != null ? Number(row.parent_id) : 0,
+    name: row.dept_name || '',
+    sort: Number(row.sort_order) || 0,
+    status: row.dept_status || 'active',
+    owner: row.manager || '',
+    phone: row.phone || '',
+    email: row.email || '',
+    createdAt: row.created_at || ''
+  };
+}
+function deptRowBody(d) {
+  return {
+    parent_id: Number(d.parentId) || 0,
+    dept_name: d.name || '',
+    sort_order: Number(d.sort) || 0,
+    manager: d.owner || null,
+    phone: d.phone || null,
+    email: d.email || null,
+    dept_status: d.status || 'active'
+  };
+}
+
+function mapPostRow(row) {
+  return {
+    id: row.id,
+    code: row.post_code || '',
+    name: row.post_name || '',
+    sort: Number(row.sort_order) || 0,
+    status: row.post_status || 'active',
+    remark: row.remark || '',
+    createdAt: row.created_at || ''
+  };
+}
+function postRowBody(p) {
+  return {
+    post_code: p.code || '',
+    post_name: p.name || '',
+    sort_order: Number(p.sort) || 0,
+    post_status: p.status || 'active',
+    remark: p.remark || null
+  };
+}
+
+/* 部门台账取数 */
+function loadDeptData() {
+  if (!window.Api || !Api.get) return;
+  Api.get(DEPT_RESOURCE, { page: 1, size: 500, sort: 'id', order: 'asc' }).then(function (res) {
+    if (!res || !res.ok || !res.data) return;
+    mockDepts = (res.data.list || []).map(mapDeptRow);
+    renderDeptTable();
+  }).catch(function (e) {
+    console.warn('[system_settings] 部门列表加载失败', e);
+  });
+}
+
+/* 岗位台账取数 */
+function loadPostData() {
+  if (!window.Api || !Api.get) return;
+  Api.get(POST_RESOURCE, { page: 1, size: 500, sort: 'id', order: 'asc' }).then(function (res) {
+    if (!res || !res.ok || !res.data) return;
+    mockPosts = (res.data.list || []).map(mapPostRow);
+    renderPostTable();
+  }).catch(function (e) {
+    console.warn('[system_settings] 岗位列表加载失败', e);
+  });
+}
 
 function deptChildren(parentId) {
   return mockDepts.filter(function (d) { return d.parentId === parentId; })
@@ -2157,29 +2328,38 @@ function submitDept() {
   if (sort === '' || Number(sort) < 0) { alert('请填写正确的显示排序'); return; }
   const status = document.querySelector('input[name="modalDeptStatus"]:checked');
   const parentEl = document.getElementById('modalDeptParent');
-  const payload = {
-    name: name,
-    sort: Number(sort),
-    status: status ? status.value : 'active',
-    owner: (document.getElementById('modalDeptOwner').value || '').trim(),
-    phone: (document.getElementById('modalDeptPhone').value || '').trim(),
-    email: (document.getElementById('modalDeptEmail').value || '').trim(),
-    createdAt: nowText()
-  };
   const parentId = parentEl ? Number(parentEl.value) || 0 : 0;
   const editId = window.__currentDeptId;
+
+  const body = {
+    parent_id: parentId,
+    dept_name: name,
+    sort_order: Number(sort) || 0,
+    manager: (document.getElementById('modalDeptOwner').value || '').trim() || null,
+    phone: (document.getElementById('modalDeptPhone').value || '').trim() || null,
+    email: (document.getElementById('modalDeptEmail').value || '').trim() || null,
+    dept_status: status ? status.value : 'active'
+  };
+
+  /* 编辑时不允许把自己或自己的下级挂到父级之下 */
   if (editId) {
     const dept = mockDepts.find(function (d) { return d.id === editId; });
-    const isSelfOrDescendant = parentId === editId || deptDescendantIds(editId).indexOf(parentId) !== -1;
-    Object.assign(dept, payload);
-    if (!isSelfOrDescendant) dept.parentId = parentId;
-  } else {
-    mockDepts.push(Object.assign({ id: Date.now(), parentId: parentId }, payload));
+    const isSelfOrDescendant = parentId === editId || (dept && deptDescendantIds(editId).indexOf(parentId) !== -1);
+    if (isSelfOrDescendant) body.parent_id = dept ? dept.parentId : 0;
   }
-  saveLocal(DEPT_STORAGE_KEY, mockDepts);
-  closeModal();
-  renderDeptTable();
-  toastDept(editId ? '部门修改成功' : '部门新增成功');
+
+  const req = editId ? Api.update(DEPT_RESOURCE, editId, body) : Api.create(DEPT_RESOURCE, body);
+  req.then(function (res) {
+    if (!res || !res.ok) {
+      alert((editId ? '部门修改失败：' : '部门新增失败：') + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    closeModal();
+    loadDeptData();
+    toastDept(editId ? '部门修改成功' : '部门新增成功');
+  }).catch(function (e) {
+    alert((editId ? '部门修改失败：' : '部门新增失败：') + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 function deleteDept(deptId) {
   if (deptChildren(deptId).length) { alert('该部门存在下级部门，无法删除'); return; }
@@ -2191,24 +2371,36 @@ function deleteDept(deptId) {
   openModal('删除部门', body, footer);
 }
 function confirmDeleteDept(deptId) {
-  const idx = mockDepts.findIndex(function (d) { return d.id === deptId; });
-  if (idx > -1) mockDepts.splice(idx, 1);
-  selectedDeptIds = selectedDeptIds.filter(function (id) { return id !== deptId; });
-  saveLocal(DEPT_STORAGE_KEY, mockDepts);
-  closeModal();
-  renderDeptTable();
-  toastDept('部门已删除');
+  Api.remove(DEPT_RESOURCE, deptId).then(function (res) {
+    if (!res || !res.ok) {
+      alert('部门删除失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    selectedDeptIds = selectedDeptIds.filter(function (id) { return id !== deptId; });
+    closeModal();
+    loadDeptData();
+    toastDept('部门已删除');
+  }).catch(function (e) {
+    alert('部门删除失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 function batchDeleteDept() {
   if (!selectedDeptIds.length) { alert('请先选择要删除的部门'); return; }
   const ids = selectedDeptIds.slice();
   const withChildren = ids.filter(function (id) { return deptChildren(id).length > 0; });
   if (withChildren.length) { alert('所选部门中存在下级部门，请先处理下级部门'); return; }
-  mockDepts = mockDepts.filter(function (d) { return ids.indexOf(d.id) === -1; });
-  selectedDeptIds = [];
-  saveLocal(DEPT_STORAGE_KEY, mockDepts);
-  renderDeptTable();
-  toastDept('已删除 ' + ids.length + ' 个部门');
+  Promise.all(ids.map(function (id) { return Api.remove(DEPT_RESOURCE, id); })).then(function (results) {
+    var failed = results.filter(function (r) { return !r || !r.ok; });
+    if (failed.length) {
+      alert('部门删除失败：' + ((failed[0] && failed[0].message) || '后端拒绝写入'));
+      return;
+    }
+    selectedDeptIds = [];
+    loadDeptData();
+    toastDept('已删除 ' + ids.length + ' 个部门');
+  }).catch(function (e) {
+    alert('部门删除失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 /* ---------- 岗位管理 ---------- */
 function renderPostTable() {
@@ -2325,24 +2517,25 @@ function submitPost() {
   const duplicated = mockPosts.some(function (p) { return p.code === code && p.id !== editId; });
   if (duplicated) { alert('岗位编码已存在：' + code); return; }
   const statusEl = document.querySelector('input[name="modalPostStatus"]:checked');
-  const payload = {
-    name: name,
-    code: code,
-    sort: Number(sort),
-    status: statusEl ? statusEl.value : 'active',
-    remark: (document.getElementById('modalPostRemark').value || '').trim(),
-    createdAt: nowText()
+  const body = {
+    post_code: code,
+    post_name: name,
+    sort_order: Number(sort) || 0,
+    post_status: statusEl ? statusEl.value : 'active',
+    remark: (document.getElementById('modalPostRemark').value || '').trim() || null
   };
-  if (editId) {
-    const post = mockPosts.find(function (p) { return p.id === editId; });
-    Object.assign(post, payload);
-  } else {
-    mockPosts.push(Object.assign({ id: Date.now() }, payload));
-  }
-  saveLocal(POST_STORAGE_KEY, mockPosts);
-  closeModal();
-  renderPostTable();
-  toastDept(editId ? '岗位修改成功' : '岗位新增成功');
+  const req = editId ? Api.update(POST_RESOURCE, editId, body) : Api.create(POST_RESOURCE, body);
+  req.then(function (res) {
+    if (!res || !res.ok) {
+      alert((editId ? '岗位修改失败：' : '岗位新增失败：') + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    closeModal();
+    loadPostData();
+    toastDept(editId ? '岗位修改成功' : '岗位新增成功');
+  }).catch(function (e) {
+    alert((editId ? '岗位修改失败：' : '岗位新增失败：') + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 function deletePost(postId) {
   const post = mockPosts.find(function (p) { return p.id === postId; });
@@ -2353,13 +2546,18 @@ function deletePost(postId) {
   openModal('删除岗位', body, footer);
 }
 function confirmDeletePost(postId) {
-  const idx = mockPosts.findIndex(function (p) { return p.id === postId; });
-  if (idx > -1) mockPosts.splice(idx, 1);
-  selectedPostIds = selectedPostIds.filter(function (id) { return id !== postId; });
-  saveLocal(POST_STORAGE_KEY, mockPosts);
-  closeModal();
-  renderPostTable();
-  toastDept('岗位已删除');
+  Api.remove(POST_RESOURCE, postId).then(function (res) {
+    if (!res || !res.ok) {
+      alert('岗位删除失败：' + ((res && res.message) || '后端拒绝写入'));
+      return;
+    }
+    selectedPostIds = selectedPostIds.filter(function (id) { return id !== postId; });
+    closeModal();
+    loadPostData();
+    toastDept('岗位已删除');
+  }).catch(function (e) {
+    alert('岗位删除失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 function batchEditPost() {
   if (selectedPostIds.length !== 1) { alert('请仅选择一条岗位记录'); return; }
@@ -2367,12 +2565,19 @@ function batchEditPost() {
 }
 function batchDeletePost() {
   if (!selectedPostIds.length) { alert('请先选择要删除的岗位'); return; }
-  const n = selectedPostIds.length;
-  mockPosts = mockPosts.filter(function (p) { return selectedPostIds.indexOf(p.id) === -1; });
-  selectedPostIds = [];
-  saveLocal(POST_STORAGE_KEY, mockPosts);
-  renderPostTable();
-  toastDept('已删除 ' + n + ' 个岗位');
+  const ids = selectedPostIds.slice();
+  Promise.all(ids.map(function (id) { return Api.remove(POST_RESOURCE, id); })).then(function (results) {
+    var failed = results.filter(function (r) { return !r || !r.ok; });
+    if (failed.length) {
+      alert('岗位删除失败：' + ((failed[0] && failed[0].message) || '后端拒绝写入'));
+      return;
+    }
+    selectedPostIds = [];
+    loadPostData();
+    toastDept('已删除 ' + ids.length + ' 个岗位');
+  }).catch(function (e) {
+    alert('岗位删除失败：' + ((e && e.message ? e.message : '网络异常')));
+  });
 }
 function exportPosts() {
   const list = filterPosts();
