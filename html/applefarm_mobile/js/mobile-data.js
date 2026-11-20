@@ -38,8 +38,8 @@
   var depsReady = (function ensureDeps() {
     if (typeof document === 'undefined') return Promise.resolve();
     var selfEl = document.currentScript;
-    if (!selfEl || !selfEl.src) return Promise.resolve();
-    var baseDir = selfEl.src.replace(/[^\/]*$/, '');
+    // currentScript 仅在脚本求值期间有效；缺失时回退到本文件的固定相对路径
+    var baseDir = (selfEl && selfEl.src) ? selfEl.src.replace(/[^\/]*$/, '') : 'js/';
     var deps = [{ name: 'Api', src: baseDir + '../../common/js/api.js' }];
     var pending = deps.filter(function (d) { return !global[d.name]; });
     if (!pending.length) return Promise.resolve();
@@ -105,14 +105,18 @@
    * ============================================================ */
   function rows(resource, params) {
     var k = cacheKey(resource, params);
-    return global.Api.get(resource, Object.assign({ size: 500 }, params || {})).then(function (res) {
-      var list = (res && res.ok && res.data && Array.isArray(res.data.list)) ? res.data.list : [];
-      cache[k] = list;
-      return list;
-    }).catch(function (e) {
-      console.warn('[MobileData] 读取失败：' + resource, e);
-      cache[k] = [];
-      return [];
+    // Api 由 ensureDeps 动态注入，首屏调用可能早于其就绪，需先等待依赖
+    return depsReady.then(function () {
+      if (!global.Api || typeof global.Api.get !== 'function') return [];
+      return global.Api.get(resource, Object.assign({ size: 500 }, params || {})).then(function (res) {
+        var list = (res && res.ok && res.data && Array.isArray(res.data.list)) ? res.data.list : [];
+        cache[k] = list;
+        return list;
+      }).catch(function (e) {
+        console.warn('[MobileData] 读取失败：' + resource, e);
+        cache[k] = [];
+        return [];
+      });
     });
   }
 

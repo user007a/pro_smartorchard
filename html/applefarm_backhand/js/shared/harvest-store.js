@@ -273,7 +273,7 @@
     { code: 'level3', name: '三级' }
   ];
 
-  var VARIETIES = ['花牛苹果', '红富士', '金帅', '秦冠', '嘎啦', '红星', '国光'];
+  /* 品种主数据：统一取自 PlotStore（sf_plot.variety_code），不内置写死品种 */
 
   /** 库位主数据：A/B/C/D 四个冷库区，编号统一为「X区-00N」 */
   /* 严格空库模式：库位主数据来自后端 sf_storage_location，不内置演示库位 */
@@ -366,7 +366,13 @@
     return out.sort();
   }
 
-  function varieties() { return VARIETIES.slice(); }
+  function varieties() {
+    var seen = {}, out = [];
+    plots().forEach(function (p) {
+      if (p.variety && !seen[p.variety]) { seen[p.variety] = 1; out.push(p.variety); }
+    });
+    return out;
+  }
 
   function grades() { return GRADES.map(function (g) { return Object.assign({}, g); }); }
 

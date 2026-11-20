@@ -752,27 +752,8 @@ const PageActions = (function() {
         ];
         break;
       case 'plot':
-        data = plotList().find(p => p.id === id);
-        fields = [
-          { name: 'name', label: '地块名称', type: 'text', required: true },
-          { name: 'enterprise', label: '所属基地', type: 'select', options: baseLedgerList().map(e => ({ value: e.name, label: e.name })) },
-          { name: 'variety', label: '品种', type: 'select', required: true, options: [
-            { value: '花牛苹果', label: '花牛苹果' },
-            { value: '红富士', label: '红富士' },
-            { value: '金帅', label: '金帅' },
-            { value: '秦冠', label: '秦冠' },
-            { value: '嘎啦', label: '嘎啦' },
-            { value: '红星', label: '红星' },
-            { value: '国光', label: '国光' }
-          ]},
-          { name: 'area', label: '面积(亩)', type: 'number', required: true },
-          { name: 'year', label: '种植年份', type: 'number', required: true },
-          { name: 'manager', label: '负责人', type: 'select', required: true, options: buildUserOptions(data && data.manager) },
-          { name: 'baseImages', label: '地块图片', type: 'custom',
-            html: buildBaseImagesUploader(data && data.baseImages),
-            collect: collectBaseImages },
-        ];
-        break;
+        // 地块表单由 enterprise_plot.html 自身的 openPlotForm 提供（品种/基地均取自数据库）
+        return;
       case 'cert-manage':
         data = getCert(id);
         fields = certEditFields(data);
@@ -886,27 +867,8 @@ const PageActions = (function() {
         ];
         break;
       case 'plot':
-        title = '新建地块';
-        fields = [
-          { name: 'name', label: '地块名称', type: 'text', required: true },
-          { name: 'enterprise', label: '所属基地', type: 'select', options: baseLedgerList().map(e => ({ value: e.name, label: e.name })) },
-          { name: 'variety', label: '品种', type: 'select', required: true, options: [
-            { value: '花牛苹果', label: '花牛苹果' },
-            { value: '红富士', label: '红富士' },
-            { value: '金帅', label: '金帅' },
-            { value: '秦冠', label: '秦冠' },
-            { value: '嘎啦', label: '嘎啦' },
-            { value: '红星', label: '红星' },
-            { value: '国光', label: '国光' }
-          ]},
-          { name: 'area', label: '面积(亩)', type: 'number', required: true },
-          { name: 'year', label: '种植年份', type: 'number', required: true },
-          { name: 'manager', label: '负责人', type: 'select', required: true, options: buildUserOptions() },
-          { name: 'baseImages', label: '地块图片', type: 'custom',
-            html: buildBaseImagesUploader([]),
-            collect: collectBaseImages },
-        ];
-        break;
+        // 地块表单由 enterprise_plot.html 自身的 openPlotForm 提供（品种/基地均取自数据库）
+        return;
       case 'cert-manage':
         // 证书新建走独立弹窗（分类切换需重绘字段）
         openCertCreateForm();

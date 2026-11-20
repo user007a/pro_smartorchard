@@ -264,14 +264,7 @@
         <div class="form-field">
           <label>品种</label>
           <select id="editVariety">
-            <option value="huaniu">花牛苹果</option>
-            <option value="redfuji">红富士</option>
-            <option value="gala">嘎啦</option>
-            <option value="qinguan">秦冠</option>
-            <option value="jinshuai">金帅</option>
-            <option value="hongxing">红星</option>
-            <option value="guoguang">国光</option>
-            <option value="mixed">混合装</option>
+            <option value="">请选择品种</option>
           </select>
         </div>
         <div class="form-field">
@@ -344,10 +337,32 @@ var productLoadState = 'loading';
 var productLoadError = '';
 
 var CAT_TEXT = { fruit: '水果', gift: '礼盒', adopt: '认养' };
-var VARIETY_TEXT = {
-  huaniu: '花牛', redfuji: '红富士', gala: '嘎啦', qinguan: '秦冠',
-  jinshuai: '金帅', hongxing: '红星', guoguang: '国光', mixed: '混合'
-};
+var VARIETY_TEXT = {};
+/* 品种字典：来自 sf_mall_variety，加载后填充「品种」下拉 */
+var varietyOptions = [];
+function loadVarietyOptions() {
+  if (!window.Api) return Promise.resolve([]);
+  return Api.get('mall_variety', { page: 1, size: 500 }).then(function (r) {
+    var list = (r && r.ok && r.data && r.data.list) || [];
+    varietyOptions = list.filter(function (v) { return v && v.variety_code; }).map(function (v) {
+      var code = v.variety_code;
+      var name = v.variety_name || code;
+      VARIETY_TEXT[code] = name;
+      return { code: code, name: name };
+    });
+    var sel = document.getElementById('editVariety');
+    if (sel) {
+      var cur = sel.value;
+      sel.innerHTML = '<option value="">请选择品种</option>' +
+        varietyOptions.map(function (v) {
+          return '<option value="' + esc(v.code) + '">' + esc(v.name) + '</option>';
+        }).join('');
+      if (cur) sel.value = cur;
+    }
+    return varietyOptions;
+  }).catch(function () { return []; });
+}
+window.loadVarietyOptions = loadVarietyOptions;
 
 var editingId = null;
 
@@ -526,7 +541,7 @@ function openEdit(id) {
   document.getElementById('editImg').value = p ? (p.img || '') : '';
   document.getElementById('editCat').value = p ? p.cat : 'fruit';
   document.getElementById('editStatus').value = p ? p.status : 'on';
-  document.getElementById('editVariety').value = p ? (p.variety || 'huaniu') : 'huaniu';
+  document.getElementById('editVariety').value = p ? (p.variety || '') : '';
   document.getElementById('editSpec').value = p ? (p.spec || '') : '';
   document.getElementById('editTag').value = p ? (p.tag || '') : '';
   document.getElementById('editUnit').value = p ? (p.unit || '斤') : '斤';
@@ -649,6 +664,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.key === 'Enter') renderTable();
   });
   loadProducts();
+  // 品种字典加载完成后刷新表格中的品种显示
+  loadVarietyOptions().then(function () { renderTable(); });
 });
 </script>
 </body>
