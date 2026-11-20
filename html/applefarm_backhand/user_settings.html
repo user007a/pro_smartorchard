@@ -852,6 +852,28 @@
     }
 
     var s = sessionUser();
+    if (!s.username) { toast('登录信息缺失，请重新登录', 'error'); return; }
+
+    /* 严格空库模式：个人资料必须落库（sf_user），不能只写会话内存。
+       姓名 / 手机号写 sf_user 对应列；性别 / 邮箱 / 职位 / 简介在
+       sf_user 中无对应列，只保留在当前页面内存（刷新即回到库里的真实值）。 */
+    var userId = s.id;
+    if (!userId) {
+      // 登录会话里没带 id：按用户名反查一次
+      Api.get('user', { page: 1, size: 500 }).then(function (res) {
+        var list = (res && res.data && res.data.list) || [];
+        var me = null;
+        for (var i = 0; i < list.length; i++) {
+          if (String(list[i].username) === String(s.username)) { me = list[i]; break; }
+        }
+        if (!me) { toast('未找到当前账号，无法保存', 'error'); return; }
+        writeProfile(me.id, realName, phone);
+      }).catch(function () { toast('保存失败：网络异常', 'error'); });
+      return;
+    }
+    writeProfile(userId, realName, phone);
+
+    /* 页面内展示字段：同步到会话内存，保持本次会话内界面即时生效 */
     s.realName = realName;
     writeJSON(sessionStorage, SESSION_KEY, s);
     patchAccount(s.username, {
@@ -866,7 +888,21 @@
 
     renderSideProfile();
     renderSecurityInfo();
-    toast('个人资料已保存');
+  }
+
+  /* 把姓名 / 手机号写入 sf_user（只提交表里真实存在的列） */
+  function writeProfile(userId, realName, phone) {
+    var payload = { real_name: realName };
+    if (phone) payload.phone = phone;
+    Api.update('user', userId, payload).then(function (res) {
+      if (!res || !res.ok) {
+        toast('保存失败：' + ((res && res.message) || '后端拒绝写入'), 'error');
+        return;
+      }
+      toast('个人资料已保存');
+    }).catch(function (e) {
+      toast('保存失败：' + ((e && e.message) || '网络异常'), 'error');
+    });
   }
 
   function pickAvatar() {
