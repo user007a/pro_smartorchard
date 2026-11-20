@@ -124,6 +124,11 @@
   /**
    * 同步单个下拉框：沿用页面已有的取值编码（如 warehouse1 / center），
    * 仅按字典名称重建选项，新增字典项使用字典 id 作为值。
+   *
+   * 空字典保护：字典为空（严格空库 / 接口未连通）时，若页面本身已带可选项，
+   * 必须保留原选项。若照常清空，select 会变成 0 个 option，
+   * selectedIndex 变为 -1，页面读取 select 值时抛
+   * 「Cannot read properties of undefined」→ 保存直接中断（表现为「编辑后不能保存」）。
    */
   function syncSelect(el, items) {
     if (!el) return;
@@ -134,6 +139,16 @@
     oldOptions.forEach(function (o) {
       valueByLabel[(o.textContent || '').trim()] = o.value;
     });
+    // 字典为空时保留页面原有选项，避免把下拉框清成空壳
+    if (!items || !items.length) {
+      if (oldOptions.length && el.selectedIndex < 0) {
+        el.selectedIndex = 0;
+        if (el.value !== current && oldOptions.some(function (o) { return o.value === current; })) {
+          el.value = current;
+        }
+      }
+      return;
+    }
     el.innerHTML = '';
     if (emptyOption) {
       el.appendChild(new Option((emptyOption.textContent || '').trim(), ''));

@@ -48,6 +48,36 @@
   var localWriteMark = 0;
   var persistTimer = null;
 
+  /* ============================================================
+   * 显式删除登记
+   * ------------------------------------------------------------
+   * 聚合保存是「按业务编号 upsert」，删除必须显式上报 deleted 清单，
+   * 后端才会把对应行置 is_deleted=1。若只提交快照不做删除声明，
+   * 被删的行会在下一次保存时被 upsert「复活」——表现为「删除后刷新又回来了」。
+   * key 为聚合子数组名（batches / inspections / showTemplates …）。
+   * ============================================================ */
+  var pendingDeletes = {};
+  function markDeleted(listName, id) {
+    if (!id) return;
+    var arr = pendingDeletes[listName] || (pendingDeletes[listName] = []);
+    if (arr.indexOf(id) === -1) arr.push(id);
+  }
+  function takeDeleted() {
+    var out = {};
+    Object.keys(pendingDeletes).forEach(function (k) {
+      if (pendingDeletes[k] && pendingDeletes[k].length) out[k] = pendingDeletes[k].slice();
+    });
+    return out;
+  }
+  function clearDeleted(sent) {
+    Object.keys(sent || {}).forEach(function (k) {
+      pendingDeletes[k] = (pendingDeletes[k] || []).filter(function (id) {
+        return sent[k].indexOf(id) === -1;
+      });
+      if (!pendingDeletes[k].length) delete pendingDeletes[k];
+    });
+  }
+
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
     if (!global.Api.get || !global.Api.create) return null;
@@ -102,6 +132,7 @@
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
     var d = ensure();
+    var deletedPayload = takeDeleted();
     var agg = {
       batches: clone(d.batches || []),
       codes: clone(d.codes || []),
@@ -113,10 +144,13 @@
       printJobs: clone(d.printJobs || []),
       recalls: clone(d.recalls || []),
       showTemplates: clone(d.showTemplates || []),
-      deleted: {},
+      deleted: deletedPayload,
     };
     var body = global.TraceMapper.fromAggregate(agg);
-    return api.create('trace/aggregate', body);
+    return api.create('trace/aggregate', body).then(function (res) {
+      if (res && res.ok) clearDeleted(deletedPayload);
+      return res;
+    });
   }
 
   /** 调度后端持久化（防抖） */
@@ -217,7 +251,12 @@
     } catch (e) { return fallback; }
   }
   function writeJSON(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (e) { return false; }
+    // 标记为「内部落盘」：不计入 api.js 的用户写入竞态计数
+    var prevFlag = global.__STRICT_DB_INTERNAL_WRITE__;
+    global.__STRICT_DB_INTERNAL_WRITE__ = true;
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (e) { return false; }
+    finally { global.__STRICT_DB_INTERNAL_WRITE__ = prevFlag; }
   }
   function plotOf(code) {
     var c = text(code);
@@ -723,7 +762,14 @@
   function save() {
     if (!inMemory) return false;
     try {
-      localStorage.setItem(KEY, JSON.stringify(inMemory));
+      // 标记为「内部落盘」：不计入 api.js 的用户写入竞态计数
+      var prevFlag = global.__STRICT_DB_INTERNAL_WRITE__;
+      global.__STRICT_DB_INTERNAL_WRITE__ = true;
+      try {
+        localStorage.setItem(KEY, JSON.stringify(inMemory));
+      } finally {
+        global.__STRICT_DB_INTERNAL_WRITE__ = prevFlag;
+      }
       return true;
     } catch (e) {
       console.warn('[TraceStore] 本地存储写入失败', e);
@@ -859,7 +905,10 @@
     if (idx < 0) return { ok: false, message: '批次不存在' };
     var codes = codesOfBatch(d.batches[idx].batchNo);
     if (codes.length) return { ok: false, message: '该批次已生成追溯码，不能删除' };
+    var removedBatchNo = d.batches[idx].batchNo || k;
     d.batches.splice(idx, 1);
+    // 登记删除清单：聚合保存按 batch_no upsert，不显式声明删除会被「复活」
+    markDeleted('batches', removedBatchNo);
     audit('删除批次', k, '');
     commit('batch');
     return { ok: true };
@@ -1015,6 +1064,8 @@
     for (var i = 0; i < d.inspections.length; i++) if (d.inspections[i].id === id) { idx = i; break; }
     if (idx < 0) return { ok: false, message: '报告不存在' };
     var rec = d.inspections.splice(idx, 1)[0];
+    // 登记删除清单：聚合保存按 report_no upsert，不显式声明删除会被「复活」
+    markDeleted('inspections', rec.reportNo);
     audit('撤销检测报告', rec.batchNo, rec.reportNo);
     commit('inspection');
     return { ok: true };
@@ -1387,6 +1438,8 @@
     var before = d.showTemplates.length;
     d.showTemplates = d.showTemplates.filter(function (t) { return t.id !== id; });
     if (d.showTemplates.length === before) return { ok: false, message: '模板不存在' };
+    // 登记删除清单：聚合保存按 template_code upsert，不显式声明删除会被「复活」
+    markDeleted('showTemplates', id);
     commit('show-template');
     return { ok: true };
   }

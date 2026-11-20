@@ -79,6 +79,25 @@
   var persistTimer = null;
   var persistPending = null;
 
+  /* ============================================================
+   * 显式删除登记
+   * ------------------------------------------------------------
+   * 聚合保存是「按 cert_no upsert」，删除必须显式上报 deleted 清单，
+   * 后端才会把对应行置 is_deleted=1。若只提交快照不做删除声明，
+   * 被删的证书会在下一次保存时被 upsert「复活」——表现为「删除后刷新又回来了」。
+   * ============================================================ */
+  var pendingDeletes = [];
+  function markDeleted(certNo) {
+    if (!certNo) return;
+    if (pendingDeletes.indexOf(certNo) === -1) pendingDeletes.push(certNo);
+  }
+  function takeDeleted() {
+    return pendingDeletes.slice();
+  }
+  function clearDeleted(sent) {
+    pendingDeletes = pendingDeletes.filter(function (no) { return sent.indexOf(no) === -1; });
+  }
+
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
     if (!global.Api.get || !global.Api.create) return null;
@@ -150,13 +169,17 @@
   function persistToBackend() {
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
+    var deletedPayload = takeDeleted();
     var agg = {
       version: VERSION,
       certs: clone(ensure().certs || []),
-      deleted: { certs: persistPending && persistPending.deleted ? persistPending.deleted : [] },
+      deleted: { certs: deletedPayload },
     };
     var body = global.CertMapper.fromAggregate(agg);
-    return api.create('cert/aggregate', body);
+    return api.create('cert/aggregate', body).then(function (res) {
+      if (res && res.ok) clearDeleted(deletedPayload);
+      return res;
+    });
   }
 
   /** 调度后端持久化（防抖） */
@@ -945,6 +968,8 @@
       return { ok: false, message: '仅草稿状态证书可删除，已生效证书请使用「作废」' };
     }
     list.splice(idx, 1);
+    // 登记删除清单：聚合保存按 cert_no upsert，不显式声明删除会被「复活」
+    markDeleted(item.certNo || item.id);
     commit('cert-remove:' + id);
     return { ok: true, message: '' };
   }

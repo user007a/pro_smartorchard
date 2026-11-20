@@ -181,7 +181,14 @@ window.MobileOpsStore = (function (global) {
 
   function rawSet(key, value) {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      // 标记为「内部落盘」：不计入 api.js 的用户写入竞态计数
+      var prevFlag = global.__STRICT_DB_INTERNAL_WRITE__;
+      global.__STRICT_DB_INTERNAL_WRITE__ = true;
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } finally {
+        global.__STRICT_DB_INTERNAL_WRITE__ = prevFlag;
+      }
       emit(key);
       if (typeof schedulePersist === 'function') schedulePersist(key);
       return true;

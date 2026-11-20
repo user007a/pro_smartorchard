@@ -70,6 +70,7 @@
 
 <script src="js/shared/mall-store.js"></script>
 <script src="../common/js/api.js"></script>
+<script src="../common/js/confirm.js"></script>
 <script>
 /* 严格空库模式：分类/品种/商品数一律来自后端 API，不再使用本地演示数据 */
 var DICT_RESOURCES = { categories: 'mall_category', varieties: 'mall_variety', products: 'mall_product' };
@@ -256,19 +257,24 @@ function removeItem(type, code) {
     ? list.filter(function (p) { return p.cat === code; }).length
     : list.filter(function (p) { return p.variety === code; }).length;
   if (used) { alert('该字典已被 ' + used + ' 个商品引用，请先调整商品后再删除'); return; }
-  if (!confirm('确定删除该字典项吗？')) return;
   var s = getSettings();
   var arr = (type === 'categories' ? s.categories : s.varieties) || [];
-  var patch = {};
-  patch[type] = arr.filter(function (x) { return x.code !== code; });
-  MallStore.saveSettings(patch);
-  render();
+  var target = arr.filter(function (x) { return x.code === code; })[0];
+  Confirm2.delete('确定删除字典项「' + ((target && target.name) || code) + '」吗？此操作不可撤销。').then(function (ok) {
+    if (!ok) return;
+    var patch = {};
+    patch[type] = arr.filter(function (x) { return x.code !== code; });
+    MallStore.saveSettings(patch);
+    render();
+  });
 }
 
 /* 严格空库模式：不再写死默认字典，改为从数据库重新加载 */
 function resetDict() {
-  if (!confirm('重新从数据库加载分类与品种？当前未保存的改动将被丢弃。')) return;
-  loadDict();
+  Confirm2.ask('重新从数据库加载分类与品种？当前未保存的改动将被丢弃。', { title: '重新加载' }).then(function (ok) {
+    if (!ok) return;
+    loadDict();
+  });
 }
 
 document.addEventListener('DOMContentLoaded', loadDict);

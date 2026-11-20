@@ -39,6 +39,37 @@
   var backendLoadPromise = null;
   var persistTimer = null;
 
+  /* ============================================================
+   * 显式删除登记
+   * ------------------------------------------------------------
+   * 聚合保存是「按业务编号 upsert」，删除必须显式上报 deleted 清单，
+   * 后端才会把对应行置 is_deleted=1。若只提交快照不做删除声明，
+   * 被删的行会在下一次保存时被 upsert「复活」——表现为「删除后刷新又回来了」。
+   * key 为聚合子数组名（customers / orders / pricePolicies …），
+   * value 为被删记录的业务编号数组。
+   * ============================================================ */
+  var pendingDeletes = {};
+  function markDeleted(listName, id) {
+    if (!id) return;
+    var arr = pendingDeletes[listName] || (pendingDeletes[listName] = []);
+    if (arr.indexOf(id) === -1) arr.push(id);
+  }
+  function takeDeleted() {
+    var out = {};
+    Object.keys(pendingDeletes).forEach(function (k) {
+      if (pendingDeletes[k] && pendingDeletes[k].length) out[k] = pendingDeletes[k].slice();
+    });
+    return out;
+  }
+  function clearDeleted(sent) {
+    Object.keys(sent || {}).forEach(function (k) {
+      pendingDeletes[k] = (pendingDeletes[k] || []).filter(function (id) {
+        return sent[k].indexOf(id) === -1;
+      });
+      if (!pendingDeletes[k].length) delete pendingDeletes[k];
+    });
+  }
+
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
     if (!global.Api.get || !global.Api.create) return null;
@@ -80,13 +111,18 @@
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
     var e = ensure();
+    var deletedPayload = takeDeleted();
     var agg = {
       customers: e.customers || [], orders: e.orders || [], payments: e.payments || [],
       shipments: e.shipments || [], afterSales: e.afterSales || [], pricePolicies: e.pricePolicies || [],
-      promotions: e.promotions || [], targets: e.targets || [], statements: e.statements || [], deleted: {},
+      promotions: e.promotions || [], targets: e.targets || [], statements: e.statements || [],
+      deleted: deletedPayload,
     };
     var body = global.SalesMapper.fromAggregate(agg);
-    return api.create('sales/aggregate', body);
+    return api.create('sales/aggregate', body).then(function (res) {
+      if (res && res.ok) clearDeleted(deletedPayload);
+      return res;
+    });
   }
   function schedulePersist(reason) {
     if (!backendEnabled()) return;
@@ -291,7 +327,14 @@
 
   function writeJSON(key, val) {
     try {
-      localStorage.setItem(key, JSON.stringify(val));
+      // 标记为「内部落盘」：不计入 api.js 的用户写入竞态计数
+      var prevFlag = global.__STRICT_DB_INTERNAL_WRITE__;
+      global.__STRICT_DB_INTERNAL_WRITE__ = true;
+      try {
+        localStorage.setItem(key, JSON.stringify(val));
+      } finally {
+        global.__STRICT_DB_INTERNAL_WRITE__ = prevFlag;
+      }
       return true;
     } catch (e) {
       console.error('[SalesStore] 写入失败：' + key, e);
@@ -1000,6 +1043,7 @@
     var hasStatement = e.statements.some(function (s) { return s.customerId === c.id; });
     if (hasStatement) return fail('该客户已有对账单，禁止删除');
     e.customers = e.customers.filter(function (x) { return x.id !== c.id; });
+    markDeleted('customers', c.id);
     persist('customer-remove');
     return ok(true);
   }
@@ -1279,6 +1323,7 @@
     var hasAs = e.afterSales.some(function (a) { return a.orderId === o.id; });
     if (hasAs) return fail('订单已有售后记录，不可删除');
     e.orders = e.orders.filter(function (x) { return x.id !== o.id; });
+    markDeleted('orders', o.id);
     persist('order-remove');
     return ok(true);
   }
@@ -1496,6 +1541,7 @@
     var before = e.pricePolicies.length;
     e.pricePolicies = e.pricePolicies.filter(function (p) { return p.id !== id; });
     if (e.pricePolicies.length === before) return fail('价格政策不存在');
+    markDeleted('pricePolicies', id);
     persist('policy-remove');
     return ok(true);
   }
@@ -1556,6 +1602,7 @@
     var before = e.promotions.length;
     e.promotions = e.promotions.filter(function (p) { return p.id !== id; });
     if (e.promotions.length === before) return fail('促销活动不存在');
+    markDeleted('promotions', id);
     persist('promo-remove');
     return ok(true);
   }
@@ -1612,6 +1659,7 @@
     var before = e.targets.length;
     e.targets = e.targets.filter(function (t) { return t.id !== id; });
     if (e.targets.length === before) return fail('销售目标不存在');
+    markDeleted('targets', id);
     persist('target-remove');
     return ok(true);
   }
@@ -1748,6 +1796,7 @@
     if (!s) return fail('对账单不存在');
     if (s.status !== 'draft') return fail('只有待确认对账单可以删除');
     e.statements = e.statements.filter(function (x) { return x.id !== id; });
+    markDeleted('statements', id);
     persist('statement-remove');
     return ok(true);
   }

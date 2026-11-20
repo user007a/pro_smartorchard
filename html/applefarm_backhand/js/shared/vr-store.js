@@ -36,6 +36,25 @@
   var inMemory = null;
   var subscribers = [];
 
+  /* ============================================================
+   * 显式删除登记
+   * ------------------------------------------------------------
+   * 聚合保存是「按 scene_code upsert」，删除必须显式上报 deleted 清单，
+   * 后端才会把对应行置 is_deleted=1。若只提交快照不做删除声明，
+   * 被删的行会在下一次保存时被 upsert「复活」——表现为「删除后刷新又回来了」。
+   * ============================================================ */
+  var pendingDeletes = [];
+  function markDeleted(sceneCode) {
+    if (!sceneCode) return;
+    if (pendingDeletes.indexOf(sceneCode) === -1) pendingDeletes.push(sceneCode);
+  }
+  function takeDeleted() {
+    return pendingDeletes.slice();
+  }
+  function clearDeleted(sent) {
+    pendingDeletes = pendingDeletes.filter(function (no) { return sent.indexOf(no) === -1; });
+  }
+
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
     if (!global.Api.get || !global.Api.create) return null;
@@ -90,8 +109,12 @@
   function persistToBackend() {
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
-    var body = global.VrMapper.fromAggregate({ scenes: ensure(), deleted: {} });
-    return api.create('vr/aggregate', body);
+    var deletedPayload = takeDeleted();
+    var body = global.VrMapper.fromAggregate({ scenes: ensure(), deleted: { scenes: deletedPayload } });
+    return api.create('vr/aggregate', body).then(function (res) {
+      if (res && res.ok) clearDeleted(deletedPayload);
+      return res;
+    });
   }
   function schedulePersist(reason) {
     if (!backendEnabled()) return;
@@ -134,8 +157,11 @@
     removeScene: function (id) {
       var d = ensure();
       var before = d.length;
+      var target = d.filter(function (x) { return x.id === id || x.code === id; })[0];
       inMemory = d.filter(function (x) { return x.id !== id && x.code !== id; });
       if (inMemory.length === before) return { ok: false, message: '场景不存在' };
+      // 登记删除清单：聚合保存按 scene_code upsert，不显式声明删除会被「复活」
+      markDeleted((target && (target.code || target.id)) || id);
       commit('scene');
       return { ok: true };
     },

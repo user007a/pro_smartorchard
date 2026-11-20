@@ -94,6 +94,7 @@
 
 <script src="js/shared/mall-store.js"></script>
 <script src="../common/js/api.js"></script>
+<script src="../common/js/confirm.js"></script>
 <script>
 /* 严格空库模式：通知模板一律来自后端 API（sf_mall_notice），不再使用本地演示数据 */
 var NOTICE_RESOURCE = 'mall_notice';
@@ -243,17 +244,22 @@ function toggle(id) {
 }
 
 function remove(id) {
-  if (!confirm('确认删除该通知模板？')) return;
-  save(list().filter(function (n) { return n.id !== id; }));
-  render();
-  toast('通知模板已删除');
+  var target = list().filter(function (n) { return n.id === id; })[0];
+  Confirm2.delete('确认删除通知模板「' + ((target && target.title) || id) + '」吗？此操作不可撤销。').then(function (ok) {
+    if (!ok) return;
+    save(list().filter(function (n) { return n.id !== id; }));
+    render();
+    toast('通知模板已删除');
+  });
 }
 
 /* 严格空库模式：不再写死默认模板，改为从数据库重新加载 */
 function resetNotices() {
-  if (!confirm('重新从数据库加载通知模板？当前未保存的改动将被丢弃。')) return;
-  loadNotices();
-  toast('已重新加载通知模板');
+  Confirm2.ask('重新从数据库加载通知模板？当前未保存的改动将被丢弃。', { title: '重新加载' }).then(function (ok) {
+    if (!ok) return;
+    loadNotices();
+    toast('已重新加载通知模板');
+  });
 }
 
 document.addEventListener('DOMContentLoaded', loadNotices);

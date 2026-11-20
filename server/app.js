@@ -35,6 +35,8 @@ const dictAggregateRouter = require('./routes/dict-aggregate');
 const traceStageAggregateRouter = require('./routes/trace-stage-aggregate');
 const { requireAuth } = require('./middleware/auth');
 const errorHandler = require('./middleware/errorHandler');
+const { pool } = require('./config/db');
+const { runMigrations } = require('./db/migrate');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -89,7 +91,22 @@ app.use((req, res) => {
 // 统一错误处理
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`[smartorchard-server] 已启动，端口 ${PORT}`);
-  console.log(`  数据库: ${process.env.DB_HOST || '127.0.0.1'}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME || 'smartorchard'}`);
-});
+// 启动前自动执行增量迁移（幂等）：保证既有数据卷在重新部署后也能获得
+// 新增的列 / 表，避免前端写入报 "Unknown column / table doesn't exist"。
+// 如需跳过（例如纯离线前端调试），设置环境变量 SKIP_MIGRATIONS=1。
+async function bootstrap() {
+  if (process.env.SKIP_MIGRATIONS !== '1') {
+    try {
+      await runMigrations(pool);
+    } catch (e) {
+      console.error('[migrate] 自动迁移异常（未阻断服务启动）', e);
+    }
+  } else {
+    console.log('[migrate] SKIP_MIGRATIONS=1，已跳过自动迁移');
+  }
+  app.listen(PORT, () => {
+    console.log(`[smartorchard-server] 已启动，端口 ${PORT}`);
+    console.log(`  数据库: ${process.env.DB_HOST || '127.0.0.1'}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME || 'smartorchard'}`);
+  });
+}
+bootstrap();

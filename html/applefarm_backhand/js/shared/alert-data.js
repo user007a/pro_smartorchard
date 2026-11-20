@@ -67,6 +67,36 @@
   var localWriteMark = 0;
   var persistTimer = null;
 
+  /* ============================================================
+   * 显式删除登记
+   * ------------------------------------------------------------
+   * 聚合保存是「按业务编号 upsert」，删除必须显式上报 deleted 清单，
+   * 后端才会把对应行置 is_deleted=1。若只提交快照不做删除声明，
+   * 被删的行会在下一次保存时被 upsert「复活」——表现为「删除后刷新又回来了」。
+   * key 为聚合子数组名（alerts / rules / reports）。
+   * ============================================================ */
+  var pendingDeletes = {};
+  function markDeleted(listName, id) {
+    if (!id) return;
+    var arr = pendingDeletes[listName] || (pendingDeletes[listName] = []);
+    if (arr.indexOf(id) === -1) arr.push(id);
+  }
+  function takeDeleted() {
+    var out = {};
+    Object.keys(pendingDeletes).forEach(function (k) {
+      if (pendingDeletes[k] && pendingDeletes[k].length) out[k] = pendingDeletes[k].slice();
+    });
+    return out;
+  }
+  function clearDeleted(sent) {
+    Object.keys(sent || {}).forEach(function (k) {
+      pendingDeletes[k] = (pendingDeletes[k] || []).filter(function (id) {
+        return sent[k].indexOf(id) === -1;
+      });
+      if (!pendingDeletes[k].length) delete pendingDeletes[k];
+    });
+  }
+
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
     if (!global.Api.get || !global.Api.create) return null;
@@ -107,9 +137,13 @@
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
     var e = ensureLoaded();
-    var agg = { alerts: e.alerts || [], rules: e.rules || [], reports: e.reports || [], deleted: {} };
+    var deletedPayload = takeDeleted();
+    var agg = { alerts: e.alerts || [], rules: e.rules || [], reports: e.reports || [], deleted: deletedPayload };
     var body = global.AlertMapper.fromAggregate(agg);
-    return api.create('alert/aggregate', body);
+    return api.create('alert/aggregate', body).then(function (res) {
+      if (res && res.ok) clearDeleted(deletedPayload);
+      return res;
+    });
   }
   function schedulePersist(reason) {
     if (!backendEnabled()) return;
@@ -1416,8 +1450,11 @@
     removeRule: function(id){
       var state = ensureLoaded();
       var before = state.rules.length;
+      var target = (state.rules || []).find(function(x){ return x.id === id || x.code === id; });
       state.rules = state.rules.filter(function(x){ return x.id !== id && x.code !== id; });
       if (state.rules.length === before) return { ok:false, message:'规则不存在' };
+      // 登记删除清单：聚合保存按 rule_code upsert，不显式声明删除会被「复活」
+      markDeleted('rules', (target && (target.code || target.id)) || id);
       broadcast('rule-removed:' + id);
       return { ok:true, message:'规则已删除' };
     },
@@ -1456,6 +1493,8 @@
       var before = (state.reports || []).length;
       state.reports = (state.reports || []).filter(function(x){ return x.id !== id; });
       if (state.reports.length === before) return { ok:false, message:'报告不存在' };
+      // 登记删除清单：聚合保存按 report_code upsert，不显式声明删除会被「复活」
+      markDeleted('reports', id);
       broadcast('report-removed:' + id);
       return { ok:true, message:'报告已删除' };
     },

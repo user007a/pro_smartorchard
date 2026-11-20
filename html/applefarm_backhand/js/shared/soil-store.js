@@ -49,6 +49,25 @@
   var persistTimer = null;
   var backendRefs = null;   // 后端下发的地块字典（plot_id ↔ plot_code）
 
+  /* ============================================================
+   * 显式删除登记
+   * ------------------------------------------------------------
+   * 聚合保存是「按 test_code upsert」，删除必须显式上报 deleted 清单，
+   * 后端才会把对应行置 is_deleted=1。若只提交快照不做删除声明，
+   * 被删的行会在下一次保存时被 upsert「复活」——表现为「删除后刷新又回来了」。
+   * ============================================================ */
+  var pendingDeletes = [];
+  function markDeleted(testCode) {
+    if (!testCode) return;
+    if (pendingDeletes.indexOf(testCode) === -1) pendingDeletes.push(testCode);
+  }
+  function takeDeleted() {
+    return pendingDeletes.slice();
+  }
+  function clearDeleted(sent) {
+    pendingDeletes = pendingDeletes.filter(function (no) { return sent.indexOf(no) === -1; });
+  }
+
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
     if (!global.Api.get || !global.Api.create) return null;
@@ -85,8 +104,12 @@
   function persistToBackend() {
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
-    var body = global.SoilMapper.fromAggregate({ tests: ensure(), deleted: {}, refs: backendRefs });
-    return api.create('soil/aggregate', body);
+    var deletedPayload = takeDeleted();
+    var body = global.SoilMapper.fromAggregate({ tests: ensure(), deleted: { tests: deletedPayload }, refs: backendRefs });
+    return api.create('soil/aggregate', body).then(function (res) {
+      if (res && res.ok) clearDeleted(deletedPayload);
+      return res;
+    });
   }
   function schedulePersist(reason) {
     if (!backendEnabled()) return;
@@ -329,6 +352,8 @@
     var before = list.length;
     inMemory = list.filter(function (x) { return String(x.id) !== String(id); });
     if (inMemory.length === before) return false;
+    // 登记删除清单：聚合保存按 test_code upsert，不显式声明删除会被「复活」
+    markDeleted(id);
     commit('remove:' + id);
     return true;
   }

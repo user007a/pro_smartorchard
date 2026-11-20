@@ -40,6 +40,36 @@
   var localWriteMark = 0;
   var persistTimer = null;
 
+  /* ============================================================
+   * 显式删除登记
+   * ------------------------------------------------------------
+   * 聚合保存是「按业务编号 upsert」，删除必须显式上报 deleted 清单，
+   * 后端才会把对应行置 is_deleted=1。若只提交快照不做删除声明，
+   * 被删的行会在下一次保存时被 upsert「复活」——表现为「删除后刷新又回来了」。
+   * key 为聚合子数组名（trees / orders / harvests / farmings / certs）。
+   * ============================================================ */
+  var pendingDeletes = {};
+  function markDeleted(listName, id) {
+    if (!id) return;
+    var arr = pendingDeletes[listName] || (pendingDeletes[listName] = []);
+    if (arr.indexOf(id) === -1) arr.push(id);
+  }
+  function takeDeleted() {
+    var out = {};
+    Object.keys(pendingDeletes).forEach(function (k) {
+      if (pendingDeletes[k] && pendingDeletes[k].length) out[k] = pendingDeletes[k].slice();
+    });
+    return out;
+  }
+  function clearDeleted(sent) {
+    Object.keys(sent || {}).forEach(function (k) {
+      pendingDeletes[k] = (pendingDeletes[k] || []).filter(function (id) {
+        return sent[k].indexOf(id) === -1;
+      });
+      if (!pendingDeletes[k].length) delete pendingDeletes[k];
+    });
+  }
+
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
     if (!global.Api.get || !global.Api.create) return null;
@@ -80,12 +110,16 @@
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
     var e = ensure();
+    var deletedPayload = takeDeleted();
     var agg = {
       trees: e.trees || [], orders: e.orders || [], harvests: e.harvests || [], farmings: e.farmings || [],
-      certs: [], deleted: {},
+      certs: [], deleted: deletedPayload,
     };
     var body = global.AdoptionMapper.fromAggregate(agg);
-    return api.create('adoption/aggregate', body);
+    return api.create('adoption/aggregate', body).then(function (res) {
+      if (res && res.ok) clearDeleted(deletedPayload);
+      return res;
+    });
   }
   function schedulePersist(reason) {
     if (!backendEnabled()) return;
@@ -214,7 +248,14 @@
 
   function writeJSON(key, value) {
     try {
-      global.localStorage.setItem(key, JSON.stringify(value));
+      // 标记为「内部落盘」：不计入 api.js 的用户写入竞态计数
+      var prevFlag = global.__STRICT_DB_INTERNAL_WRITE__;
+      global.__STRICT_DB_INTERNAL_WRITE__ = true;
+      try {
+        global.localStorage.setItem(key, JSON.stringify(value));
+      } finally {
+        global.__STRICT_DB_INTERNAL_WRITE__ = prevFlag;
+      }
       return true;
     } catch (e) {
       lastError = e && e.name === 'QuotaExceededError' ? '本地存储空间不足，数据未保存' : '数据保存失败';
@@ -772,9 +813,16 @@
     if (active.length) fail('该果树存在未完结的认养订单（' + active[0].orderNo + '），请先处理订单再删除');
 
     var s = ensure();
+    // 先收集被级联删除的采收 / 农事记录编号，一并登记删除清单
+    s.harvests.filter(function (x) { return x.treeCode === t.treeCode; })
+      .forEach(function (x) { markDeleted('harvests', x.id); });
+    s.farmings.filter(function (x) { return x.treeCode === t.treeCode; })
+      .forEach(function (x) { markDeleted('farmings', x.id); });
     s.trees = s.trees.filter(function (x) { return x.id !== t.id; });
     s.harvests = s.harvests.filter(function (x) { return x.treeCode !== t.treeCode; });
     s.farmings = s.farmings.filter(function (x) { return x.treeCode !== t.treeCode; });
+    // 登记删除清单：聚合保存按业务编号 upsert，不显式声明删除会被「复活」
+    markDeleted('trees', t.treeCode || t.id);
 
     /* 级联：证书、成长相册、移动端挂牌 */
     var certs = readJSON(CROSS.certs, []);

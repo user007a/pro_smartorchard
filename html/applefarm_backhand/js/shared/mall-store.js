@@ -191,7 +191,14 @@
 
   function safeWrite(key, value) {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      // 标记为「内部落盘」：不计入 api.js 的用户写入竞态计数
+      var prevFlag = window.__STRICT_DB_INTERNAL_WRITE__;
+      window.__STRICT_DB_INTERNAL_WRITE__ = true;
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } finally {
+        window.__STRICT_DB_INTERNAL_WRITE__ = prevFlag;
+      }
       if (typeof schedulePersist === 'function') schedulePersist(key);
       // 窗口事件：页面在未持有 Store 引用时也能感知数据变化并重绘
       try {

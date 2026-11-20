@@ -254,11 +254,16 @@ const Modal = (function() {
     let formHtml = '<form id="modal-form" class="modal-form">';
     fields.forEach(field => {
       const value = values[field.name] || field.default || '';
-      const required = field.required ? 'required' : '';
+      /* required 的下拉框若没有任何可选项（严格空库下参照数据为空），
+         该字段永远无法满足 → 表单永远提交不了。这里降级为非必填，
+         保证「保存」可用；已填值时仍按必填校验。 */
+      const selectOptions = (field.type === 'select') ? (field.options || []) : null;
+      const effectivelyRequired = field.required && !(selectOptions && selectOptions.length === 0 && !value);
+      const required = effectivelyRequired ? 'required' : '';
       const placeholder = field.placeholder || '';
 
       formHtml += `<div class="form-group">`;
-      formHtml += `<label class="form-label ${field.required ? 'required' : ''}">${field.label}</label>`;
+      formHtml += `<label class="form-label ${effectivelyRequired ? 'required' : ''}">${field.label}</label>`;
 
       switch (field.type) {
         case 'textarea':
@@ -333,6 +338,13 @@ const Modal = (function() {
 
     const formEl = modal.querySelector('#modal-form');
 
+    /* 必填校验改由 JS 承担：
+       浏览器原生约束校验会在 submit 事件之前静默拦截提交，用户点「保存」
+       没有任何反应也无法得知原因（严格空库下参照数据为空时必填项永远
+       无法满足，表现为「编辑后不能保存」）。
+       这里关闭原生校验，改为在 submit 处理器里给出可见的提示。 */
+    formEl.setAttribute('novalidate', 'novalidate');
+
     // 取消按钮
     modal.querySelector('[data-action="cancel"]').addEventListener('click', () => {
       close();
@@ -347,6 +359,34 @@ const Modal = (function() {
     // 表单提交
     formEl.addEventListener('submit', (e) => {
       e.preventDefault();
+
+      /* 必填校验（JS 版，替代浏览器原生静默拦截）：
+         逐个检查 required 字段，缺项时给出可见提示并聚焦首个缺项，
+         避免用户点「保存」后毫无反应。
+         与渲染时一致：无可选项的 required 下拉框不参与校验。 */
+      const missing = fields.filter(field => {
+        if (!field.required) return false;
+        const el = formEl.querySelector('[name="' + field.name + '"]');
+        if (!el) return false;
+        if (field.type === 'select') {
+          const opts = field.options || [];
+          if (!opts.length && !String(el.value || '').trim()) return false;
+        }
+        if (el.type === 'checkbox' || el.type === 'switch') return !el.checked;
+        if (el.tagName === 'SELECT') return !String(el.value || '').trim();
+        return !String(el.value == null ? '' : el.value).trim();
+      });
+      if (missing.length) {
+        const first = missing[0];
+        const el = formEl.querySelector('[name="' + first.name + '"]');
+        if (el && el.focus) { try { el.focus(); } catch (err) { /* ignore */ } }
+        const msg = '请填写「' + (first.label || first.name) + '」';
+        if (typeof Toast !== 'undefined' && Toast.show) Toast.show(msg, 'warning');
+        else if (typeof window.Toast !== 'undefined' && window.Toast.show) window.Toast.show(msg, 'warning');
+        else alert(msg);
+        return;
+      }
+
       const formData = new FormData(formEl);
       const data = {};
       // 处理多选 select：同名 key 会出现多次，需要合并为逗号分隔字符串

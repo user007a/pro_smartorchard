@@ -70,6 +70,37 @@
   var localWriteMark = 0;
   var persistTimer = null;
 
+  /* ============================================================
+   * 显式删除登记
+   * ------------------------------------------------------------
+   * 聚合保存是「按业务编号 upsert」，删除必须显式上报 deleted 清单，
+   * 后端才会把对应行置 is_deleted=1。若只提交快照不做删除声明，
+   * 被删的行会在下一次保存时被 upsert「复活」——表现为「删除后刷新又回来了」。
+   * key 为聚合子数组名（plans / records / processes / shipments），
+   * value 为被删记录的业务编号数组。
+   * ============================================================ */
+  var pendingDeletes = {};
+  function markDeleted(listName, id) {
+    if (!id) return;
+    var arr = pendingDeletes[listName] || (pendingDeletes[listName] = []);
+    if (arr.indexOf(id) === -1) arr.push(id);
+  }
+  function takeDeleted() {
+    var out = {};
+    Object.keys(pendingDeletes).forEach(function (k) {
+      if (pendingDeletes[k] && pendingDeletes[k].length) out[k] = pendingDeletes[k].slice();
+    });
+    return out;
+  }
+  function clearDeleted(sent) {
+    Object.keys(sent || {}).forEach(function (k) {
+      pendingDeletes[k] = (pendingDeletes[k] || []).filter(function (id) {
+        return sent[k].indexOf(id) === -1;
+      });
+      if (!pendingDeletes[k].length) delete pendingDeletes[k];
+    });
+  }
+
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
     if (!global.Api.get || !global.Api.create) return null;
@@ -123,15 +154,19 @@
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
     var ctx = { baseIdByName: {}, plotIdByCode: {}, planIdByCode: {}, processIdByCode: {} };
+    var deletedPayload = takeDeleted();
     var agg = {
       plans: clone(ensure().plans || []),
       records: clone(ensure().records || []),
       processes: clone(ensure().processes || []),
       shipments: clone(ensure().shipments || []),
-      deleted: {},
+      deleted: deletedPayload,
     };
     var body = global.HarvestMapper.fromAggregate(agg, ctx);
-    return api.create('harvest/aggregate', body);
+    return api.create('harvest/aggregate', body).then(function (res) {
+      if (res && res.ok) clearDeleted(deletedPayload);
+      return res;
+    });
   }
 
   /** 调度后端持久化（防抖） */
@@ -1317,6 +1352,8 @@
       if (used3.length) return { ok: false, message: '该处理单已有 ' + used3.length + ' 张发货单，不能删除' };
     }
     d[entity].splice(idx, 1);
+    // 登记删除清单：聚合保存按业务编号 upsert，不显式声明删除会被「复活」
+    markDeleted(entity, id);
     commit(entity + '-remove:' + id);
     return { ok: true, message: '' };
   }

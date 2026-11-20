@@ -146,6 +146,7 @@
 
 <script src="js/shared/mall-store.js"></script>
 <script src="../common/js/api.js"></script>
+<script src="../common/js/confirm.js"></script>
 <script>
 /* 严格空库模式：轮播图来自后端 API（sf_mall_banner）；快捷入口无对应聚合表，保持空态 */
 var BANNER_RESOURCE = 'mall_banner';
@@ -387,12 +388,16 @@ function moveBanner(id, step) {
 }
 
 function removeBanner(id) {
-  if (!confirm('确认删除该轮播图？')) return;
-  var home = readHome();
-  home.banners = home.banners.filter(function (b) { return b.id !== id; });
-  writeHome(home);
-  render();
-  toast('轮播图已删除');
+  var home0 = readHome();
+  var target = (home0.banners || []).filter(function (b) { return b.id === id; })[0];
+  Confirm2.delete('确认删除轮播图「' + ((target && target.title) || id) + '」吗？此操作不可撤销。').then(function (ok) {
+    if (!ok) return;
+    var home = readHome();
+    home.banners = home.banners.filter(function (b) { return b.id !== id; });
+    writeHome(home);
+    render();
+    toast('轮播图已删除');
+  });
 }
 
 /* ---------- 快捷入口 ---------- */
@@ -454,19 +459,25 @@ function moveQuick(index, step) {
 }
 
 function removeQuick(index) {
-  if (!confirm('确认删除该快捷入口？')) return;
-  var home = readHome();
-  home.quickEntries.splice(index, 1);
-  writeHome(home);
-  render();
-  toast('快捷入口已删除');
+  var home0 = readHome();
+  var target = (home0.quickEntries || [])[index];
+  Confirm2.delete('确认删除快捷入口「' + ((target && target.name) || index) + '」吗？此操作不可撤销。').then(function (ok) {
+    if (!ok) return;
+    var home = readHome();
+    home.quickEntries.splice(index, 1);
+    writeHome(home);
+    render();
+    toast('快捷入口已删除');
+  });
 }
 
 /* 严格空库模式：不再写死默认装修配置，改为从数据库重新加载 */
 function resetHome() {
-  if (!confirm('重新从数据库加载轮播图？当前未保存的改动将被丢弃。')) return;
-  loadHome();
-  toast('已重新加载');
+  Confirm2.ask('重新从数据库加载轮播图？当前未保存的改动将被丢弃。', { title: '重新加载' }).then(function (ok) {
+    if (!ok) return;
+    loadHome();
+    toast('已重新加载');
+  });
 }
 
 document.addEventListener('DOMContentLoaded', loadHome);

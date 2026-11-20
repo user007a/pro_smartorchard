@@ -493,7 +493,12 @@
   }
 
   function safeSet(key, value){
-    try { localStorage.setItem(key, value); return true; } catch(e){ return false; }
+    // 标记为「内部落盘」：不计入 api.js 的用户写入竞态计数
+    var prevFlag = global.__STRICT_DB_INTERNAL_WRITE__;
+    global.__STRICT_DB_INTERNAL_WRITE__ = true;
+    try { localStorage.setItem(key, value); return true; }
+    catch(e){ return false; }
+    finally { global.__STRICT_DB_INTERNAL_WRITE__ = prevFlag; }
   }
 
   function load(){

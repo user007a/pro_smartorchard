@@ -720,6 +720,7 @@
 <!-- 引入交互脚本 -->
 <script src="js/material-store.js"></script>
 <script src="../common/js/api.js"></script>
+<script src="../common/js/confirm.js"></script>
 <script>
 // 农资数据（安全库存以 stock 字段表示，当前库存取自共享 MaterialStore）
 let materialData = [];
@@ -1215,10 +1216,15 @@ function closeEditModal() {
 // 读取表单中的档案字段（保存/编辑共用）
 function collectFormData() {
   const typeSelectEl = document.getElementById('materialType');
+  // 下拉框可能因字典为空而没有任何选项（selectedIndex = -1），
+  // 直接读 options[-1].text 会抛异常导致保存中断，此处做兜底。
+  const typeOption = (typeSelectEl && typeSelectEl.selectedIndex >= 0)
+    ? typeSelectEl.options[typeSelectEl.selectedIndex]
+    : null;
   return {
     name: document.getElementById('materialName').value,
-    type: typeSelectEl.value,
-    typeName: typeSelectEl.options[typeSelectEl.selectedIndex].text,
+    type: (typeSelectEl && typeSelectEl.value) || 'other',
+    typeName: typeOption ? typeOption.text : '其他',
     spec: document.getElementById('materialSpec').value,
     unit: document.getElementById('materialUnit').value,
     price: document.getElementById('materialPrice').value || '0.00',
@@ -1405,18 +1411,20 @@ function doExport() {
 
 // 删除农资
 function deleteMaterial(code) {
-  if (!confirm(`确定要删除农资 ${code} 吗？`)) return;
   var id = rowIdOf(code);
   if (!id) { alert('未找到该农资记录'); return; }
-  Api.remove(MATERIAL_RESOURCE, id).then(function (res) {
-    if (!res || !res.ok) {
-      alert('删除失败：' + ((res && res.message) || '后端拒绝写入'));
-      return;
-    }
-    alert('删除成功');
-    loadMaterials();
-  }).catch(function (e) {
-    alert('删除失败：' + ((e && e.message ? e.message : '网络异常')));
+  Confirm2.delete('确定要删除农资 ' + code + ' 吗？此操作不可撤销。').then(function (ok) {
+    if (!ok) return;
+    Api.remove(MATERIAL_RESOURCE, id).then(function (res) {
+      if (!res || !res.ok) {
+        alert('删除失败：' + ((res && res.message) || '后端拒绝写入'));
+        return;
+      }
+      alert('删除成功');
+      loadMaterials();
+    }).catch(function (e) {
+      alert('删除失败：' + ((e && e.message ? e.message : '网络异常')));
+    });
   });
 }
 

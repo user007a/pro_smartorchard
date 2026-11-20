@@ -71,6 +71,35 @@
   var localWriteMark = 0;
   var persistTimer = null;
 
+  /* ============================================================
+   * 显式删除登记
+   * ------------------------------------------------------------
+   * 聚合保存是「按业务编号 upsert」，删除必须显式上报 deleted 清单，
+   * 后端才会把对应行置 is_deleted=1。若只提交快照不做删除声明，
+   * 被删的行会在下一次保存时被 upsert「复活」——表现为「删除后刷新又回来了」。
+   * ============================================================ */
+  var pendingDeletes = {};
+  function markDeleted(listName, id) {
+    if (!id) return;
+    var arr = pendingDeletes[listName] || (pendingDeletes[listName] = []);
+    if (arr.indexOf(id) === -1) arr.push(id);
+  }
+  function takeDeleted() {
+    var out = {};
+    Object.keys(pendingDeletes).forEach(function (k) {
+      if (pendingDeletes[k] && pendingDeletes[k].length) out[k] = pendingDeletes[k].slice();
+    });
+    return out;
+  }
+  function clearDeleted(sent) {
+    Object.keys(sent || {}).forEach(function (k) {
+      pendingDeletes[k] = (pendingDeletes[k] || []).filter(function (id) {
+        return sent[k].indexOf(id) === -1;
+      });
+      if (!pendingDeletes[k].length) delete pendingDeletes[k];
+    });
+  }
+
   function backendApi() {
     if (typeof global.Api !== 'object' && typeof global.Api !== 'function') return null;
     if (!global.Api.get || !global.Api.create) return null;
@@ -122,6 +151,7 @@
     var api = backendApi();
     if (!api || !backendEnabled()) return Promise.resolve({ ok: false, message: '未登录或依赖未就绪' });
     var ctx = { baseIdByName: {}, plotIdByCode: {}, routeIdByCode: {}, stdIdByCode: {}, planIdByCode: {}, taskIdByCode: {} };
+    var deletedPayload = takeDeleted();
     var agg = {
       standards: clone(ensure().standards || []),
       plans: clone(ensure().plans || []),
@@ -133,10 +163,13 @@
       sorties: clone(ensure().sorties || []),
       flightLogs: clone(ensure().flightLogs || []),
       anomalies: clone(ensure().anomalies || []),
-      deleted: {},
+      deleted: deletedPayload,
     };
     var body = global.ProductionMapper.fromAggregate(agg, ctx);
-    return api.create('production/aggregate', body);
+    return api.create('production/aggregate', body).then(function (res) {
+      if (res && res.ok) clearDeleted(deletedPayload);
+      return res;
+    });
   }
 
   /** 调度后端持久化（防抖） */
@@ -783,9 +816,14 @@
       d.tasks.forEach(function (t) { if (String(t.patrolPlanId) === String(id)) t.patrolPlanId = ''; });
     }
     if (entity === 'sorties') {
+      // 级联删除的飞行日志一并登记，否则刷新后日志会复活
+      d.flightLogs.filter(function (l) { return String(l.sortieId) === String(id); })
+        .forEach(function (l) { markDeleted('flightLogs', l.id); });
       d.flightLogs = d.flightLogs.filter(function (l) { return String(l.sortieId) !== String(id); });
     }
     d[entity] = d[entity].filter(function (x) { return String(x.id) !== String(id); });
+    // 登记删除清单：聚合保存按业务编号 upsert，不显式声明删除会被「复活」
+    markDeleted(entity, id);
     commit(entity + '-remove:' + id);
     return true;
   }
