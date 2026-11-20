@@ -1177,7 +1177,6 @@
     <div class="modal-body" id="modalBody"></div>
     <div class="modal-footer" id="modalFooter">
       <button class="btn btn-secondary" onclick="closeModal()">取消</button>
-      <button class="btn btn-primary" onclick="submitModal()">确定</button>
     </div>
   </div>
 </div>
@@ -1552,17 +1551,15 @@ function searchLogs() {
 function openModal(title, body, footer, extraClass) {
   document.getElementById('modalTitle').innerHTML = title;
   document.getElementById('modalBody').innerHTML = body;
-  document.getElementById('modalFooter').innerHTML = footer || '<button class="btn btn-secondary" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="submitModal()">确定</button>';
+  /* 每个弹窗都必须自带 footer（指向各自的落库函数）。
+     这里不给「确定」兜底按钮，避免出现「点了确定只弹操作成功、实际没写入」的假成功。 */
+  document.getElementById('modalFooter').innerHTML = footer || '<button class="btn btn-secondary" onclick="closeModal()">取消</button>';
   const modalEl = document.querySelector('#modalOverlay .modal');
   modalEl.className = 'modal' + (extraClass ? ' ' + extraClass : '');
   document.getElementById('modalOverlay').classList.add('show');
 }
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('show');
-}
-function submitModal() {
-  closeModal();
-  alert('操作成功');
 }
 function openAddUserModal() {
   // 严格空库模式：不展示任何密码字段，密码写入由后端专用接口负责（当前不支持）
@@ -2054,8 +2051,6 @@ function switchTab(event, tabId) {
  *   岗位：编码 + 名称 + 顺序的平铺列表，分页复用 Pagination 组件
  *   严格空库模式：数据由后端 API 取数，不再写 localStorage
  * ============================================================ */
-const DEPT_STORAGE_KEY = 'smartorchard_dept';
-const POST_STORAGE_KEY = 'smartorchard_post';
 /* 严格空库模式：删除写死的示例时间常量 */
 
 let mockDepts = [];
@@ -2066,8 +2061,6 @@ let deptCollapsed = {};
 let selectedDeptIds = [];
 let selectedPostIds = [];
 
-function loadLocal(key, target) { /* no-op：无本地兜底数据 */ }
-function saveLocal(key, data) { /* no-op：不写本地业务数据 */ }
 
 /* ============================================================
  * 部门 / 岗位：读写均走后端（sf_dept / sf_post）
@@ -2217,13 +2210,31 @@ function toggleAllDepts(expand) {
 }
 // 批量保存：读取表格中所有「排序」输入框的值后统一落库并按新顺序重排
 function batchSaveDeptSort() {
+  /* 排序必须真正落库（sf_dept.sort_order）：
+     只改内存数组再提示「已保存」是假成功——刷新后顺序就回去了。 */
+  const changed = [];
   document.querySelectorAll('[data-dept-sort]').forEach(function (input) {
     const dept = mockDepts.find(function (d) { return d.id === Number(input.dataset.deptSort); });
-    if (dept) dept.sort = Number(input.value) || 0;
+    if (!dept) return;
+    const next = Number(input.value) || 0;
+    if (dept.sort === next) return;
+    dept.sort = next;
+    changed.push({ id: dept.id, sort_order: next });
   });
-  saveLocal(DEPT_STORAGE_KEY, mockDepts);
-  renderDeptTable();
-  toastDept('部门排序已保存');
+  if (!changed.length) { toastDept('排序未变化'); return; }
+  Promise.all(changed.map(function (c) {
+    return Api.update(DEPT_RESOURCE, c.id, { sort_order: c.sort_order });
+  })).then(function (results) {
+    const failed = results.filter(function (r) { return !r || !r.ok; });
+    if (failed.length) {
+      toastDept('排序保存失败：' + ((failed[0] && failed[0].message) || '后端拒绝写入'));
+      return;
+    }
+    renderDeptTable();
+    toastDept('部门排序已保存');
+  }).catch(function (e) {
+    toastDept('排序保存失败：' + ((e && e.message) || '网络异常'));
+  });
 }
 function toggleDeptCheck(id, checked) {
   const i = selectedDeptIds.indexOf(id);

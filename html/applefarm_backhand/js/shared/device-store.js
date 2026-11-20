@@ -1898,7 +1898,6 @@
       var d = ensure();
       var n = d.logs.length;
       d.logs = [];
-      try { localStorage.setItem('device_log_cleared_at', stampFull()); } catch (e) { /* ignore */ }
       addAudit('delete', 'log', '', '清空设备日志 ' + n + ' 条', null, null);
       broadcast('log-clear');
       return n;

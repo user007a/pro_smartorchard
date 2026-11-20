@@ -959,7 +959,6 @@
     var postChanged = false;
     ps.forEach(function (p) { if (p && !p.status) { p.status = 'approved'; postChanged = true; } });
     if (postChanged) safeWrite(KEYS.posts, ps);
-    try { localStorage.setItem('mall_store_version', String(VERSION)); } catch (e) {}
     return { ok: true, data: { version: VERSION, ordersChanged: changed, postsChanged: postChanged } };
   }
 
