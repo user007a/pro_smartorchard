@@ -43,7 +43,9 @@
       'smartorchard_token', 'snzg_logged_in', 'snzg_user',
       'snzg_remember', 'snzg_login_lock', 'snzg_notification', 'snzg_2fa',
       /* 纯 UI 偏好：不产生业务记录，允许落盘以保留界面状态 */
-      'sidebar-collapsed', 'sidebar-tabs'
+      'sidebar-collapsed', 'sidebar-tabs',
+      /* 移动端登录页「记住用户名」：只记账号、不记密码，属会话偏好 */
+      'rememberedUser'
     ];
     var ALLOW_PREFIX = ['snzg_avatar_', 'snzg_alert_'];
     function allowed(key) {

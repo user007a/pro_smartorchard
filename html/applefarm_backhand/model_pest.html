@@ -200,6 +200,19 @@
 </div>
 
 <script>
+
+/* ---------- 模型建议 → 农事计划预填 ----------
+   写入契约与 farming_plan.html 的 readPrefill() 一致：
+   单个对象 { name, type, base, manager, startDate, endDate, desc, model }。
+   存 sessionStorage：严格模式下 localStorage 的业务键会被闸门重定向到
+   内存镜像，跨页跳转后取不到。 */
+function writeFarmingPrefill(payload) {
+  try {
+    sessionStorage.setItem('orchard_farming_prefill', JSON.stringify(payload || {}));
+    return true;
+  } catch (e) { return false; }
+}
+
   /* 模型页面通用页签切换 */
   function mpSwitchTab(name) {
     document.querySelectorAll('.mp-tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
@@ -369,17 +382,15 @@ function buildPestMap() {
       if (f) f.src = url; else location.href = url;
     };
 
-    // 防治按钮 → 写入 localStorage 并跳转
+    // 防治按钮 → 写入会话内预填草稿并跳转
     document.getElementById('pd-treat').onclick = () => {
       try {
-        const prefills = JSON.parse(localStorage.getItem('orchard_farming_prefill') || '[]');
-        prefills.push({
-          title: (p.pest || '病虫害') + '防治任务（来自病虫害地图）',
-          taskType: '病虫害防治',
-          plotRange: p.id + ' ' + p.name,
-          priority: p.level === 'high' ? '高' : '中'
+        writeFarmingPrefill({
+          name: (p.pest || '病虫害') + '防治任务（来自病虫害地图）',
+          type: '病虫害防治',
+          desc: '推荐地块：' + p.id + ' ' + p.name,
+          model: '病虫害地图'
         });
-        localStorage.setItem('orchard_farming_prefill', JSON.stringify(prefills));
         Toast.show('已为 ' + p.name + ' 生成防治任务', 'success');
         setTimeout(() => {
           var f = window.parent.document.querySelector('iframe[name="mainFrame"]');
@@ -567,11 +578,14 @@ function selectPest(tag) {
 
 function adoptPestAdvice(pestName) {
   try {
-    const prefills = JSON.parse(localStorage.getItem('orchard_farming_prefill') || '[]');
     const high = PEST_MODEL.kpi[0] ? PEST_MODEL.kpi[0].value : '--';
     const mid = PEST_MODEL.kpi[1] ? PEST_MODEL.kpi[1].value : '--';
-    prefills.push({ title: pestName + '任务（来自病虫害模型）', taskType: '病虫害防治', plotRange: '高风险' + high + '块 + 中风险' + mid + '块', priority: '高' });
-    localStorage.setItem('orchard_farming_prefill', JSON.stringify(prefills));
+    writeFarmingPrefill({
+      name: pestName + '任务（来自病虫害模型）',
+      type: '病虫害防治',
+      desc: '高风险' + high + '块 + 中风险' + mid + '块',
+      model: '病虫害模型'
+    });
     Toast.show('已生成' + pestName + '任务', 'success');
     setTimeout(() => {
       const f = window.parent.document.querySelector('iframe[name="mainFrame"]');

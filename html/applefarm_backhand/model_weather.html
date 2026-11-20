@@ -151,6 +151,19 @@
 </div>
 
 <script>
+
+/* ---------- 模型建议 → 农事计划预填 ----------
+   写入契约与 farming_plan.html 的 readPrefill() 一致：
+   单个对象 { name, type, base, manager, startDate, endDate, desc, model }。
+   存 sessionStorage：严格模式下 localStorage 的业务键会被闸门重定向到
+   内存镜像，跨页跳转后取不到。 */
+function writeFarmingPrefill(payload) {
+  try {
+    sessionStorage.setItem('orchard_farming_prefill', JSON.stringify(payload || {}));
+    return true;
+  } catch (e) { return false; }
+}
+
   /* 模型页面通用页签切换 */
   function mpSwitchTab(name) {
     document.querySelectorAll('.mp-tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
@@ -274,9 +287,12 @@ function selectDay(el) {
 
 function createPrecaution(name) {
   try {
-    const prefills = JSON.parse(localStorage.getItem('orchard_farming_prefill') || '[]');
-    prefills.push({ title: name + '应对任务（来自气象模型）', taskType: name + '应对', plotRange: '全部地块', priority: '高' });
-    localStorage.setItem('orchard_farming_prefill', JSON.stringify(prefills));
+    writeFarmingPrefill({
+      name: name + '应对任务（来自气象模型）',
+      type: name + '应对',
+      desc: '适用地块：全部地块',
+      model: '气象模型'
+    });
     Toast.show('已生成' + name + '预案任务', 'success');
     setTimeout(() => {
       const f = window.parent.document.querySelector('iframe[name="mainFrame"]');

@@ -980,10 +980,13 @@ function getTypeName(code) {
   return map[code] || '其他';
 }
 
-/* ---------- 模型预填（保持原能力） ---------- */
+/* ---------- 模型预填（保持原能力） ----------
+   预填内容是「模型页 → 农事计划」的会话内一次性草稿：
+   走 sessionStorage（严格模式下 localStorage 只放会话/UI 偏好，
+   业务键会被闸门重定向到内存镜像，跨页跳转后取不到）。 */
 function readPrefill() {
   try {
-    var raw = localStorage.getItem('orchard_farming_prefill');
+    var raw = sessionStorage.getItem('orchard_farming_prefill');
     if (!raw) return null;
     var pre = JSON.parse(raw);
     return (pre && !pre.consumed) ? pre : null;
@@ -1024,7 +1027,7 @@ function adoptPrefill() {
   var pre = readPrefill();
   if (!pre) { document.getElementById('prefillBanner').style.display = 'none'; return; }
   pre.consumed = true;
-  localStorage.setItem('orchard_farming_prefill', JSON.stringify(pre));
+  try { sessionStorage.setItem('orchard_farming_prefill', JSON.stringify(pre)); } catch (e) {}
   document.getElementById('prefillBanner').style.display = 'none';
   Modal.show('modal-add-plan');
   Toast.success('已采纳模型建议，请补充地块与计划量');
