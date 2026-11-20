@@ -264,7 +264,9 @@
         </div>
         <div class="form-field">
           <label>所属基地</label>
-          <input type="text" id="editBase" placeholder="如 天水麦积区基地">
+          <select id="editBase" data-base-source data-base-value="id" data-base-all-label="未分配基地">
+            <option value="">未分配基地</option>
+          </select>
         </div>
       </div>
     </div>
@@ -426,7 +428,7 @@ function renderTable() {
       '<td class="text-mono">' + esc(s.username) + '</td>' +
       '<td><span class="role-tag ' + (ROLE_CLASS[s.role] || 'worker') + '">' + esc(s.role) + '</span></td>' +
       '<td class="text-mono">' + esc(s.phone) + '</td>' +
-      '<td>' + esc(s.base || '—') + '</td>' +
+      '<td>' + esc(s.base || (window.BaseOptions ? BaseOptions.nameOf(s.baseId) : '') || '—') + '</td>' +
       '<td><span class="status-tag ' + (disabled ? 'disabled' : 'active') + '">' + (disabled ? '已停用' : '启用中') + '</span></td>' +
       '<td><div class="action-btns">' +
         '<button class="action-btn detail" onclick="openEdit(\'' + esc(s.username) + '\')">编辑</button>' +
@@ -467,7 +469,9 @@ function openEdit(username) {
   document.getElementById('editStatus').value = s ? (s.status || 'active') : 'active';
   document.getElementById('editIsExpert').checked = !!(s && s.isExpert);
   document.getElementById('editExpertTitle').value = s ? (s.expertTitle || '') : '';
-  document.getElementById('editBase').value = s ? (s.base || '') : '';
+  var baseSel = document.getElementById('editBase');
+  baseSel.dataset.want = s ? (s.baseId || '') : '';
+  baseSel.value = baseSel.dataset.want;
   document.getElementById('pwdRequired').style.display = s ? 'none' : '';
 
   document.getElementById('editModal').classList.add('show');
@@ -518,7 +522,7 @@ function submitEdit() {
     name: name,
     phone: phone,
     role: document.getElementById('editRole').value,
-    baseId: document.getElementById('editBase').value.trim(),
+    baseId: document.getElementById('editBase').value,
     isExpert: isExpert,
     expertise: isExpert ? document.getElementById('editExpertTitle').value.trim() : '',
     status: document.getElementById('editStatus').value
@@ -591,10 +595,17 @@ function resetToMobileDefault() {
   });
 }
 
+document.addEventListener('base-options:ready', function (e) {
+  var sel = e.target;
+  if (sel && sel.id === 'editBase' && sel.dataset.want) sel.value = sel.dataset.want;
+});
+
 document.addEventListener('DOMContentLoaded', function () {
   MobileOpsStore.ready();
   // 严格空库模式：账号一律由后端 API 拉取，不再播种演示账号
   loadStaff();
+  // 基地下拉就绪后，刷新表格中显示的基地名称
+  if (window.BaseOptions) BaseOptions.load().then(function () { renderTable(); });
   MobileOpsStore.subscribe(function (key) {
     if (key === MobileOpsStore.KEYS.staff) renderTable();
   });

@@ -500,35 +500,6 @@ function openCertCreateForm(preset) {
 }
 
 const PageActions = (function() {
-  // 模拟数据
-  const mockData = {
-    // 产品源（证书签发 / 批次管理 / 溯源编码共用）
-    products: ['花牛苹果', '金帅苹果', '秦冠苹果', '礼盒装苹果'],
-    // VR 全景图片库（来源于原 VR 全景页，归并到基地管理使用）
-    vrPanoramas: [
-      { id: 1, name: '苹果园全景-入口', group: '苹果园', image: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=400&h=300&fit=crop' },
-      { id: 2, name: '苹果园全景-观景台', group: '苹果园', image: 'https://images.unsplash.com/photo-1570913149827-d2ac84ab3f9a?w=400&h=300&fit=crop' },
-      { id: 3, name: '苹果园全景-采摘区', group: '苹果园', image: 'https://images.unsplash.com/photo-1584306670957-acf935f5033c?w=400&h=300&fit=crop' },
-      { id: 4, name: '葡萄园全景-入口', group: '葡萄园', image: 'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?w=400&h=300&fit=crop' },
-      { id: 5, name: '葡萄园全景-藤架区', group: '葡萄园', image: 'https://images.unsplash.com/photo-1560493676-04071c5f467b?w=400&h=300&fit=crop' },
-      { id: 6, name: '樱桃园全景-入口', group: '樱桃园', image: 'https://images.unsplash.com/photo-1528821128474-27f963b062bf?w=400&h=300&fit=crop' },
-      { id: 7, name: '樱桃园全景-采摘区', group: '樱桃园', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=300&fit=crop' },
-      { id: 8, name: '樱桃园全景-观景台', group: '樱桃园', image: 'https://images.unsplash.com/photo-1515907007725-a1e3d70c6e73?w=400&h=300&fit=crop' }
-    ],
-    // 基地状态 4 态：planning 筹建中 / built 已建成 / active 运营中 / disabled 已停用
-    enterprises: [],
-    plots: [],
-    // 证书数据已迁移至共享数据层 CertStore（js/shared/cert-store.js），此处不再保留副本
-    certRecords: []
-  };
-
-  // 当前页码和每页条数
-  let currentPage = 1;
-  let pageSize = 10;
-  let totalPages = 1;
-  // 最近一次 renderPagination 的上下文，供 changePage 重绘复用
-  let paginationContext = null;
-
   // 获取状态文本
   function getStatusText(status, type = 'default') {
     const statusMap = {
@@ -672,27 +643,6 @@ const PageActions = (function() {
     html += data.map((row, index) => renderRowHtml(row, index, currentColumns)).join('');
 
     html += '</tbody>';
-    container.innerHTML = html;
-  }
-
-  // 渲染分页
-  function renderPagination(total, current, containerSelector) {
-    const container = document.querySelector(containerSelector);
-    if (!container) return;
-
-    totalPages = Math.ceil(total / pageSize);
-    paginationContext = { total, containerSelector };
-
-    let html = '<div class="pagination">';
-    html += `<button class="page-btn ${current === 1 ? 'disabled' : ''}" onclick="PageActions.changePage(${current - 1})">‹</button>`;
-    
-    for (let i = 1; i <= totalPages; i++) {
-      html += `<button class="page-btn ${current === i ? 'active' : ''}" onclick="PageActions.changePage(${i})">${i}</button>`;
-    }
-    
-    html += `<button class="page-btn ${current === totalPages ? 'disabled' : ''}" onclick="PageActions.changePage(${current + 1})">›</button>`;
-    html += '</div>';
-
     container.innerHTML = html;
   }
 
@@ -961,27 +911,6 @@ const PageActions = (function() {
         // 证书新建走独立弹窗（分类切换需重绘字段）
         openCertCreateForm();
         return;
-      case 'cert-issue':
-        title = '开具合格证';
-        fields = [
-          { name: 'template', label: '选择模板', type: 'select', options: [
-            { value: '花牛苹果合格证', label: '花牛苹果合格证' },
-            { value: '红富士苹果合格证', label: '红富士苹果合格证' },
-            { value: '礼盒装合格证', label: '礼盒装合格证' },
-            { value: '原产地证明合格证', label: '原产地证明合格证' }
-          ]},
-          { name: 'product', label: '产品名称', type: 'select', options: mockData.products.map(p => ({ value: p, label: p })) },
-          { name: 'batch', label: '批次号', type: 'text', required: true },
-          { name: 'produceDate', label: '生产日期', type: 'date', required: true },
-          { name: 'netWeight', label: '净含量', type: 'text', required: true },
-          { name: 'grade', label: '等级', type: 'select', options: [
-            { value: '特级', label: '特级' },
-            { value: '一级', label: '一级' },
-            { value: '二级', label: '二级' }
-          ]},
-          { name: 'tester', label: '检测人', type: 'text', required: true },
-        ];
-        break;
     }
 
     Modal.form({
@@ -1338,27 +1267,7 @@ const PageActions = (function() {
     }
   }
 
-  // 分页切换：真实生效——更新当前页并重绘分页条与数据表格
-  function changePage(page) {
-    if (page < 1 || page > totalPages) return;
-    currentPage = page;
-    if (!paginationContext) {
-      Toast.show('分页由列表组件统一接管，本页未启用通用分页', 'info');
-      return;
-    }
-    // 列表数据源按当前页切片后重绘 tbody
-    const rows = sliceByPage(mockData[document.body.dataset.activePage] || []);
-    const tbody = document.querySelector('.data-table tbody');
-    if (tbody && rows.length) {
-      const columns = currentColumns || [];
-      if (columns.length) {
-        tbody.innerHTML = rows.map((row, i) => renderRowHtml(row, i + (currentPage - 1) * pageSize, columns)).join('');
-      }
-    }
-    renderPagination(paginationContext.total, currentPage, paginationContext.containerSelector);
-  }
-
-  // 通用分页所用的列定义与行模板（由 renderTable 记录，供 changePage 复用）
+  // 通用分页所用的列定义与行模板（由 renderTable 记录）
   let currentColumns = [];
   function renderRowHtml(row, index, columns) {
     let html = `<tr data-id="${row.id}" data-index="${index}">`;
@@ -1380,12 +1289,6 @@ const PageActions = (function() {
       <button class="action-btn delete" onclick="PageActions.deleteItem('${row.id}')">删除</button>
     </div></td></tr>`;
     return html;
-  }
-
-  function sliceByPage(list) {
-    const arr = Array.isArray(list) ? list : [];
-    const start = (currentPage - 1) * pageSize;
-    return arr.slice(start, start + pageSize);
   }
 
   // 合格证开具已迁移到 cert_issue.html 页面自有实现（校验 / 真实二维码 / 完整落库），
@@ -1503,9 +1406,7 @@ const PageActions = (function() {
     approveCert,
     rejectCert,
     queryCert,
-    changePage,
-    issueCert,
-    mockData
+    issueCert
   };
 })();
 

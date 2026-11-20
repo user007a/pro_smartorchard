@@ -390,7 +390,9 @@
       <div class="form-row">
         <div class="form-field">
           <label>基地</label>
-          <input type="text" id="certEditBase" placeholder="如 麦积区基地 A区">
+          <select id="certEditBase" data-base-source data-base-all-label="请选择基地">
+            <option value="">请选择基地</option>
+          </select>
         </div>
         <div class="form-field">
           <label>地块</label>
@@ -673,7 +675,7 @@ function genCertNo() {
 function readH5Trees() {
   var out = [];
   var seen = {};
-  function push(rawCode, adopter, variety) {
+  function push(rawCode, adopter, variety, base) {
     var code = S ? S.normalizeCode(rawCode) : String(rawCode || '').replace(/^AD-/i, '');
     if (!code || seen[code]) return;
     seen[code] = 1;
@@ -682,12 +684,13 @@ function readH5Trees() {
       code: code,
       full: 'AD-' + code,
       adopter: adopter || (tree ? tree.adopter : ''),
-      variety: variety || (tree ? tree.variety : '')
+      variety: variety || (tree ? tree.variety : ''),
+      base: base || (tree ? tree.baseName : '')
     });
   }
   if (S) {
     S.trees().filter(function (t) { return t.status === 'adopted'; }).forEach(function (t) {
-      push(t.treeCode, t.adopter, t.variety);
+      push(t.treeCode, t.adopter, t.variety, t.baseName);
     });
   }
   readJSON(H5_ADOPT_KEY, []).forEach(function (a) {
@@ -706,7 +709,7 @@ function refreshTreeOptions() {
   var html = '<option value="">请选择果树</option>';
   trees.forEach(function (t) {
     var label = t.code + (t.variety ? ' · ' + t.variety : '') + (t.adopter ? ' / ' + t.adopter : '');
-    html += '<option value="' + esc(t.code) + '" data-full="' + esc(t.full) + '" data-adopter="' + esc(t.adopter) + '" data-variety="' + esc(t.variety) + '">' + esc(label) + '</option>';
+    html += '<option value="' + esc(t.code) + '" data-full="' + esc(t.full) + '" data-adopter="' + esc(t.adopter) + '" data-variety="' + esc(t.variety) + '" data-base="' + esc(t.base || '') + '">' + esc(label) + '</option>';
   });
   sel.innerHTML = html;
   if (current) sel.value = current;
@@ -720,6 +723,20 @@ document.addEventListener('change', function (e) {
   var full = opt.getAttribute('data-full') || '';
   if (full) document.getElementById('certEditAdopter').value = opt.getAttribute('data-adopter') || '';
   if (opt.getAttribute('data-variety')) document.getElementById('certEditVariety').value = opt.getAttribute('data-variety');
+  var base = opt.getAttribute('data-base') || '';
+  if (base) {
+    var baseSel = document.getElementById('certEditBase');
+    if (baseSel && Array.prototype.some.call(baseSel.options, function (o) { return o.value === base; })) {
+      baseSel.value = base;
+    }
+  }
+});
+
+/* 基地下拉异步加载完成后，回填编辑时待选中的基地 */
+document.addEventListener('base-options:ready', function (e) {
+  var sel = e.target;
+  if (!sel || sel.id !== 'certEditBase') return;
+  if (sel.dataset.want) sel.value = sel.dataset.want;
 });
 
 /* ---------- 模板下拉框 ---------- */
@@ -862,7 +879,9 @@ function openCertEdit(certNo) {
   document.getElementById('certEditPeriodEnd').value   = (item && item.periodEnd)   || '';
   document.getElementById('certEditVariety').value = (item && item.variety) || '';
   document.getElementById('certEditYield').value   = (item && item.expectedYield) || '';
-  document.getElementById('certEditBase').value    = (item && item.base)    || '';
+  var baseSel = document.getElementById('certEditBase');
+  baseSel.dataset.want = (item && item.base) || '';
+  baseSel.value = baseSel.dataset.want;
   document.getElementById('certEditPlot').value    = (item && item.plot)    || '';
   document.getElementById('certEditTpl').value     = (item && item.templateId) || '';
   document.getElementById('certEditStatus').value  = (item && item.status) || 'pending';

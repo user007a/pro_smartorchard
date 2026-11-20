@@ -247,7 +247,7 @@
     padding:var(--space-xl);
     opacity:0;
     visibility:hidden;
-    transition:all var(--transition-normal);
+    transition: opacity  var(--transition-normal);
   }
   .modal-box {
     background:var(--bg-card);
@@ -550,14 +550,8 @@
               <span class="date-separator">至</span>
               <input type="date" class="search-input" id="endDate">
             </div>
-            <select class="search-select" id="baseSelect" style="min-width:160px;">
+            <select class="search-select" id="baseSelect" style="min-width:160px;" data-base-source data-base-all-label="全部基地">
               <option value="">全部基地</option>
-              <option value="all">全部基地汇总</option>
-              <option value="yantai">天水麦积区基地</option>
-              <option value="weihai">天水秦州基地</option>
-              <option value="penglai">天水甘谷基地</option>
-              <option value="qingdao">青岛莱西基地</option>
-              <option value="longkou">龙口南山基地</option>
             </select>
 
           <div class="search-actions"><button class="jg-btn jg-btn-primary" id="btnSearch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" id="btnReset">重置</button></div>
@@ -732,13 +726,8 @@
       </div>
       <div class="form-group">
         <label>涉及基地</label>
-        <select class="form-select" id="generateBase">
+        <select class="form-select" id="generateBase" data-base-source data-base-all-label="全部基地汇总">
           <option value="all">全部基地汇总</option>
-          <option value="yantai">天水麦积区基地</option>
-          <option value="weihai">天水秦州基地</option>
-          <option value="penglai">天水甘谷基地</option>
-          <option value="qingdao">青岛莱西基地</option>
-          <option value="longkou">龙口南山基地</option>
         </select>
       </div>
       <div class="form-group" id="dateRangeGroup" style="display:none;">
@@ -868,7 +857,7 @@
     <div class="modal-body">
       <div class="form-group">
         <label>报告名称</label>
-        <input type="text" class="search-input" id="downloadFileName" style="max-width:100%;" readonly>
+        <input type="text" class="search-input" id="downloadFileName" placeholder="选择报告后自动填充" style="max-width:100%;" readonly>
       </div>
       <div class="form-group">
         <label>导出格式</label>
@@ -987,10 +976,9 @@
         let matchDate = true;
         if (startDate) matchDate = matchDate && item.time >= startDate + ' 00:00';
         if (endDate) matchDate = matchDate && item.time <= endDate + ' 23:59';
-        // 基地：base 是下拉 value（如 yantai），需转为中文名后比较
-        const baseText = ({ yantai:'天水麦积区基地', weihai:'天水秦州基地', penglai:'天水甘谷基地',
-                            qingdao:'青岛莱西基地', longkou:'龙口南山基地', all:'' })[base];
-        const matchBase = !base || !baseText || item.base.indexOf(baseText) >= 0;
+        // 基地下拉已改为动态加载基地名称，value 即中文名称
+        const baseText = base || '';
+        const matchBase = !baseText || item.base.indexOf(baseText) >= 0;
         return matchKeyword && matchType && matchDate && matchBase;
       });
 
@@ -1176,9 +1164,8 @@
   // 统计数据一律取自 AlertStore 实时汇总，与预警总览 / 设备预警 / 农事预警口径一致
   function buildGeneratedReport(opts) {
     var typeMap = { daily: '日报', weekly: '周报', monthly: '月报', custom: '自定义报告' };
-    var baseMap = { all: '全部基地汇总', yantai: '天水麦积区基地', weihai: '天水秦州基地', penglai: '天水甘谷基地', qingdao: '青岛莱西基地', longkou: '龙口南山基地' };
     var typeText = typeMap[opts.type] || '报告';
-    var baseText = baseMap[opts.base] || '全部基地汇总';
+    var baseText = (!opts.base || opts.base === 'all') ? '全部基地汇总' : opts.base;
     var has = function(k){ return !opts.contents || opts.contents.length === 0 || opts.contents.indexOf(k) >= 0; };
 
     // 取真实预警集合：日报=今日，周报=近7天，月报=近30天，自定义=所选区间
@@ -1218,7 +1205,7 @@
   // reportTime：种子报告自带生成时间时，以其为准计算周期（而非当前日期）
   function collectAlertsForReport(type, base, startDate, endDate, reportTime){
     var all = (window.AlertStore ? AlertStore.all() : []);
-    var baseText = ({ all:'', yantai:'天水麦积区基地', weihai:'天水秦州基地', penglai:'天水甘谷基地', qingdao:'青岛莱西基地', longkou:'龙口南山基地' })[base] || '';
+    var baseText = (base && base !== 'all') ? base : '';
     var from = '', to = '';
     var anchor = new Date();
     if (reportTime){
@@ -1379,11 +1366,9 @@
   // 严格空库模式：报告统计直接取后端字段，不再依赖 AlertStore 重算种子报告
   function refreshSeedReportStats() { /* no-op：数据一律来自后端 API */ }
 
-  // 基地中文名 → 下拉 value
+  // 基地中文名 → 下拉 value（下拉 value 已统一为中文名）
   function baseValueOf(baseText) {
-    var map = { '天水麦积区基地':'yantai', '天水秦州基地':'weihai', '天水甘谷基地':'penglai',
-                '青岛莱西基地':'qingdao', '龙口南山基地':'longkou', '全部基地汇总':'all' };
-    return map[baseText] || 'all';
+    return baseText || 'all';
   }
 
   function showDetailModal(id) {

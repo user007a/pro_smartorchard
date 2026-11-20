@@ -153,6 +153,10 @@ router.post('/aggregate', async (req, res, next) => {
 async function upsertEnterprise(enterprise) {
   if (!enterprise || typeof enterprise !== 'object') return 0;
   const data = cleanRow(enterprise);
+  // 企业名称为 NOT NULL：空库下仅新增基地/地块时前端会带上空企业对象，
+  // 此时不写主表，避免 INSERT/UPDATE 触发「Column 'name' cannot be null」。
+  const hasName = data.name !== undefined && data.name !== null && String(data.name).trim() !== '';
+  if (!hasName) delete data.name;
   const existing = await query('SELECT `id` FROM `sf_enterprise` WHERE `id` = 1 LIMIT 1');
   if (existing.length) {
     const sets = [];
@@ -171,7 +175,8 @@ async function upsertEnterprise(enterprise) {
     }
     return 0;
   }
-  // 首次无记录则插入（id 显式置 1）
+  // 首次无记录则插入（id 显式置 1）；无企业名称时跳过，避免 NOT NULL 报错
+  if (!hasName) return 0;
   const keys = Object.keys(data);
   if (keys.length) {
     await execute(

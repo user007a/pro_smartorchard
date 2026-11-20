@@ -393,3 +393,222 @@ if (typeof window.Toast === 'undefined') {
   window.Toast = LegacyToast;
 }
 
+/* ============================================================
+ * 兼容层：静态 .modal-overlay 统一补齐 Esc / 点击遮罩关闭
+ * 动态弹层（components/modal.js 创建，带 data-modal）已自行处理，跳过。
+ * ============================================================ */
+(function bindStaticModalDismiss() {
+  if (window.__soStaticModalDismissBound) return;
+  window.__soStaticModalDismissBound = true;
+
+  function closeOverlay(overlay) {
+    if (!overlay) return;
+    if (overlay.getAttribute('data-dynamic') === '1') overlay.remove();
+    else overlay.classList.remove('show');
+    if (!document.querySelector('.modal-overlay.show')) document.body.style.overflow = '';
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' && e.key !== 'Esc') return;
+    var open = Array.prototype.filter.call(document.querySelectorAll('.modal-overlay.show'), function (m) {
+      return m.dataset.modal !== 'true';
+    });
+    if (!open.length) return;
+    closeOverlay(open[open.length - 1]);
+  });
+
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.classList || !t.classList.contains('modal-overlay')) return;
+    if (t.dataset.modal === 'true' || !t.classList.contains('show')) return;
+    closeOverlay(t);
+  });
+})();
+
+/* ============================================================
+ * 基地下拉统一数据源
+ * ------------------------------------------------------------
+ * 农事 / 预警等页面的「基地」下拉统一从 sf_base 动态加载，
+ * 不再在 HTML 里写死基地名称。使用方式：
+ *   <select data-base-source data-base-all-label="全部基地">…</select>
+ * 首个 option 作为占位项（保留其 value），其余选项由本模块重建；
+ * 基地名称同时作为 value 与显示文本，便于各页按名称筛选。
+ * ============================================================ */
+var BaseOptions = (function () {
+  var bases = null;
+  var loading = null;
+
+  function api() {
+    return (window.Api && typeof window.Api.get === 'function') ? window.Api : null;
+  }
+
+  function load() {
+    if (bases) return Promise.resolve(bases);
+    if (loading) return loading;
+    loading = new Promise(function (resolve) {
+      var tries = 0;
+      (function attempt() {
+        var a = api();
+        if (!a) {
+          // api.js 由部分页面的 store 懒加载，最多等待约 5 秒
+          if (++tries > 50) { loading = null; resolve([]); return; }
+          setTimeout(attempt, 100);
+          return;
+        }
+        a.get('base', { page: 1, size: 500, sort: 'code', order: 'asc' }).then(function (res) {
+          var list = (res && res.ok && res.data && Array.isArray(res.data.list)) ? res.data.list : [];
+          bases = list.filter(function (b) { return b && b.name; }).map(function (b) {
+            return { id: b.id, code: b.code || '', name: String(b.name).trim() };
+          });
+          loading = null;
+          resolve(bases);
+        }).catch(function () {
+          loading = null;
+          resolve([]);
+        });
+      })();
+    });
+    return loading;
+  }
+
+  function fill(sel) {
+    if (!sel || sel.dataset.baseFilled === '1') return;
+    sel.dataset.baseFilled = '1';
+    load().then(function (list) {
+      var current = sel.value;
+      var first = sel.querySelector('option');
+      var keepValue = first ? first.value : '';
+      var label = sel.dataset.baseAllLabel || (first ? first.textContent : '全部基地');
+
+      sel.innerHTML = '';
+      var allOpt = document.createElement('option');
+      allOpt.value = keepValue;
+      allOpt.textContent = label;
+      sel.appendChild(allOpt);
+
+      var seen = {};
+      var useId = sel.dataset.baseValue === 'id';
+      list.forEach(function (b) {
+        if (seen[b.name]) return;
+        seen[b.name] = true;
+        var opt = document.createElement('option');
+        opt.value = useId ? String(b.id) : b.name;
+        opt.textContent = b.name;
+        sel.appendChild(opt);
+      });
+
+      if (current && Array.prototype.some.call(sel.options, function (o) { return o.value === current; })) {
+        sel.value = current;
+      }
+      sel.dispatchEvent(new CustomEvent('base-options:ready', { bubbles: true }));
+    });
+  }
+
+  function nameOf(value) {
+    if (!bases || value === undefined || value === null || value === '') return '';
+    var v = String(value);
+    for (var i = 0; i < bases.length; i++) {
+      if (String(bases[i].id) === v || bases[i].name === v) return bases[i].name;
+    }
+    return '';
+  }
+
+  function fillAll() {
+    Array.prototype.forEach.call(document.querySelectorAll('select[data-base-source]'), fill);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fillAll);
+  } else {
+    setTimeout(fillAll, 0);
+  }
+
+  return { load: load, fill: fill, fillAll: fillAll, nameOf: nameOf };
+})();
+
+window.BaseOptions = BaseOptions;
+
+/* ============================================================
+ * 品种下拉统一数据源：取自 sf_plot.variety_code 的去重结果
+ * 使用方式：
+ *   <select data-variety-source data-variety-all-label="全部品种">…</select>
+ * ============================================================ */
+var VarietyOptions = (function () {
+  var names = null;
+  var loading = null;
+
+  function api() {
+    return (window.Api && typeof window.Api.get === 'function') ? window.Api : null;
+  }
+
+  function load() {
+    if (names) return Promise.resolve(names);
+    if (loading) return loading;
+    loading = new Promise(function (resolve) {
+      var tries = 0;
+      (function attempt() {
+        var a = api();
+        if (!a) {
+          if (++tries > 50) { loading = null; resolve([]); return; }
+          setTimeout(attempt, 100);
+          return;
+        }
+        a.get('plot', { page: 1, size: 1000 }).then(function (res) {
+          var list = (res && res.ok && res.data && Array.isArray(res.data.list)) ? res.data.list : [];
+          names = [];
+          list.forEach(function (p) {
+            var v = p && p.variety_code ? String(p.variety_code).trim() : '';
+            if (v && names.indexOf(v) < 0) names.push(v);
+          });
+          loading = null;
+          resolve(names);
+        }).catch(function () {
+          loading = null;
+          resolve([]);
+        });
+      })();
+    });
+    return loading;
+  }
+
+  function fill(sel) {
+    if (!sel || sel.dataset.varietyFilled === '1') return;
+    sel.dataset.varietyFilled = '1';
+    load().then(function (list) {
+      var current = sel.value;
+      var first = sel.querySelector('option');
+      var keepValue = first ? first.value : '';
+      var label = sel.dataset.varietyAllLabel || (first ? first.textContent : '全部品种');
+      sel.innerHTML = '';
+      var allOpt = document.createElement('option');
+      allOpt.value = keepValue;
+      allOpt.textContent = label;
+      sel.appendChild(allOpt);
+      list.forEach(function (name) {
+        var opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        sel.appendChild(opt);
+      });
+      if (current && Array.prototype.some.call(sel.options, function (o) { return o.value === current; })) {
+        sel.value = current;
+      }
+      sel.dispatchEvent(new CustomEvent('variety-options:ready', { bubbles: true }));
+    });
+  }
+
+  function fillAll() {
+    Array.prototype.forEach.call(document.querySelectorAll('select[data-variety-source]'), fill);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fillAll);
+  } else {
+    setTimeout(fillAll, 0);
+  }
+
+  return { load: load, fill: fill, fillAll: fillAll };
+})();
+
+window.VarietyOptions = VarietyOptions;
+

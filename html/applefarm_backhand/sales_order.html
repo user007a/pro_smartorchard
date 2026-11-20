@@ -412,6 +412,9 @@
 <script src="js/search-helper.js"></script>
 <script src="js/typography.js"></script>
 <script src="js/shared/sales-store.js"></script>
+<!-- 批次下拉数据源：溯源批次（sf_trace_batch）与采收储藏（sf_harvest_storage） -->
+<script src="js/shared/trace-store.js"></script>
+<script src="js/shared/harvest-store.js"></script>
 <script>
 var PAGE_SIZE = 10;
 var selected = {};
@@ -446,8 +449,20 @@ function nowLocal() {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') +
     'T' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 }
-function openModal(id) { document.getElementById(id).style.display = 'flex'; }
-function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function openModal(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'flex';
+  // design-system.css 的 .modal-overlay 默认 opacity:0/visibility:hidden，
+  // 只有 .show 才可见；不同步 .show 会导致弹窗「看不见但存在」
+  el.classList.add('show');
+}
+function closeModal(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('show');
+  el.style.display = 'none';
+}
 
 /* ---------------- 筛选 ---------------- */
 function getFilters() {
@@ -1197,9 +1212,7 @@ function fillBatchOptions() {
       HarvestStore.storages().forEach(function (s) { if (s && s.batchNo) set[s.batchNo] = true; });
     }
   } catch (e) {}
-  if (!Object.keys(set).length) {
-    ['PC-20260901-001', 'PC-20260905-005', 'PC-20260910-008', 'PC-20260915-012'].forEach(function (b) { set[b] = true; });
-  }
+  // 无写死兜底：批次必须来自 sf_trace_batch / sf_harvest_storage（铁律 1）
   document.getElementById('batchOptions').innerHTML = Object.keys(set).map(function (b) {
     return '<option value="' + esc(b) + '">';
   }).join('');
