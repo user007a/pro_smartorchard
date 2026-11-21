@@ -138,6 +138,7 @@ const ALLOWED_TABLES = new Set([
   'sf_achievement',
   'sf_milestone',
   'sf_model_config',
+  'sf_model_data_source',
   'sf_model_threshold',
   'sf_phenology_stage',
   'sf_pest_risk',

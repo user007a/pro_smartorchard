@@ -2444,6 +2444,22 @@ CREATE TABLE `sf_model_config` (
   UNIQUE KEY `uk_model_config_code` (`model_code`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='模型配置';
 
+DROP TABLE IF EXISTS `sf_model_data_source`;
+CREATE TABLE `sf_model_data_source` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `source_code` varchar(50) NOT NULL COMMENT '映射编码',
+  `model_name` varchar(100) NOT NULL COMMENT '模型名称',
+  `data_type` varchar(100) NOT NULL COMMENT '数据类型',
+  `source_name` varchar(100) NOT NULL COMMENT '数据来源',
+  `update_freq` varchar(50) NOT NULL COMMENT '更新频率',
+  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '逻辑删除：0=正常 1=已删除',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_model_data_source_code` (`source_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='模型数据来源映射';
+
 DROP TABLE IF EXISTS `sf_model_threshold`;
 CREATE TABLE `sf_model_threshold` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
