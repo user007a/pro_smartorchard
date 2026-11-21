@@ -142,18 +142,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const item = BizStore.revenueMix().filter(function (x) { return String(x.name || '').indexOf(name) >= 0; })[0];
     return item ? Math.round((Number(item.value) || 0) * 10000) : null;
   }
-  const SERIES = {
-    adopt: mixSeries('认养'),
-    wholesale: mixSeries('批发'),
-    retail: mixSeries('零售'),
-    pick: mixSeries('观光')
-  };
-  const AMOUNT = {
-    adopt: mixAmount('认养'),
-    wholesale: mixAmount('批发'),
-    retail: mixAmount('零售'),
-    pick: mixAmount('观光')
-  };
+  var SERIES = {};
+  var AMOUNT = {};
+  function rebuildSeries() {
+    SERIES = {
+      adopt: mixSeries('认养'),
+      wholesale: mixSeries('批发'),
+      retail: mixSeries('零售'),
+      pick: mixSeries('观光')
+    };
+    AMOUNT = {
+      adopt: mixAmount('认养'),
+      wholesale: mixAmount('批发'),
+      retail: mixAmount('零售'),
+      pick: mixAmount('观光')
+    };
+  }
+  rebuildSeries();
   function seriesOf(key) {
     return SERIES[key] || [0,0,0,0,0,0,0,0,0,0,0,0];
   }
@@ -263,24 +268,65 @@ document.addEventListener('DOMContentLoaded', function() {
       chart2: '各品种收入占比',
       chart3: '品种销售排行',
       trendData: {
-        categories: ['花牛苹果', '红富士', '金帅', '秦冠', '嘎啦', '红星', '国光'],
+        categories: [],
         series: [
-          { name: '销量(吨)', data: [0, 0, 0, 0, 0, 0, 0], color: '#ff6b35' }
+          { name: '销量(吨)', data: [], color: '#ff6b35' }
         ]
       },
       pieData: {
-        series: [
-          { name: '花牛苹果', value: 0 },
-          { name: '红富士', value: 0 },
-          { name: '金帅', value: 0 },
-          { name: '秦冠', value: 0 },
-          { name: '其他品种', value: 0 }
-        ]
+        series: []
       },
       tableCols: ['排名', '品种', '销量(吨)', '收入(元)', '单价(元/吨)', '占比'],
       tableRows: []
     }
   };
+
+  /* 产品分析：品种与销量取自采收记录（sf_harvest_record，与采收日报同源） */
+  function rebuildProductTab() {
+    var byVariety = {}, order = [];
+    var recs = (typeof HarvestStore !== 'undefined' && HarvestStore.records) ? HarvestStore.records() : [];
+    recs.forEach(function (r) {
+      var v = r && r.variety ? String(r.variety) : '未标注品种';
+      if (!byVariety[v]) { byVariety[v] = 0; order.push(v); }
+      byVariety[v] += Number(r.qty) || 0;
+    });
+    order.sort(function (a, b) { return byVariety[b] - byVariety[a]; });
+    var p = revenueDataSet.product;
+    var total = order.reduce(function (s, v) { return s + byVariety[v]; }, 0);
+    if (!order.length) {
+      p.trendData.categories = [];
+      p.trendData.series[0].data = [];
+      p.pieData.series = [];
+      p.tableRows = [];
+      return;
+    }
+    var tons = function (kg) { return Math.round(kg / 1000 * 10) / 10; };
+    p.trendData.categories = order;
+    p.trendData.series[0].data = order.map(function (v) { return tons(byVariety[v]); });
+    p.pieData.series = order.map(function (v) { return { name: v, value: tons(byVariety[v]) }; });
+    p.tableRows = order.map(function (v, i) {
+      var share = total > 0 ? Math.round(byVariety[v] / total * 1000) / 10 : 0;
+      return [i + 1, v, tons(byVariety[v]), '—', '—', share + '%'];
+    });
+  }
+
+  /* 数据变化后重建：收入序列 + 产品分析 + 当前 tab */
+  function refreshRevenue() {
+    rebuildSeries();
+    var t = revenueDataSet.trend, s = revenueDataSet.struct;
+    ['adopt', 'wholesale', 'retail'].forEach(function (k, i) {
+      t.trendData.series[i].data = seriesOf(k);
+      t.pieData.series[i].value = amountOf(k);
+    });
+    ['adopt', 'wholesale', 'retail', 'pick'].forEach(function (k, i) {
+      s.trendData.series[i].data = seriesOf(k);
+      s.pieData.series[i].value = amountOf(k);
+    });
+    rebuildProductTab();
+    renderTab(revCurrentTab || 'trend');
+    paintStatCards();
+  }
+  window.__refreshRevenue = refreshRevenue;
 
   window.__exportRevenueData = function() {
     var d = revenueDataSet[window.__revCurrentTab || 'trend'] || { tableCols: [], tableRows: [] };
@@ -295,7 +341,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
     if (typeof Toast !== 'undefined') Toast.success('营收报表已导出');
   };
-  var revCurrentTab = 'adopt';
+  var revCurrentTab = 'trend';
   function renderTab(tabKey) {
     revCurrentTab = tabKey;
     window.__revCurrentTab = tabKey;
@@ -325,8 +371,7 @@ document.addEventListener('DOMContentLoaded', function() {
       '<table class="data-table" style="font-size:var(--font-size-sm);"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
   }
 
-  renderTab('trend');
-  paintStatCards();
+  refreshRevenue();
 
   document.querySelectorAll('#revenue-tabs .tab-item').forEach(tab => {
     tab.addEventListener('click', function() {
@@ -352,8 +397,8 @@ function exportRevenueReport() {
 <script src="js/common-functions.js"></script>
 <script src="js/shared/harvest-store.js"></script>
 <script>
-/* 本月采收量：与首页、采收日报、大屏共用 smartorchard_harvest_v1 */
-(function () {
+/* 本月采收量：与首页、采收日报、大屏同源（sf_harvest_record） */
+function paintHarvestCard() {
   try {
     var now = new Date();
     var ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
@@ -365,7 +410,8 @@ function exportRevenueReport() {
     if (val) val.innerHTML = (kg / 1000).toFixed(1) + '<span style="font-size:13px; font-weight:500;">吨</span>';
     if (sub) sub.textContent = kg ? '与采收日报同源' : '本月暂无采收';
   } catch (e) {}
-})();
+}
+paintHarvestCard();
 </script>
   <script src="js/typography.js"></script>
 <script>
@@ -386,7 +432,8 @@ function exportRevenueReport() {
     });
   }
   bind(["harvestStoreChange","bizStoreChange"], function () {
-      renderTab();
+    if (typeof window.__refreshRevenue === 'function') window.__refreshRevenue();
+    if (typeof paintHarvestCard === 'function') paintHarvestCard();
   });
 })();
 </script>
