@@ -725,43 +725,33 @@ function editFromDetail() {
   openEditModal(id);
 }
 
-/* ---------- 实时数据（由物模型测点派生） ---------- */
-var METRIC_BASE = {
-  airTemp: 23.5, airHum: 62.5, windSpeed: 2.4, windDir: 186, rainfall: 0.6,
-  pressure: 1013.2, light: 18600, radiation: 420, evaporation: 3.2, visibility: 18.5,
-  surfaceTemp: 24.8, soilTemp: 22.6, soilMoist: 38.4, soilEc: 426, soilPh: 6.6,
-  soilTempDeep: 20.4, soilMoistDeep: 41.2, frozen: 0,
-  insectImg: 24, insectCnt: 12, temp: 28.5, collectLoad: 42, accuracy: 94.6, baitRemain: 18,
-  trapCnt: 46, trapDays: 12, lampPower: 18, solarVolt: 13.2, switchState: 1,
-  bitrate: 4.2, fps: 25, storageUsed: 56, ptzCtrl: 1, snapshot: 1, streamMain: 1, streamSub: 1,
-  deviceTemp: 34.5, alarmCnt: 1, onlineHours: 1450,
-  co2: 520, soilMoist: 38.4,
-  flowRate: 12.6, ecOut: 1.82, phOut: 6.1, pressure: 0.32, targetEc: 1.8, targetPh: 6.2,
-  valveOpen: 65, fertRemain: 42.5, pumpState: 1, filterState: 1, recycleRate: 88, runMode: 1,
-  totalVolume: 186.5,
-  storeTemp: 2.4, storeHum: 90, compressState: 1, defrostState: 0, doorState: 0, setTemp: 2, power: 12.6,
-  dust: 1.2,
-  sortieCnt: 126, workArea: 2860, batteryLevel: 86, batteryCycle: 128, flightHours: 342.5,
-  rtkRate: 97.5, sprayVolume: 1240,
-  hangarState: 1, chargeState: 1, hangarTemp: 22.5, doorState: 1,
-  heartbeat: 1, rssi: -62, cpuUsed: 32, onlineDevices: 18,
-  memUsed: 48, diskFree: 320, netDelay: 18, runHours: 1180,
-  collectCnt: 288, uploadRate: 99.2, cacheUsed: 26,
-  batteryVolt: 12.8, outputPower: 64, chargeCurrent: 3.2, backupHours: 4.5,
-  ph: 7.2, ec: 420, turbidity: 2.1, waterTemp: 16.5,
-  pm25: 32, pm10: 58, o3: 76, no2: 28,
-  weight: 186.5, throughput: 1250, accuracy: 0.02
-};
+/* ---------- 实时数据（取自设备真实上报的测点读数） ---------- */
+/* 采集记录按「时间 → 测点」归并，同一测点同一时刻只取首条，时间倒序 */
+function deviceSamples(id, points, limit) {
+  var keyMap = {};
+  points.forEach(function (p) { keyMap[p.key] = 1; });
+  var logs = DeviceStore.logs().filter(function (l) {
+    return l.deviceId === id && keyMap[l.point] && l.value !== '' && l.value != null;
+  });
+  var byTime = {}, order = [];
+  logs.forEach(function (l) {
+    var t = l.time || '';
+    if (!t) return;
+    if (!byTime[t]) { byTime[t] = {}; order.push(t); }
+    if (byTime[t][l.point] === undefined) byTime[t][l.point] = l.value;
+  });
+  order.sort().reverse();
+  if (limit) order = order.slice(0, limit);
+  return order.map(function (t) {
+    return {
+      time: t,
+      values: points.map(function (p) {
+        return byTime[t][p.key] !== undefined ? byTime[t][p.key] : '';
+      })
+    };
+  });
+}
 
-function seedOf(str) {
-  var h = 0;
-  for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 99991;
-  return h;
-}
-function noiseOf(seed, i) {
-  var x = Math.sin(seed + i * 12.9898) * 43758.5453;
-  return (x - Math.floor(x)) - 0.5;
-}
 
 function openData(id) {
   var d = DeviceStore.deviceOf(id);
@@ -781,18 +771,11 @@ function openData(id) {
   }
 
   var offline = d.status !== 'online';
-  /* 优先取设备最近一次真实上报值（气象/土壤/虫情等在线设备），无上报值时按物模型测点模拟 */
+  /* 实时值只取设备最近一次真实上报（sf_device_log 测点读数）；
+     没有上报值的测点显示「—」，不做任何模拟推算 */
   var live = DeviceStore.readingsOf(id) || {};
-  var vals = points.map(function (p, pi) {
-    if (typeof live[p.key] === 'number') return live[p.key];
-    var base = METRIC_BASE[p.key] !== undefined ? METRIC_BASE[p.key] : 10;
-    var n = noiseOf(seedOf(id + '_' + pi), 7);
-    var v = base * (1 + 0.06 * n);
-    var dec = p.step && String(p.step).indexOf('.') >= 0 ? String(p.step).split('.')[1].length : 0;
-    return parseFloat(v.toFixed(dec));
-  });
+  var samples = deviceSamples(id, points, 8);
 
-  var times = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'];
   document.getElementById('data-title').textContent = '设备实时数据 · ' + d.name;
   document.getElementById('dataBody').innerHTML =
     '<div class="detail-info" style="margin-bottom:14px;"><div class="detail-grid">' +
@@ -804,33 +787,30 @@ function openData(id) {
       '<div class="detail-row"><span class="detail-label">最近上线</span><span class="detail-value">' + DeviceUI.esc(d.lastSeenAt || '-') + '</span></div>' +
     '</div></div>' +
     (offline ? '<div style="margin-bottom:14px;padding:8px 12px;font-size:12.5px;color:#cf7d00;background:#fffbe6;border:1px solid #ffe58f;border-radius:8px;">设备当前非在线状态，以下展示最近一次成功采集的数据。</div>' : '') +
-    '<div class="metric-grid">' + points.map(function (p, pi) {
-      var abnormal = p.min !== undefined && p.max !== undefined
-        && (vals[pi] < p.min || vals[pi] > p.max);
+    '<div class="metric-grid">' + points.map(function (p) {
+      var has = typeof live[p.key] === 'number';
+      var abnormal = has && p.min !== undefined && p.max !== undefined
+        && (live[p.key] < p.min || live[p.key] > p.max);
+      var tagColor = !has ? '#8c8c8c' : (abnormal ? '#cf1322' : '#3a8618');
       return '<div class="metric-card"><div class="metric-name">' + DeviceUI.esc(p.name) +
-        ' <span style="font-size:11px;color:' + (abnormal ? '#cf1322' : '#3a8618') + '">' + (abnormal ? '异常' : '正常') + '</span></div>' +
-        '<div class="metric-value">' + vals[pi] + '<em>' + DeviceUI.esc(p.unit || '') + '</em></div></div>';
+        ' <span style="font-size:11px;color:' + tagColor + '">' + (!has ? '无数据' : (abnormal ? '异常' : '正常')) + '</span></div>' +
+        '<div class="metric-value">' + (has ? live[p.key] : '—') + '<em>' + DeviceUI.esc(p.unit || '') + '</em></div></div>';
     }).join('') + '</div>' +
     '<div style="font-weight:600;font-size:13px;color:var(--text-primary);margin-bottom:8px;">采集明细</div>' +
     '<div style="max-height:280px;overflow:auto;border:1px solid var(--border-default);border-radius:12px;">' +
     '<table class="data-table" style="min-width:600px;"><thead><tr><th>采集时间</th>' +
     points.map(function (p) { return '<th>' + DeviceUI.esc(p.name) + '(' + DeviceUI.esc(p.unit || '-') + ')</th>'; }).join('') +
     '<th>状态</th></tr></thead><tbody>' +
-    times.slice().reverse().map(function (t, i) {
-      var idx = times.length - 1 - i;
-      var rowVals = points.map(function (p, pi) {
-        var base = METRIC_BASE[p.key] !== undefined ? METRIC_BASE[p.key] : 10;
-        var v = base * (1 + 0.06 * noiseOf(seedOf(id + '_' + pi), idx));
-        var dec = p.step && String(p.step).indexOf('.') >= 0 ? String(p.step).split('.')[1].length : 0;
-        return parseFloat(v.toFixed(dec));
-      });
+    (samples.length ? samples.map(function (s) {
       var bad = points.some(function (p, pi) {
-        return p.min !== undefined && p.max !== undefined && (rowVals[pi] < p.min || rowVals[pi] > p.max);
+        var v = parseFloat(s.values[pi]);
+        return !isNaN(v) && p.min !== undefined && p.max !== undefined && (v < p.min || v > p.max);
       });
-      return '<tr><td>' + DeviceStore.todayStr() + ' ' + t + '</td>' +
-        rowVals.map(function (v) { return '<td>' + v + '</td>'; }).join('') +
+      return '<tr><td>' + DeviceUI.esc(s.time) + '</td>' +
+        s.values.map(function (v) { return '<td>' + (v === '' ? '—' : DeviceUI.esc(v)) + '</td>'; }).join('') +
         '<td>' + DeviceUI.statusTag(bad ? 'offline' : 'online', bad ? '预警' : '正常') + '</td></tr>';
-    }).join('') + '</tbody></table></div>';
+    }).join('') : '<tr><td colspan="' + (points.length + 2) + '" style="text-align:center;color:var(--text-tertiary);padding:28px;">暂无采集记录</td></tr>') +
+    '</tbody></table></div>';
 
   document.getElementById('dataModal').classList.add('show');
   document.getElementById('dataOverlay').classList.add('show');
@@ -849,13 +829,14 @@ function exportDeviceData() {
     ? DeviceStore.dataPointsOf(acc.deviceType).filter(function (p) { return acc.points.indexOf(p.key) !== -1; })
     : DeviceStore.dataPointsOf(d.type);
   var headers = ['采集时间'].concat(points.map(function (p) { return p.name + '(' + (p.unit || '-') + ')'; }));
-  var rows = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'].map(function (t, idx) {
-    return [DeviceStore.todayStr() + ' ' + t].concat(points.map(function (p, pi) {
-      var base = METRIC_BASE[p.key] !== undefined ? METRIC_BASE[p.key] : 10;
-      var v = base * (1 + 0.06 * noiseOf(seedOf(dataId + '_' + pi), idx));
-      var dec = p.step && String(p.step).indexOf('.') >= 0 ? String(p.step).split('.')[1].length : 0;
-      return parseFloat(v.toFixed(dec));
-    }));
+  /* 导出只包含真实采集记录；无记录时明确提示，不导出模拟数据 */
+  var samples = deviceSamples(dataId, points, 0);
+  if (!samples.length) {
+    DeviceUI.toast('暂无采集记录可导出', 'warning');
+    return;
+  }
+  var rows = samples.map(function (s) {
+    return [s.time].concat(s.values.map(function (v) { return v === '' ? '—' : v; }));
   });
   DeviceUI.exportCsv('设备数据_' + d.id, headers, rows);
 }
