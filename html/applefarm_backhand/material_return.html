@@ -331,9 +331,6 @@
           <div class="search-bar">
             <select class="search-select" id="warehouseSelect">
               <option value="">选择仓库</option>
-              <option value="wh1">中心仓库</option>
-              <option value="wh2">东区仓库</option>
-              <option value="wh3">西区仓库</option>
             </select>
             <select class="search-select" id="returnTypeSelect">
               <option value="">原因类型</option>
@@ -445,10 +442,8 @@
         <div class="form-row">
           <div class="form-item">
             <label>仓库 <span style="color:var(--error);">*</span></label>
-            <select id="returnWarehouse" data-dict="warehouse">
-              <option value="wh1">中心仓库</option>
-              <option value="wh2">东区仓库</option>
-              <option value="wh3">西区仓库</option>
+            <select id="returnWarehouse">
+              <option value="">请选择仓库</option>
             </select>
           </div>
           <div class="form-item">
@@ -899,7 +894,6 @@ function mapReturnRow(row, matMap) {
     code: row.return_code || '',
     docType: docType,
     docTypeText: DOC_TYPE_TEXT[docType] || '',
-    warehouse: row.warehouse_id != null ? String(row.warehouse_id) : '',
     warehouseCode: row.warehouse_id != null ? String(row.warehouse_id) : '',
     supplier: '',
     supplierCode: row.supplier_id != null ? String(row.supplier_id) : '',
@@ -975,9 +969,16 @@ function loadReturn() {
   });
 }
 
-/* 仓库 / 供应商 的编码 → 物理 id（写入时用） */
-let returnWarehouseIdByCode = {};
+/* 供应商 的编码 → 物理 id（写入时用） */
 let returnSupplierIdByCode = {};
+let returnWarehouseNameById = {};   // 物理 id → 仓库名称（列表/详情/导出展示用）
+
+/* 仓库展示名：优先取库中名称，其次回退原始值 */
+function warehouseLabel(code) {
+  if (code == null || code === '') return '—';
+  return returnWarehouseNameById[String(code)] || String(code);
+}
+
 function loadReturnLookups() {
   if (!window.Api || !Api.get) return;
   Promise.all([
@@ -985,13 +986,15 @@ function loadReturnLookups() {
     Api.get('material_supplier', { page: 1, size: 500 })
   ]).then(function (res) {
     var wh = res[0], sup = res[1];
-    returnWarehouseIdByCode = {};
     returnSupplierIdByCode = {};
+    returnWarehouseNameById = {};
     if (wh && wh.ok && wh.data && wh.data.list) {
       wh.data.list.forEach(function (w) {
-        if (w.warehouse_code) returnWarehouseIdByCode[w.warehouse_code] = w.id;
-        if (w.warehouse_name) returnWarehouseIdByCode[w.warehouse_name] = w.id;
+        if (w.id != null && w.warehouse_name) returnWarehouseNameById[String(w.id)] = w.warehouse_name;
       });
+      fillReturnWarehouseSelects(wh.data.list);
+      // 仓库名称就绪后重绘列表（首次渲染时名称映射可能尚未加载）
+      if (returnData.length) renderTable();
     }
     if (sup && sup.ok && sup.data && sup.data.list) {
       sup.data.list.forEach(function (s) {
@@ -1002,6 +1005,30 @@ function loadReturnLookups() {
     }
   }).catch(function (e) {
     console.warn('[material_return] 仓库/供应商关联数据加载失败', e);
+  });
+}
+
+/* 仓库下拉：取自 sf_material_warehouse；筛选与表单统一以物理 id 作为值，不再写死仓库名单 */
+function fillReturnWarehouseSelects(list) {
+  [['warehouseSelect', '选择仓库'], ['returnWarehouse', '请选择仓库']].forEach(function (pair) {
+    var sel = document.getElementById(pair[0]);
+    if (!sel) return;
+    var cur = sel.value;
+    sel.innerHTML = '';
+    var placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = pair[1];
+    sel.appendChild(placeholder);
+    list.forEach(function (w) {
+      if (!w || !w.warehouse_name) return;
+      var opt = document.createElement('option');
+      opt.value = String(w.id);
+      opt.textContent = w.warehouse_name;
+      sel.appendChild(opt);
+    });
+    if (cur && Array.prototype.some.call(sel.options, function (o) { return o.value === cur; })) {
+      sel.value = cur;
+    }
   });
 }
 
@@ -1119,7 +1146,7 @@ function renderTable() {
         <td class="checkbox-col">${start + __seq + 1}</td>
         <td><strong>${item.code}</strong></td>
         <td>${item.docTypeText}</td>
-        <td>${item.warehouse}</td>
+        <td>${warehouseLabel(item.warehouseCode)}</td>
         <td>${item.supplier || '—'}</td>
         <td>${item.material}</td>
         <td>${getRelatedNo(item)}</td>
@@ -1358,7 +1385,9 @@ function openAddReturnModal() {
   const docType = currentDocType || 'internal';
   document.getElementById('returnCode').value = nextDocCode(docType);
   document.getElementById('returnDocType').value = docType;
-  document.getElementById('returnWarehouse').value = 'wh1';
+  // 默认选中库中第一家仓库（无仓库时保持空，由保存校验拦截）
+  var whSel = document.getElementById('returnWarehouse');
+  whSel.value = whSel.options.length > 1 ? whSel.options[1].value : '';
   document.getElementById('returnSupplier').value = '';
   document.getElementById('returnMaterial').value = '';
   document.getElementById('returnBatchNo').value = '';
@@ -1455,6 +1484,10 @@ function saveReturn() {
   const reason = document.getElementById('returnReason').value.trim();
   const remark = document.getElementById('returnRemark').value.trim();
 
+  if (!warehouse) {
+    alert('请选择仓库');
+    return;
+  }
   if (!material) {
     alert('请选择农资');
     return;
@@ -1499,7 +1532,7 @@ function saveReturn() {
   /* 表单 → sf_material_return 写入体（只提交真实存在的列） */
   const body = {
     return_code: code,
-    warehouse_id: returnWarehouseIdByCode[warehouse] != null ? returnWarehouseIdByCode[warehouse] : null,
+    warehouse_id: warehouse === '' ? null : Number(warehouse),
     return_type: reasonType,
     material_id: returnMaterialIdByName[material] != null ? returnMaterialIdByName[material] : null,
     batch_no: batchNo || null,
@@ -1542,7 +1575,7 @@ function viewDetail(id) {
   if (item) {
     document.getElementById('viewCode').textContent = item.code;
     document.getElementById('viewType').textContent = item.docTypeText;
-    document.getElementById('viewWarehouse').textContent = item.warehouse;
+    document.getElementById('viewWarehouse').textContent = warehouseLabel(item.warehouseCode);
     document.getElementById('viewSupplier').textContent = item.supplier ? item.supplier + '（' + item.supplierCode + '）' : '—';
     document.getElementById('viewMaterial').textContent = item.material;
     document.getElementById('viewBatchNo').textContent = item.batchNo || '—';
@@ -1767,7 +1800,7 @@ function doExport() {
       index + 1,
       item.code,
       item.docTypeText,
-      item.warehouse,
+      warehouseLabel(item.warehouseCode),
       item.supplier || '',
       item.material,
       getRelatedNo(item),
