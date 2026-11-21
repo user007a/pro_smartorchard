@@ -320,14 +320,10 @@
           </div>
         </div>
 
-        <!-- 单据类型切换 -->
+        <!-- 单据类型切换（选项取自数据字典 MATERIAL_RETURN_TYPE） -->
         <div class="page-section doc-type-bar">
-          <div class="doc-type-switch">
-            <button class="jg-btn jg-btn-primary doc-type-btn" data-doctype="internal" onclick="applyDocType('internal')">内部退库</button>
-            <button class="jg-btn doc-type-btn" data-doctype="supplier" onclick="applyDocType('supplier')">供应商退货</button>
-            <button class="jg-btn doc-type-btn" data-doctype="scrap" onclick="applyDocType('scrap')">报废报损</button>
-          </div>
-          <span class="doc-type-hint" id="docTypeHint">内部退库：库房之间调拨或退回中心仓库，不涉及供应商</span>
+          <div class="doc-type-switch"></div>
+          <span class="doc-type-hint" id="docTypeHint"></span>
         </div>
 
         <!-- 搜索栏区 -->
@@ -443,11 +439,7 @@
           </div>
           <div class="form-item">
             <label>单据类型 <span style="color:var(--error);">*</span></label>
-            <select id="returnDocType" onchange="onDocTypeChange()">
-              <option value="internal">内部退库</option>
-              <option value="supplier">供应商退货</option>
-              <option value="scrap">报废报损</option>
-            </select>
+            <select id="returnDocType" onchange="onDocTypeChange()"></select>
           </div>
         </div>
         <div class="form-row">
@@ -841,6 +833,53 @@ const DOC_TYPE_HINT = {
 // 原因类型字典
 const REASON_TYPE_TEXT = { quality: '质量问题', expired: '过期', damage: '破损', other: '其他' };
 
+/* 单据类型选项：取自数据字典 MATERIAL_RETURN_TYPE（空库即空，不内置枚举） */
+function loadReturnDocTypes() {
+  if (!window.DictOptions) return Promise.resolve([]);
+  return DictOptions.load('MATERIAL_RETURN_TYPE').then(function (list) {
+    if (!list.length) return list;
+    // 顶部切换按钮
+    var bar = document.querySelector('.doc-type-switch');
+    if (bar) {
+      bar.innerHTML = '';
+      list.forEach(function (it, i) {
+        var btn = document.createElement('button');
+        btn.className = 'jg-btn' + (i === 0 ? ' jg-btn-primary' : '') + ' doc-type-btn';
+        btn.setAttribute('data-doctype', it.value);
+        btn.textContent = it.label;
+        btn.addEventListener('click', function () { applyDocType(it.value); });
+        bar.appendChild(btn);
+      });
+    }
+    // 表单内下拉
+    var sel = document.getElementById('returnDocType');
+    if (sel) {
+      var cur = sel.value;
+      sel.innerHTML = '';
+      list.forEach(function (it) {
+        var opt = document.createElement('option');
+        opt.value = it.value;
+        opt.textContent = it.label;
+        if (it.hint) opt.setAttribute('data-hint', it.hint);
+        sel.appendChild(opt);
+      });
+      if (cur && list.some(function (it) { return it.value === cur; })) sel.value = cur;
+    }
+    // 文案映射同步（前缀 / 简称属编码规则，保留在代码中）
+    list.forEach(function (it) {
+      DOC_TYPE_TEXT[it.value] = it.label;
+      if (it.hint) DOC_TYPE_HINT[it.value] = it.hint;
+    });
+    var hint = document.getElementById('docTypeHint');
+    if (hint && list[0] && list[0].hint) hint.textContent = list[0].hint;
+    updateDocTypeButtons();
+    return list;
+  }).catch(function (e) {
+    console.warn('[material_return] 单据类型字典加载失败', e);
+    return [];
+  });
+}
+
 /* ---------- 数据源（严格空库模式） ---------- */
 const RETURN_RESOURCE = 'material_return';
 const RETURN_MATERIAL_RESOURCE = 'material_info';
@@ -1019,6 +1058,7 @@ const exportModal = document.getElementById('exportModal');
 // 初始化（严格空库模式：数据一律由后端 API 拉取）
 function init() {
   bindEvents();
+  loadReturnDocTypes();
   updateDocTypeButtons();
   updateStatusButtons();
   loadReturn();
@@ -1777,6 +1817,7 @@ document.addEventListener('DOMContentLoaded', init);
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/common-functions.js"></script>
+<script src="js/shared/dict-options.js"></script>
   <script src="js/search-helper.js"></script>
   <script src="js/typography.js"></script>
 <script src="js/material-dict.js"></script>

@@ -152,6 +152,7 @@
 <script src="js/components/chart.js"></script>
 <script src="js/shared/data-store.js"></script>
 <script src="../common/js/api.js"></script>
+<script src="js/shared/dict-options.js"></script>
 <script>
 (function(){
   'use strict';
@@ -323,14 +324,16 @@
   }
 
   /* ---------------- 归集记录维护（写入共享数据层，驾驶舱同步） ---------------- */
-  var CATEGORIES = [
-    { value: '农事', label: '农事' },
-    { value: '设备', label: '设备' },
-    { value: '销售', label: '销售' },
-    { value: '溯源', label: '溯源' },
-    { value: '环境', label: '环境' },
-    { value: '其他', label: '其他' }
-  ];
+  /* 归集类别：取自数据字典 DATA_COLLECT_CATEGORY（空库即空，不内置枚举） */
+  var CATEGORIES = [];
+
+  function loadCategories(){
+    if (!window.DictOptions) return Promise.resolve([]);
+    return DictOptions.load('DATA_COLLECT_CATEGORY').then(function(list){
+      CATEGORIES = list || [];
+      return CATEGORIES;
+    });
+  }
 
   function openCollectionForm(id){
     var item = null;
@@ -339,39 +342,46 @@
       if (!item){ Toast.show('归集记录不存在', 'error'); return; }
     }
 
-    Modal.form({
-      title: item ? '编辑归集记录' : '新增归集记录',
-      submitText: item ? '保存' : '新增',
-      width: '520px',
-      values: item ? {
-        source: item.source,
-        category: item.category || '其他',
-        amount: item.amount,
-        yoy: item.yoy,
-        rate: item.rate
-      } : { category: '农事', rate: 95 },
-      fields: [
-        { name: 'source', label: '数据来源', type: 'text', required: true, placeholder: '如：智能气象站' },
-        { name: 'category', label: '归集类别', type: 'select', options: CATEGORIES },
-        { name: 'amount', label: '归集量（条）', type: 'number', min: 0, step: 1, required: true },
-        { name: 'yoy', label: '同比增长（%）', type: 'number', step: 0.1, hint: '可填负数表示同比下降' },
-        { name: 'rate', label: '合格率（%）', type: 'number', min: 0, max: 100, step: 0.1, required: true }
-      ],
-      onSubmit: function(data){
-        var res = DataStore.upsertCollection({
-          id: item ? item.id : '',
-          source: data.source,
-          category: data.category,
-          amount: data.amount,
-          yoy: data.yoy,
-          rate: data.rate
-        });
-        if (!res.ok){ Toast.show(res.message, 'error'); return false; }
-        collectionData = DataStore.collections();
-        renderAll();
-        Toast.show(item ? '归集记录已更新，驾驶舱数据已同步' : '归集记录已新增，驾驶舱数据已同步', 'success');
-        return true;
+    loadCategories().then(function(options){
+      if (!options.length){
+        Toast.show('归集类别未配置，请先在数据字典中维护', 'error');
+        return;
       }
+      var firstCat = options[0].value;
+      Modal.form({
+        title: item ? '编辑归集记录' : '新增归集记录',
+        submitText: item ? '保存' : '新增',
+        width: '520px',
+        values: item ? {
+          source: item.source,
+          category: item.category || firstCat,
+          amount: item.amount,
+          yoy: item.yoy,
+          rate: item.rate
+        } : { category: firstCat, rate: 95 },
+        fields: [
+          { name: 'source', label: '数据来源', type: 'text', required: true, placeholder: '如：智能气象站' },
+          { name: 'category', label: '归集类别', type: 'select', options: options },
+          { name: 'amount', label: '归集量（条）', type: 'number', min: 0, step: 1, required: true },
+          { name: 'yoy', label: '同比增长（%）', type: 'number', step: 0.1, hint: '可填负数表示同比下降' },
+          { name: 'rate', label: '合格率（%）', type: 'number', min: 0, max: 100, step: 0.1, required: true }
+        ],
+        onSubmit: function(data){
+          var res = DataStore.upsertCollection({
+            id: item ? item.id : '',
+            source: data.source,
+            category: data.category,
+            amount: data.amount,
+            yoy: data.yoy,
+            rate: data.rate
+          });
+          if (!res.ok){ Toast.show(res.message, 'error'); return false; }
+          collectionData = DataStore.collections();
+          renderAll();
+          Toast.show(item ? '归集记录已更新，驾驶舱数据已同步' : '归集记录已新增，驾驶舱数据已同步', 'success');
+          return true;
+        }
+      });
     });
   }
 

@@ -524,14 +524,7 @@
           <thead>
             <tr><th>模型</th><th>数据类型</th><th>数据来源</th><th>更新频率</th></tr>
           </thead>
-          <tbody>
-            <tr><td>生长模型</td><td>积温数据</td><td>气象站传感器</td><td>每小时</td></tr>
-            <tr><td>气象模型</td><td>气象预报</td><td>气象局API</td><td>每6小时</td></tr>
-            <tr><td>病虫害模型</td><td>虫情数据</td><td>虫情灯设备</td><td>每天</td></tr>
-            <tr><td>物候期模型</td><td>历史记录</td><td>系统数据库</td><td>每周</td></tr>
-            <tr><td>产量预估模型</td><td>果径抽样</td><td>人工录入</td><td>每周</td></tr>
-            <tr><td>价格预测模型</td><td>市场价格</td><td>市场数据API</td><td>每天</td></tr>
-          </tbody>
+          <tbody id="dataSourceBody"></tbody>
         </table>
       </div>
     </div>
@@ -604,6 +597,35 @@
       if (document.getElementById('panel-data').classList.contains('active')) renderCallTrend();
     }).catch(function (e) {
       setModelStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
+    });
+  }
+
+  /* 数据来源映射：取自 sf_model_data_source，空库显示「暂无数据」 */
+  function escDs(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function loadDataSourceMap() {
+    var body = document.getElementById('dataSourceBody');
+    if (!body) return;
+    function empty(text, isError) {
+      body.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:28px;color:' +
+        (isError ? '#cf1322' : 'var(--text-tertiary)') + ';">' + escDs(text) + '</td></tr>';
+    }
+    if (!window.Api) { empty('数据加载失败：接口未就绪', true); return; }
+    Api.get('model_data_source', { page: 1, size: 500 }).then(function (r) {
+      if (!r || !r.ok) { empty('数据加载失败：' + ((r && r.message) || '请求异常'), true); return; }
+      var list = (r.data && r.data.list) || [];
+      if (!list.length) { empty('暂无数据', false); return; }
+      list.sort(function (a, b) { return (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0); });
+      body.innerHTML = list.map(function (x) {
+        return '<tr><td>' + escDs(x.model_name) + '</td><td>' + escDs(x.data_type) +
+          '</td><td>' + escDs(x.source_name) + '</td><td>' + escDs(x.update_freq) + '</td></tr>';
+      }).join('');
+    }).catch(function (e) {
+      empty('数据加载失败：' + ((e && e.message) || '网络异常'), true);
     });
   }
 
@@ -901,6 +923,8 @@
   loadConfig();
   // 严格空库模式：模型配置 / 训练历史由后端 API 异步取数并渲染三态
   loadModelConfig();
+  // 数据来源映射：读 sf_model_data_source
+  loadDataSourceMap();
 
 </script>
 <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
