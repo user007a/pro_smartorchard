@@ -197,11 +197,8 @@
     <div class="filter-group">
       <label class="filter-label">周期</label>
       <div class="filter-select-wrapper">
-        <select class="filter-select">
-          <option>本月</option>
-          <option>上月</option>
-          <option>本季度</option>
-          <option>本年度</option>
+        <select class="filter-select" id="periodFilter">
+          <option value="">全部周期</option>
         </select>
         <svg class="select-arrow" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 5L7 9L11 5"/>
@@ -358,10 +355,39 @@ function fillTeamFilter(list) {
   if (teams.indexOf(current) >= 0) sel.value = current;
 }
 
+function fillPeriodFilter(list) {
+  var sel = document.getElementById('periodFilter');
+  if (!sel) return;
+  var periods = [];
+  list.forEach(function (r) { if (r.period && periods.indexOf(r.period) < 0) periods.push(r.period); });
+  periods.sort();
+  var current = sel.value;
+  var html = '<option value="">全部周期</option>';
+  periods.forEach(function (p) { html += '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>'; });
+  sel.innerHTML = html;
+  if (periods.indexOf(current) >= 0) sel.value = current;
+}
+
 function visibleList() {
-  var sel = document.getElementById('teamFilter');
-  var team = sel ? sel.value : '';
-  return team ? performanceResults.filter(function (r) { return r.team === team; }) : performanceResults.slice();
+  var teamSel = document.getElementById('teamFilter');
+  var periodSel = document.getElementById('periodFilter');
+  var team = teamSel ? teamSel.value : '';
+  var period = periodSel ? periodSel.value : '';
+  return performanceResults.filter(function (r) {
+    if (team && r.team !== team) return false;
+    if (period && String(r.period || '') !== period) return false;
+    return true;
+  });
+}
+
+function applyFilters() {
+  var list = visibleList();
+  renderStats(list);
+  renderRank(list);
+  renderTrend(list);
+  renderPie(list);
+  renderTeamCompare(list);
+  renderTeamRating(list);
 }
 
 function avg(list, field) {
@@ -475,13 +501,8 @@ function loadData() {
     }
     performanceResults = (res.data && res.data.list) || [];
     fillTeamFilter(performanceResults);
-    var list = visibleList();
-    renderStats(list);
-    renderRank(list);
-    renderTrend(list);
-    renderPie(list);
-    renderTeamCompare(list);
-    renderTeamRating(list);
+    fillPeriodFilter(performanceResults);
+    applyFilters();
   }).catch(function (err) {
     showEmpty('数据加载失败：' + (err && err.message ? err.message : '网络异常'));
   });
@@ -489,6 +510,10 @@ function loadData() {
 
 document.addEventListener('DOMContentLoaded', function() {
   /* 全部图表与统计改为基于真实接口计算，见 loadData() / renderTrend 等函数 */
+  ['teamFilter', 'periodFilter'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', applyFilters);
+  });
   loadData();
 });
 </script>
