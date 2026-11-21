@@ -219,19 +219,10 @@
   <!-- 搜索栏 -->
   <div class="search-section">
     <div class="search-bar">
-      <select class="search-select">
-        <option>2026</option>
-        <option>2025</option>
+      <select class="search-select" id="profitYearSelect">
+        <option value="">全部年份</option>
       </select>
-      <span style="color:var(--text-tertiary); padding:0 4px;">年</span>
-      <select class="search-select">
-        <option>全年</option>
-        <option>春季</option>
-        <option>夏季</option>
-        <option>秋季</option>
-        <option>冬季</option>
-      </select>
-      <select class="search-select" id="profitVarietySelect" data-variety-source data-variety-all-label="全部品种">
+      <select class="search-select" id="profitVarietySelect">
         <option value="">全部品种</option>
       </select>
       <div class="search-actions"><button class="jg-btn jg-btn-primary" onclick="smartSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;margin-right:6px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索</button><button class="jg-btn" onclick="smartReset()">重置</button></div><div class="search-actions" style="margin-left:auto;">
@@ -384,11 +375,9 @@ function loadProfitData() {
       return;
     }
     var list = (r.data && r.data.list) || [];
-    plotProfitData = list.map(mapProfitRow);
-    renderProfitStats();
-    renderBaseSummary();
-    renderRankTable();
-    colorizePlotGrossRate();
+    profitAllData = list.map(mapProfitRow);
+    populateProfitFilters();
+    applyProfitFilters();
   }).catch(function (e) {
     setProfitStatus('数据加载失败：' + (e && e.message ? e.message : '网络异常'), true);
   });
@@ -422,8 +411,64 @@ function closeModal() {
   document.getElementById('detail-modal').classList.remove('show');
 }
 
-// 地块效益数据（用于「按基地汇总」聚合与顶部汇总；金额单位：元）
+// 地块效益数据（金额单位：元）：profitAllData 为接口全量，plotProfitData 为当前筛选结果
+let profitAllData = [];
 let plotProfitData = [];
+
+// 搜索栏：年份/品种选项一律取自接口数据，不做写死
+function populateProfitFilters() {
+  var years = [], varieties = [];
+  profitAllData.forEach(function (p) {
+    if (p.fiscalYear && years.indexOf(p.fiscalYear) < 0) years.push(p.fiscalYear);
+    if (p.variety && varieties.indexOf(p.variety) < 0) varieties.push(p.variety);
+  });
+  years.sort(function (a, b) { return String(b).localeCompare(String(a)); });
+  varieties.sort(function (a, b) { return String(a).localeCompare(String(b), 'zh-Hans-CN'); });
+
+  var yearSel = document.getElementById('profitYearSelect');
+  if (yearSel) {
+    var curYear = yearSel.value;
+    yearSel.innerHTML = '<option value="">全部年份</option>' + years.map(function (y) {
+      return '<option value="' + y + '">' + y + '</option>';
+    }).join('');
+    if (curYear && years.indexOf(curYear) >= 0) yearSel.value = curYear;
+  }
+  var varietySel = document.getElementById('profitVarietySelect');
+  if (varietySel) {
+    var curVariety = varietySel.value;
+    varietySel.innerHTML = '<option value="">全部品种</option>' + varieties.map(function (v) {
+      return '<option value="' + v + '">' + v + '</option>';
+    }).join('');
+    if (curVariety && varieties.indexOf(curVariety) >= 0) varietySel.value = curVariety;
+  }
+}
+
+// 按搜索栏条件过滤全量数据并重绘三块内容
+function applyProfitFilters() {
+  var yearSel = document.getElementById('profitYearSelect');
+  var varietySel = document.getElementById('profitVarietySelect');
+  var year = yearSel ? yearSel.value : '';
+  var variety = varietySel ? varietySel.value : '';
+  plotProfitData = profitAllData.filter(function (p) {
+    if (year && p.fiscalYear !== year) return false;
+    if (variety && p.variety !== variety) return false;
+    return true;
+  });
+  renderProfitStats();
+  renderBaseSummary();
+  renderRankTable();
+  colorizePlotGrossRate();
+}
+
+function smartSearch() { applyProfitFilters(); }
+
+function smartReset() {
+  var yearSel = document.getElementById('profitYearSelect');
+  var varietySel = document.getElementById('profitVarietySelect');
+  if (yearSel) yearSel.value = '';
+  if (varietySel) varietySel.value = '';
+  applyProfitFilters();
+}
 
 // 效益评级（依据利润率）：≥40% 高效益 / ≥35% 中效益 / <35% 低效益
 function ratingOf(profitRate) {
@@ -461,7 +506,7 @@ function renderBaseSummary() {
 
   const groups = {};
   plotProfitData.forEach(function (p) {
-    const base = p.base || BASE_NAME_BY_PLOT[p.code] || '—';
+    const base = p.base || '未归属基地';
     if (!groups[base]) groups[base] = { base: base, area: 0, yield: 0, revenue: 0, cost: 0 };
     groups[base].area += p.area;
     groups[base].yield += p.yield;
@@ -546,18 +591,6 @@ function colorizePlotGrossRate() {
   });
 }
 
-// 地块 → 基地主数据映射（与「企业管理 · 地块管理」的 PLOT 主数据一致）
-// 用于把利润报表的基地口径对齐到基地主数据，并回写经营分析驾驶舱
-const BASE_NAME_BY_PLOT = {
-  'D-007': '天水清水县基地',
-  'D-009': '天水张家川县基地',
-  'D-011': '天水秦州基地',
-  'D-014': '天水武山县基地',
-  'D-017': '天水秦州基地',
-  'D-020': '天水清水县基地',
-  'D-021': '天水武山县基地'
-};
-
 /* 严格空库模式：报表页只读 API 数据，不再回写 BizStore（历史路径会把演示假数据写入共享源） */
 function syncBizStore() { /* no-op */ }
 
@@ -565,6 +598,12 @@ document.addEventListener('DOMContentLoaded', function() {
   // 严格空库模式：先显示加载态，再由后端 API 拉取地块效益数据
   setProfitStatus('正在加载数据...', false);
   loadProfitData();
+
+  // 年份/品种筛选即时生效（选项由 applyProfitFilters 从接口数据生成）
+  var yearSel = document.getElementById('profitYearSelect');
+  if (yearSel) yearSel.addEventListener('change', applyProfitFilters);
+  var varietySel = document.getElementById('profitVarietySelect');
+  if (varietySel) varietySel.addEventListener('change', applyProfitFilters);
 
   // 地块效益趋势：无对应月度数据表，图表显示空态（不编造演示数值）
   var trendBox = document.getElementById('chart-profit-trend');
