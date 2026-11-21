@@ -475,7 +475,8 @@ var BaseOptions = (function () {
     if (!sel || sel.dataset.baseFilled === '1') return;
     sel.dataset.baseFilled = '1';
     load().then(function (list) {
-      var current = sel.value;
+      // dataset.want：页面在选项就绪前已指定的目标值，优先级高于当前选中项
+      var current = sel.dataset.want !== undefined ? sel.dataset.want : sel.value;
       var first = sel.querySelector('option');
       var keepValue = first ? first.value : '';
       var label = sel.dataset.baseAllLabel || (first ? first.textContent : '全部基地');
@@ -500,6 +501,7 @@ var BaseOptions = (function () {
       if (current && Array.prototype.some.call(sel.options, function (o) { return o.value === current; })) {
         sel.value = current;
       }
+      delete sel.dataset.want;
       sel.dispatchEvent(new CustomEvent('base-options:ready', { bubbles: true }));
     });
   }
@@ -575,7 +577,8 @@ var VarietyOptions = (function () {
     if (!sel || sel.dataset.varietyFilled === '1') return;
     sel.dataset.varietyFilled = '1';
     load().then(function (list) {
-      var current = sel.value;
+      // dataset.want：页面在选项就绪前已指定的目标值，优先级高于当前选中项
+      var current = sel.dataset.want !== undefined ? sel.dataset.want : sel.value;
       var first = sel.querySelector('option');
       var keepValue = first ? first.value : '';
       var label = sel.dataset.varietyAllLabel || (first ? first.textContent : '全部品种');
@@ -593,6 +596,7 @@ var VarietyOptions = (function () {
       if (current && Array.prototype.some.call(sel.options, function (o) { return o.value === current; })) {
         sel.value = current;
       }
+      delete sel.dataset.want;
       sel.dispatchEvent(new CustomEvent('variety-options:ready', { bubbles: true }));
     });
   }
